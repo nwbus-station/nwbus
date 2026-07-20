@@ -9,8 +9,9 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
-    persistSession: false,
-    autoRefreshToken: false,
+    // جلسة دائمة: الموظف يبقى مسجلاً بعد تحديث الصفحة وإغلاق المتصفح
+    persistSession: true,
+    autoRefreshToken: true,
     detectSessionInUrl: false,
   },
 })

@@ -16,7 +16,7 @@ function Clock({ accent, muted }) {
   const [c, setC] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setC(new Date()), 1000); return () => clearInterval(t) }, [])
   return (
-    <div style={{ fontFamily: 'monospace' }}>
+    <div style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
       <div style={{ fontSize: 40, fontWeight: 700, color: accent, lineHeight: 1 }}>{c.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
       <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{c.toLocaleDateString('en-GB')}</div>
     </div>
@@ -24,10 +24,10 @@ function Clock({ accent, muted }) {
 }
 
 const THEMES = {
-  navy:  { name: 'كحلي/ذهبي',  bg: 'radial-gradient(circle at 50% -20%, #14315c 0%, #0b1b34 60%)', accent: '#d9b25f', arr: '#3ddc97', dep: '#5aa6ff', text: '#e8eef7', muted: '#8ea3c4' },
-  teal:  { name: 'تركوازي',    bg: 'radial-gradient(circle at 50% -20%, #0d3b3a 0%, #07211f 60%)', accent: '#e6c66b', arr: '#56e0b0', dep: '#4fc3d9', text: '#eafaf6', muted: '#8fb8b2' },
-  black: { name: 'أسود/كهرماني', bg: '#0a0a0c',                                                    accent: '#f0a92b', arr: '#37d67a', dep: '#5aa6ff', text: '#f2f2f4', muted: '#9a9aa2' },
-  royal: { name: 'بنفسجي',     bg: 'radial-gradient(circle at 50% -20%, #2a2156 0%, #140f2e 60%)', accent: '#e0b3ff', arr: '#5fe0c0', dep: '#8aa0ff', text: '#efeaff', muted: '#a99fc4' },
+  nwb:   { name: 'هوية النظام',   bg: '#101B24', accent: '#DE9526', arr: '#4BC98F', dep: '#6FB1D8', text: '#F2EFE8', muted: '#77848E' },
+  navy:  { name: 'كحلي/ذهبي',    bg: '#0B1B34', accent: '#D9B25F', arr: '#3DDC97', dep: '#5AA6FF', text: '#E8EEF7', muted: '#8EA3C4' },
+  black: { name: 'أسود/كهرماني',  bg: '#0A0A0C', accent: '#F0A92B', arr: '#37D67A', dep: '#5AA6FF', text: '#F2F2F4', muted: '#9A9AA2' },
+  teal:  { name: 'بترولي',        bg: '#07211F', accent: '#E6C66B', arr: '#56E0B0', dep: '#4FC3D9', text: '#EAFAF6', muted: '#8FB8B2' },
 }
 
 const nmOf = (s, isAr) => (isAr ? s?.name_ar : s?.name_en) || '—'
@@ -48,19 +48,19 @@ const Row = memo(function Row({ e, accent, th, isAr }) {
   const arr = e.type === 'arrival'
   return (
     <div className="lb-row" style={{ display: 'flex', alignItems: 'center', gap: 14, height: 80, boxSizing: 'border-box', padding: '0 18px', borderBottom: '1px solid rgba(255,255,255,0.07)', opacity: upcoming ? 0.72 : 1 }}>
-      <div style={{ minWidth: 70, textAlign: 'center', fontFamily: 'monospace', fontSize: 28, fontWeight: 800, color: th.accent, letterSpacing: 1 }}>{e.time}</div>
+      <div style={{ minWidth: 70, textAlign: 'center', fontFamily: "'IBM Plex Mono', monospace", fontSize: 28, fontWeight: 800, color: th.accent, letterSpacing: 1 }}>{e.time}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 16, fontWeight: 900, color: th.text, lineHeight: 1.18, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {nmOf(e.trip?.from_station, isAr)} <span style={{ color: accent, fontWeight: 700, margin: '0 4px' }}>→</span> {nmOf(e.trip?.to_station, isAr)}
         </div>
-        <div style={{ fontSize: 13, color: th.muted, marginTop: 3, fontFamily: 'monospace' }}>
+        <div style={{ fontSize: 13, color: th.muted, marginTop: 3, fontFamily: "'IBM Plex Mono', monospace" }}>
           {isAr ? 'رحلة' : 'Trip'} {e.trip?.trip_number || '—'}{e.bus && <span style={{ marginInlineStart: 10 }}>{e.bus}</span>}
         </div>
       </div>
       <div style={{ textAlign: 'center', minWidth: 96 }}>
         {upcoming
-          ? <span style={{ fontSize: 12, fontWeight: 700, color: th.muted, border: `1px solid ${th.muted}55`, borderRadius: 12, padding: '4px 12px', whiteSpace: 'nowrap' }}>{isAr ? 'مجدولة' : 'Scheduled'}</span>
-          : <span style={{ fontSize: 13, fontWeight: 800, color: accent, background: `${accent}1f`, borderRadius: 12, padding: '4px 12px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>}
+          ? <span style={{ fontSize: 12, fontWeight: 700, color: th.muted, border: `1px solid ${th.muted}55`, borderRadius: 6, padding: '4px 12px', whiteSpace: 'nowrap' }}>{isAr ? 'مجدولة' : 'Scheduled'}</span>
+          : <span style={{ fontSize: 13, fontWeight: 800, color: accent, background: `${accent}1f`, borderRadius: 6, padding: '4px 12px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>}
       </div>
     </div>
   )
@@ -88,7 +88,7 @@ export default function LiveBoard() {
 
 
   const [mode, setMode] = useState(() => localStorage.getItem('nwbus_board_mode') || 'actual')
-  const [theme, setTheme] = useState(() => localStorage.getItem('nwbus_board_theme') || 'navy')
+  const [theme, setTheme] = useState(() => localStorage.getItem('nwbus_board_theme') || 'nwb')
   const [layout, setLayout] = useState(() => localStorage.getItem('nwbus_board_layout') || 'columns')
   const [bg, setBg] = useState(() => localStorage.getItem('nwbus_board_bg') || '')
   const [events, setEvents] = useState([])
@@ -107,7 +107,7 @@ export default function LiveBoard() {
   const view = layout === 'feed' ? 'feed' : 'columns'   // التلقائي يستخدم بنية العمودين
   const COL_PER = 6   // عدد الرحلات في كل لقطة (للوضع التلقائي)
 
-  const th = THEMES[theme] || THEMES.navy
+  const th = THEMES[theme] || THEMES.nwb
   const sigRef = useRef('')
   const setEventsIfChanged = list => {
     const sig = list.map(e => e.id + e.time + e.status).join('|')
@@ -233,7 +233,7 @@ export default function LiveBoard() {
       `}</style>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '22px 48px', borderBottom: `2px solid ${th.accent}88` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '22px 48px', borderBottom: `2px solid ${th.accent}` }}>
         <div style={{ width: 160 }} dangerouslySetInnerHTML={{ __html: NWB_LOGO_SVG.replace('width="180" height="90"', 'width="160" height="68"') }} />
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: 1 }}>{isAr ? 'حركة الرحلات المباشرة' : 'Live Trip Movements'}</div>
@@ -249,9 +249,9 @@ export default function LiveBoard() {
       {isGeneralAdmin && (
         <div style={{ position: 'absolute', top: 100, insetInlineStart: 48, display: 'flex', gap: 6, opacity: showHint ? 1 : 0, transition: 'opacity .4s', zIndex: 6 }}>
           {[['actual', isAr ? 'فعلي' : 'Actual'], ['scheduled', isAr ? 'مجدول' : 'Scheduled']].map(([v, l]) => (
-            <button key={v} onClick={() => setModePref(v)} style={{ padding: '6px 16px', borderRadius: 8, border: `1px solid ${th.accent}66`, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: mode === v ? th.accent : 'transparent', color: mode === v ? '#0b1b34' : th.text }}>{l}</button>
+            <button key={v} onClick={() => setModePref(v)} style={{ padding: '6px 16px', borderRadius: 6, border: `1px solid ${th.accent}66`, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: mode === v ? th.accent : 'transparent', color: mode === v ? '#0b1b34' : th.text }}>{l}</button>
           ))}
-          <button onClick={() => setSettingsOpen(true)} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${th.accent}66`, fontSize: 13, cursor: 'pointer', background: 'transparent', color: th.text }}>{isAr ? 'إعدادات' : 'Settings'}</button>
+          <button onClick={() => setSettingsOpen(true)} style={{ padding: '6px 14px', borderRadius: 6, border: `1px solid ${th.accent}66`, fontSize: 13, cursor: 'pointer', background: 'transparent', color: th.text }}>{isAr ? 'إعدادات' : 'Settings'}</button>
         </div>
       )}
 
@@ -266,7 +266,7 @@ export default function LiveBoard() {
             const shown = isAuto ? items.slice(p * COL_PER, p * COL_PER + COL_PER) : items
             const flow = !isAuto && items.length > 7
             return (
-              <div key={col.type} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: 'rgba(255,255,255,0.025)', borderRadius: 16, overflow: 'hidden' }}>
+              <div key={col.type} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: 'rgba(255,255,255,0.025)', borderRadius: 8, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', background: 'rgba(255,255,255,0.04)', borderBottom: `2px solid ${col.accent}` }}>
                   <span className="lb-ar" style={{ fontSize: 24, color: col.accent }}>{col.icon}</span>
                   <span style={{ fontSize: 22, fontWeight: 800, color: col.accent }}>{col.label}</span>
@@ -284,7 +284,7 @@ export default function LiveBoard() {
         </div>
       ) : (
         <div style={{ padding: '18px 40px', height: 'calc(100% - 130px)', overflow: 'hidden', boxSizing: 'border-box' }}>
-          <div style={{ background: 'rgba(255,255,255,0.025)', borderRadius: 16, overflow: 'hidden', height: '100%' }}>
+          <div style={{ background: 'rgba(255,255,255,0.025)', borderRadius: 8, overflow: 'hidden', height: '100%' }}>
             <div style={feedSorted.length > 9 ? { animation: `scrollup ${feedSorted.length * 3.5}s linear infinite` } : {}}>
               {[...feedSorted, ...(feedSorted.length > 9 ? feedSorted : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={e.type === 'arrival' ? th.arr : th.dep} th={th} isAr={isAr} />)}
               {feedSorted.length === 0 && <div style={{ textAlign: 'center', color: th.muted, fontSize: 20, padding: '80px 0' }}>{isAr ? 'لا حركة حالياً' : 'No movements'}</div>}
@@ -296,7 +296,7 @@ export default function LiveBoard() {
       {/* Settings panel */}
       {settingsOpen && (
         <div onClick={() => setSettingsOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#0e1f3d', border: `1px solid ${th.accent}55`, borderRadius: 16, padding: 24, width: 420, maxWidth: '90%' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#16232E', border: `1px solid ${th.accent}55`, borderRadius: 8, padding: 24, width: 420, maxWidth: '90%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
               <span style={{ fontSize: 18, fontWeight: 800 }}>{isAr ? 'إعدادات الشاشة' : 'Board Settings'}</span>
               <button onClick={() => setSettingsOpen(false)} style={{ background: 'none', border: 'none', color: th.muted, fontSize: 22, cursor: 'pointer' }}>×</button>
@@ -306,7 +306,7 @@ export default function LiveBoard() {
               <>
                 <div style={{ fontSize: 13, color: th.muted, marginBottom: 6 }}>{isAr ? 'المحطة المعروضة' : 'Displayed station'}</div>
                 <select value={boardStation} onChange={e => setStationPref(e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: th.text, fontSize: 13, marginBottom: 18 }}>
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: th.text, fontSize: 13, marginBottom: 18 }}>
                   <option value="all" style={{ color: '#000' }}>{isAr ? 'كل المحطات (شامل)' : 'All stations'}</option>
                   {stations.map(s => <option key={s.id} value={s.id} style={{ color: '#000' }}>{nm(s)}</option>)}
                 </select>
@@ -316,7 +316,7 @@ export default function LiveBoard() {
             <div style={{ fontSize: 13, color: th.muted, marginBottom: 6 }}>{isAr ? 'القالب واللون' : 'Theme'}</div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
               {Object.entries(THEMES).map(([k, v]) => (
-                <button key={k} onClick={() => setThemePref(k)} style={{ padding: '8px 12px', borderRadius: 10, cursor: 'pointer', border: theme === k ? `2px solid ${v.accent}` : '1px solid rgba(255,255,255,0.2)', background: v.bg.includes('gradient') ? v.bg : v.bg, color: v.text, fontSize: 12, fontWeight: 700 }}>
+                <button key={k} onClick={() => setThemePref(k)} style={{ padding: '8px 12px', borderRadius: 6, cursor: 'pointer', border: theme === k ? `2px solid ${v.accent}` : '1px solid rgba(255,255,255,0.2)', background: v.bg.includes('gradient') ? v.bg : v.bg, color: v.text, fontSize: 12, fontWeight: 700 }}>
                   <span style={{ color: v.accent }}>●</span> {v.name}
                 </button>
               ))}
@@ -325,7 +325,7 @@ export default function LiveBoard() {
             <div style={{ fontSize: 13, color: th.muted, marginBottom: 6 }}>{isAr ? 'طريقة العرض' : 'Layout'}</div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
               {[['columns', isAr ? 'عمودان منفصلان' : 'Two columns'], ['feed', isAr ? 'متتالي (قائمة واحدة)' : 'Continuous feed'], ['auto', isAr ? 'تنقّل تلقائي (كل 15ث)' : 'Auto (every 15s)']].map(([v, l]) => (
-                <button key={v} onClick={() => setLayoutPref(v)} style={{ flex: '1 1 45%', padding: '10px', borderRadius: 10, cursor: 'pointer', border: layout === v ? `2px solid ${th.accent}` : '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: th.text, fontSize: 13, fontWeight: 700 }}>{l}</button>
+                <button key={v} onClick={() => setLayoutPref(v)} style={{ flex: '1 1 45%', padding: '10px', borderRadius: 6, cursor: 'pointer', border: layout === v ? `2px solid ${th.accent}` : '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: th.text, fontSize: 13, fontWeight: 700 }}>{l}</button>
               ))}
             </div>
 
@@ -334,11 +334,11 @@ export default function LiveBoard() {
                 <div style={{ fontSize: 13, color: th.muted, marginBottom: 6 }}>{isAr ? 'مدة كل لقطة (ثانية)' : 'Seconds per view'}</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   {[10, 15, 20, 30, 60].map(s => (
-                    <button key={s} onClick={() => setRotatePref(s)} style={{ padding: '8px 14px', borderRadius: 10, cursor: 'pointer', border: rotateSec === s ? `2px solid ${th.accent}` : '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: th.text, fontSize: 13, fontWeight: 700 }}>{s}{isAr ? 'ث' : 's'}</button>
+                    <button key={s} onClick={() => setRotatePref(s)} style={{ padding: '8px 14px', borderRadius: 6, cursor: 'pointer', border: rotateSec === s ? `2px solid ${th.accent}` : '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: th.text, fontSize: 13, fontWeight: 700 }}>{s}{isAr ? 'ث' : 's'}</button>
                   ))}
                   <input type="number" min="3" value={rotateSec}
                     onChange={e => setRotatePref(Math.max(3, Number(e.target.value) || 3))}
-                    style={{ width: 70, padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: th.text, fontSize: 13, textAlign: 'center' }} />
+                    style={{ width: 70, padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: th.text, fontSize: 13, textAlign: 'center' }} />
                 </div>
               </div>
             )}
@@ -352,7 +352,7 @@ export default function LiveBoard() {
               rd.readAsDataURL(f)
             }} style={{ fontSize: 12, color: th.text, marginBottom: 8 }} />
             <input value={bg.startsWith('data:') ? '' : bg} onChange={e => setBgPref(e.target.value)} placeholder={isAr ? 'أو ألصق رابط صورة https://...' : 'or paste URL https://...'}
-              dir="ltr" style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: th.text, fontSize: 13, boxSizing: 'border-box' }} />
+              dir="ltr" style={{ width: '100%', padding: '9px 12px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: th.text, fontSize: 13, boxSizing: 'border-box' }} />
             {bg && <button onClick={() => setBgPref('')} style={{ marginTop: 8, fontSize: 12, color: '#ff8a8a', background: 'none', border: 'none', cursor: 'pointer' }}>{isAr ? 'إزالة الخلفية' : 'Remove background'}</button>}
           </div>
         </div>
@@ -360,7 +360,7 @@ export default function LiveBoard() {
 
       {/* Exit */}
       <div style={{ position: 'absolute', bottom: 16, width: '100%', textAlign: 'center', opacity: showHint ? 1 : 0, transition: 'opacity .5s' }}>
-        <button onClick={() => navigate('/')} style={{ background: 'rgba(255,255,255,0.08)', color: th.muted, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 20, padding: '7px 20px', fontSize: 13, cursor: 'pointer' }}>
+        <button onClick={() => navigate('/')} style={{ background: 'rgba(255,255,255,0.08)', color: th.muted, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '7px 20px', fontSize: 13, cursor: 'pointer' }}>
           {isAr ? '✕ خروج (أو زر Esc)' : '✕ Exit (or Esc)'}
         </button>
       </div>
