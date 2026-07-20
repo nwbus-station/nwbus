@@ -3,6 +3,10 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
+// مدة الجلسة القصوى: تسجيل خروج تلقائي بعدها (وردية كاملة)
+const SESSION_HOURS = 8
+const LOGIN_AT_KEY  = 'nwbus_login_at'
+
 export function AuthProvider({ children }) {
   const [session,      setSession]      = useState(null)
   const [profile,      setProfile]      = useState(null)   // users table row
@@ -51,6 +55,24 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  // انتهاء الجلسة: خروج تلقائي بعد SESSION_HOURS من تسجيل الدخول
+  useEffect(() => {
+    if (!session) return
+    // جلسة قائمة بدون طابع (مسجل قبل هذه الميزة): يبدأ عدّها الآن
+    if (!localStorage.getItem(LOGIN_AT_KEY)) {
+      localStorage.setItem(LOGIN_AT_KEY, String(Date.now()))
+    }
+    const check = () => {
+      const t = Number(localStorage.getItem(LOGIN_AT_KEY) || 0)
+      if (t && Date.now() - t > SESSION_HOURS * 3600 * 1000) {
+        signOut()
+      }
+    }
+    check()
+    const id = setInterval(check, 60 * 1000)
+    return () => clearInterval(id)
+  }, [session])
+
   // Realtime — أي تعديل على بيانات المستخدم يُطبَّق فوراً (channel ثابت لا يُعاد إنشاؤه)
   useEffect(() => {
     const channel = supabase
@@ -78,6 +100,7 @@ export function AuthProvider({ children }) {
     const email = `${username.toLowerCase()}@nwbus.sa`
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setLoading(false); throw error }
+    localStorage.setItem(LOGIN_AT_KEY, String(Date.now()))   // بداية عدّ الـ 8 ساعات
     if (data?.user) {
       await fetchProfile(data.user)
       // تحديث last_login — نعطّل الـ ref مؤقتاً لمنع الـ realtime من إعادة الجلب
@@ -91,6 +114,7 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
+    localStorage.removeItem(LOGIN_AT_KEY)
     await supabase.auth.signOut()
     setProfile(null)
     setLoading(false)
