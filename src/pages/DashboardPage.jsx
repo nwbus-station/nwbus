@@ -117,12 +117,27 @@ export default function DashboardPage() {
     return isAr ? `منذ ${Math.floor(diff / 1440)} يوم` : `${Math.floor(diff / 1440)}d ago`
   }
 
-  /* ── وصلات سريعة ── */
+  /* ── وصلات سريعة: كل الأقسام حسب صلاحيات الدور (نفس منطق شريط التنقل) ── */
+  const mods = profile?.allowed_modules
   const quickLinks = [
-    { to: '/transportation', ar: 'الترحيل',    en: 'Transportation' },
-    ...(isAdmin || profile?.role === 'accountant' ? [{ to: '/reports', ar: 'التقارير', en: 'Reports' }] : []),
+    { to: '/transportation', ar: 'الترحيل',    en: 'Transportation', module: 'transportation' },
+    { to: '/lost-found',     ar: 'الموجودات',  en: 'Lost & Found',   module: 'lost_found' },
+    { to: '/sales',          ar: 'الإيرادات',  en: 'Sales',          module: 'sales' },
+    { to: '/reports',        ar: 'التقارير',    en: 'Reports',        module: 'reports',
+      roles: ['general_admin', 'station_admin', 'accountant'] },
+    { to: '/leaves',         ar: 'الإجازات',    en: 'Leaves' },
+    { to: '/users',          ar: 'الموظفون',    en: 'Staff',
+      roles: ['general_admin', 'station_admin'] },
+    { to: '/stations',       ar: 'المحطات',     en: 'Stations',
+      roles: ['general_admin'] },
+    { to: '/settings',       ar: 'الإعدادات',   en: 'Settings',
+      roles: ['general_admin'] },
     { to: '/board',          ar: 'شاشة العرض', en: 'Live Board' },
-  ]
+  ].filter(l => {
+    if (l.roles && !l.roles.includes(profile?.role)) return false
+    if (l.module && mods && !mods.includes(l.module)) return false
+    return true
+  })
 
   const card = 'bg-white border border-gray-200 rounded-lg'
 
@@ -173,14 +188,15 @@ export default function DashboardPage() {
               <p className="mt-3 text-sm text-gray-400">{dateStr}</p>
             </div>
 
-            {/* وصلات سريعة */}
-            <div className="flex border-t border-gray-200">
-              {quickLinks.map((l, i) => (
+            {/* وصلات سريعة — كل الأقسام المتاحة للدور */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-px border-t border-gray-200"
+              style={{ background: 'var(--border)' }}>
+              {quickLinks.map(l => (
                 <button key={l.to} onClick={() => navigate(l.to)}
-                  className={`flex-1 py-3 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors ${i > 0 ? 'border-s border-gray-200' : ''}`}
-                  style={{ background: 'transparent' }}
+                  className="py-3 px-2 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+                  style={{ background: 'var(--card)' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#F5F2EB'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  onMouseLeave={e => e.currentTarget.style.background = 'var(--card)'}>
                   {isAr ? l.ar : l.en} ←
                 </button>
               ))}
