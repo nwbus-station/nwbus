@@ -32,10 +32,12 @@ export const USER_ROLES = [
 
 // Modules (sections of the system)
 export const MODULES = [
-  { value: 'transportation', ar: 'الترحيل',    en: 'Transportation' },
-  { value: 'sales',          ar: 'المبيعات',   en: 'Sales' },
-  { value: 'lost_found',     ar: 'الموجودات',  en: 'Lost & Found' },
-  { value: 'reports',        ar: 'التقارير',   en: 'Reports' },
+  { value: 'transportation', ar: 'الترحيل',     en: 'Transportation' },
+  { value: 'sales',          ar: 'المبيعات',    en: 'Sales' },
+  { value: 'lost_found',     ar: 'الموجودات',   en: 'Lost & Found' },
+  { value: 'reports',        ar: 'التقارير',    en: 'Reports' },
+  { value: 'leaves',         ar: 'الإجازات',    en: 'Leaves' },
+  { value: 'live_board',     ar: 'شاشة العرض',  en: 'Live Board' },
 ]
 
 // Departure accuracy thresholds (minutes)

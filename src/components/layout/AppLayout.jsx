@@ -157,7 +157,7 @@ const NAV_GROUPS = [
       { to: '/lost-found',     labelAr: 'الموجودات',      labelEn: 'Lost & Found',   icon: 'bag',     roles: null,                                          module: 'lost_found' },
       { to: '/sales',          labelAr: 'الإيرادات',      labelEn: 'Sales',          icon: 'sales',   roles: null,                                          module: 'sales' },
       { to: '/reports',        labelAr: 'التقارير',        labelEn: 'Reports',        icon: 'report',  roles: ['general_admin','station_admin','accountant'], module: 'reports' },
-      { to: '/leaves',         labelAr: 'الإجازات',        labelEn: 'Leaves',         icon: 'leave',   roles: null, module: null },
+      { to: '/leaves',         labelAr: 'الإجازات',        labelEn: 'Leaves',         icon: 'leave',   roles: null, module: 'leaves' },
     ]
   },
   {
@@ -279,13 +279,15 @@ export default function AppLayout() {
 
         <div style={{ flex: 1 }} />
 
-        {/* شاشة العرض */}
+        {/* شاشة العرض — تُخفى لمن حُجب عنه القسم */}
+        {(!mods || mods.includes('live_board')) && (
         <button onClick={() => navigate('/board')} style={ghostBtn}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#DE9526'; e.currentTarget.style.color = '#DE9526' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.16)'; e.currentTarget.style.color = '#A8B2BA' }}>
           <Icon d={ICONS.monitor} size={13} />
           <span className="hidden md:inline">{isAr ? 'شاشة العرض' : 'Live Board'}</span>
         </button>
+        )}
 
         {/* اللغة */}
         <button onClick={toggleLang} style={ghostBtn}

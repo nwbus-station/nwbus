@@ -117,11 +117,12 @@ export default function DashboardPage() {
     return isAr ? `منذ ${Math.floor(diff / 1440)} يوم` : `${Math.floor(diff / 1440)}d ago`
   }
 
-  /* ── وصلات سريعة ── */
+  /* ── وصلات سريعة (تحترم الأقسام المحجوبة عن المستخدم) ── */
+  const mods = profile?.allowed_modules
   const quickLinks = [
-    { to: '/transportation', ar: 'الترحيل',    en: 'Transportation' },
+    ...(!mods || mods.includes('transportation') ? [{ to: '/transportation', ar: 'الترحيل', en: 'Transportation' }] : []),
     ...(isAdmin || profile?.role === 'accountant' ? [{ to: '/reports', ar: 'التقارير', en: 'Reports' }] : []),
-    { to: '/board',          ar: 'شاشة العرض', en: 'Live Board' },
+    ...(!mods || mods.includes('live_board') ? [{ to: '/board', ar: 'شاشة العرض', en: 'Live Board' }] : []),
   ]
 
   const card = 'bg-white border border-gray-200 rounded-lg'
