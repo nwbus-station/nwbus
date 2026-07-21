@@ -32,6 +32,32 @@ const RAW_TABLES = [
   'sales_records',
 ];
 
+// الترجمة العربية لدقة المغادرة والحالات التشغيلية
+const ACCURACY_AR = {
+  'Early':       'مبكرة',
+  'On Time':     'في الموعد',
+  'Not On Time': 'غير منضبطة',
+  'Delayed':     'متأخرة',
+};
+const STATUS_AR = {
+  'Accident between other vehicles': 'حادث بين مركبات أخرى',
+  'Health (Driver/Passengers)':      'حالة صحية (سائق/ركاب)',
+  'Passenger Misbehavior':           'سوء سلوك راكب',
+  'Police Control':                  'نقطة تفتيش',
+  'Traffic Jam':                     'ازدحام مروري',
+  'Weather':                         'أحوال جوية',
+  'Accident with NWB bus':           'حادث لحافلة NWB',
+  'Malfunction inside the station':  'عطل داخل المحطة',
+  'Out-of-station malfunction':      'عطل خارج المحطة',
+  'Normal':                          'طبيعية',
+};
+
+// ألوان الهوية
+const C_PRIMARY = '#16315e';
+const C_BAND    = '#eef2f9';
+const C_OK      = '#1e7e34';
+const C_BAD     = '#b02a37';
+
 // أعمدة الترحيل وعناوينها العربية في تبويبات المحطات
 const COLUMNS = [
   ['record_date',        'التاريخ'],
@@ -93,12 +119,192 @@ function runBackup() {
     totalRaw += rows.length;
   });
 
+  // تبويب التحليل — أول تبويب في الملف
+  const summary = buildAnalysisSheet(ss, stations, records, stationName);
+
   // تحديث وقت آخر نسخة
   updateStatusSheet(ss, stations.length, records.length, totalRaw);
 
   // إرسال النسخة للإيميل
   SpreadsheetApp.flush();
-  sendBackupEmail(ss, stations.length, records.length, totalRaw);
+  sendBackupEmail(ss, stations.length, records.length, totalRaw, summary);
+}
+
+/**
+ * تبويب "📊 التحليل" — لوحة مؤشرات: أمس + آخر 7 أيام + أداء المحطات + رسوم بيانية.
+ * يعيد ملخص أمس لاستخدامه في نص الإيميل.
+ */
+function buildAnalysisSheet(ss, stations, records, stationName) {
+  const tz  = Session.getScriptTimeZone();
+  const fmt = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
+  const DAY = 24 * 3600 * 1000;
+  const yday = fmt(new Date(Date.now() - DAY));
+
+  // آخر 7 أيام منتهية (الأقدم أولاً وآخرها أمس)
+  const days = [];
+  for (let i = 7; i >= 1; i--) days.push(fmt(new Date(Date.now() - i * DAY)));
+
+  const newStat = function () { return { trips: 0, pax: 0, missed: 0, onTime: 0, late: 0, acc: 0, cancelled: 0, extra: 0 }; };
+  const addTo = function (s, r) {
+    s.trips++;
+    s.pax    += r.passenger_count || 0;
+    s.missed += r.missed_count || 0;
+    if (r.is_cancelled)  s.cancelled++;
+    if (r.is_extra_trip) s.extra++;
+    if (r.departure_accuracy) {
+      s.acc++;
+      if (r.departure_accuracy === 'Early' || r.departure_accuracy === 'On Time') s.onTime++;
+      else s.late++;
+    }
+  };
+  const pctTxt = function (s) { return s.acc > 0 ? Math.round((s.onTime / s.acc) * 100) + '%' : '—'; };
+
+  const byDay = {};
+  days.forEach(function (d) { byDay[d] = newStat(); });
+  const ydayByStation = {};
+  const statusCount = {};
+
+  records.forEach(function (r) {
+    const d = String(r.record_date).slice(0, 10);
+    if (byDay[d]) addTo(byDay[d], r);
+    if (d === yday) {
+      const sid = r.station_id;
+      if (!ydayByStation[sid]) ydayByStation[sid] = newStat();
+      addTo(ydayByStation[sid], r);
+      if (r.operational_status && r.operational_status !== 'Normal') {
+        statusCount[r.operational_status] = (statusCount[r.operational_status] || 0) + 1;
+      }
+    }
+  });
+  const y = byDay[yday];
+
+  // ── بناء التبويب ──
+  let sheet = ss.getSheetByName('📊 التحليل');
+  if (!sheet) sheet = ss.insertSheet('📊 التحليل', 0);
+  sheet.getCharts().forEach(function (c) { sheet.removeChart(c); });
+  sheet.clear();
+  sheet.setRightToLeft(true);
+
+  const setRow = function (row, values) {
+    sheet.getRange(row, 1, 1, values.length).setValues([values]);
+  };
+
+  // العنوان
+  sheet.getRange(1, 1, 1, 7).merge().setValue('NORTH WEST BUS — التقرير اليومي')
+    .setBackground(C_PRIMARY).setFontColor('#ffffff').setFontWeight('bold').setFontSize(14)
+    .setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 34);
+  sheet.getRange(2, 1, 1, 7).merge()
+    .setValue('تقرير يوم ' + yday + '  ·  أُنشئ تلقائياً ' + Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm'))
+    .setFontColor('#666666').setFontSize(9).setHorizontalAlignment('center');
+
+  // مؤشرات أمس (KPI)
+  const kpiLabels = ['رحلات أمس', 'الركاب', 'المتخلفون', 'الانضباط', 'متأخرة', 'ملغاة', 'إضافية RF'];
+  const kpiValues = [y.trips, y.pax, y.missed, pctTxt(y), y.late, y.cancelled, y.extra];
+  setRow(4, kpiLabels);
+  setRow(5, kpiValues);
+  sheet.getRange(4, 1, 1, 7).setBackground(C_BAND).setFontColor('#555555').setFontSize(9)
+    .setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.getRange(5, 1, 1, 7).setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center')
+    .setFontColor(C_PRIMARY);
+  sheet.getRange(5, 5).setFontColor(y.late > 0 ? C_BAD : C_OK);   // متأخرة
+  sheet.getRange(5, 6).setFontColor(y.cancelled > 0 ? C_BAD : C_OK); // ملغاة
+  sheet.setRowHeight(5, 30);
+  sheet.getRange(4, 1, 2, 7).setBorder(true, true, true, true, true, false);
+
+  const tableHeader = ['التاريخ', 'الرحلات', 'الركاب', 'المتخلفون', 'الانضباط', 'متأخرة', 'ملغاة'];
+  const styleSection = function (row, title) {
+    sheet.getRange(row, 1, 1, 7).merge().setValue(title)
+      .setBackground(C_PRIMARY).setFontColor('#ffffff').setFontWeight('bold').setFontSize(10);
+  };
+  const styleTable = function (headerRow, nRows) {
+    sheet.getRange(headerRow, 1, 1, 7).setBackground(C_BAND).setFontWeight('bold').setFontSize(9)
+      .setHorizontalAlignment('center');
+    if (nRows > 0) {
+      sheet.getRange(headerRow + 1, 1, nRows, 7).setHorizontalAlignment('center').setFontSize(10);
+      sheet.getRange(headerRow, 1, nRows + 1, 7).setBorder(true, true, true, true, true, true, '#dddddd', SpreadsheetApp.BorderStyle.SOLID);
+      for (let i = 0; i < nRows; i += 2) {
+        sheet.getRange(headerRow + 1 + i, 1, 1, 7).setBackground('#f8f9fb');
+      }
+    }
+  };
+
+  // جدول آخر 7 أيام
+  let row = 7;
+  styleSection(row, 'أداء آخر 7 أيام');
+  setRow(row + 1, tableHeader);
+  const daysStart = row + 2;
+  days.forEach(function (d, i) {
+    const s = byDay[d];
+    setRow(daysStart + i, [d, s.trips, s.pax, s.missed, pctTxt(s), s.late, s.cancelled]);
+  });
+  styleTable(row + 1, days.length);
+
+  // جدول المحطات — أمس
+  row = daysStart + days.length + 1;
+  styleSection(row, 'أداء المحطات — يوم ' + yday);
+  setRow(row + 1, ['المحطة', 'الرحلات', 'الركاب', 'المتخلفون', 'الانضباط', 'متأخرة', 'ملغاة']);
+  const activeStations = stations.filter(function (s) { return ydayByStation[s.id]; });
+  const stStart = row + 2;
+  activeStations.forEach(function (st, i) {
+    const s = ydayByStation[st.id];
+    setRow(stStart + i, [stationName[st.id], s.trips, s.pax, s.missed, pctTxt(s), s.late, s.cancelled]);
+  });
+  if (activeStations.length === 0) {
+    setRow(stStart, ['لا توجد سجلات أمس', '', '', '', '', '', '']);
+  }
+  styleTable(row + 1, Math.max(activeStations.length, 1));
+
+  // الحالات التشغيلية غير الطبيعية — أمس
+  row = stStart + Math.max(activeStations.length, 1) + 1;
+  styleSection(row, 'الحالات التشغيلية غير الطبيعية — يوم ' + yday);
+  const statusKeys = Object.keys(statusCount);
+  if (statusKeys.length === 0) {
+    sheet.getRange(row + 1, 1, 1, 7).merge().setValue('✅ لا توجد حالات غير طبيعية')
+      .setFontColor(C_OK).setFontWeight('bold');
+  } else {
+    statusKeys.forEach(function (k, i) {
+      setRow(row + 1 + i, [STATUS_AR[k] || k, statusCount[k], '', '', '', '', '']);
+    });
+    sheet.getRange(row + 1, 1, statusKeys.length, 2)
+      .setBorder(true, true, true, true, true, true, '#dddddd', SpreadsheetApp.BorderStyle.SOLID);
+    sheet.getRange(row + 1, 2, statusKeys.length, 1).setFontWeight('bold').setFontColor(C_BAD)
+      .setHorizontalAlignment('center');
+  }
+
+  sheet.setColumnWidth(1, 150);
+  for (let c = 2; c <= 7; c++) sheet.setColumnWidth(c, 90);
+
+  // ── الرسوم البيانية ──
+  // ركاب آخر 7 أيام (خطي)
+  const lineChart = sheet.newChart()
+    .setChartType(Charts.ChartType.LINE)
+    .addRange(sheet.getRange(daysStart - 1, 1, days.length + 1, 1))
+    .addRange(sheet.getRange(daysStart - 1, 3, days.length + 1, 1))
+    .setPosition(4, 9, 0, 0)
+    .setOption('title', 'الركاب — آخر 7 أيام')
+    .setOption('legend', { position: 'none' })
+    .setOption('colors', [C_PRIMARY])
+    .setOption('width', 420).setOption('height', 260)
+    .build();
+  sheet.insertChart(lineChart);
+
+  // ركاب المحطات أمس (أعمدة)
+  if (activeStations.length > 0) {
+    const colChart = sheet.newChart()
+      .setChartType(Charts.ChartType.COLUMN)
+      .addRange(sheet.getRange(stStart - 1, 1, activeStations.length + 1, 1))
+      .addRange(sheet.getRange(stStart - 1, 3, activeStations.length + 1, 1))
+      .setPosition(18, 9, 0, 0)
+      .setOption('title', 'الركاب حسب المحطة — أمس')
+      .setOption('legend', { position: 'none' })
+      .setOption('colors', ['#c8a25a'])
+      .setOption('width', 420).setOption('height', 260)
+      .build();
+    sheet.insertChart(colChart);
+  }
+
+  return { yday: yday, trips: y.trips, pax: y.pax, missed: y.missed, onTimePct: pctTxt(y), late: y.late, cancelled: y.cancelled };
 }
 
 /**
@@ -193,7 +399,7 @@ function updateStatusSheet(ss, stationCount, recordCount, totalRaw) {
 /**
  * تصدير الملف كـ Excel وإرساله بالإيميل.
  */
-function sendBackupEmail(ss, stationCount, recordCount, totalRaw) {
+function sendBackupEmail(ss, stationCount, recordCount, totalRaw, summary) {
   const tz = Session.getScriptTimeZone();
   const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm');
@@ -203,20 +409,33 @@ function sendBackupEmail(ss, stationCount, recordCount, totalRaw) {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
   }).getBlob().setName('NWBUS_Backup_' + today + '.xlsx');
 
+  const kpi = function (label, value, color) {
+    return '<td style="border:1px solid #dde3ee;padding:10px 14px;text-align:center;background:#f8f9fb">' +
+      '<div style="font-size:11px;color:#777">' + label + '</div>' +
+      '<div style="font-size:20px;font-weight:bold;color:' + (color || C_PRIMARY) + '">' + value + '</div></td>';
+  };
+
   MailApp.sendEmail({
     to: BACKUP_EMAIL,
-    subject: '📦 NWBUS — النسخة الاحتياطية اليومية ' + today,
+    subject: '📦 NWBUS — التقرير اليومي والنسخة الاحتياطية · ' + (summary ? summary.yday : today),
     htmlBody:
-      '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;font-size:14px">' +
-      '<h3>✅ اكتملت النسخة الاحتياطية اليومية</h3>' +
-      '<table cellpadding="6" style="border-collapse:collapse">' +
-      '<tr><td><b>الوقت</b></td><td>' + now + '</td></tr>' +
-      '<tr><td><b>عدد المحطات</b></td><td>' + stationCount + '</td></tr>' +
-      '<tr><td><b>سجلات الترحيل</b></td><td>' + recordCount + '</td></tr>' +
-      '<tr><td><b>إجمالي الصفوف (كل الجداول)</b></td><td>' + totalRaw + '</td></tr>' +
-      '</table>' +
-      '<p>النسخة الكاملة مرفقة كملف Excel، وهي متاحة أيضاً في ملف Google Sheets.</p>' +
-      '<p style="color:#888">NWBUS — نسخ احتياطي تلقائي</p>' +
+      '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;font-size:14px;max-width:640px">' +
+      '<div style="background:' + C_PRIMARY + ';color:#fff;padding:14px 18px;font-weight:bold;font-size:16px">' +
+      'NORTH WEST BUS — التقرير اليومي' +
+      (summary ? '<div style="font-weight:normal;font-size:11px;opacity:.75;margin-top:2px">تقرير يوم ' + summary.yday + '</div>' : '') +
+      '</div>' +
+      (summary ?
+        '<table cellspacing="0" style="border-collapse:collapse;width:100%;margin-top:12px"><tr>' +
+        kpi('الرحلات', summary.trips) +
+        kpi('الركاب', summary.pax) +
+        kpi('المتخلفون', summary.missed) +
+        kpi('الانضباط', summary.onTimePct, summary.onTimePct === '—' ? '#777' : C_OK) +
+        kpi('متأخرة', summary.late, summary.late > 0 ? C_BAD : C_OK) +
+        kpi('ملغاة', summary.cancelled, summary.cancelled > 0 ? C_BAD : C_OK) +
+        '</tr></table>' : '') +
+      '<p style="margin-top:14px">📎 مرفق ملف Excel يحوي <b>تبويب التحليل</b> (مؤشرات أمس، آخر 7 أيام، أداء المحطات، الرسوم البيانية) ' +
+      'مع <b>النسخة الاحتياطية الكاملة</b> لكل الجداول (' + totalRaw + ' صف من ' + stationCount + ' محطة).</p>' +
+      '<p style="color:#888;font-size:11px">أُنشئ تلقائياً ' + now + ' · NWBUS — نسخ احتياطي يومي</p>' +
       '</div>',
     attachments: [blob],
   });
