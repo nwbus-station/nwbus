@@ -420,6 +420,7 @@ export default function TransportationPage() {
   const [showUpload, setShowUpload]       = useState(false)
   const [confirmRf,  setConfirmRf]        = useState(null)
   const [showSelect, setShowSelect]       = useState(false)
+  const [hiddenCount, setHiddenCount]     = useState(0)  // رحلات المحطة الموقوفة كلياً أو أحد اتجاهيها
 
   // محطات مثبّتة — مخزّنة في localStorage لكل مستخدم
   const PIN_KEY = `nwbus_pinned_stations_${profile?.id ?? 'guest'}`
@@ -572,6 +573,12 @@ export default function TransportationPage() {
     })
     entries.sort((a, b) => (a.schedTime || '').localeCompare(b.schedTime || ''))
 
+    // عدد الرحلات المخفية (كلياً أو أحد اتجاهيها) — لتنبيه الأدمن
+    setHiddenCount((chosen ?? []).filter(r =>
+      r.trip && r.trip.is_active && (!r.trip.is_rf || r.trip.rf_date === date) &&
+      (r.dep_enabled === false || r.arr_enabled === false)
+    ).length)
+
     setTrips(entries)
     setRecords(recs ?? [])
     setLoading(false)
@@ -657,7 +664,8 @@ export default function TransportationPage() {
   const extra        = records.filter(r => r.is_extra_trip).length
   const enteredPct   = total > 0 ? Math.round((entered / total) * 100) : 0
 
-  const canEdit = !isAccountant
+  // المحاسب الصرف لا يُدخل ترحيلاً — لكن المشرف/الأدمن الذي يحمل صفة محاسب إضافية يُدخل عادي
+  const canEdit = isGeneralAdmin || isStationAdmin || !isAccountant
 
   const selectedStationName = stations.find(s => s.id === selectedStation)
     ? (isAr
@@ -718,8 +726,14 @@ export default function TransportationPage() {
           {/* Select station trips — supervisor & admin */}
           {isGeneralAdmin && stationId && (
             <button onClick={() => setShowSelect(true)}
-              className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
+              className="h-9 flex items-center gap-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'تفعيل رحلات المحطة' : 'Activate Trips'}
+              {hiddenCount > 0 && (
+                <span title={isAr ? 'رحلات مخفية كلياً أو أحد اتجاهيها' : 'Trips hidden fully or one direction'}
+                  className="min-w-[18px] h-[18px] grid place-items-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1">
+                  {hiddenCount}
+                </span>
+              )}
             </button>
           )}
           {/* Add extra trip (RF) — supervisor & admin */}

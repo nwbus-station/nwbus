@@ -62,6 +62,7 @@ export default function StationTripsModal({ stationId, stationName, stations = [
   const [busy, setBusy]             = useState(null)
   const [search, setSearch]         = useState('')
   const [error, setError]           = useState('')
+  const [suspendedOnly, setSuspendedOnly] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -94,6 +95,8 @@ export default function StationTripsModal({ stationId, stationName, stations = [
         arrival_time: s.arrival_time ?? '',
         departure_station_id: s.departure_station_id ?? '',   // '' = محطة الانطلاق الأصلية من الجدول
         is_extra: !!s.is_extra,
+        depOn: s.dep_enabled === true,
+        arrOn: s.arr_enabled === true,
         enabled: s.dep_enabled === true || s.arr_enabled === true,
         exists: true,
       }))
@@ -117,7 +120,7 @@ export default function StationTripsModal({ stationId, stationName, stations = [
         const { error } = await supabase.from('station_trips').update({ dep_enabled: nv, arr_enabled: nv })
           .eq('station_id', stationId).eq('trip_schedule_id', tr.id)
         if (error) throw error
-        setSelected(prev => { const n = new Map(prev); n.set(tr.id, { ...ov, enabled: nv }); return n })
+        setSelected(prev => { const n = new Map(prev); n.set(tr.id, { ...ov, enabled: nv, depOn: nv, arrOn: nv }); return n })
       } else {
         const row = {
           station_id: stationId, trip_schedule_id: tr.id, departure_station_id: null, dep_enabled: true, arr_enabled: true,
@@ -127,7 +130,8 @@ export default function StationTripsModal({ stationId, stationName, stations = [
         const { error } = await supabase.from('station_trips').insert(row)
         if (error) throw error
         setSelected(prev => new Map(prev).set(tr.id, {
-          departure_time: row.departure_time ?? '', arrival_time: '', departure_station_id: '', is_extra: false, enabled: true, exists: true,
+          departure_time: row.departure_time ?? '', arrival_time: '', departure_station_id: '', is_extra: false,
+          depOn: true, arrOn: true, enabled: true, exists: true,
         }))
       }
     } catch (err) {
@@ -162,6 +166,21 @@ export default function StationTripsModal({ stationId, stationName, stations = [
     }
   }
 
+  // تفعيل/تعليق اتجاه واحد (مغادرة أو وصول) من الرحلة
+  async function toggleDirection(tr, dir) {
+    const ov = selected.get(tr.id)
+    if (!ov?.exists) return
+    const key = dir === 'dep' ? 'depOn' : 'arrOn'
+    const col = dir === 'dep' ? 'dep_enabled' : 'arr_enabled'
+    const nv = !ov[key]
+    const next = { ...ov, [key]: nv }
+    next.enabled = next.depOn || next.arrOn
+    setSelected(prev => { const n = new Map(prev); n.set(tr.id, next); return n })
+    const { error } = await supabase.from('station_trips').update({ [col]: nv })
+      .eq('station_id', stationId).eq('trip_schedule_id', tr.id)
+    if (error) setError(error.message)
+  }
+
   async function updateOverride(tripId, patch) {
     setSelected(prev => { const n = new Map(prev); n.set(tripId, { ...n.get(tripId), ...patch }); return n })
     const { error } = await supabase.from('station_trips').update(patch)
@@ -169,7 +188,12 @@ export default function StationTripsModal({ stationId, stationName, stations = [
     if (error) setError(error.message)
   }
 
+  // رحلة "معلّقة": مضافة للمحطة لكن كاملة الإيقاف أو أحد اتجاهيها موقوف
+  const isSuspended = ov => ov?.exists && (!ov.enabled || !ov.depOn || !ov.arrOn)
+  const suspendedCount = [...selected.values()].filter(isSuspended).length
+
   const shown = candidates.filter(t => {
+    if (suspendedOnly && !isSuspended(selected.get(t.id))) return false
     if (!search) return true
     const q = search.toLowerCase()
     return (t.trip_number ?? '').toLowerCase().includes(q) ||
@@ -209,6 +233,20 @@ export default function StationTripsModal({ stationId, stationName, stations = [
             })()}
           </div>
           {error && <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-2">{error}</div>}
+          {suspendedCount > 0 && (
+            <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-300 text-amber-800 text-xs rounded-lg px-3 py-2">
+              <span className="font-semibold">
+                ⚠️ {t(
+                  `${suspendedCount} trip(s) hidden (fully or one direction)`,
+                  suspendedCount === 1 ? 'توجد رحلة واحدة مخفية (كلياً أو أحد اتجاهيها)' : `توجد ${suspendedCount} رحلات مخفية (كلياً أو أحد اتجاهيها)`
+                )}
+              </span>
+              <button onClick={() => setSuspendedOnly(v => !v)}
+                className="shrink-0 border border-amber-400 rounded-lg px-2.5 py-1 font-semibold hover:bg-amber-100">
+                {suspendedOnly ? t('Show all', 'عرض الكل') : t('Show hidden only', 'عرض المخفية فقط')}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* List */}
@@ -236,9 +274,24 @@ export default function StationTripsModal({ stationId, stationName, stations = [
                       {ov?.is_extra && (
                         <span className="text-[10px] rounded-full px-2 py-0.5 bg-purple-100 text-purple-700 font-bold">RF</span>
                       )}
+                      {ov?.exists && !ov.enabled && (
+                        <span className="text-[10px] rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 font-bold">
+                          {t('Suspended', 'معلّقة')}
+                        </span>
+                      )}
                       {tr.passes && (
                         <span className="text-[10px] rounded-full px-2 py-0.5 bg-green-100 text-green-700">
                           {t('Passes your station', 'تمر بمحطتك')}
+                        </span>
+                      )}
+                      {isSel && !ov.depOn && (
+                        <span className="text-[10px] rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 font-bold">
+                          {t('Departure suspended', 'المغادرة معلّقة')}
+                        </span>
+                      )}
+                      {isSel && !ov.arrOn && (
+                        <span className="text-[10px] rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 font-bold">
+                          {t('Arrival suspended', 'الوصول معلّق')}
                         </span>
                       )}
                     </div>
@@ -253,6 +306,19 @@ export default function StationTripsModal({ stationId, stationName, stations = [
                 {/* محرّر محطة/موعد المغادرة — للرحلة المختارة */}
                 {isSel && (
                   <div className="mt-2 pt-2 border-t border-blue-100 grid grid-cols-3 gap-2" onClick={e => e.stopPropagation()}>
+                    <div className="col-span-3 flex items-center gap-2">
+                      <span className="text-[10px] text-gray-500">{t('Active directions', 'الاتجاهات المفعّلة')}:</span>
+                      {[['dep', t('Departure', 'المغادرة'), ov.depOn], ['arr', t('Arrival', 'الوصول'), ov.arrOn]].map(([dir, label, on]) => (
+                        <button key={dir} disabled={!canEdit || busy === tr.id}
+                          onClick={() => toggleDirection(tr, dir)}
+                          className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border transition-colors disabled:opacity-50 ${
+                            on
+                              ? 'bg-nwbus-primary border-nwbus-primary text-white hover:opacity-90'
+                              : 'bg-white border-amber-400 text-amber-600 hover:border-amber-500'}`}>
+                          {on ? '✓' : '—'} {label}
+                        </button>
+                      ))}
+                    </div>
                     <div>
                       <label className="block text-[10px] text-gray-500 mb-0.5">{t('Departure station', 'محطة المغادرة')}</label>
                       <select value={ov.departure_station_id || ''} disabled={!canEdit}
