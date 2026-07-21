@@ -295,6 +295,6 @@ function createDailyTrigger() {
   ScriptApp.newTrigger('backupTransportation')
     .timeBased()
     .everyDays(1)
-    .atHour(23)      // 11 مساءً
+    .atHour(7)       // 7 صباحاً — بعد انتهاء اليوم بـ7 ساعات (يغطي يوم أمس كاملاً)
     .create();
 }
