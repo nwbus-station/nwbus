@@ -67,7 +67,6 @@ const COLUMNS = [
   ['actual_departure',   'وقت المغادرة الفعلي'],
   ['operational_status', 'الحالة التشغيلية'],
   ['is_extra_trip',      'رحلة إضافية'],
-  ['is_cancelled',       'ملغاة'],
   ['notes',              'ملاحظات'],
   ['created_by_name',    'أُدخل بواسطة'],
   ['trip_schedule_id',   'رقم الرحلة'],
@@ -144,12 +143,11 @@ function buildAnalysisSheet(ss, stations, records, stationName) {
   const days = [];
   for (let i = 7; i >= 1; i--) days.push(fmt(new Date(Date.now() - i * DAY)));
 
-  const newStat = function () { return { trips: 0, pax: 0, missed: 0, onTime: 0, late: 0, acc: 0, cancelled: 0, extra: 0 }; };
+  const newStat = function () { return { trips: 0, pax: 0, missed: 0, onTime: 0, late: 0, acc: 0, extra: 0 }; };
   const addTo = function (s, r) {
     s.trips++;
     s.pax    += r.passenger_count || 0;
     s.missed += r.missed_count || 0;
-    if (r.is_cancelled)  s.cancelled++;
     if (r.is_extra_trip) s.extra++;
     if (r.departure_accuracy) {
       s.acc++;
@@ -189,42 +187,43 @@ function buildAnalysisSheet(ss, stations, records, stationName) {
     sheet.getRange(row, 1, 1, values.length).setValues([values]);
   };
 
+  const W = 6; // عدد أعمدة التقرير
+
   // العنوان
-  sheet.getRange(1, 1, 1, 7).merge().setValue('NORTH WEST BUS — التقرير اليومي')
+  sheet.getRange(1, 1, 1, W).merge().setValue('NORTH WEST BUS — التقرير اليومي')
     .setBackground(C_PRIMARY).setFontColor('#ffffff').setFontWeight('bold').setFontSize(14)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
   sheet.setRowHeight(1, 34);
-  sheet.getRange(2, 1, 1, 7).merge()
+  sheet.getRange(2, 1, 1, W).merge()
     .setValue('تقرير يوم ' + yday + '  ·  أُنشئ تلقائياً ' + Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm'))
     .setFontColor('#666666').setFontSize(9).setHorizontalAlignment('center');
 
   // مؤشرات أمس (KPI)
-  const kpiLabels = ['رحلات أمس', 'الركاب', 'المتخلفون', 'الانضباط', 'متأخرة', 'ملغاة', 'إضافية RF'];
-  const kpiValues = [y.trips, y.pax, y.missed, pctTxt(y), y.late, y.cancelled, y.extra];
+  const kpiLabels = ['رحلات أمس', 'الركاب', 'المتخلفون', 'الانضباط', 'متأخرة', 'إضافية RF'];
+  const kpiValues = [y.trips, y.pax, y.missed, pctTxt(y), y.late, y.extra];
   setRow(4, kpiLabels);
   setRow(5, kpiValues);
-  sheet.getRange(4, 1, 1, 7).setBackground(C_BAND).setFontColor('#555555').setFontSize(9)
+  sheet.getRange(4, 1, 1, W).setBackground(C_BAND).setFontColor('#555555').setFontSize(9)
     .setFontWeight('bold').setHorizontalAlignment('center');
-  sheet.getRange(5, 1, 1, 7).setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center')
+  sheet.getRange(5, 1, 1, W).setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center')
     .setFontColor(C_PRIMARY);
   sheet.getRange(5, 5).setFontColor(y.late > 0 ? C_BAD : C_OK);   // متأخرة
-  sheet.getRange(5, 6).setFontColor(y.cancelled > 0 ? C_BAD : C_OK); // ملغاة
   sheet.setRowHeight(5, 30);
-  sheet.getRange(4, 1, 2, 7).setBorder(true, true, true, true, true, false);
+  sheet.getRange(4, 1, 2, W).setBorder(true, true, true, true, true, false);
 
-  const tableHeader = ['التاريخ', 'الرحلات', 'الركاب', 'المتخلفون', 'الانضباط', 'متأخرة', 'ملغاة'];
+  const tableHeader = ['التاريخ', 'الرحلات', 'الركاب', 'المتخلفون', 'الانضباط', 'متأخرة'];
   const styleSection = function (row, title) {
-    sheet.getRange(row, 1, 1, 7).merge().setValue(title)
+    sheet.getRange(row, 1, 1, W).merge().setValue(title)
       .setBackground(C_PRIMARY).setFontColor('#ffffff').setFontWeight('bold').setFontSize(10);
   };
   const styleTable = function (headerRow, nRows) {
-    sheet.getRange(headerRow, 1, 1, 7).setBackground(C_BAND).setFontWeight('bold').setFontSize(9)
+    sheet.getRange(headerRow, 1, 1, W).setBackground(C_BAND).setFontWeight('bold').setFontSize(9)
       .setHorizontalAlignment('center');
     if (nRows > 0) {
-      sheet.getRange(headerRow + 1, 1, nRows, 7).setHorizontalAlignment('center').setFontSize(10);
-      sheet.getRange(headerRow, 1, nRows + 1, 7).setBorder(true, true, true, true, true, true, '#dddddd', SpreadsheetApp.BorderStyle.SOLID);
+      sheet.getRange(headerRow + 1, 1, nRows, W).setHorizontalAlignment('center').setFontSize(10);
+      sheet.getRange(headerRow, 1, nRows + 1, W).setBorder(true, true, true, true, true, true, '#dddddd', SpreadsheetApp.BorderStyle.SOLID);
       for (let i = 0; i < nRows; i += 2) {
-        sheet.getRange(headerRow + 1 + i, 1, 1, 7).setBackground('#f8f9fb');
+        sheet.getRange(headerRow + 1 + i, 1, 1, W).setBackground('#f8f9fb');
       }
     }
   };
@@ -236,22 +235,22 @@ function buildAnalysisSheet(ss, stations, records, stationName) {
   const daysStart = row + 2;
   days.forEach(function (d, i) {
     const s = byDay[d];
-    setRow(daysStart + i, [d, s.trips, s.pax, s.missed, pctTxt(s), s.late, s.cancelled]);
+    setRow(daysStart + i, [d, s.trips, s.pax, s.missed, pctTxt(s), s.late]);
   });
   styleTable(row + 1, days.length);
 
   // جدول المحطات — أمس
   row = daysStart + days.length + 1;
   styleSection(row, 'أداء المحطات — يوم ' + yday);
-  setRow(row + 1, ['المحطة', 'الرحلات', 'الركاب', 'المتخلفون', 'الانضباط', 'متأخرة', 'ملغاة']);
+  setRow(row + 1, ['المحطة', 'الرحلات', 'الركاب', 'المتخلفون', 'الانضباط', 'متأخرة']);
   const activeStations = stations.filter(function (s) { return ydayByStation[s.id]; });
   const stStart = row + 2;
   activeStations.forEach(function (st, i) {
     const s = ydayByStation[st.id];
-    setRow(stStart + i, [stationName[st.id], s.trips, s.pax, s.missed, pctTxt(s), s.late, s.cancelled]);
+    setRow(stStart + i, [stationName[st.id], s.trips, s.pax, s.missed, pctTxt(s), s.late]);
   });
   if (activeStations.length === 0) {
-    setRow(stStart, ['لا توجد سجلات أمس', '', '', '', '', '', '']);
+    setRow(stStart, ['لا توجد سجلات أمس', '', '', '', '', '']);
   }
   styleTable(row + 1, Math.max(activeStations.length, 1));
 
@@ -260,11 +259,11 @@ function buildAnalysisSheet(ss, stations, records, stationName) {
   styleSection(row, 'الحالات التشغيلية غير الطبيعية — يوم ' + yday);
   const statusKeys = Object.keys(statusCount);
   if (statusKeys.length === 0) {
-    sheet.getRange(row + 1, 1, 1, 7).merge().setValue('✅ لا توجد حالات غير طبيعية')
+    sheet.getRange(row + 1, 1, 1, W).merge().setValue('✅ لا توجد حالات غير طبيعية')
       .setFontColor(C_OK).setFontWeight('bold');
   } else {
     statusKeys.forEach(function (k, i) {
-      setRow(row + 1 + i, [STATUS_AR[k] || k, statusCount[k], '', '', '', '', '']);
+      setRow(row + 1 + i, [STATUS_AR[k] || k, statusCount[k], '', '', '', '']);
     });
     sheet.getRange(row + 1, 1, statusKeys.length, 2)
       .setBorder(true, true, true, true, true, true, '#dddddd', SpreadsheetApp.BorderStyle.SOLID);
@@ -273,7 +272,7 @@ function buildAnalysisSheet(ss, stations, records, stationName) {
   }
 
   sheet.setColumnWidth(1, 150);
-  for (let c = 2; c <= 7; c++) sheet.setColumnWidth(c, 90);
+  for (let c = 2; c <= W; c++) sheet.setColumnWidth(c, 90);
 
   // ── الرسوم البيانية ──
   // ركاب آخر 7 أيام (خطي)
@@ -304,7 +303,7 @@ function buildAnalysisSheet(ss, stations, records, stationName) {
     sheet.insertChart(colChart);
   }
 
-  return { yday: yday, trips: y.trips, pax: y.pax, missed: y.missed, onTimePct: pctTxt(y), late: y.late, cancelled: y.cancelled };
+  return { yday: yday, trips: y.trips, pax: y.pax, missed: y.missed, onTimePct: pctTxt(y), late: y.late };
 }
 
 /**
@@ -431,7 +430,6 @@ function sendBackupEmail(ss, stationCount, recordCount, totalRaw, summary) {
         kpi('المتخلفون', summary.missed) +
         kpi('الانضباط', summary.onTimePct, summary.onTimePct === '—' ? '#777' : C_OK) +
         kpi('متأخرة', summary.late, summary.late > 0 ? C_BAD : C_OK) +
-        kpi('ملغاة', summary.cancelled, summary.cancelled > 0 ? C_BAD : C_OK) +
         '</tr></table>' : '') +
       '<p style="margin-top:14px">📎 مرفق ملف Excel يحوي <b>تبويب التحليل</b> (مؤشرات أمس، آخر 7 أيام، أداء المحطات، الرسوم البيانية) ' +
       'مع <b>النسخة الاحتياطية الكاملة</b> لكل الجداول (' + totalRaw + ' صف من ' + stationCount + ' محطة).</p>' +
