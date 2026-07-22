@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@sentry/react": "^10.67.0",
     "@supabase/supabase-js": "^2.108.1",
     "date-fns": "^3.6.0",
     "i18next": "^23.11.0",
