@@ -132,7 +132,7 @@ export async function importSchedule(parsed, profile, fileName = '', opts = {}) 
     dispatch_info: tnull(t.dispatchInfo),
     dispatch_time: tnull(t.dispatchTime),
     schedule_period: parsed.period || null,
-    bus_type: t.busType || 'STANDARD',
+    bus_type: t.busType || 'WHEELCHAIR',
     from_station_id: stId[t.startStation] ?? null,
     to_station_id: stId[t.endStation] ?? null,
     is_active: true,

@@ -22,7 +22,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     trip_number: '', route: '',
     from_station_id: '', to_station_id: '',
     scheduled_departure: '', scheduled_arrival: '',
-    bus_type: 'STANDARD',
+    bus_type: 'WHEELCHAIR',
   })
   const [stops, setStops]   = useState([])   // [{station_id, arrival_time, departure_time}]
   const [autoActivate, setAutoActivate] = useState(true)

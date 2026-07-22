@@ -48,7 +48,7 @@ begin
     nullif(trim(coalesce(t->>'endTime','')), '')          as end_time,
     nullif(trim(coalesce(t->>'dispatchInfo','')), '')     as dispatch_info,
     nullif(trim(coalesce(t->>'dispatchTime','')), '')     as dispatch_time,
-    coalesce(nullif(trim(coalesce(t->>'busType','')),''),'STANDARD') as bus_type,
+    coalesce(nullif(trim(coalesce(t->>'busType','')),''),'WHEELCHAIR') as bus_type,
     nullif(trim(coalesce(t->>'startStation','')), '')     as start_station,
     nullif(trim(coalesce(t->>'endStation','')), '')       as end_station
   from jsonb_array_elements(coalesce(payload->'trips','[]'::jsonb)) t

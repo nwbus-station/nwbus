@@ -79,7 +79,7 @@ export function parseSchedule(arrayBuffer) {
       startTime:    fmtTime(r[8]),
       endStation:   normStation(r[9]),
       endTime:      fmtTime(r[10]),
-      busType:      busTypeOf(r[11]),
+      busType:      busTypeOf(r[11]) || 'WHEELCHAIR',   // الافتراضي لأسطول الشركة
     })
   }
 
