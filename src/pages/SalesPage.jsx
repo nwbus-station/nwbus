@@ -899,9 +899,8 @@ export default function SalesPage() {
             </select>
             <button onClick={() => setShowPinModal(true)}
               title={isAr ? 'تثبيت محطات' : 'Pin stations'}
-              className="text-gray-400 hover:text-nwbus-primary text-base leading-none"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>
-              
+              className={`text-base leading-none rounded-lg px-2 py-1.5 border transition-colors ${pinnedStations.length > 0 ? 'text-amber-600 border-amber-300 bg-amber-50' : 'text-gray-400 border-gray-200 bg-white hover:text-amber-500'}`}>
+              📌
             </button>
           </>
         )}
