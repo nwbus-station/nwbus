@@ -178,7 +178,6 @@ export default function SettingsPage() {
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
           {[
             { ar:'الإصدار', en:'Version', val:'1.0.0' },
-            { ar:'قاعدة البيانات', en:'Database', val:'Supabase' },
             { ar:'الواجهة', en:'Frontend', val:'React 18' },
           ].map((r,i) => (
             <div key={i} style={{ background:'var(--surface)', borderRadius:9, padding:'10px 14px' }}>
