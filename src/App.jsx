@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { useAuth } from './context/AuthContext'
 
 // Pages
@@ -13,7 +13,7 @@ import ReportsPage      from './pages/ReportsPage'
 import UsersPage        from './pages/UsersPage'
 import StationsPage     from './pages/StationsPage'
 import LiveBoard        from './pages/LiveBoard'
-import MapPage          from './pages/MapPage'
+const MapPage = lazy(() => import('./pages/MapPage'))
 import SettingsPage     from './pages/SettingsPage'
 import LeavePage        from './pages/LeavePage'
 
@@ -93,7 +93,9 @@ export default function App() {
         } />
         <Route path="map" element={
           <RequireAuth allowedRoles={['general_admin','station_admin']}>
-            <MapPage />
+            <Suspense fallback={<LoadingSpinner />}>
+              <MapPage />
+            </Suspense>
           </RequireAuth>
         } />
         <Route path="users"    element={
