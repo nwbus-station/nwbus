@@ -767,11 +767,11 @@ export default function ReportsPage() {
 
     const html = `<div style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:rtl;color:#1a2233;background:#fff">${pages}</div>`
     const style = document.createElement('style')
-    style.textContent = `@page{size:A4 landscape;margin:5mm}@media print{body>*:not(#__stprint){display:none!important}#__stprint{display:block!important;position:static!important;width:100%!important}#__stprint *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}`
+    style.textContent = `@page{size:A4 landscape;margin:5mm}@media print{body>*{display:none!important}#__stprint{display:block!important;width:100%!important}#__stprint *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}`
     document.head.appendChild(style)
     const div = document.createElement('div')
     div.id = '__stprint'
-    div.style.cssText = 'position:fixed;top:-99999px;left:0;width:100%'
+    div.style.cssText = 'display:none'
     div.innerHTML = html
     document.body.appendChild(div)
     try { window.print() } finally { document.body.removeChild(div); document.head.removeChild(style) }
@@ -817,20 +817,20 @@ export default function ReportsPage() {
     style.textContent = `
       @page { size: A4 landscape; margin: 6mm; }
       @media print {
-        body > *:not(#__print){display:none!important}
-        #__print{display:block!important;position:static!important;top:auto!important;width:100%!important;font-size:9px!important}
-        #__print *{box-sizing:border-box; -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important}
-        #__print table{font-size:8px!important}
-        #__print th, #__print td{padding:3px 5px!important}
-        #__print svg{max-height:70px!important}
-        #__print div[style*="margin-bottom:10px"]{margin-bottom:4px!important}
-        #__print div[style*="margin-top:18px"]{margin-top:6px!important}
-        #__print div[style*="padding:14px"]{padding:6px!important}
+        body > * { display: none !important; }
+        #__print { display: block !important; width: 100% !important; font-size: 9px !important; }
+        #__print * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        #__print table { font-size: 8px !important; }
+        #__print th, #__print td { padding: 3px 5px !important; }
+        #__print svg { max-height: 70px !important; }
+        #__print div[style*="margin-bottom:10px"] { margin-bottom: 4px !important; }
+        #__print div[style*="margin-top:18px"] { margin-top: 6px !important; }
+        #__print div[style*="padding:14px"] { padding: 6px !important; }
       }`
     document.head.appendChild(style)
     const div = document.createElement('div')
     div.id = '__print'
-    div.style.cssText = 'position:fixed;top:-99999px;left:0;width:100%'
+    div.style.cssText = 'display:none'
     div.innerHTML = html
     document.body.appendChild(div)
     try { window.print() } finally { document.body.removeChild(div); document.head.removeChild(style) }
