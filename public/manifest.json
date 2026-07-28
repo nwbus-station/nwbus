@@ -1,0 +1,18 @@
+{
+  "name": "North West Bus",
+  "short_name": "NW Bus",
+  "description": "نظام تشغيل المحطات — نورث وست باص",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1C2B36",
+  "theme_color": "#1C2B36",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/bus-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
