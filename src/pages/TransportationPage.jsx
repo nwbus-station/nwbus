@@ -422,12 +422,18 @@ export default function TransportationPage() {
   const [showSelect, setShowSelect]       = useState(false)
   const [hiddenCount, setHiddenCount]     = useState(0)  // رحلات المحطة الموقوفة كلياً أو أحد اتجاهيها
 
-  // محطات مثبّتة — مخزّنة في localStorage لكل مستخدم
-  const PIN_KEY = `nwbus_pinned_stations_${profile?.id ?? 'guest'}`
-  const [pinnedIds, setPinnedIds] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(PIN_KEY) || '[]') } catch { return [] }
-  })
-  const savePins = ids => { setPinnedIds(ids); localStorage.setItem(PIN_KEY, JSON.stringify(ids)) }
+  // محطات مثبّتة — مخزّنة في Supabase لكل مستخدم
+  const [pinnedIds, setPinnedIds] = useState([])
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase.from('user_preferences').select('pinned_stations').eq('user_id', profile.id).single()
+      .then(({ data }) => { if (data?.pinned_stations) setPinnedIds(data.pinned_stations) })
+  }, [profile?.id])
+  const savePins = async ids => {
+    setPinnedIds(ids)
+    if (!profile?.id) return
+    await supabase.from('user_preferences').upsert({ user_id: profile.id, pinned_stations: ids, updated_at: new Date().toISOString() })
+  }
   const togglePin = id => savePins(pinnedIds.includes(id) ? pinnedIds.filter(p => p !== id) : [...pinnedIds, id])
   const isPinned = id => pinnedIds.includes(id)
 
