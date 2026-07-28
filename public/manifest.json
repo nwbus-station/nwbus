@@ -1,6 +1,6 @@
 {
-  "name": "North West Bus",
-  "short_name": "NW Bus",
+  "name": "NW Station",
+  "short_name": "NW Station",
   "description": "نظام تشغيل المحطات — نورث وست باص",
   "start_url": "/",
   "display": "standalone",
