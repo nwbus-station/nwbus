@@ -31,6 +31,20 @@ export function AppSettingsProvider({ children }) {
       }
       setLoading(false)
     })
+
+    const channel = supabase.channel('app_settings_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, payload => {
+        if (payload.new?.key) {
+          setSettings(prev => {
+            const updated = { ...prev, [payload.new.key]: payload.new.value }
+            if (payload.new.key === 'theme') applyTheme(payload.new.value)
+            return updated
+          })
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   async function saveSetting(key, value) {
