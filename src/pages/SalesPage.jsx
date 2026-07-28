@@ -842,6 +842,14 @@ export default function SalesPage() {
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
 
+  // Real-time sync للمبيعات
+  useEffect(() => {
+    const channel = supabase.channel('sales_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_records' }, () => fetchRecords())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [fetchRecords])
+
   const totalActualSum   = records.reduce((s, r) => s + Number(r.total_actual   ?? 0), 0)
   const totalExpectedSum = records.reduce((s, r) => s + Number(r.total_expected  ?? 0), 0)
   const confirmed        = records.filter(r => r.is_confirmed).length

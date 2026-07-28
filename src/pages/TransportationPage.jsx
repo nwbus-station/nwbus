@@ -592,6 +592,16 @@ export default function TransportationPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // Real-time sync — تحديث فوري عند أي تغيير من أي جهاز
+  useEffect(() => {
+    if (!stationId) return
+    const channel = supabase.channel(`transport_${stationId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_records' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_trips', filter: `station_id=eq.${stationId}` }, () => fetchData())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [stationId, fetchData])
+
   // عند بداية يوم جديد: تحديث تلقائي للصفحة بالكامل
   const todayRef = useRef(todayStr())
   useEffect(() => {
