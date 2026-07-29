@@ -165,7 +165,7 @@ const NAV_GROUPS = [
       { to: '/users',    labelAr: 'الموظفون', labelEn: 'Staff',     icon: 'users',   roles: ['general_admin','station_admin'], module: null },
       { to: '/stations', labelAr: 'المحطات',  labelEn: 'Stations',  icon: 'station', roles: ['general_admin'],                 module: null },
       { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ['general_admin'],               module: null },
-      { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: ['general_admin','station_admin'], module: null, disabled: true },
+      { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: ['general_admin','station_admin'], module: null },
     ]
   },
 ]
