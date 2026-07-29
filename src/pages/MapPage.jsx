@@ -247,13 +247,13 @@ export default function MapPage() {
       </div>
 
       {/* ── Map ── */}
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div style={{ flex: 1, position: 'relative', height: '100%' }}>
         {stations.length === 0 && !loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#aaa', gap: 12 }}>
             <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{isAr ? 'لا توجد محطات بإحداثيات' : 'No stations with coordinates'}</div>
           </div>
         ) : (
-          <MapContainer center={saudiCenter} zoom={6} style={{ width: '100%', height: '100%' }} zoomControl={false}>
+          <MapContainer center={saudiCenter} zoom={6} style={{ width: '100%', height: 'calc(100vh - 58px)' }} zoomControl={false}>
             <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
             {stations.length > 0 && <FitBounds stations={stations} />}
             {flyTo && <FlyTo coords={flyTo} />}
