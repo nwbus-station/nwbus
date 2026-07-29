@@ -50,11 +50,13 @@ export default function MapPage() {
   const [routeTo, setRouteTo] = useState(null)
   const markerRefs = useRef({})
 
+  const [fetchError, setFetchError] = useState(null)
+
   useEffect(() => {
     supabase.from('stations')
       .select('id, name_ar, name_en, lat, lng, is_active, region, maps_url')
-      .eq('is_active', true)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { setFetchError(error.message); setLoading(false); return }
         setStations((data ?? []).filter(s => s.lat && s.lng))
         setLoading(false)
       })
@@ -248,6 +250,11 @@ export default function MapPage() {
 
       {/* ── Map ── */}
       <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+        {fetchError && (
+          <div style={{ padding: 20, background: '#fee', color: '#900', fontFamily: 'monospace', fontSize: '0.8rem', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 999 }}>
+            خطأ: {fetchError}
+          </div>
+        )}
         {stations.length === 0 && !loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#aaa', gap: 12 }}>
             <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{isAr ? 'لا توجد محطات بإحداثيات' : 'No stations with coordinates'}</div>
