@@ -100,9 +100,28 @@ export default function MapPage() {
     return 12
   }
 
-  const routeDistance = routeFrom && routeTo
-    ? (L.latLng(routeFrom.lat, routeFrom.lng).distanceTo(L.latLng(routeTo.lat, routeTo.lng)) / 1000).toFixed(0)
-    : null
+  const [routeDistance, setRouteDistance] = useState(null)
+  const [routeLoading, setRouteLoading] = useState(false)
+  const [routePoints, setRoutePoints] = useState(null)
+
+  useEffect(() => {
+    if (!routeFrom || !routeTo) { setRouteDistance(null); setRoutePoints(null); return }
+    setRouteLoading(true)
+    fetch(`https://router.project-osrm.org/route/v1/driving/${routeFrom.lng},${routeFrom.lat};${routeTo.lng},${routeTo.lat}?overview=full&geometries=geojson`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.routes?.[0]) {
+          setRouteDistance((d.routes[0].distance / 1000).toFixed(0))
+          const coords = d.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng])
+          setRoutePoints(coords)
+        }
+      })
+      .catch(() => {
+        setRouteDistance((L.latLng(routeFrom.lat, routeFrom.lng).distanceTo(L.latLng(routeTo.lat, routeTo.lng)) / 1000).toFixed(0))
+        setRoutePoints(null)
+      })
+      .finally(() => setRouteLoading(false))
+  }, [routeFrom?.id, routeTo?.id])
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 58px)', background: '#f0f0f0', position: 'relative' }} dir={isAr ? 'rtl' : 'ltr'}>
@@ -147,9 +166,12 @@ export default function MapPage() {
                   {routeTo ? (isAr ? routeTo.name_ar : routeTo.name_en) : (isAr ? 'إلى...' : 'To...')}
                 </div>
               </div>
-              {routeDistance && (
+              {routeLoading && (
+                <div style={{ marginTop: 6, fontSize: '0.72rem', color: '#888', textAlign: 'center' }}>{isAr ? 'جارٍ حساب المسافة...' : 'Calculating...'}</div>
+              )}
+              {routeDistance && !routeLoading && (
                 <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#1C2B36', fontWeight: 700, textAlign: 'center' }}>
-                  {isAr ? `المسافة التقريبية: ${routeDistance} كم` : `~${routeDistance} km (straight line)`}
+                  {isAr ? `مسافة الطريق: ${routeDistance} كم` : `Road distance: ${routeDistance} km`}
                 </div>
               )}
             </div>
@@ -266,9 +288,13 @@ export default function MapPage() {
             {flyTo && <FlyTo coords={flyTo} />}
 
             {/* Route line */}
-            {routeFrom && routeTo && (
+            {routePoints && (
+              <Polyline positions={routePoints}
+                pathOptions={{ color: '#1C2B36', weight: 4, opacity: 0.85 }} />
+            )}
+            {!routePoints && routeFrom && routeTo && (
               <Polyline positions={[[routeFrom.lat, routeFrom.lng], [routeTo.lat, routeTo.lng]]}
-                pathOptions={{ color: '#1C2B36', weight: 3, dashArray: '8 6', opacity: 0.85 }} />
+                pathOptions={{ color: '#1C2B36', weight: 3, dashArray: '8 6', opacity: 0.6 }} />
             )}
 
             {filtered.map(s => (
