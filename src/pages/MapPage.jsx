@@ -100,6 +100,7 @@ export default function MapPage() {
     return 12
   }
 
+  const [copiedId, setCopiedId] = useState(null)
   const [routeDistance, setRouteDistance] = useState(null)
   const [routeLoading, setRouteLoading] = useState(false)
   const [routePoints, setRoutePoints] = useState(null)
@@ -229,16 +230,23 @@ export default function MapPage() {
                     <div style={{ fontSize: '0.68rem', color: active ? 'rgba(255,255,255,0.6)' : '#aaa', marginTop: 1 }}>{s.region}</div>
                   )}
                 </div>
-                {/* Google Maps mini link */}
-                {s.maps_url && !routeMode && (
-                  <a href={s.maps_url} target="_blank" rel="noopener noreferrer"
-                    onClick={e => e.stopPropagation()}
-                    title="Google Maps"
-                    style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, background: active ? 'rgba(255,255,255,0.15)' : '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#888'} strokeWidth="2.2" strokeLinecap="round">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
-                    </svg>
-                  </a>
+                {/* زر نسخ الرابط */}
+                {!routeMode && (
+                  <button
+                    onClick={e => {
+                      e.stopPropagation()
+                      const url = s.maps_url || `https://www.google.com/maps?q=${s.lat},${s.lng}`
+                      navigator.clipboard.writeText(url)
+                      setCopiedId(s.id)
+                      setTimeout(() => setCopiedId(null), 1500)
+                    }}
+                    title={isAr ? 'نسخ رابط Google Maps' : 'Copy Google Maps link'}
+                    style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 6, background: copiedId === s.id ? '#22c55e' : active ? 'rgba(255,255,255,0.15)' : '#f0f0f0', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'background 0.2s' }}>
+                    {copiedId === s.id
+                      ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? '#fff' : '#888'} strokeWidth="2.2" strokeLinecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    }
+                  </button>
                 )}
               </button>
             )
