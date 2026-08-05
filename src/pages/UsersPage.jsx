@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { getCached, setCached } from '../lib/pageCache'
 import { USER_ROLES, MODULES } from '../utils/constants'
 import { toLatinDigits } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
@@ -669,7 +670,9 @@ export default function UsersPage() {
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm, onCancel? }
 
   const fetchAll = useCallback(async () => {
-    setLoading(true)
+    const cacheKey = `users_all_${profile?.station_id ?? 'admin'}`
+    const cached = getCached(cacheKey)
+    if (cached) { setUsers(cached.users); setStations(cached.stations); setLoading(false) } else { setLoading(true) }
     let usersQuery = supabase
       .from('users')
       .select('*, station:station_id(name_ar, name_en)')
@@ -684,8 +687,12 @@ export default function UsersPage() {
       usersQuery,
       supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar'),
     ])
-    setUsers(u ?? [])
-    setStations((s ?? []).filter(st => !isRestStation(st)))
+    const filteredStations = (s ?? []).filter(st => !isRestStation(st))
+    if (u) {
+      setCached(cacheKey, { users: u, stations: filteredStations })
+      setUsers(u)
+      setStations(filteredStations)
+    }
     setLoading(false)
   }, [isGeneralAdmin, isStationAdmin, profile?.station_id])
 

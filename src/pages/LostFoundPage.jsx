@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { getCached, setCached } from '../lib/pageCache'
 import { ITEM_TYPES } from '../utils/constants'
 import DatePicker from '../components/shared/DatePicker'
 import { todayStr } from '../utils/dates'
@@ -709,7 +710,9 @@ function LogsTab({ stationFilter = null, isAdmin = false }) {
   const deliveredCutoff   = new Date(Date.now() - 30 * 86400000).toISOString()
 
   async function load() {
-    setLoading(true)
+    const cacheKey = `lostfound_logs_${stationFilter ?? 'all'}`
+    const cached = getCached(cacheKey)
+    if (cached) { setReports(cached.reports); setItems(cached.items); setLoading(false) } else { setLoading(true) }
     // حذف تلقائي لما فوق 40 يوم
     await supabase.from('lost_reports').delete().lt('created_at', autoDeleteCutoff)
     await supabase.from('lost_found_items').delete().lt('created_at', autoDeleteCutoff)
@@ -731,8 +734,11 @@ function LogsTab({ stationFilter = null, isAdmin = false }) {
       iq = iq.eq('station_id', stationFilter)
     }
     const [{ data: r }, { data: i }] = await Promise.all([rq, iq])
-    setReports(r ?? [])
-    setItems(i ?? [])
+    const reports = r ?? []
+    const items = i ?? []
+    if (reports.length || items.length) setCached(cacheKey, { reports, items })
+    setReports(reports)
+    setItems(items)
     setLoading(false)
   }
 

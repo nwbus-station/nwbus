@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { getCached, setCached } from '../lib/pageCache'
 import { NWB_LOGO_SVG } from '../utils/logo'
 import DatePicker from '../components/shared/DatePicker'
 import SearchSelect from '../components/shared/SearchSelect'
@@ -212,7 +213,14 @@ export default function ReportsPage() {
   const myStationIds = stations.map(s => s.id)
 
   const runReport = useCallback(async () => {
-    setLoading(true)
+    const cacheKey = `reports_${dateFrom}_${dateTo}_${station}`
+    const cached = getCached(cacheKey)
+    if (cached) {
+      setData(cached)
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
     // تطبيق نطاق المحطة: محطة محددة، أو كل محطات المشرف، أو الكل للأدمن
     const scope = q => {
       if (station !== 'all') return q.eq('station_id', station)
@@ -446,7 +454,7 @@ export default function ReportsPage() {
       return (a.sched ?? '').localeCompare(b.sched ?? '')
     })
 
-    setData({
+    const reportResult = {
       missed,
       facilities,
       movements,
@@ -474,7 +482,9 @@ export default function ReportsPage() {
         claimed:   lost.filter(l => l.status === 'claimed').length,
         disposed:  lost.filter(l => l.status === 'disposed').length,
       },
-    })
+    }
+    setCached(cacheKey, reportResult)
+    setData(reportResult)
     setLoading(false)
   }, [dateFrom, dateTo, station, seesAll, stations])
 

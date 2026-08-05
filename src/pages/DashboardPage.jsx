@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import { getCached, setCached } from '../lib/pageCache'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -57,6 +58,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!profile?.id || !isAdmin) return
     async function load() {
+      const cacheKey = `dashboard_leaves_${profile.id}_${profile.role}`
+      const cached = getCached(cacheKey)
+      if (cached) setPendingLeaves(cached)
       let q = supabase
         .from('leaves')
         .select('id, employee_name, station_id')
@@ -66,7 +70,7 @@ export default function DashboardPage() {
         q = q.eq('station_id', profile.station_id)
       }
       const { data, error } = await q
-      if (!error) setPendingLeaves(data ?? [])
+      if (!error && data) { setCached(cacheKey, data); setPendingLeaves(data) }
     }
     load()
     const ch = supabase.channel('dashboard-leaves')

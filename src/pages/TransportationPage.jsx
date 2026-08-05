@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { getCached, setCached } from '../lib/pageCache'
 import { TRIP_STATUSES } from '../utils/constants'
 import { toLatinDigits, cleanNumber } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
@@ -476,7 +477,9 @@ export default function TransportationPage() {
       setTrips([]); setRecords([]); setLoading(false)
       return
     }
-    setLoading(true)
+    const cacheKey = `transport_${stationId}_${date}`
+    const cached = getCached(cacheKey)
+    if (cached) { setTrips(cached.trips); setRecords(cached.records); setLoading(false) } else { setLoading(true) }
 
     const tripFields = `
       id, trip_number, trip_name, scheduled_departure, scheduled_arrival, bus_type, is_active, is_rf, rf_date,
@@ -585,8 +588,10 @@ export default function TransportationPage() {
       (r.dep_enabled === false || r.arr_enabled === false)
     ).length)
 
+    const finalRecords = recs ?? []
+    if (entries.length || finalRecords.length) setCached(cacheKey, { trips: entries, records: finalRecords })
     setTrips(entries)
-    setRecords(recs ?? [])
+    setRecords(finalRecords)
     setLoading(false)
   }, [date, stationId, stations, profile])
 

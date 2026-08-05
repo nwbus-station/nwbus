@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { getCached, setCached } from '../lib/pageCache'
 import { toLatinDigits, cleanNumber } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
 import StatStrip from '../components/shared/StatStrip'
@@ -807,7 +808,9 @@ export default function SalesPage() {
   }
 
   const fetchRecords = useCallback(async () => {
-    setLoading(true)
+    const cacheKey = `sales_${filterDate}_${filterStation}_${profile?.id}`
+    const cached = getCached(cacheKey)
+    if (cached) { setRecords(cached); setLoading(false) } else { setLoading(true) }
     let q = supabase
       .from('sales_records')
       .select('*, station:station_id(name_ar, name_en)')
@@ -836,7 +839,9 @@ export default function SalesPage() {
         .from('users').select('id, job_number').in('id', creatorIds)
       if (users) users.forEach(u => { jobMap[u.id] = u.job_number })
     }
-    setRecords(rows.map(r => ({ ...r, created_by_user: { job_number: jobMap[r.created_by] ?? null } })))
+    const finalRows = rows.map(r => ({ ...r, created_by_user: { job_number: jobMap[r.created_by] ?? null } }))
+    if (finalRows.length) setCached(cacheKey, finalRows)
+    setRecords(finalRows)
     setLoading(false)
   }, [filterDate, filterStation, profile?.id, profile?.station_id, isEmployee, isStationAdmin, isAccountant, isGeneralAdmin])
 

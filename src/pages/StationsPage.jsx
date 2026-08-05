@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { getCached, setCached } from '../lib/pageCache'
 import { toLatinDigits } from '../utils/digits'
 import { syncStationTripsByNumbers } from '../utils/importSchedule'
 import { mergeStations, checkMergeReady } from '../utils/mergeStations'
@@ -321,9 +322,10 @@ export default function StationsPage() {
   const [search, setSearch]     = useState('')
 
   const fetch = useCallback(async () => {
-    setLoading(true)
+    const cached = getCached('stations_all')
+    if (cached) { setStations(cached); setLoading(false) } else { setLoading(true) }
     const { data } = await supabase.from('stations').select('*').order('name_ar')
-    setStations(data ?? [])
+    if (data) { setCached('stations_all', data); setStations(data) }
     setLoading(false)
   }, [])
 

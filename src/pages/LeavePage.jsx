@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { getCached, setCached } from '../lib/pageCache'
 import DatePicker from '../components/shared/DatePicker'
 import { notifyMany } from '../utils/notifications'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
@@ -886,7 +887,9 @@ export default function LeavePage() {
   })
 
   async function load() {
-    setLoading(true)
+    const cacheKey = `leaves_${tab}_${profile?.id}`
+    const cached = getCached(cacheKey)
+    if (cached) { setLeaves(cached); setLoading(false) } else { setLoading(true) }
     let q = supabase.from('leaves').select('*').order('created_at', { ascending: false })
     if (tab === 'mine')    q = q.eq('employee_id', profile.id)
     if (tab === 'pending') {
@@ -895,7 +898,7 @@ export default function LeavePage() {
     }
     if (tab === 'all' && !isAdmin) q = q.eq('station_id', profile.station_id)
     const { data } = await q
-    setLeaves(data ?? [])
+    if (data) { setCached(cacheKey, data); setLeaves(data) }
     setLoading(false)
   }
 
