@@ -57,7 +57,7 @@ export default function MapPage() {
       .select('id, name_ar, name_en, lat, lng, is_active, region, maps_url')
       .then(({ data, error }) => {
         if (error) { setFetchError(error.message); setLoading(false); return }
-        setStations((data ?? []).filter(s => s.lat && s.lng))
+        setStations((data ?? []).filter(s => s.lat && s.lng).sort((a, b) => (a.name_ar || a.name_en || '').localeCompare(b.name_ar || b.name_en || '', 'ar')))
         setLoading(false)
       })
   }, [])
