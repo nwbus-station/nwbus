@@ -117,13 +117,17 @@ export default function ReportsPage() {
   const isAr = i18n.language === 'ar'
   const { isGeneralAdmin, isAccountant, isStationAdmin, profile } = useAuth()
 
-  const [dateFrom, setDateFrom] = useState(toLocalDateStr())
-  const [dateTo,   setDateTo]   = useState(toLocalDateStr())
+  const [dateFrom, _setDateFrom] = useState(() => localStorage.getItem('rpt_dateFrom') || toLocalDateStr())
+  const setDateFrom = v => { localStorage.setItem('rpt_dateFrom', v); _setDateFrom(v) }
+  const [dateTo,   _setDateTo]   = useState(() => localStorage.getItem('rpt_dateTo')   || toLocalDateStr())
+  const setDateTo = v => { localStorage.setItem('rpt_dateTo', v); _setDateTo(v) }
   const [loading,  setLoading]  = useState(false)
   const [data,     setData]     = useState(null)
-  const [reportTypes, setReportTypes] = useState([])   // [] = الكل، وإلا مصفوفة من الأنواع المختارة
+  const [reportTypes, _setReportTypes] = useState(() => { try { return JSON.parse(localStorage.getItem('rpt_types') ?? '[]') } catch { return [] } })
+  const setReportTypes = v => { const next = typeof v === 'function' ? v(reportTypes) : v; localStorage.setItem('rpt_types', JSON.stringify(next)); _setReportTypes(next) }
   const [stations, setStations]     = useState([])
-  const [station,  setStation]      = useState('all')   // 'all' أو id محطة
+  const [station,  _setStation]      = useState(() => localStorage.getItem('rpt_station') || 'all')
+  const setStation = v => { localStorage.setItem('rpt_station', v); _setStation(v) }
   const [printStationIds, _setPrintStationIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('rpt_station_ids') ?? '[]') } catch { return [] }
   })
