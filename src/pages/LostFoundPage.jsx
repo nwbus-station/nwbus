@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { getCached, setCached } from '../lib/pageCache'
+import { getCached, setCached, clearCached } from '../lib/pageCache'
 import { ITEM_TYPES } from '../utils/constants'
 import DatePicker from '../components/shared/DatePicker'
 import { todayStr } from '../utils/dates'
@@ -743,6 +743,20 @@ function LogsTab({ stationFilter = null, isAdmin = false }) {
   }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    const ch = supabase.channel('lostfound_rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lost_found_items' }, () => {
+        clearCached(`lostfound_logs_${stationFilter ?? 'all'}`)
+        load()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lost_reports' }, () => {
+        clearCached(`lostfound_logs_${stationFilter ?? 'all'}`)
+        load()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [stationFilter])
 
   async function deleteReport(id) {
     setBusy(id)

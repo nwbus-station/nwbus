@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { getCached, setCached } from '../lib/pageCache'
+import { getCached, setCached, clearCached } from '../lib/pageCache'
 import DatePicker from '../components/shared/DatePicker'
 import { notifyMany } from '../utils/notifications'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
@@ -903,6 +903,17 @@ export default function LeavePage() {
   }
 
   useEffect(() => { if (tab !== 'new') load() }, [tab])
+
+  useEffect(() => {
+    if (tab === 'new') return
+    const ch = supabase.channel(`leaves_rt_${tab}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves' }, () => {
+        clearCached(`leaves_${tab}_${profile?.id}`)
+        load()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [tab])
 
   async function handleAction(id, decision, level, notes) {
     const now  = new Date().toISOString()
