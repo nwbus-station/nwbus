@@ -672,9 +672,10 @@ export default function ReportsPage() {
     sales: isAr ? 'ملخص المبيعات' : 'Sales', lost: isAr ? 'الموجودات' : 'Lost & Found',
   }
 
-  function printStationsReport() {
+  function printStationsReport(idsOverride) {
     if (!data) return
-    const cleanIds = printStationIds.filter(id => id !== '__none__')
+    const sourceIds = idsOverride ?? printStationIds
+    const cleanIds = sourceIds.filter(id => id !== '__none__')
     const targetIds = cleanIds.length ? cleanIds : stations.map(s => s.id)
     const targetStations = stations.filter(s => targetIds.includes(s.id))
 
@@ -982,9 +983,9 @@ export default function ReportsPage() {
                   </label>
                 ))}
                 <div className="border-t mt-2 pt-2">
-                  <button onClick={() => setShowAgentPicker(false)}
+                  <button onClick={() => { printStationsReport(printAgentIds); setShowAgentPicker(false) }}
                     className="w-full bg-indigo-700 text-white py-1.5 rounded-lg text-sm font-semibold hover:opacity-90">
-                    ✓ {isAr ? 'حفظ الاختيار' : 'Save'}
+                    {isAr ? 'طباعة الآن' : 'Print Now'}
                   </button>
                 </div>
               </div>
