@@ -656,7 +656,7 @@ export default function TransportationPage() {
         to_station: tr.to_station,
         schedTime,
         rec,
-        status: rec?.is_cancelled ? 'cancelled' : rec?.actual_departure ? 'departed' : 'scheduled',
+        status: rec?.actual_departure ? 'departed' : 'scheduled',
         actual_departure: rec?.actual_departure ? new Date(rec.actual_departure).toISOString().slice(11, 16) : null,
         bus_number: rec?.bus_number,
         passenger_count: rec?.passenger_count,
@@ -1120,7 +1120,6 @@ export default function TransportationPage() {
                   { label: 'إجمالي الرحلات', val: scheduleData.length },
                   { label: 'غادرت', val: scheduleData.filter(t => t.status === 'departed').length, tone: 'text-green-600' },
                   { label: 'مجدول', val: scheduleData.filter(t => t.status === 'scheduled').length, tone: 'text-gray-500' },
-                  { label: 'ملغاة', val: scheduleData.filter(t => t.status === 'cancelled').length, tone: 'text-red-500' },
                 ].map((s, i) => (
                   <div key={s.label} className={`flex-1 px-4 py-2.5 text-center ${i > 0 ? 'border-s border-gray-100' : ''}`}>
                     <div className={`text-base font-bold font-mono ${s.tone || 'text-gray-800'}`}>{s.val}</div>
@@ -1142,7 +1141,7 @@ export default function TransportationPage() {
                 <tbody>
                   {scheduleData.map(trip => (
                     <tr key={trip.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50"
-                      style={{ borderInlineStart: trip.status === 'departed' ? '3px solid #22c55e' : trip.status === 'cancelled' ? '3px solid #ef4444' : '3px solid #e5e7eb' }}>
+                      style={{ borderInlineStart: trip.status === 'departed' ? '3px solid #22c55e' : '3px solid #e5e7eb' }}>
                       <td className="px-3 py-2.5 text-center">
                         <span className="font-mono font-bold text-gray-800">{trip.schedTime}</span>
                       </td>
@@ -1155,9 +1154,6 @@ export default function TransportationPage() {
                       <td className="px-3 py-2.5 text-center">
                         {trip.status === 'departed' && (
                           <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">غادرت</span>
-                        )}
-                        {trip.status === 'cancelled' && (
-                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">ملغاة</span>
                         )}
                         {trip.status === 'scheduled' && (
                           <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-gray-50 text-gray-400 border border-gray-200">مجدول</span>
