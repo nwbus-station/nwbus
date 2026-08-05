@@ -492,6 +492,7 @@ export default function TransportationPage() {
       { data: chosen },
       { data: stopRows },
       { data: recs },
+      { data: crossRecs },
       { data: shipmentRows },
     ] = await Promise.all([
       supabase.from('station_trips')
@@ -507,12 +508,23 @@ export default function TransportationPage() {
         .eq('record_date', date)
         .eq('station_id', stationId),
 
+      // سجلات المغادرة من محطات أخرى لنفس الرحلات (لعرض الوقت الفعلي للوصول)
+      supabase.from('trip_records')
+        .select('trip_schedule_id, actual_departure, station_id')
+        .eq('record_date', date)
+        .neq('station_id', stationId)
+        .not('actual_departure', 'is', null),
+
       // ارساليات معتمدة مرتبطة برحلات اليوم
       supabase.from('shipments')
         .select('trip_schedule_id, shipment_number, status, from_st:from_station_id(name_ar), to_st:to_station_id(name_ar)')
         .eq('record_date', date)
         .in('status', ['approved', 'in_transit']),
     ])
+
+    // خريطة المغادرة الفعلية من محطات أخرى: tripId → actual_departure
+    const crossDepMap = {}
+    ;(crossRecs ?? []).forEach(r => { crossDepMap[r.trip_schedule_id] = r.actual_departure })
 
     const stopMap = {}
     ;(stopRows ?? []).forEach(s => { stopMap[s.trip_schedule_id] = { arrival: s.arrival_time, departure: s.departure_time } })
@@ -541,7 +553,8 @@ export default function TransportationPage() {
       // الوقتان: وقت الجدول (من trip_schedule_stops) يُقدَّم على وقت station_trips إلا إذا كان station_trips مختلفاً (تعديل يدوي)
       const arrT = r.arrival_time || ''
       const depT = r.departure_time || ''
-      const addArr = (toStation, time) => arrOn && time && entries.push({ ...base, role: 'arrival', ...(toStation ? { to_station: toStation } : {}), schedTime: s5(time), _key: tr.id + '-a' })
+      const crossDep = crossDepMap[tr.id]
+      const addArr = (toStation, time) => arrOn && time && entries.push({ ...base, role: 'arrival', ...(toStation ? { to_station: toStation } : {}), schedTime: s5(time), _key: tr.id + '-a', crossActualDep: crossDep ?? null })
       const addDep = (fromStation, time) => depOn && time && entries.push({ ...base, role: 'departure', ...(fromStation ? { from_station: fromStation } : {}), schedTime: s5(time), _key: tr.id + '-d' })
 
       const toId   = tr.to_station?.id   || tr.to_station_id
@@ -951,6 +964,10 @@ export default function TransportationPage() {
                             </span>
                           )}
                         </div>
+                      ) : isArrival && trip.crossActualDep ? (
+                        <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 rounded px-2 py-0.5">
+                          {isAr ? 'غادر' : 'Departed'} {new Date(trip.crossActualDep).toISOString().slice(11, 16)}
+                        </span>
                       ) : (
                         <span className="text-[11px] text-gray-300">{isAr ? 'لم تُدخل' : 'Not entered'}</span>
                       )}
