@@ -85,6 +85,8 @@ export default function MapPage() {
     setTimeout(() => { markerRefs.current[s.id]?.openPopup() }, 1400)
   }
 
+  const mapsLink = s => s.maps_url || `https://www.google.com/maps?q=${s.lat},${s.lng}`
+
   function getMarkerColor(s) {
     if (routeMode) {
       if (routeFrom?.id === s.id) return '#1C2B36'
@@ -260,15 +262,13 @@ export default function MapPage() {
             <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#111' }}>{isAr ? selected.name_ar : selected.name_en}</div>
             <div style={{ fontSize: '0.68rem', color: '#bbb', marginTop: 2, fontFamily: 'monospace' }}>{selected.lat?.toFixed(5)}, {selected.lng?.toFixed(5)}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              {selected.maps_url && (
-                <a href={selected.maps_url} target="_blank" rel="noopener noreferrer"
-                  style={{ flex: 1, padding: '6px', borderRadius: 7, background: '#1C2B36', color: '#fff', fontSize: '0.72rem', fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
-                  </svg>
-                  {isAr ? 'افتح في الخرائط' : 'Open in Maps'}
-                </a>
-              )}
+              <a href={mapsLink(selected)} target="_blank" rel="noopener noreferrer"
+                style={{ flex: 1, padding: '6px', borderRadius: 7, background: '#1C2B36', color: '#fff', fontSize: '0.72rem', fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+                </svg>
+                {isAr ? 'افتح في الخرائط' : 'Open in Maps'}
+              </a>
               <button onClick={() => { setSelected(null); setFlyTo(null) }}
                 style={{ padding: '6px 10px', borderRadius: 7, background: '#f5f5f5', border: 'none', cursor: 'pointer', fontSize: '0.72rem', color: '#888' }}>
                 {isAr ? 'إلغاء' : 'Clear'}
@@ -324,15 +324,13 @@ export default function MapPage() {
                       </div>
                     </div>
                     <div style={{ fontSize: '0.7rem', color: '#aaa', fontFamily: 'monospace', marginBottom: 8 }}>{s.lat?.toFixed(5)}, {s.lng?.toFixed(5)}</div>
-                    {s.maps_url && (
-                      <a href={s.maps_url} target="_blank" rel="noopener noreferrer"
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '7px', borderRadius: 7, background: '#1C2B36', color: '#fff', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none' }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
-                        </svg>
-                        {isAr ? 'افتح في Google Maps' : 'Open in Google Maps'}
-                      </a>
-                    )}
+                    <a href={mapsLink(s)} target="_blank" rel="noopener noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '7px', borderRadius: 7, background: '#1C2B36', color: '#fff', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none' }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+                      </svg>
+                      {isAr ? 'افتح في Google Maps' : 'Open in Google Maps'}
+                    </a>
                   </div>
                 </Popup>
               </Marker>
