@@ -19,7 +19,7 @@ const LEAVE_TYPES = [
 ]
 
 const COMPENSATORY_REASONS = [
-  { id: 'before_rest',  ar: 'قبل الراحات' },
+  { id: 'before_rest',  ar: 'راحة أسبوعية' },
   { id: 'eid_fitr',     ar: 'عيد الفطر' },
   { id: 'eid_adha',     ar: 'عيد الأضحى' },
   { id: 'national_day', ar: 'اليوم الوطني' },
