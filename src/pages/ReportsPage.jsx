@@ -948,7 +948,7 @@ export default function ReportsPage() {
           <div className="flex flex-col gap-1 relative">
             <button onClick={() => setShowAgentPicker(v => !v)}
               className="bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 flex items-center gap-2">
-              {isAr ? 'محطات الوكلاء' : 'Agent Stations'}
+              {isAr ? 'تقرير محطات الوكلاء' : 'Agent Stations Report'}
               <span className="text-xs opacity-70">
                 {printAgentIds[0] === '__none__' ? (isAr ? '(لا شيء)' : '(None)') : printAgentIds.length ? `(${printAgentIds.length})` : isAr ? '(الكل)' : '(All)'}
               </span>
