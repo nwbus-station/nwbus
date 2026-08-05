@@ -8,12 +8,22 @@ import ConfirmDialog from '../components/shared/ConfirmDialog'
 
 /* ─── ثوابت ─── */
 const LEAVE_TYPES = [
-  { id: 'annual',      ar: 'إجازة سنوية',       icon: '' },
-  { id: 'unpaid',      ar: 'إجازة بدون راتب',   icon: '' },
-  { id: 'sick',        ar: 'إجازة مرضية',        icon: '' },
-  { id: 'marriage',    ar: 'إجازة زواج',         icon: '' },
-  { id: 'paternity',   ar: 'إجازة مولود',        icon: '' },
-  { id: 'bereavement', ar: 'إجازة وفاة',         icon: '' },
+  { id: 'annual',        ar: 'إجازة سنوية',       icon: '' },
+  { id: 'unpaid',        ar: 'إجازة بدون راتب',   icon: '' },
+  { id: 'sick',          ar: 'إجازة مرضية',        icon: '' },
+  { id: 'marriage',      ar: 'إجازة زواج',         icon: '' },
+  { id: 'paternity',     ar: 'إجازة مولود',        icon: '' },
+  { id: 'bereavement',   ar: 'إجازة وفاة',         icon: '' },
+  { id: 'casual',        ar: 'إجازة عادية',        icon: '' },
+  { id: 'compensatory',  ar: 'إجازة تعويضية',      icon: '' },
+]
+
+const COMPENSATORY_REASONS = [
+  { id: 'before_rest',  ar: 'قبل الراحات' },
+  { id: 'eid_fitr',     ar: 'عيد الفطر' },
+  { id: 'eid_adha',     ar: 'عيد الأضحى' },
+  { id: 'national_day', ar: 'اليوم الوطني' },
+  { id: 'founding_day', ar: 'يوم التأسيس' },
 ]
 
 const BEREAVEMENT_RELS = [
@@ -69,6 +79,24 @@ const PROOF_NO_DEADLINE = ['bereavement'] // بدون مهلة زمنية
 
 // أنواع بدون دورة موافقات — تُعتمد مباشرة (يكفي المرفق والطباعة)
 const NO_APPROVAL_TYPES = ['sick', 'marriage', 'bereavement']
+
+// حساب الفرق بالساعات بين تاريخين ووقتين
+function timeDiffHours(dateFrom, timeFrom, dateTo, timeTo) {
+  if (!dateFrom || !timeFrom || !dateTo || !timeTo) return 0
+  const from = new Date(`${dateFrom}T${timeFrom}:00`)
+  const to   = new Date(`${dateTo}T${timeTo}:00`)
+  const diff = (to - from) / 3600000
+  return diff > 0 ? diff : 0
+}
+
+function formatHoursAr(totalHours) {
+  const h = Math.floor(totalHours)
+  const m = Math.round((totalHours - h) * 60)
+  const hStr = h > 0 ? `${h.toLocaleString('ar-EG')} ساعة` : ''
+  const mStr = m > 0 ? `${m.toLocaleString('ar-EG')} دقيقة` : ''
+  if (hStr && mStr) return `${hStr} و${mStr}`
+  return hStr || mStr || 'صفر'
+}
 
 // رفع مرفق الإثبات إلى التخزين — يرجع الرابط العام
 async function uploadProof(file, employeeId) {
@@ -126,8 +154,11 @@ function Badge({ status }) {
    طباعة الإجازة — نفس تصميم التقارير
 ══════════════════════════════════════════ */
 function printLeave(leave, employeeName, stationName, profile, usedAnnual = 0) {
-  const typeLabel  = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
-  const relLabel   = BEREAVEMENT_RELS.find(r => r.id === leave.bereavement_rel)?.ar ?? ''
+  const typeLabel   = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
+  const relLabel    = BEREAVEMENT_RELS.find(r => r.id === leave.bereavement_rel)?.ar ?? ''
+  const compLabel   = leave.compensatory_reason ? (COMPENSATORY_REASONS.find(r => r.id === leave.compensatory_reason)?.ar ?? '') : ''
+  const isCasual    = leave.leave_type === 'casual'
+  const durationStr = isCasual ? formatHoursAr((leave.days_count ?? 0) * 24) : `${leave.days_count} يوم`
   const printDate  = new Date().toLocaleDateString('ar-SA-u-ca-gregory')
   const printTime  = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
   // بيانات الموظف تُقرأ من بطاقة الموظف (جدول users) — مصدر الحقيقة الوحيد
@@ -214,16 +245,16 @@ function printLeave(leave, employeeName, stationName, profile, usedAnnual = 0) {
           <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">نوع الإجازة</th>
           <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">من تاريخ</th>
           <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">إلى تاريخ</th>
-          <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">المدة (أيام)</th>
+          <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">المدة</th>
           <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">تاريخ المباشرة</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td style="text-align:center">${typeLabel}</td>
-          <td style="text-align:center">${leave.start_date}</td>
-          <td style="text-align:center">${leave.end_date}</td>
-          <td style="text-align:center;font-weight:900;color:#1C2B36;font-size:13px">${leave.days_count}</td>
+          <td style="text-align:center">${typeLabel}${compLabel ? '<br><span style="font-size:9px;color:#0f766e">' + compLabel + '</span>' : ''}</td>
+          <td style="text-align:center">${leave.start_date}${leave.time_from ? '<br><span style="font-size:9px">' + leave.time_from + '</span>' : ''}</td>
+          <td style="text-align:center">${leave.end_date}${leave.time_to ? '<br><span style="font-size:9px">' + leave.time_to + '</span>' : ''}</td>
+          <td style="text-align:center;font-weight:900;color:#1C2B36;font-size:${isCasual ? '11' : '13'}px">${durationStr}</td>
           <td style="text-align:center">${leave.return_date ?? '—'}</td>
         </tr>
       </tbody>
@@ -319,6 +350,9 @@ function NewLeaveForm({ profile, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
   const [proofFile, setProofFile] = useState(null)
+  const [timeFrom, setTimeFrom] = useState('08:00')
+  const [timeTo, setTimeTo]     = useState('17:00')
+  const [compReason, setCompReason] = useState('before_rest')
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -341,10 +375,16 @@ function NewLeaveForm({ profile, onSaved }) {
   // مسح الملف المختار عند تغيير نوع الإجازة — كل إجازة بمرفقها المستقل
   useEffect(() => { setProofFile(null) }, [form.leave_type])
 
+  const casualHours = form.leave_type === 'casual'
+    ? timeDiffHours(form.start_date, timeFrom, form.end_date, timeTo)
+    : 0
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (days < 1) { setError('تاريخ النهاية يجب أن يكون بعد تاريخ البداية'); return }
+    if (form.leave_type !== 'casual' && days < 1) { setError('تاريخ النهاية يجب أن يكون بعد تاريخ البداية'); return }
+    if (form.leave_type === 'casual' && casualHours <= 0) { setError('وقت الانتهاء يجب أن يكون بعد وقت البداية'); return }
+    if (form.leave_type === 'casual' && !form.notes?.trim()) { setError('سبب الإجازة إلزامي'); return }
     if (maxDays && days > maxDays) { setError(`هذه الإجازة لا تتجاوز ${maxDays} أيام`); return }
 
     // التحقق من عدم وجود طلب معلق
@@ -370,22 +410,25 @@ function NewLeaveForm({ profile, onSaved }) {
     const autoApproved   = NO_APPROVAL_TYPES.includes(form.leave_type)
     const nowIso         = new Date().toISOString()
     const { error: err } = await supabase.from('leaves').insert({
-      employee_id:     profile.id,
-      employee_name:   profile.full_name_ar,
-      job_number:      profile.job_number ?? null,
-      hire_date:       profile.hire_date ?? null,
-      national_id:     profile.national_id ?? null,
-      phone:           profile.phone ?? null,
-      job_title:       profile.job_title ?? null,
-      station_id:      profile.station_id,
-      leave_type:      form.leave_type,
-      bereavement_rel: form.leave_type === 'bereavement' ? form.bereavement_rel : null,
-      start_date:      form.start_date,
-      end_date:        form.end_date,
-      return_date:     form.return_date || null,
-      days_count:      days,
-      notes:           form.notes || null,
-      attachment_url:  attachmentUrl,
+      employee_id:          profile.id,
+      employee_name:        profile.full_name_ar,
+      job_number:           profile.job_number ?? null,
+      hire_date:            profile.hire_date ?? null,
+      national_id:          profile.national_id ?? null,
+      phone:                profile.phone ?? null,
+      job_title:            profile.job_title ?? null,
+      station_id:           profile.station_id,
+      leave_type:           form.leave_type,
+      bereavement_rel:      form.leave_type === 'bereavement' ? form.bereavement_rel : null,
+      start_date:           form.start_date,
+      end_date:             form.end_date,
+      return_date:          form.return_date || null,
+      days_count:           form.leave_type === 'casual' ? casualHours / 24 : days,
+      notes:                form.notes || null,
+      attachment_url:       attachmentUrl,
+      time_from:            form.leave_type === 'casual' ? timeFrom : null,
+      time_to:              form.leave_type === 'casual' ? timeTo : null,
+      compensatory_reason:  form.leave_type === 'compensatory' ? compReason : null,
       // المرضية/الزواج/الوفاة تُعتمد مباشرة بدون موافقات
       supervisor_status: autoApproved || !isEmployeeRole ? 'approved' : 'pending',
       supervisor_by:     autoApproved || !isEmployeeRole ? (autoApproved ? 'اعتماد تلقائي' : profile.full_name_ar) : null,
@@ -478,6 +521,20 @@ function NewLeaveForm({ profile, onSaved }) {
         </Field>
       )}
 
+      {/* سبب الإجازة التعويضية */}
+      {form.leave_type === 'compensatory' && (
+        <Field label="سبب الإجازة التعويضية">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {COMPENSATORY_REASONS.map(r => (
+              <button key={r.id} type="button" onClick={() => setCompReason(r.id)}
+                style={{ padding: '6px 12px', borderRadius: 99, fontSize: '0.78rem', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.12s', border: `1px solid ${compReason === r.id ? '#0f766e' : 'var(--border)'}`, background: compReason === r.id ? '#0f766e' : '#fff', color: compReason === r.id ? '#fff' : 'var(--text-2)' }}>
+                {r.ar}
+              </button>
+            ))}
+          </div>
+        </Field>
+      )}
+
       {/* تنبيه الإجازة المرضية */}
       {form.leave_type === 'sick' && (
         <div style={{ padding: '10px 14px', borderRadius: 9, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.78rem', color: '#92400e' }}>
@@ -513,12 +570,36 @@ function NewLeaveForm({ profile, onSaved }) {
         </Field>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="عدد الأيام">
-          <div style={{ ...inp, background: '#f8fafc', color: days > (maxDays ?? Infinity) ? '#dc2626' : '#1C2B36', fontWeight: 800 }}>
-            {days} يوم {maxDays ? `(الحد الأقصى ${maxDays})` : ''}
+      {/* حقول الوقت — للإجازة العادية */}
+      {form.leave_type === 'casual' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="الوقت من">
+            <input type="time" value={timeFrom} onChange={e => setTimeFrom(e.target.value)}
+              style={{ ...inp }} />
+          </Field>
+          <Field label="الوقت إلى">
+            <input type="time" value={timeTo} onChange={e => setTimeTo(e.target.value)}
+              style={{ ...inp }} />
+          </Field>
+        </div>
+      )}
+
+      {form.leave_type === 'casual' && (
+        <Field label="مدة الإجازة">
+          <div style={{ ...inp, background: '#f0fdf4', color: '#166534', fontWeight: 800 }}>
+            {formatHoursAr(casualHours)}
           </div>
         </Field>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {form.leave_type !== 'casual' && (
+          <Field label="عدد الأيام">
+            <div style={{ ...inp, background: '#f8fafc', color: days > (maxDays ?? Infinity) ? '#dc2626' : '#1C2B36', fontWeight: 800 }}>
+              {days} يوم {maxDays ? `(الحد الأقصى ${maxDays})` : ''}
+            </div>
+          </Field>
+        )}
         <Field label="تاريخ المباشرة (العودة)">
           <DatePicker value={form.return_date} onChange={v => set('return_date', v)}
             className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white text-right" isAr={true} />
@@ -541,9 +622,10 @@ function NewLeaveForm({ profile, onSaved }) {
         </Field>
       )}
 
-      <Field label="ملاحظات">
+      <Field label={form.leave_type === 'casual' ? 'سبب الإجازة *' : 'ملاحظات'}>
         <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)}
-          style={{ ...inp, resize: 'none' }} placeholder="أي تفاصيل إضافية..." />
+          style={{ ...inp, resize: 'none', borderColor: form.leave_type === 'casual' && !form.notes?.trim() ? '#fca5a5' : undefined }}
+          placeholder={form.leave_type === 'casual' ? 'أدخل سبب الإجازة (إلزامي)...' : 'أي تفاصيل إضافية...'} />
       </Field>
 
       <button type="submit" disabled={saving}
@@ -569,9 +651,12 @@ function LeaveCard({ leave, profile, onAction, onPrint, onProofUploaded, onDelet
   const isSupervisor = role === 'station_admin' || role === 'shift_supervisor'
   const isOwn       = leave.employee_id === profile?.id
 
-  const typeLabel = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
-  const typeIcon  = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.icon ?? ''
-  const relLabel  = leave.bereavement_rel ? BEREAVEMENT_RELS.find(r => r.id === leave.bereavement_rel)?.ar : null
+  const typeLabel   = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
+  const typeIcon    = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.icon ?? ''
+  const relLabel    = leave.bereavement_rel ? BEREAVEMENT_RELS.find(r => r.id === leave.bereavement_rel)?.ar : null
+  const compLabel   = leave.compensatory_reason ? COMPENSATORY_REASONS.find(r => r.id === leave.compensatory_reason)?.ar : null
+  const casualHoursDisplay = leave.leave_type === 'casual' && leave.days_count
+    ? formatHoursAr(leave.days_count * 24) : null
 
   // هل يمكن لهذا المستخدم الموافقة/الرفض؟
   const canActSupervisor = isSupervisor && leave.supervisor_status === 'pending' && !isOwn
@@ -624,9 +709,21 @@ function LeaveCard({ leave, profile, onAction, onPrint, onProofUploaded, onDelet
           )}
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-2)' }}>
             <span>{leave.start_date} ← {leave.end_date}</span>
-            <span style={{ fontWeight: 700, color: 'var(--brand-900)' }}>{leave.days_count} يوم</span>
+            {casualHoursDisplay
+              ? <span style={{ fontWeight: 700, color: 'var(--brand-900)' }}>{casualHoursDisplay}</span>
+              : <span style={{ fontWeight: 700, color: 'var(--brand-900)' }}>{leave.days_count} يوم</span>}
             {leave.return_date && <span>مباشرة: {leave.return_date}</span>}
           </div>
+          {leave.time_from && leave.time_to && (
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-2)', marginTop: 3 }}>
+              من {leave.time_from} إلى {leave.time_to}
+            </div>
+          )}
+          {compLabel && (
+            <div style={{ fontSize: '0.72rem', color: '#0f766e', fontWeight: 600, marginTop: 3 }}>
+              السبب: {compLabel}
+            </div>
+          )}
           {leave.notes && <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 4 }}>{leave.notes}</div>}
 
           {/* مرفق الإثبات */}
