@@ -415,6 +415,9 @@ export default function TransportationPage() {
   const [modal, setModal]     = useState(null)
   const [search, setSearch]   = useState('')
   const [filter, setFilter]   = useState('departure') // 'departure' | 'arrival' | 'all'
+  const [viewMode, setViewMode] = useState('station') // 'station' | 'schedule'
+  const [scheduleData, setScheduleData] = useState([])
+  const [scheduleLoading, setScheduleLoading] = useState(false)
 
   const [stations, setStations]           = useState([])
   const [selectedStation, setSelectedStation] = useState(profile?.station_id ?? '')
@@ -610,6 +613,62 @@ export default function TransportationPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  const fetchSchedule = useCallback(async () => {
+    setScheduleLoading(true)
+
+    const [{ data: allTrips }, { data: allRecords }] = await Promise.all([
+      supabase.from('station_trips')
+        .select(`
+          station_id,
+          departure_time,
+          dep_enabled,
+          trip:trip_schedule_id(
+            id, trip_number, trip_name, scheduled_departure, scheduled_arrival,
+            from_station:from_station_id(id, name_ar, name_en),
+            to_station:to_station_id(id, name_ar, name_en)
+          )
+        `)
+        .eq('dep_enabled', true),
+
+      supabase.from('trip_records')
+        .select('trip_schedule_id, actual_departure, is_cancelled, station_id, bus_number, passenger_count')
+        .eq('record_date', date)
+        .eq('is_arrival', false),
+    ])
+
+    const recMap = {}
+    ;(allRecords ?? []).forEach(r => { recMap[r.trip_schedule_id] = r })
+
+    const seen = new Set()
+    const entries = []
+    ;(allTrips ?? []).forEach(st => {
+      const tr = st.trip
+      if (!tr || !tr.id) return
+      if (seen.has(tr.id)) return
+      seen.add(tr.id)
+      const rec = recMap[tr.id]
+      const schedTime = (st.departure_time || tr.scheduled_departure || '').slice(0, 5)
+      entries.push({
+        id: tr.id,
+        trip_number: tr.trip_number,
+        trip_name: tr.trip_name,
+        from_station: tr.from_station,
+        to_station: tr.to_station,
+        schedTime,
+        rec,
+        status: rec?.is_cancelled ? 'cancelled' : rec?.actual_departure ? 'departed' : 'scheduled',
+        actual_departure: rec?.actual_departure ? new Date(rec.actual_departure).toISOString().slice(11, 16) : null,
+        bus_number: rec?.bus_number,
+        passenger_count: rec?.passenger_count,
+      })
+    })
+    entries.sort((a, b) => (a.schedTime || '').localeCompare(b.schedTime || ''))
+    setScheduleData(entries)
+    setScheduleLoading(false)
+  }, [date])
+
+  useEffect(() => { if (viewMode === 'schedule') fetchSchedule() }, [viewMode, fetchSchedule])
+
   // Real-time sync — تحديث فوري عند أي تغيير من أي جهاز
   useEffect(() => {
     if (!stationId) return
@@ -619,6 +678,15 @@ export default function TransportationPage() {
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [stationId, fetchData])
+
+  // Real-time sync للجدول الشامل
+  useEffect(() => {
+    if (viewMode !== 'schedule') return
+    const ch = supabase.channel('global_schedule_rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_records' }, () => fetchSchedule())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [viewMode, fetchSchedule])
 
   // عند بداية يوم جديد: تحديث تلقائي للصفحة بالكامل
   const todayRef = useRef(todayStr())
@@ -834,6 +902,20 @@ export default function TransportationPage() {
         )}
       </div>
 
+      {/* تبديل العرض: المحطة / الجدول الشامل */}
+      <div className="flex border border-gray-300 rounded-md overflow-hidden shrink-0 mb-3 w-fit">
+        <button onClick={() => setViewMode('station')}
+          className={`px-4 py-2 text-xs font-semibold transition-colors border-e border-gray-300 ${viewMode === 'station' ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+          {isAr ? 'المحطة' : 'Station'}
+        </button>
+        <button onClick={() => setViewMode('schedule')}
+          className={`px-4 py-2 text-xs font-semibold transition-colors ${viewMode === 'schedule' ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+          {isAr ? 'الجدول الشامل' : 'Schedule'}
+        </button>
+      </div>
+
+      {viewMode === 'station' && (
+      <>
       {/* شريط الأدوات: تصفية + بحث */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <div className="flex border border-gray-300 rounded-md overflow-hidden shrink-0">
@@ -1021,6 +1103,80 @@ export default function TransportationPage() {
             delayed > 0 && `${delayed} ${isAr ? 'متأخرة' : 'delayed'}`,
           ].filter(Boolean).join(' · ')}
         </p>
+      )}
+      </>
+      )}
+
+      {/* الجدول الشامل */}
+      {viewMode === 'schedule' && (
+        <div>
+          {scheduleLoading ? (
+            <p className="text-center py-20 text-gray-400 text-sm">جارٍ تحميل الجدول…</p>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
+              {/* إحصائيات سريعة */}
+              <div className="flex border-b border-gray-100 text-center">
+                {[
+                  { label: 'إجمالي الرحلات', val: scheduleData.length },
+                  { label: 'غادرت', val: scheduleData.filter(t => t.status === 'departed').length, tone: 'text-green-600' },
+                  { label: 'مجدول', val: scheduleData.filter(t => t.status === 'scheduled').length, tone: 'text-gray-500' },
+                  { label: 'ملغاة', val: scheduleData.filter(t => t.status === 'cancelled').length, tone: 'text-red-500' },
+                ].map((s, i) => (
+                  <div key={s.label} className={`flex-1 px-4 py-2.5 text-center ${i > 0 ? 'border-s border-gray-100' : ''}`}>
+                    <div className={`text-base font-bold font-mono ${s.tone || 'text-gray-800'}`}>{s.val}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-wider border-b border-gray-200">
+                    <th className="px-3 py-2 text-center w-16 font-semibold">الوقت</th>
+                    <th className="px-3 py-2 text-start font-semibold">الرحلة</th>
+                    <th className="px-3 py-2 text-start font-semibold">من</th>
+                    <th className="px-3 py-2 text-start font-semibold">إلى</th>
+                    <th className="px-3 py-2 text-center font-semibold">الحالة</th>
+                    <th className="px-3 py-2 text-center font-semibold">الفعلي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scheduleData.map(trip => (
+                    <tr key={trip.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50"
+                      style={{ borderInlineStart: trip.status === 'departed' ? '3px solid #22c55e' : trip.status === 'cancelled' ? '3px solid #ef4444' : '3px solid #e5e7eb' }}>
+                      <td className="px-3 py-2.5 text-center">
+                        <span className="font-mono font-bold text-gray-800">{trip.schedTime}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="font-mono font-bold text-gray-800">{trip.trip_number}</span>
+                        {trip.trip_name && <div className="text-[10px] text-gray-400">{trip.trip_name}</div>}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-gray-600">{trip.from_station?.name_ar}</td>
+                      <td className="px-3 py-2.5 text-xs text-gray-600">{trip.to_station?.name_ar}</td>
+                      <td className="px-3 py-2.5 text-center">
+                        {trip.status === 'departed' && (
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">غادرت</span>
+                        )}
+                        {trip.status === 'cancelled' && (
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">ملغاة</span>
+                        )}
+                        {trip.status === 'scheduled' && (
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-gray-50 text-gray-400 border border-gray-200">مجدول</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {trip.actual_departure ? (
+                          <span className="font-mono text-xs font-bold text-green-600">{trip.actual_departure}</span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {modal && (
