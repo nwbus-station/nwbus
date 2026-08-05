@@ -14,7 +14,7 @@ const LEAVE_TYPES = [
   { id: 'marriage',      ar: 'إجازة زواج',         icon: '' },
   { id: 'paternity',     ar: 'إجازة مولود',        icon: '' },
   { id: 'bereavement',   ar: 'إجازة وفاة',         icon: '' },
-  { id: 'casual',        ar: 'إجازة عادية',        icon: '' },
+  { id: 'casual',        ar: 'استئذان خروج',        icon: '' },
   { id: 'compensatory',  ar: 'إجازة تعويضية',      icon: '' },
 ]
 
