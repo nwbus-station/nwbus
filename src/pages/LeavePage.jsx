@@ -98,6 +98,30 @@ function formatHoursAr(totalHours) {
   return hStr || mStr || 'صفر'
 }
 
+// ترميز/فك ترميز الأوقات وسبب التعويض في حقل notes
+function encodeLeaveNotes({ timeFrom, timeTo, compReason, userNotes, leaveType }) {
+  const parts = []
+  if (leaveType === 'casual' && timeFrom && timeTo) parts.push(`[TF:${timeFrom}][TT:${timeTo}]`)
+  if (leaveType === 'compensatory' && compReason) parts.push(`[CR:${compReason}]`)
+  if (userNotes) parts.push(userNotes)
+  return parts.join(' ').trim() || null
+}
+
+function decodeLeaveNotes(leave) {
+  const notes = leave.notes ?? ''
+  const tfMatch = notes.match(/\[TF:(\d{2}:\d{2})\]/)
+  const ttMatch = notes.match(/\[TT:(\d{2}:\d{2})\]/)
+  const crMatch = notes.match(/\[CR:([^\]]+)\]/)
+  const cleanNotes = notes.replace(/\[TF:[^\]]+\]|\[TT:[^\]]+\]|\[CR:[^\]]+\]/g, '').trim()
+  return {
+    ...leave,
+    time_from:           tfMatch ? tfMatch[1] : (leave.time_from ?? null),
+    time_to:             ttMatch ? ttMatch[1] : (leave.time_to ?? null),
+    compensatory_reason: crMatch ? crMatch[1]  : (leave.compensatory_reason ?? null),
+    notes:               cleanNotes || null,
+  }
+}
+
 // رفع مرفق الإثبات إلى التخزين — يرجع الرابط العام
 async function uploadProof(file, employeeId) {
   const ext  = file.name.split('.').pop()
@@ -153,7 +177,8 @@ function Badge({ status }) {
 /* ══════════════════════════════════════════
    طباعة الإجازة — نفس تصميم التقارير
 ══════════════════════════════════════════ */
-function printLeave(leave, employeeName, stationName, profile, usedAnnual = 0) {
+function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0) {
+  const leave = decodeLeaveNotes(rawLeave)
   const typeLabel   = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
   const relLabel    = BEREAVEMENT_RELS.find(r => r.id === leave.bereavement_rel)?.ar ?? ''
   const compLabel   = leave.compensatory_reason ? (COMPENSATORY_REASONS.find(r => r.id === leave.compensatory_reason)?.ar ?? '') : ''
@@ -424,11 +449,8 @@ function NewLeaveForm({ profile, onSaved }) {
       end_date:             form.end_date,
       return_date:          form.return_date || null,
       days_count:           form.leave_type === 'casual' ? casualHours / 24 : days,
-      notes:                form.notes || null,
+      notes:                encodeLeaveNotes({ timeFrom, timeTo, compReason, userNotes: form.notes, leaveType: form.leave_type }),
       attachment_url:       attachmentUrl,
-      time_from:            form.leave_type === 'casual' ? timeFrom : null,
-      time_to:              form.leave_type === 'casual' ? timeTo : null,
-      compensatory_reason:  form.leave_type === 'compensatory' ? compReason : null,
       // المرضية/الزواج/الوفاة تُعتمد مباشرة بدون موافقات
       supervisor_status: autoApproved || !isEmployeeRole ? 'approved' : 'pending',
       supervisor_by:     autoApproved || !isEmployeeRole ? (autoApproved ? 'اعتماد تلقائي' : profile.full_name_ar) : null,
@@ -639,7 +661,8 @@ function NewLeaveForm({ profile, onSaved }) {
 /* ══════════════════════════════════════════
    بطاقة إجازة مع خطوات الموافقة
 ══════════════════════════════════════════ */
-function LeaveCard({ leave, profile, onAction, onPrint, onProofUploaded, onDelete }) {
+function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploaded, onDelete }) {
+  const leave = decodeLeaveNotes(rawLeave)
   const [showNotes, setShowNotes]  = useState(false)
   const [actionNotes, setActionNotes] = useState('')
   const [uploadingProof, setUploadingProof] = useState(false)
