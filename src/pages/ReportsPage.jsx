@@ -872,7 +872,10 @@ export default function ReportsPage() {
               const active = isAll ? reportTypes.length === 0 : reportTypes.includes(id)
               return (
                 <button key={id} onClick={() => isAll ? setReportTypes([]) : toggleReportType(id)}
-                  className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors ${active ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${active ? 'bg-nwbus-primary text-white border-nwbus-primary shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
+                  <span style={{ width: 14, height: 14, borderRadius: 3, border: active ? '1.5px solid rgba(255,255,255,0.7)' : '1.5px solid #9ca3af', background: active ? 'rgba(255,255,255,0.2)' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {active && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </span>
                   {label}
                 </button>
               )
