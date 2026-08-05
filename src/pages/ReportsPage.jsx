@@ -120,7 +120,7 @@ export default function ReportsPage() {
   const [dateTo,   setDateTo]   = useState(toLocalDateStr())
   const [loading,  setLoading]  = useState(false)
   const [data,     setData]     = useState(null)
-  const [reportType, setReportType] = useState('all')   // all | transport | missed | facilities | sales | lost
+  const [reportTypes, setReportTypes] = useState([])   // [] = الكل، وإلا مصفوفة من الأنواع المختارة
   const [stations, setStations]     = useState([])
   const [station,  setStation]      = useState('all')   // 'all' أو id محطة
   const [printStationIds, _setPrintStationIds] = useState(() => {
@@ -483,7 +483,10 @@ export default function ReportsPage() {
 
   const onTimeRate = data ? Math.round((data.trips.onTime / (data.trips.total || 1)) * 100) : 0
   const normalRate = data ? Math.round((data.trips.normal / (data.trips.total || 1)) * 100) : 0
-  const show = type => reportType === 'all' || reportType === type
+  const show = type => reportTypes.length === 0 || reportTypes.includes(type)
+  function toggleReportType(id) {
+    setReportTypes(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
+  }
 
   const stationLabel = station === 'all'
     ? (seesAll ? (isAr ? 'جميع المحطات' : 'All stations') : (isAr ? 'محطاتي' : 'My stations'))
@@ -774,13 +777,14 @@ export default function ReportsPage() {
   }
 
   function printReport() {
-    const types = reportType === 'all' ? ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost'] : [reportType]
+    const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost']
+    const types = reportTypes.length === 0 ? ALL_TYPES : ALL_TYPES.filter(t => reportTypes.includes(t))
 
     // header احترافي موحّد لجميع الأقسام
     const printHeader = `
       <div style="background:#1C2B36;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
         <div>
-          <div style="font-size:15px;font-weight:700;letter-spacing:.2px">${REPORT_LABEL[reportType]}</div>
+          <div style="font-size:15px;font-weight:700;letter-spacing:.2px">${reportTypes.length === 0 ? 'التقرير الشامل' : types.map(t => REPORT_LABEL[t]).join(' + ')}</div>
           <div style="font-size:9px;opacity:.7;margin-top:3px">الفترة: ${dateFrom} → ${dateTo} &nbsp;·&nbsp; المحطة: ${stationLabel}</div>
         </div>
         <div style="text-align:center">
@@ -853,17 +857,27 @@ export default function ReportsPage() {
       <div className="bg-white border border-gray-200 rounded-lg p-3 mb-5 flex flex-wrap gap-3 items-end">
         <div>
           <label className="block text-xs text-gray-500 mb-1">{isAr ? 'نوع التقرير' : 'Report Type'}</label>
-          <select value={reportType} onChange={e => setReportType(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white">
-            <option value="all">{isAr ? 'الكل' : 'All'}</option>
-            <option value="movements">{isAr ? 'الوصول والمغادرة' : 'Arrivals & Departures'}</option>
-            <option value="compliance">{isAr ? 'الالتزام بمواعيد الوصول' : 'Arrival Punctuality'}</option>
-            <option value="transport">{isAr ? 'ملخص الترحيل' : 'Transportation'}</option>
-            <option value="missed">{isAr ? 'المتخلفون عن الرحلات' : 'Missed Passengers'}</option>
-            <option value="facilities">{isAr ? 'الحالة التشغيلية' : 'Faulty Facilities'}</option>
-            <option value="sales">{isAr ? 'ملخص المبيعات' : 'Sales'}</option>
-            <option value="lost">{isAr ? 'الموجودات' : 'Lost & Found'}</option>
-          </select>
+          <div className="flex flex-wrap gap-1">
+            {[
+              { id: 'all',        label: isAr ? 'الكل' : 'All' },
+              { id: 'movements',  label: isAr ? 'الوصول والمغادرة' : 'Arrivals' },
+              { id: 'compliance', label: isAr ? 'الالتزام بالمواعيد' : 'Punctuality' },
+              { id: 'transport',  label: isAr ? 'ملخص الترحيل' : 'Transport' },
+              { id: 'missed',     label: isAr ? 'المتخلفون' : 'Missed' },
+              { id: 'facilities', label: isAr ? 'الحالة التشغيلية' : 'Facilities' },
+              { id: 'sales',      label: isAr ? 'ملخص المبيعات' : 'Sales' },
+              { id: 'lost',       label: isAr ? 'الموجودات' : 'Lost & Found' },
+            ].map(({ id, label }) => {
+              const isAll = id === 'all'
+              const active = isAll ? reportTypes.length === 0 : reportTypes.includes(id)
+              return (
+                <button key={id} onClick={() => isAll ? setReportTypes([]) : toggleReportType(id)}
+                  className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors ${active ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
+                  {label}
+                </button>
+              )
+            })}
+          </div>
         </div>
         {/* Station selector */}
         {stations.length > 0 && (
