@@ -73,7 +73,7 @@ function NotificationBell({ profile }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button onClick={() => { setOpen(o => !o); if (!open) load() }}
-        style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', color: '#444', flexShrink: 0, boxShadow: '0 2px 10px rgba(0,0,0,0.12),0 1px 3px rgba(0,0,0,0.08)', transition: 'all 0.14s' }}>
+        style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: 'var(--card)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', color: 'var(--text-2)', flexShrink: 0, boxShadow: '0 2px 10px rgba(0,0,0,0.12),0 1px 3px rgba(0,0,0,0.08)', transition: 'all 0.14s' }}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
         </svg>
@@ -107,7 +107,7 @@ function NotificationBell({ profile }) {
               const s = TYPE_STYLE[n.type] ?? TYPE_STYLE.info
               return (
                 <div key={n.id} onClick={() => markRead(n.id)}
-                  style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-start', background: n.is_read ? 'var(--card)' : '#F5F2EB', cursor: 'pointer', transition: 'background 0.1s' }}>
+                  style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-start', background: n.is_read ? 'var(--card)' : 'var(--gold-dim)', cursor: 'pointer', transition: 'background 0.1s' }}>
                   <div style={{ width: 7, height: 7, borderRadius: 1, background: n.is_read ? 'var(--border-2)' : s.dot, marginTop: 6, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: n.is_read ? 500 : 700, color: 'var(--text-1)', lineHeight: 1.4 }}>{n.title}</p>

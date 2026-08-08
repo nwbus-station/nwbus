@@ -149,21 +149,32 @@ export default function DashboardPage() {
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }}>
 
-      {/* ── شريط الترحيب ── */}
-      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '18px 28px' }}>
+      {/* ── شريط الترحيب (ثابت أبيض في الفاتح والداكن) ── */}
+      <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E8E8E8', padding: '16px 28px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-1)' }}>
-              {greet()}{userName ? `، ${userName}` : ''}
-            </p>
-            <p style={{ margin: '3px 0 0', fontSize: '0.75rem', color: 'var(--text-3)' }}>
-              {dateStr}
-            </p>
+
+          {/* الشعار + الترحيب */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {/* NW wordmark */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingInlineEnd: 16, borderInlineEnd: '1px solid #E8E8E8' }}>
+              <div style={{ width: 32, height: 32, background: '#111', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', flexShrink: 0 }}>
+                <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.62rem', color: '#fff', letterSpacing: '0.04em' }}>NW</span>
+              </div>
+              <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: '0.65rem', letterSpacing: '0.12em', color: '#111', whiteSpace: 'nowrap' }}>NORTH WEST BUS</span>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#111111' }}>
+                {greet()}{userName ? `، ${userName}` : ''}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#888888' }}>
+                {dateStr}
+              </p>
+            </div>
           </div>
 
           <div dir="ltr" style={{
             fontFamily: MONO, fontWeight: 700, fontSize: '1.5rem',
-            color: 'var(--text-1)', letterSpacing: '0.04em',
+            color: '#111111', letterSpacing: '0.04em',
             fontVariantNumeric: 'tabular-nums',
           }}>
             {timeStr}
