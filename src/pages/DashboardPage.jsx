@@ -162,23 +162,23 @@ export default function DashboardPage() {
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }}>
 
-      {/* ── شريط الترحيب (ثابت أبيض في الفاتح والداكن) ── */}
-      <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E8E8E8', padding: '16px 28px' }}>
+      {/* ── شريط الترحيب ── */}
+      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '16px 28px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
 
           {/* الترحيب */}
           <div>
-            <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, color: '#111111' }}>
+            <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-1)' }}>
               {greet()}{userName ? `، ${userName}` : ''}
             </p>
-            <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#888888' }}>
+            <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
               {dateStr}
             </p>
           </div>
 
           <div dir="ltr" style={{
             fontFamily: MONO, fontWeight: 700, fontSize: '1.5rem',
-            color: '#111111', letterSpacing: '0.04em',
+            color: 'var(--text-1)', letterSpacing: '0.04em',
             fontVariantNumeric: 'tabular-nums',
           }}>
             {timeStr}
