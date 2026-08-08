@@ -295,68 +295,101 @@ export default function DashboardPage() {
           </div>
 
           {/* لوحة الإشعارات */}
-          <aside style={card}>
-            <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <div style={{ width: 3, height: 14, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
-                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-1)', letterSpacing: '0.06em', fontFamily: MONO, textTransform: 'uppercase' }}>
-                  {isAr ? 'الإشعارات' : 'Notifications'}
-                </span>
-                {unread > 0 && (
-                  <span style={{ fontSize: '0.58rem', fontWeight: 800, padding: '1px 6px', borderRadius: 3, background: 'var(--accent)', color: '#fff', fontFamily: MONO }}>
-                    {unread}
-                  </span>
-                )}
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
+
+            {/* رأس الإشعارات */}
+            <div style={{ background: 'var(--brand-900)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 6, background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.7)' }}>
+                  <Svg paths={ICONS.bell} size={14} />
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>
+                    {isAr ? 'الإشعارات' : 'Notifications'}
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', fontFamily: MONO }}>
+                    {unread > 0 ? (isAr ? `${unread} غير مقروء` : `${unread} unread`) : (isAr ? 'لا يوجد جديد' : 'all caught up')}
+                  </p>
+                </div>
               </div>
               {unread > 0 && (
-                <button onClick={markAllRead}
-                  style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--info)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <button onClick={markAllRead} style={{
+                  fontSize: '0.62rem', fontWeight: 600, color: 'rgba(255,255,255,0.55)',
+                  background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit',
+                  transition: 'all 0.12s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.14)'; e.currentTarget.style.color = '#fff' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = 'rgba(255,255,255,0.55)' }}>
                   {isAr ? 'قراءة الكل' : 'Mark all'}
                 </button>
               )}
             </div>
 
-            <div style={{ maxHeight: 440, overflowY: 'auto' }}>
+            {/* قائمة الإشعارات */}
+            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
               {notifLoading ? (
-                <div style={{ padding: '24px 14px' }}>
-                  {[1, 2, 3].map(i => (
-                    <div key={i} style={{ marginBottom: 14 }}>
-                      <div style={{ height: 10, background: 'var(--surface)', borderRadius: 3, marginBottom: 6 }} />
-                      <div style={{ height: 8, width: '60%', background: 'var(--surface)', borderRadius: 3 }} />
+                <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {[80, 60, 70].map((w, i) => (
+                    <div key={i}>
+                      <div style={{ height: 9, width: `${w}%`, background: 'var(--surface-2)', borderRadius: 3, marginBottom: 6 }} />
+                      <div style={{ height: 7, width: '45%', background: 'var(--surface)', borderRadius: 3 }} />
                     </div>
                   ))}
                 </div>
               ) : notifs.length === 0 ? (
-                <div style={{ padding: '32px 16px', textAlign: 'center' }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', boxShadow: 'var(--shadow-icon)', color: 'var(--text-3)' }}>
-                    <Svg paths={ICONS.bell} size={16} />
+                <div style={{ padding: '40px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 12,
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--border-2)', boxShadow: 'var(--shadow-sm)',
+                  }}>
+                    <Svg paths={ICONS.bell} size={20} />
                   </div>
-                  <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-3)' }}>
-                    {isAr ? 'لا توجد إشعارات' : 'No notifications'}
-                  </p>
-                </div>
-              ) : notifs.map((n, i) => (
-                <div key={n.id} onClick={() => markRead(n.id)}
-                  style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 9,
-                    padding: '10px 14px',
-                    borderBottom: i < notifs.length - 1 ? '1px solid var(--border)' : 'none',
-                    background: 'transparent', cursor: 'pointer', transition: 'background 0.1s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <span style={{
-                    width: 6, height: 6, borderRadius: 1, flexShrink: 0, marginTop: 5,
-                    background: n.is_read ? 'var(--border-2)' : (NOTIF_DOT[n.type] ?? NOTIF_DOT.info),
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: '0.76rem', fontWeight: n.is_read ? 400 : 700, color: n.is_read ? 'var(--text-3)' : 'var(--text-1)', lineHeight: 1.4 }}>{n.title}</p>
-                    {n.body && <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', lineHeight: 1.4 }}>{n.body}</p>}
-                    <p style={{ margin: '4px 0 0', fontSize: '0.6rem', color: 'var(--text-3)', fontFamily: MONO }}>{timeAgo(n.created_at)}</p>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-2)' }}>
+                      {isAr ? 'لا توجد إشعارات' : 'No notifications'}
+                    </p>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', lineHeight: 1.5 }}>
+                      {isAr ? 'ستظهر هنا عند وصولها' : 'They\'ll appear here'}
+                    </p>
                   </div>
                 </div>
-              ))}
+              ) : notifs.map((n, i) => {
+                const dotColor = NOTIF_DOT[n.type] ?? NOTIF_DOT.info
+                return (
+                  <div key={n.id} onClick={() => markRead(n.id)}
+                    style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                      padding: '12px 16px',
+                      borderBottom: i < notifs.length - 1 ? '1px solid var(--border)' : 'none',
+                      borderInlineStart: `3px solid ${n.is_read ? 'transparent' : dotColor}`,
+                      background: n.is_read ? 'transparent' : 'var(--gold-dim)',
+                      cursor: 'pointer', transition: 'background 0.12s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                    onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : 'var(--gold-dim)'}
+                  >
+                    {/* أيقونة النوع */}
+                    <div style={{
+                      width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+                      background: n.is_read ? 'var(--surface)' : `${dotColor}18`,
+                      border: `1px solid ${n.is_read ? 'var(--border)' : `${dotColor}30`}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: n.is_read ? 'var(--text-3)' : dotColor,
+                      marginTop: 1,
+                    }}>
+                      <Svg paths={ICONS.bell} size={12} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: '0.77rem', fontWeight: n.is_read ? 400 : 700, color: n.is_read ? 'var(--text-3)' : 'var(--text-1)', lineHeight: 1.45 }}>{n.title}</p>
+                      {n.body && <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', lineHeight: 1.4 }}>{n.body}</p>}
+                      <p style={{ margin: '5px 0 0', fontSize: '0.6rem', color: 'var(--text-3)', fontFamily: MONO, display: 'inline-block', background: 'var(--surface)', padding: '1px 6px', borderRadius: 3 }}>{timeAgo(n.created_at)}</p>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </aside>
 
