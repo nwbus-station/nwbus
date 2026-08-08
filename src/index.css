@@ -435,6 +435,38 @@ span.rounded-full                          { border-radius: 4px !important; }
 }
 .hover\:opacity-90:hover { opacity: 0.88 !important; }
 
+/* ── Dark mode: modals / dialogs ──────────────────────────── */
+[data-theme="dark"] .rounded-2xl,
+[data-theme="dark"] .rounded-xl,
+[data-theme="dark"] .rounded-lg,
+html.dark .rounded-2xl,
+html.dark .rounded-xl,
+html.dark .rounded-lg {
+  /* don't override; only bg-white ones matter */
+}
+
+[data-theme="dark"] .bg-white,
+html.dark .bg-white {
+  background-color: var(--card) !important;
+  color: var(--text-1);
+}
+
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.dark select,
+html.dark textarea {
+  background-color: var(--surface) !important;
+  color: var(--text-1) !important;
+  border-color: var(--border) !important;
+}
+
+[data-theme="dark"] input::placeholder,
+html.dark input::placeholder {
+  color: var(--text-3) !important;
+}
+
 /* ── Dark mode: override all Tailwind hover/bg grays ─────── */
 [data-theme="dark"] .hover\:bg-gray-50:hover,
 [data-theme="dark"] .hover\:bg-gray-100:hover,
