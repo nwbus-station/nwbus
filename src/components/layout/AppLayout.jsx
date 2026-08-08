@@ -195,7 +195,7 @@ function NavTab({ item, isAr }) {
         display: 'flex', alignItems: 'center', whiteSpace: 'nowrap',
         padding: '11px 16px 9px', fontSize: '0.83rem',
         fontWeight: isActive ? 700 : 400,
-        color: isActive ? '#111111' : '#888888',
+        color: isActive ? 'var(--text-1)' : 'var(--text-3)',
         textDecoration: 'none',
         borderBottom: isActive ? '2px solid #5B5BD6' : '2px solid transparent',
         marginBottom: -1,
@@ -266,8 +266,8 @@ export default function AppLayout() {
   const ghostBtn = {
     display: 'flex', alignItems: 'center', gap: 6,
     height: 32, padding: '0 12px', borderRadius: 6,
-    background: '#fff', border: 'none',
-    color: '#444', fontSize: '0.72rem', fontWeight: 500,
+    background: 'var(--card)', border: 'none',
+    color: 'var(--text-2)', fontSize: '0.72rem', fontWeight: 500,
     cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
     boxShadow: '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)',
     transition: 'all 0.13s',
@@ -278,8 +278,8 @@ export default function AppLayout() {
 
       {/* ══ شريط العلامة العلوي ══════════════════════════ */}
       <header className="no-print" style={{
-        background: '#FFFFFF',
-        borderBottom: '1px solid #F0F0F0',
+        background: 'var(--card)',
+        borderBottom: '1px solid var(--border)',
         height: 54, flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px',
         position: 'sticky', top: 0, zIndex: 40,
@@ -287,12 +287,11 @@ export default function AppLayout() {
       }}>
         {/* Wordmark */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ width: 30, height: 30, background: '#111', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
-            <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.55rem', color: '#fff', letterSpacing: '0.04em', lineHeight: 1 }}>NWB</span>
+          <div style={{ width: 30, height: 30, background: 'var(--brand-900)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+            <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.62rem', color: 'var(--card)', letterSpacing: '0.04em', lineHeight: 1 }}>NW</span>
           </div>
           <div style={{ lineHeight: 1.2 }}>
-            <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: '#111', letterSpacing: '0.12em', fontFamily: MONO }}>NORTH WEST BUS</p>
-            <p style={{ margin: 0, fontSize: '0.57rem', color: '#888', letterSpacing: '0.02em' }} className="hidden sm:block">{isAr ? 'نظام تشغيل المحطات' : 'Stations Operations'}</p>
+            <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-1)', letterSpacing: '0.12em', fontFamily: MONO }}>NORTH WEST BUS</p>
           </div>
         </div>
 
@@ -301,8 +300,8 @@ export default function AppLayout() {
         {/* شاشة العرض */}
         {(!mods || mods.includes('live_board')) && (
         <button onClick={() => navigate('/board')} style={ghostBtn}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#111' }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.color = '#444' }}>
+          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = 'var(--text-1)' }}
+          onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.color = 'var(--text-2)' }}>
           <Icon d={ICONS.monitor} size={13} />
           <span className="hidden md:inline">{isAr ? 'شاشة العرض' : 'Live Board'}</span>
         </button>
@@ -310,8 +309,8 @@ export default function AppLayout() {
 
         {/* اللغة */}
         <button onClick={toggleLang} style={ghostBtn}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = '#111' }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.color = '#444' }}>
+          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = 'var(--text-1)' }}
+          onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.color = 'var(--text-2)' }}>
           {isAr ? 'EN' : 'ع'}
         </button>
 
@@ -327,19 +326,16 @@ export default function AppLayout() {
         <NotificationBell profile={profile} />
 
         {/* المستخدم */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 12, borderInlineStart: '1px solid #F0F0F0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 12, borderInlineStart: '1px solid var(--border)' }}>
           <div style={{ textAlign: isAr ? 'right' : 'left', lineHeight: 1.2 }} className="hidden sm:block">
-            <p style={{ margin: 0, fontSize: '0.74rem', fontWeight: 700, color: '#111', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p style={{ margin: 0, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-1)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {profile?.full_name_ar}
-            </p>
-            <p style={{ margin: 0, fontSize: '0.58rem', color: '#5B5BD6', fontFamily: MONO, letterSpacing: '0.04em' }}>
-              {roleLabel}{stationName ? ` · ${stationName}` : ''}
             </p>
           </div>
           <button onClick={handleLogout} title={isAr ? 'تسجيل الخروج' : 'Sign Out'}
             style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: '50%', justifyContent: 'center', flexShrink: 0 }}
             onMouseEnter={e => { e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.color = '#DC2626' }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#444' }}>
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--card)'; e.currentTarget.style.color = 'var(--text-2)' }}>
             <Icon d={ICONS.logout} size={13} />
           </button>
         </div>
@@ -347,8 +343,8 @@ export default function AppLayout() {
 
       {/* ══ شريط التبويبات ══════════════════════════════ */}
       <nav className="no-print" style={{
-        background: '#FFFFFF', flexShrink: 0,
-        borderBottom: '1px solid #F0F0F0',
+        background: 'var(--card)', flexShrink: 0,
+        borderBottom: '1px solid var(--border)',
         boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         display: 'flex', alignItems: 'stretch', gap: 0,
         padding: '0 12px', overflowX: 'auto',
