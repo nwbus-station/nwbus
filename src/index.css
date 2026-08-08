@@ -66,7 +66,7 @@
 }
 
 /* ── Dark Mode Tokens ────────────────────────────────── */
-[data-theme="dark"] {
+[data-theme="dark"], html.dark {
   --brand-900:  #F0F0F0;
   --brand-800:  #D0D0D0;
   --brand-700:  #A0A0A0;

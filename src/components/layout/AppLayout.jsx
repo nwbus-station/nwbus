@@ -230,11 +230,15 @@ export default function AppLayout() {
 
   // ── Theme toggle ─────────────────────────────────────
   const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('nwbus_theme')
-    return saved === 'dark'
+    const saved = localStorage.getItem('nwbus_theme') === 'dark'
+    // synchronous — no flash
+    document.documentElement.setAttribute('data-theme', saved ? 'dark' : 'light')
+    document.documentElement.classList.toggle('dark', saved)
+    return saved
   })
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+    document.documentElement.classList.toggle('dark', dark)
     localStorage.setItem('nwbus_theme', dark ? 'dark' : 'light')
   }, [dark])
 
