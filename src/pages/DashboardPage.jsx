@@ -166,20 +166,14 @@ export default function DashboardPage() {
       <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E8E8E8', padding: '16px 28px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
 
-          {/* الشعار + الترحيب */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            {/* NW logo monochrome */}
-            <div style={{ paddingInlineEnd: 16, borderInlineEnd: '1px solid #E8E8E8', flexShrink: 0 }}>
-              <NWLogo height={32} />
-            </div>
-            <div>
-              <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#111111' }}>
-                {greet()}{userName ? `، ${userName}` : ''}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#888888' }}>
-                {dateStr}
-              </p>
-            </div>
+          {/* الترحيب */}
+          <div>
+            <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, color: '#111111' }}>
+              {greet()}{userName ? `، ${userName}` : ''}
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#888888' }}>
+              {dateStr}
+            </p>
           </div>
 
           <div dir="ltr" style={{
