@@ -177,59 +177,64 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     setSaving(false)
   }
 
-  const inputCls = "w-full border rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
+  const S = {
+    input: {
+      width: '100%', border: '1px solid var(--border)', borderRadius: 8,
+      padding: '10px 12px', fontSize: '0.875rem', background: 'var(--surface)',
+      color: 'var(--text-1)', outline: 'none', fontFamily: 'inherit',
+      transition: 'border-color 0.14s', boxSizing: 'border-box',
+    },
+    label: { display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)', marginBottom: 5, letterSpacing: '0.04em' },
+  }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} dir={isAr ? 'rtl' : 'ltr'}>
+      <div style={{ background:'var(--card)', borderRadius:16, boxShadow:'var(--shadow-xl)', width:'100%', maxWidth:520, maxHeight:'90vh', overflowY:'auto', border:'1px solid var(--border)' }}>
 
         {/* Header */}
-        <div className="px-5 py-4 border-b flex items-center justify-between"
-          style={{ background: isArrival ? 'var(--brand-700)' : 'var(--brand-900)' }}>
+        <div style={{ padding:'18px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', background: isArrival ? 'var(--brand-700)' : 'var(--brand-900)', borderRadius:'16px 16px 0 0' }}>
           <div>
-            <p className="font-bold text-white text-sm">{trip.trip_number}{trip.trip_name ? ` — ${trip.trip_name}` : ''}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
+            <p style={{ margin:0, fontWeight:700, color:'#fff', fontSize:'0.875rem', letterSpacing:'0.02em' }}>{trip.trip_number}{trip.trip_name ? ` — ${trip.trip_name}` : ''}</p>
+            <p style={{ margin:'3px 0 0', fontSize:'0.72rem', color:'rgba(255,255,255,0.6)' }}>
               {isAr ? trip.from_station?.name_ar : trip.from_station?.name_en}
               {' → '}
               {isAr ? trip.to_station?.name_ar : trip.to_station?.name_en}
             </p>
           </div>
-          <div className="text-end flex flex-col items-end gap-1">
-            <span className={`text-xs rounded-full px-2.5 py-1 font-bold ${isArrival ? 'bg-teal-100 text-teal-800' : 'bg-amber-100 text-amber-800'}`}>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
+            <span style={{ fontSize:'0.7rem', borderRadius:20, padding:'3px 10px', fontWeight:700, background: isArrival ? 'rgba(52,211,153,0.2)' : 'rgba(251,191,36,0.2)', color: isArrival ? '#34D399' : '#FBBF24' }}>
               {isArrival ? (isAr ? 'وصول' : 'Arrival') : (isAr ? 'مغادرة' : 'Departure')}
             </span>
             {trip.bus_type && busTypeLookup(trip.bus_type) && (
-              <span className="text-[10px] rounded px-2 py-0.5" style={busTypeLookup(trip.bus_type).style}>
+              <span style={{ fontSize:'0.65rem', borderRadius:4, padding:'2px 8px', ...busTypeLookup(trip.bus_type).style }}>
                 {isAr ? busTypeLookup(trip.bus_type).ar : busTypeLookup(trip.bus_type).en}
               </span>
             )}
-            <p className="text-xs mt-0.5 font-mono text-white/60">{schedDep} {isAr ? 'مجدول' : 'sched.'}</p>
+            <p style={{ margin:0, fontSize:'0.7rem', fontFamily:'monospace', color:'rgba(255,255,255,0.5)' }}>{schedDep} {isAr ? 'مجدول' : 'sched.'}</p>
           </div>
         </div>
 
-        <form onSubmit={handleSave} className="px-5 py-4 space-y-4">
+        <form onSubmit={handleSave} style={{ padding:'20px', display:'flex', flexDirection:'column', gap:16 }}>
 
           {/* Bus number */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              {isAr ? 'رقم الحافلة' : 'Bus Number'}
-            </label>
-            <input className={inputCls}
+            <label style={S.label}>{isAr ? 'رقم الحافلة' : 'Bus Number'}</label>
+            <input style={S.input}
               value={form.bus_number} onChange={e => set('bus_number', toLatinDigits(e.target.value))}
               placeholder={isAr ? 'مثال: 4521' : 'e.g. 4521'}
+              onFocus={e => e.target.style.borderColor='var(--accent)'}
+              onBlur={e => e.target.style.borderColor='var(--border)'}
             />
           </div>
 
-          {/* Actual time — departure or arrival */}
+          {/* Actual time */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
+            <label style={S.label}>
               {isArrival ? (isAr ? 'وقت الوصول الفعلي' : 'Actual Arrival') : (isAr ? 'وقت المغادرة الفعلي' : 'Actual Departure')}
             </label>
-            <TimeInput24
-              value={form[actualKey]} onChange={v => set(actualKey, v)}
-            />
+            <TimeInput24 value={form[actualKey]} onChange={v => set(actualKey, v)} />
             {form[actualKey] && schedDep && (
-              <p className="text-xs text-gray-400 mt-1">
+              <p style={{ margin:'5px 0 0', fontSize:'0.72rem', color:'var(--text-3)' }}>
                 {isAr ? 'المجدول:' : 'Scheduled:'} {schedDep} → {accuracyPreview()}
               </p>
             )}
@@ -237,42 +242,40 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
           {/* Passengers */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">{isAr ? 'الركاب' : 'Passengers'}</label>
-            <input type="text" inputMode="numeric" className={inputCls} placeholder="0"
+            <label style={S.label}>{isAr ? 'الركاب' : 'Passengers'}</label>
+            <input type="text" inputMode="numeric" style={S.input} placeholder="0"
               value={form.passenger_count} onChange={e => set('passenger_count', cleanNumber(e.target.value))}
+              onFocus={e => e.target.style.borderColor='var(--accent)'}
+              onBlur={e => e.target.style.borderColor='var(--border)'}
             />
           </div>
 
-          {/* تذاكر المتخلفين — للمغادرة فقط */}
+          {/* تذاكر المتخلفين */}
           {!isArrival && <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">
+            <label style={S.label}>
               {isAr ? 'تذاكر المتخلفين عن الرحلة' : 'Missed Passenger Tickets'} · {isAr ? 'العدد:' : 'Count:'} {missedTickets.length}
             </label>
-            <div className="flex gap-2">
-              {/* جدول المتخلفين */}
-              <div className="flex-1 border rounded-xl overflow-hidden" style={{ minHeight: 90 }}>
-                <div className="grid grid-cols-2 bg-gray-50 border-b px-3 py-1.5 text-xs font-semibold text-gray-500">
+            <div style={{ display:'flex', gap:8 }}>
+              <div style={{ flex:1, border:'1px solid var(--border)', borderRadius:8, overflow:'hidden', minHeight:90 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', background:'var(--surface)', borderBottom:'1px solid var(--border)', padding:'6px 12px', fontSize:'0.7rem', fontWeight:600, color:'var(--text-3)' }}>
                   <span>{isAr ? 'المحطة' : 'Station'}</span>
-                  <span className="text-left">{isAr ? 'رقم التذكرة' : 'Ticket #'}</span>
+                  <span style={{ textAlign:'left' }}>{isAr ? 'رقم التذكرة' : 'Ticket #'}</span>
                 </div>
                 {missedTickets.length === 0 ? (
-                  <p className="text-center text-gray-400 text-xs py-4">{isAr ? 'لا يوجد متخلفون' : 'No missed passengers'}</p>
+                  <p style={{ textAlign:'center', color:'var(--text-3)', fontSize:'0.75rem', padding:'14px 0' }}>{isAr ? 'لا يوجد متخلفون' : 'No missed passengers'}</p>
                 ) : missedTickets.map((m, i) => (
-                  <div key={i} className="grid grid-cols-2 px-3 py-1.5 text-xs border-b last:border-0 hover:bg-red-50 group">
-                    <span className="text-gray-600 truncate">{m.station}</span>
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-gray-800">{m.ticket}</span>
-                      <button type="button" onClick={() => removeTicket(i)}
-                        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs transition-opacity">✕</button>
+                  <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 1fr', padding:'6px 12px', fontSize:'0.75rem', borderBottom:'1px solid var(--border)' }}>
+                    <span style={{ color:'var(--text-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.station}</span>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                      <span style={{ fontFamily:'monospace', color:'var(--text-1)' }}>{m.ticket}</span>
+                      <button type="button" onClick={() => removeTicket(i)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.75rem', padding:'0 4px' }}>✕</button>
                     </div>
                   </div>
                 ))}
               </div>
-
-              {/* إضافة تذكرة */}
-              <div className="flex flex-col gap-1.5 w-44 shrink-0">
+              <div style={{ display:'flex', flexDirection:'column', gap:6, width:176, flexShrink:0 }}>
                 <select value={ticketStation} onChange={e => setTicketStation(e.target.value)}
-                  className="border rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-nwbus-primary focus:outline-none">
+                  style={{ ...S.input, padding:'7px 10px', fontSize:'0.75rem' }}>
                   {[trip?.from_station?.name_ar, trip?.from_station?.name_en, trip?.to_station?.name_ar, trip?.to_station?.name_en]
                     .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i)
                     .map(s => <option key={s} value={s}>{s}</option>)}
@@ -282,45 +285,42 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
                   onChange={e => setTicketInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTicket())}
                   placeholder={isAr ? 'رقم التذكرة ثم Enter' : 'Ticket # then Enter'}
-                  className="border rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-nwbus-primary focus:outline-none font-mono"
+                  style={{ ...S.input, padding:'7px 10px', fontSize:'0.75rem', fontFamily:'monospace' }}
+                  onFocus={e => e.target.style.borderColor='var(--accent)'}
+                  onBlur={e => e.target.style.borderColor='var(--border)'}
                 />
-                <p className="text-[10px] text-gray-400">{isAr ? 'اكتب رقم التذكرة' : 'Type ticket number'}</p>
+                <p style={{ margin:0, fontSize:'0.65rem', color:'var(--text-3)' }}>{isAr ? 'اكتب رقم التذكرة' : 'Type ticket number'}</p>
               </div>
             </div>
           </div>}
 
           {/* مطابقة الكشف */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">
-              {isAr ? 'مطابقة الكشف' : 'Manifest Check'}
-            </label>
-            <div className="flex gap-2">
-              <button type="button"
-                onClick={() => setManifestMatch(true)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all
-                  ${manifestMatch === true
-                    ? 'bg-green-500 text-white border-green-500'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-green-400'}`}>
+            <label style={S.label}>{isAr ? 'مطابقة الكشف' : 'Manifest Check'}</label>
+            <div style={{ display:'flex', gap:8 }}>
+              <button type="button" onClick={() => setManifestMatch(true)}
+                style={{ flex:1, padding:'10px', borderRadius:8, fontSize:'0.875rem', fontWeight:600, cursor:'pointer', border:'2px solid', transition:'all 0.14s',
+                  background: manifestMatch === true ? 'var(--success)' : 'var(--surface)',
+                  borderColor: manifestMatch === true ? 'var(--success)' : 'var(--border)',
+                  color: manifestMatch === true ? '#fff' : 'var(--text-2)' }}>
                 ✓ {isAr ? 'مطابق الكشف' : 'Matches'}
               </button>
-              <button type="button"
-                onClick={() => setManifestMatch(false)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all
-                  ${manifestMatch === false
-                    ? 'bg-red-500 text-white border-red-500'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-red-400'}`}>
+              <button type="button" onClick={() => setManifestMatch(false)}
+                style={{ flex:1, padding:'10px', borderRadius:8, fontSize:'0.875rem', fontWeight:600, cursor:'pointer', border:'2px solid', transition:'all 0.14s',
+                  background: manifestMatch === false ? 'var(--danger)' : 'var(--surface)',
+                  borderColor: manifestMatch === false ? 'var(--danger)' : 'var(--border)',
+                  color: manifestMatch === false ? '#fff' : 'var(--text-2)' }}>
                 ✗ {isAr ? 'غير مطابق الكشف' : 'Mismatch'}
               </button>
             </div>
             {manifestMatch === false && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs text-gray-500">{isAr ? 'من أصل' : 'Out of'}</span>
-                <input
-                  type="text" inputMode="numeric"
+              <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ fontSize:'0.75rem', color:'var(--text-3)' }}>{isAr ? 'من أصل' : 'Out of'}</span>
+                <input type="text" inputMode="numeric"
                   value={manifestTotal}
                   onChange={e => setManifestTotal(toLatinDigits(e.target.value).replace(/\D/g, ''))}
                   placeholder="0"
-                  className="w-24 border-2 border-red-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:ring-2 focus:ring-red-400 focus:outline-none text-center"
+                  style={{ ...S.input, width:80, borderColor:'var(--danger)', fontFamily:'monospace', textAlign:'center' }}
                 />
               </div>
             )}
@@ -328,10 +328,8 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
           {/* Trip Status */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">
-              ⚡ {isAr ? 'حالة الرحلة' : 'Trip Status'}
-            </label>
-<select className={inputCls}
+            <label style={S.label}>⚡ {isAr ? 'حالة الرحلة' : 'Trip Status'}</label>
+            <select style={S.input}
               value={form.operational_status} onChange={e => set('operational_status', e.target.value)}>
               {TRIP_STATUSES.map(s => (
                 <option key={s.value} value={s.value}>{isAr ? s.ar : s.en}</option>
@@ -341,24 +339,24 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
           {/* Facilities status */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              {isAr ? 'حالة التجهيزات' : 'Facilities'}
-            </label>
-            <div className="space-y-1.5">
+            <label style={S.label}>{isAr ? 'حالة التجهيزات' : 'Facilities'}</label>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
               {[
                 { k: 'screen_works',     label: isAr ? 'الشاشة' : 'Screen' },
                 ...(/^4[01]/.test(form.bus_number || '') ? [] : [{ k: 'wheelchair_works', label: isAr ? '♿ ويل تشير' : 'Wheelchair' }]),
                 { k: 'toilet_works',     label: isAr ? 'دورات المياه' : 'Toilets' },
               ].map(f => (
-                <div key={f.k} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
-                  <span className="text-sm text-gray-700">{f.label}</span>
-                  <div className="flex gap-1">
+                <div key={f.k} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'var(--surface)', borderRadius:8, padding:'8px 12px', border:'1px solid var(--border)' }}>
+                  <span style={{ fontSize:'0.875rem', color:'var(--text-2)' }}>{f.label}</span>
+                  <div style={{ display:'flex', gap:4 }}>
                     <button type="button" onClick={() => set(f.k, true)}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${form[f.k] ? 'bg-green-600 text-white' : 'bg-white border text-gray-400'}`}>
+                      style={{ padding:'4px 12px', borderRadius:6, fontSize:'0.75rem', fontWeight:600, cursor:'pointer', border:'1px solid', transition:'all 0.14s',
+                        background: form[f.k] ? 'var(--success)' : 'var(--card)', borderColor: form[f.k] ? 'var(--success)' : 'var(--border)', color: form[f.k] ? '#fff' : 'var(--text-3)' }}>
                       {isAr ? 'تعمل' : 'Works'}
                     </button>
                     <button type="button" onClick={() => set(f.k, false)}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${!form[f.k] ? 'bg-red-500 text-white' : 'bg-white border text-gray-400'}`}>
+                      style={{ padding:'4px 12px', borderRadius:6, fontSize:'0.75rem', fontWeight:600, cursor:'pointer', border:'1px solid', transition:'all 0.14s',
+                        background: !form[f.k] ? 'var(--danger)' : 'var(--card)', borderColor: !form[f.k] ? 'var(--danger)' : 'var(--border)', color: !form[f.k] ? '#fff' : 'var(--text-3)' }}>
                       {isAr ? 'لا تعمل' : 'Faulty'}
                     </button>
                   </div>
@@ -369,28 +367,29 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
           {/* Notes */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              {isAr ? 'ملاحظات' : 'Notes'}
-            </label>
-            <textarea rows={2} className={`${inputCls} resize-none`}
+            <label style={S.label}>{isAr ? 'ملاحظات' : 'Notes'}</label>
+            <textarea rows={2} style={{ ...S.input, resize:'none' }}
               value={form.notes} onChange={e => set('notes', e.target.value)}
+              onFocus={e => e.target.style.borderColor='var(--accent)'}
+              onBlur={e => e.target.style.borderColor='var(--border)'}
             />
           </div>
 
-          {error && <p className="text-red-600 text-xs bg-red-50 rounded-lg p-2">{error}</p>}
+          {error && (
+            <p style={{ margin:0, fontSize:'0.75rem', background:'var(--danger-bg)', color:'var(--danger)', borderRadius:8, padding:'8px 12px' }}>{error}</p>
+          )}
 
-          <p className="text-xs text-gray-400 border-t pt-2">
-            ✍{profile?.full_name_ar} · {new Date().toLocaleDateString('ar-SA-u-ca-gregory')} {new Date().toLocaleTimeString('ar-SA-u-ca-gregory', { hour: '2-digit', minute: '2-digit', hour12: false })}
+          <p style={{ margin:0, fontSize:'0.7rem', color:'var(--text-3)', borderTop:'1px solid var(--border)', paddingTop:10 }}>
+            ✍ {profile?.full_name_ar} · {new Date().toLocaleDateString('ar-SA-u-ca-gregory')} {new Date().toLocaleTimeString('ar-SA-u-ca-gregory', { hour: '2-digit', minute: '2-digit', hour12: false })}
           </p>
 
-          <div className="flex gap-2">
+          <div style={{ display:'flex', gap:8 }}>
             <button type="submit" disabled={saving}
-              className="flex-1 text-white py-2.5 rounded-xl text-sm font-bold disabled:opacity-50 transition-colors"
-              style={{ background: isArrival ? 'var(--brand-700)' : 'var(--brand-900)' }}>
+              style={{ flex:1, color:'#fff', padding:'11px 0', borderRadius:8, fontSize:'0.875rem', fontWeight:700, border:'none', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, transition:'all 0.14s', background: isArrival ? 'var(--brand-700)' : 'var(--brand-900)' }}>
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
             </button>
             <button type="button" onClick={onClose}
-              className="px-4 py-2.5 border rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+              style={{ padding:'11px 18px', borderRadius:8, fontSize:'0.875rem', border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text-2)', cursor:'pointer', transition:'all 0.14s' }}>
               {isAr ? 'إلغاء' : 'Cancel'}
             </button>
           </div>
