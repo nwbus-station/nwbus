@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
@@ -16,6 +16,12 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false)
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(false)
+
+  // تطبيق الثيم المحفوظ
+  useEffect(() => {
+    const saved = localStorage.getItem('nwbus_theme') ?? 'light'
+    document.documentElement.setAttribute('data-theme', saved)
+  }, [])
 
   if (profile) { navigate('/'); return null }
 
