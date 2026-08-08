@@ -65,14 +65,7 @@ export default function LoginPage() {
       <div style={{ width: '100%', maxWidth: 360 }}>
 
         {/* ── Wordmark ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-          <div style={{
-            width: 36, height: 36, background: '#111', borderRadius: 4,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.6rem', color: '#fff', letterSpacing: '0.04em' }}>NW</span>
-          </div>
+        <div style={{ marginBottom: 28 }}>
           <div style={{ lineHeight: 1.3 }}>
             <p style={{ margin: 0, color: '#F2EFE8', fontWeight: 700, fontSize: '0.82rem', letterSpacing: '0.14em', fontFamily: MONO }}>
               NORTH WEST BUS
