@@ -307,12 +307,14 @@ export default function AppLayout() {
 
         {/* شاشة العرض */}
         {(!mods || mods.includes('live_board')) && (
+        <span className="header-live-board" style={{ display: 'contents' }}>
         <button onClick={() => navigate('/board')} style={ghostBtn}
           onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = 'var(--text-1)' }}
           onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.color = 'var(--text-2)' }}>
           <Icon d={ICONS.monitor} size={13} />
           <span className="hidden md:inline">{isAr ? 'شاشة العرض' : 'Live Board'}</span>
         </button>
+        </span>
         )}
 
         {/* اللغة */}
@@ -350,7 +352,7 @@ export default function AppLayout() {
       </header>
 
       {/* ══ شريط التبويبات ══════════════════════════════ */}
-      <nav className="no-print" style={{
+      <nav className="no-print top-nav" style={{
         background: 'var(--card)', flexShrink: 0,
         borderBottom: '1px solid var(--border)',
         boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -371,6 +373,19 @@ export default function AppLayout() {
       <main style={{ flex: 1, minWidth: 0 }}>
         <Outlet />
       </main>
+
+      {/* ── Bottom nav (mobile only) ── */}
+      <nav className="bottom-nav">
+        {visibleGroups.flatMap(g => g.items).slice(0, 5).map(item => (
+          <NavLink key={item.to} to={item.to} end={item.to === '/'}
+            className={({ isActive }) => `bottom-nav-item${isActive ? ' active' : ''}`}>
+            <Icon d={ICONS[item.icon]} size={20} />
+            <span style={{ maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isAr ? item.labelAr : item.labelEn}
+            </span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   )
 }

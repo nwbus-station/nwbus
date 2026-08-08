@@ -596,3 +596,44 @@ span.rounded-full                          { border-radius: 4px !important; }
 @media (max-width: 767px) {
   input, select, textarea { font-size: 16px !important; }
 }
+
+/* ── Mobile (≤767px) ──────────────────────────────────── */
+@media (max-width: 767px) {
+  /* bottom nav padding */
+  main { padding-bottom: 64px !important; }
+
+  /* hide top nav tabs on mobile */
+  nav.top-nav { display: none !important; }
+
+  /* show bottom nav on mobile */
+  nav.bottom-nav { display: flex !important; }
+
+  /* header simplify */
+  .header-live-board { display: none !important; }
+}
+
+/* bottom nav — hidden on desktop */
+nav.bottom-nav {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+  height: 60px;
+  padding: 0 4px;
+  padding-bottom: env(safe-area-inset-bottom);
+  align-items: stretch;
+  justify-content: space-around;
+}
+.bottom-nav-item {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; text-decoration: none;
+  color: var(--text-3); font-size: 0.58rem; font-weight: 600;
+  padding: 6px 4px; border-radius: 0;
+  transition: color 0.12s;
+  min-width: 0;
+}
+.bottom-nav-item.active { color: var(--accent); }
+.bottom-nav-item svg { flex-shrink: 0; }

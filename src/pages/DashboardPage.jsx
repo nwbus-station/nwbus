@@ -226,10 +226,10 @@ export default function DashboardPage() {
           </button>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'start' }}>
 
           {/* عمود يسار */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* وصول سريع */}
             {quickLinks.length > 0 && (
@@ -295,7 +295,7 @@ export default function DashboardPage() {
           </div>
 
           {/* لوحة الإشعارات */}
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
+          <aside style={{ flex: '0 0 280px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
 
             {/* رأس الإشعارات */}
             <div style={{ background: 'var(--brand-900)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
