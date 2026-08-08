@@ -435,6 +435,62 @@ span.rounded-full                          { border-radius: 4px !important; }
 }
 .hover\:opacity-90:hover { opacity: 0.88 !important; }
 
+/* ── Dark mode: override all Tailwind hover/bg grays ─────── */
+[data-theme="dark"] .hover\:bg-gray-50:hover,
+[data-theme="dark"] .hover\:bg-gray-100:hover,
+[data-theme="dark"] .hover\:bg-gray-200:hover,
+[data-theme="dark"] .hover\:bg-white:hover,
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-gray-100:hover,
+html.dark .hover\:bg-gray-200:hover,
+html.dark .hover\:bg-white:hover {
+  background-color: var(--card-hover) !important;
+}
+
+[data-theme="dark"] .bg-gray-50,
+[data-theme="dark"] .bg-gray-100,
+[data-theme="dark"] .bg-white,
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-white {
+  background-color: var(--card) !important;
+}
+
+[data-theme="dark"] tr.hover\:bg-gray-50:hover td,
+[data-theme="dark"] tr:hover.hover\:bg-gray-50 td,
+[data-theme="dark"] .hover\:bg-gray-50:hover,
+html.dark tr.hover\:bg-gray-50:hover td,
+html.dark tr:hover.hover\:bg-gray-50 td {
+  background-color: var(--card-hover) !important;
+}
+
+[data-theme="dark"] .text-gray-600,
+[data-theme="dark"] .text-gray-700,
+[data-theme="dark"] .text-gray-500,
+[data-theme="dark"] .text-gray-400,
+html.dark .text-gray-600,
+html.dark .text-gray-700,
+html.dark .text-gray-500,
+html.dark .text-gray-400 {
+  color: var(--text-2) !important;
+}
+
+[data-theme="dark"] .text-gray-900,
+[data-theme="dark"] .text-gray-800,
+html.dark .text-gray-900,
+html.dark .text-gray-800 {
+  color: var(--text-1) !important;
+}
+
+[data-theme="dark"] .border-gray-200,
+[data-theme="dark"] .border-gray-300,
+[data-theme="dark"] .border-gray-100,
+html.dark .border-gray-200,
+html.dark .border-gray-300,
+html.dark .border-gray-100 {
+  border-color: var(--border) !important;
+}
+
 /* Table hover */
 .data-table tr:hover td { background: rgba(91,91,214,0.04) !important; }
 
