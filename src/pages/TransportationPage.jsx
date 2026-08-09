@@ -117,7 +117,24 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
   async function handleSave(e) {
     e.preventDefault()
-    setSaving(true); setError('')
+    setError('')
+
+    if (!form.bus_number?.trim()) {
+      setError(isAr ? 'يرجى إدخال رقم الحافلة' : 'Bus number is required')
+      return
+    }
+    if (!form[actualKey]) {
+      setError(isAr
+        ? (isArrival ? 'يرجى إدخال وقت الوصول الفعلي' : 'يرجى إدخال وقت المغادرة الفعلي')
+        : (isArrival ? 'Actual arrival time is required' : 'Actual departure time is required'))
+      return
+    }
+    if (form.passenger_count === '' || form.passenger_count === null || form.passenger_count === undefined) {
+      setError(isAr ? 'يرجى إدخال عدد الركاب (يمكن أن يكون 0)' : 'Passenger count is required (can be 0)')
+      return
+    }
+
+    setSaving(true)
 
     const dateStr = recordDate || todayStr()
     const ts = v => v ? `${dateStr}T${v}:00` : null
@@ -218,8 +235,10 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
           {/* Bus number */}
           <div>
-            <label style={S.label}>{isAr ? 'رقم الحافلة' : 'Bus Number'}</label>
-            <input style={S.input}
+            <label style={S.label}>{isAr ? 'رقم الحافلة *' : 'Bus Number *'}</label>
+            <input
+              inputMode="numeric" pattern="[0-9]*"
+              style={S.input}
               value={form.bus_number} onChange={e => set('bus_number', toLatinDigits(e.target.value))}
               placeholder={isAr ? 'مثال: 4521' : 'e.g. 4521'}
               onFocus={e => e.target.style.borderColor='var(--accent)'}
@@ -230,7 +249,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
           {/* Actual time */}
           <div>
             <label style={S.label}>
-              {isArrival ? (isAr ? 'وقت الوصول الفعلي' : 'Actual Arrival') : (isAr ? 'وقت المغادرة الفعلي' : 'Actual Departure')}
+              {isArrival ? (isAr ? 'وقت الوصول الفعلي *' : 'Actual Arrival *') : (isAr ? 'وقت المغادرة الفعلي *' : 'Actual Departure *')}
             </label>
             <TimeInput24 value={form[actualKey]} onChange={v => set(actualKey, v)} />
             {form[actualKey] && schedDep && (
@@ -242,7 +261,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
           {/* Passengers */}
           <div>
-            <label style={S.label}>{isAr ? 'الركاب' : 'Passengers'}</label>
+            <label style={S.label}>{isAr ? 'الركاب *' : 'Passengers *'}</label>
             <input type="text" inputMode="numeric" style={S.input} placeholder="0"
               value={form.passenger_count} onChange={e => set('passenger_count', cleanNumber(e.target.value))}
               onFocus={e => e.target.style.borderColor='var(--accent)'}
