@@ -72,7 +72,7 @@ export default function DashboardPage() {
   const mods        = profile?.allowed_modules
 
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-  const dateStr = now.toLocaleDateString(isAr ? 'ar-SA' : 'en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const dateStr = now.toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
   const greet = () => {
     const h = now.getHours()
