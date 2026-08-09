@@ -298,29 +298,27 @@ export default function DashboardPage() {
           <aside style={{ flex: '0 0 280px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
 
             {/* رأس الإشعارات */}
-            <div style={{ background: 'var(--brand-900)', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 30, height: 30, borderRadius: 6, background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.7)' }}>
-                  <Svg paths={ICONS.bell} size={14} />
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>
-                    {isAr ? 'الإشعارات' : 'Notifications'}
+                <Svg paths={ICONS.bell} size={15} style={{ color: 'var(--text-3)' }} />
+                <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-1)' }}>
+                  {isAr ? 'الإشعارات' : 'Notifications'}
+                </p>
+                {unread === 0 && (
+                  <p style={{ margin: 0, fontSize: '0.68rem', color: 'var(--text-3)', fontFamily: MONO }}>
+                    {isAr ? 'لا يوجد جديد' : 'all caught up'}
                   </p>
-                  <p style={{ margin: 0, fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', fontFamily: MONO }}>
-                    {unread > 0 ? (isAr ? `${unread} غير مقروء` : `${unread} unread`) : (isAr ? 'لا يوجد جديد' : 'all caught up')}
-                  </p>
-                </div>
+                )}
               </div>
               {unread > 0 && (
                 <button onClick={markAllRead} style={{
-                  fontSize: '0.62rem', fontWeight: 600, color: 'rgba(255,255,255,0.55)',
-                  background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit',
+                  fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-3)',
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit',
                   transition: 'all 0.12s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.14)'; e.currentTarget.style.color = '#fff' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; e.currentTarget.style.color = 'rgba(255,255,255,0.55)' }}>
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface)' }}>
                   {isAr ? 'قراءة الكل' : 'Mark all'}
                 </button>
               )}
