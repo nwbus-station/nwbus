@@ -1,54 +1,127 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { toLatinDigits } from '../../utils/digits'
 
 /**
- * مدخل وقت 24 ساعة سريع: اكتب الأرقام فقط (مثل 1505) وتنسّق تلقائياً 15:05.
+ * مدخل وقت 24 ساعة بحقلين: ساعة ودقائق.
+ * بعد إدخال الساعة ينتقل تلقائياً للدقائق.
  * value/onChange بصيغة "HH:MM".
  */
-export default function TimeInput24({ value = '', onChange, className = '', placeholder = '--:--' }) {
-  const [text, setText] = useState(value)
-  useEffect(() => { setText(value) }, [value])
+export default function TimeInput24({ value = '', onChange, placeholder = '--:--', style = {} }) {
+  const [hh, setHh] = useState('')
+  const [mm, setMm] = useState('')
+  const minRef = useRef(null)
+  const hrRef  = useRef(null)
 
-  function parse(raw) {
-    const d = toLatinDigits(raw).replace(/\D/g, '').slice(0, 4)
-    if (!d) return { d: '', v: '' }
-    // رقم واحد أو اثنان = ساعة فقط، بدون دقائق → أضف 00
-    const hStr = d.length <= 2 ? d.padStart(2, '0') : d.slice(0, 2)
-    const mStr = d.length >= 3 ? d.slice(2).padEnd(2, '0') : '00'
-    const hh = Math.min(23, parseInt(hStr, 10))
-    const mm = Math.min(59, parseInt(mStr, 10))
-    const v = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
-    return { d, v }
+  // sync from parent value
+  useEffect(() => {
+    if (value && /^\d{1,2}:\d{2}$/.test(value)) {
+      const [h, m] = value.split(':')
+      setHh(h.replace(/^0+/, '') || '')
+      setMm(m)
+    } else if (!value) {
+      setHh(''); setMm('')
+    }
+  }, [value])
+
+  function emit(h, m) {
+    if (h === '' && m === '') { onChange(''); return }
+    const hNum = Math.min(23, parseInt(h || '0', 10))
+    const mNum = Math.min(59, parseInt(m || '0', 10))
+    onChange(`${String(hNum).padStart(2,'0')}:${String(mNum).padStart(2,'0')}`)
   }
 
-  function handle(e) {
-    const d = toLatinDigits(e.target.value).replace(/\D/g, '').slice(0, 4)
-    const out = d.length <= 2 ? d : d.slice(0, 2) + ':' + d.slice(2)
-    setText(out)
-    // أطلق onChange فور اكتمال 4 أرقام أو برقمين إذا ≤ 23
-    if (d.length === 4) {
-      const { v } = parse(d)
-      onChange(v)
-    } else if (d.length <= 2 && d.length > 0) {
-      const h = parseInt(d, 10)
-      if (h >= 3) {         // ≥3 ساعة لا يمكن أن يكون بادئة صحيحة لساعتين → أطلق مباشرة
-        const { v } = parse(d)
-        onChange(v); setText(v)
-      }
-    } else if (d.length === 0) {
-      onChange('')
+  function handleHr(e) {
+    const raw = toLatinDigits(e.target.value).replace(/\D/g,'').slice(0,2)
+    setHh(raw)
+    // انتقل للدقائق إذا: رقمان، أو الرقم > 2 (لا يمكن أن يكون عشرات الساعة)
+    if (raw.length === 2 || (raw.length === 1 && parseInt(raw,10) > 2)) {
+      emit(raw, mm)
+      setTimeout(() => { minRef.current?.focus(); minRef.current?.select() }, 0)
+    } else if (raw.length === 0) {
+      emit('', mm)
     }
   }
 
-  function blur() {
-    const { d, v } = parse(text)
-    if (!d) { setText(''); onChange(''); return }
-    setText(v); onChange(v)
+  function handleMm(e) {
+    const raw = toLatinDigits(e.target.value).replace(/\D/g,'').slice(0,2)
+    setMm(raw)
+    if (raw.length === 2) emit(hh, raw)
+    else if (raw.length === 0) emit(hh, '')
   }
 
+  function blurHr() {
+    if (!hh) return
+    const h = Math.min(23, parseInt(hh,10))
+    const str = String(h)
+    setHh(str)
+    emit(str, mm)
+  }
+
+  function blurMm() {
+    if (!mm) { emit(hh, '00'); setMm('00'); return }
+    const m = Math.min(59, parseInt(mm,10))
+    const str = String(m).padStart(2,'0')
+    setMm(str)
+    emit(hh, str)
+  }
+
+  function onHrKey(e) {
+    if (e.key === ':' || e.key === 'ArrowRight' || e.key === 'Tab') {
+      e.preventDefault()
+      minRef.current?.focus(); minRef.current?.select()
+    }
+  }
+
+  function onMmKey(e) {
+    if (e.key === 'Backspace' && mm === '') {
+      hrRef.current?.focus()
+    }
+  }
+
+  const cell = {
+    width: 36, border: 'none', background: 'transparent',
+    textAlign: 'center', fontFamily: 'monospace', fontSize: '0.95rem',
+    fontWeight: 600, outline: 'none', color: 'var(--text-1)',
+    padding: 0,
+  }
+
+  const empty = !hh && !mm
+
   return (
-    <input value={text} onChange={handle} onBlur={blur}
-      inputMode="numeric" maxLength={5} placeholder={placeholder} dir="ltr"
-      className={`border rounded-xl px-3 py-2.5 text-sm text-center font-mono tracking-wider focus:ring-2 focus:ring-nwbus-primary focus:outline-none ${className}`} />
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 2,
+      border: '1px solid var(--border)', borderRadius: 8,
+      padding: '9px 12px', background: 'var(--surface)',
+      cursor: 'text', userSelect: 'none',
+      ...style,
+    }}
+      onClick={() => (hh ? minRef.current : hrRef.current)?.focus()}
+    >
+      <input
+        ref={hrRef}
+        value={hh}
+        onChange={handleHr}
+        onBlur={blurHr}
+        onKeyDown={onHrKey}
+        inputMode="numeric"
+        maxLength={2}
+        placeholder={empty ? '--' : 'ش'}
+        dir="ltr"
+        style={{ ...cell, color: hh ? 'var(--text-1)' : 'var(--text-3)' }}
+      />
+      <span style={{ color: hh || mm ? 'var(--text-1)' : 'var(--text-3)', fontWeight:700, fontSize:'1rem', lineHeight:1 }}>:</span>
+      <input
+        ref={minRef}
+        value={mm}
+        onChange={handleMm}
+        onBlur={blurMm}
+        onKeyDown={onMmKey}
+        inputMode="numeric"
+        maxLength={2}
+        placeholder={empty ? '--' : '00'}
+        dir="ltr"
+        style={{ ...cell, color: mm ? 'var(--text-1)' : 'var(--text-3)' }}
+      />
+    </div>
   )
 }
