@@ -291,20 +291,7 @@ export default function AppLayout() {
 
   async function handleLogout() { await signOut(); navigate('/login') }
 
-  const idleTimer = useRef(null)
-  useEffect(() => {
-    const idleEnabled = settings.idle_enabled !== 'false'
-    if (!idleEnabled) return
-    const idleMin = parseInt(settings.idle_min || '3')
-    const reset = () => {
-      clearTimeout(idleTimer.current)
-      idleTimer.current = setTimeout(() => navigate('/board'), idleMin * 60 * 1000)
-    }
-    const evts = ['mousemove','mousedown','keydown','touchstart','scroll']
-    evts.forEach(e => window.addEventListener(e, reset, { passive: true }))
-    reset()
-    return () => { clearTimeout(idleTimer.current); evts.forEach(e => window.removeEventListener(e, reset)) }
-  }, [navigate, settings.idle_enabled, settings.idle_min])
+  // idle timer disabled
 
   const ghostBtn = {
     display: 'flex', alignItems: 'center', gap: 6,
