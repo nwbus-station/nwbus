@@ -36,6 +36,12 @@ function FitBounds({ stations }) {
   return null
 }
 
+function ZoomController({ onReady }) {
+  const map = useMap()
+  useEffect(() => { onReady(map) }, [map])
+  return null
+}
+
 export default function MapPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -103,6 +109,7 @@ export default function MapPage() {
   }
 
   const [copiedId, setCopiedId] = useState(null)
+  const mapRef = useRef(null)
   const [routeDistance, setRouteDistance] = useState(null)
   const [routeLoading, setRouteLoading] = useState(false)
   const [routePoints, setRoutePoints] = useState(null)
@@ -291,6 +298,7 @@ export default function MapPage() {
           </div>
         ) : (
           <MapContainer center={saudiCenter} zoom={6} style={{ width: '100%', height: 'calc(100vh - 58px)' }} zoomControl={false}>
+            <ZoomController onReady={m => { mapRef.current = m }} />
             <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
             {stations.length > 0 && <FitBounds stations={stations} />}
             {flyTo && <FlyTo coords={flyTo} />}
@@ -341,8 +349,8 @@ export default function MapPage() {
         {/* Zoom controls */}
         <div style={{ position: 'absolute', top: 12, [isAr?'left':'right']: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.12)', overflow: 'hidden', border: '1px solid #e8e8e8' }}>
-            {[{l:'+',t:'in'},{l:'−',t:'out'}].map((b,i) => (
-              <button key={i} onClick={() => document.querySelector(`.leaflet-control-zoom-${b.t}`)?.click()}
+            {[{l:'+', fn: () => mapRef.current?.zoomIn()}, {l:'−', fn: () => mapRef.current?.zoomOut()}].map((b,i) => (
+              <button key={i} onClick={b.fn}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, background: 'none', border: 'none', borderBottom: i===0?'1px solid #f0f0f0':'none', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 700, color: '#333' }}
                 onMouseEnter={e=>e.currentTarget.style.background='#f5f5f5'}
                 onMouseLeave={e=>e.currentTarget.style.background='none'}>
@@ -351,8 +359,6 @@ export default function MapPage() {
             ))}
           </div>
         </div>
-
-        <style>{`.leaflet-control-zoom { display: none !important; }`}</style>
       </div>
     </div>
   )
