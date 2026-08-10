@@ -70,8 +70,10 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
     const deficitAcknowledged = sale?.accountant_notes?.includes('تم إقرار العجز')
     const shiftLabel = { A: isAr ? 'الوردية أ' : 'Shift A', B: isAr ? 'الوردية ب' : 'Shift B', C: isAr ? 'الوردية ج' : 'Shift C' }[sale?.shift] ?? sale?.shift ?? '—'
 
+    const docTitle = `إيرادات_${stationName}_${sale?.sale_date ?? ''}_${shiftLabel}`.replace(/\s+/g, '_')
     const html = `<!DOCTYPE html><html dir="${dir}"><head>
       <meta charset="UTF-8"/>
+      <title>${docTitle}</title>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=IBM Plex Sans Arabic:wght@400;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
