@@ -252,38 +252,18 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
     </div>
     </body></html>`
 
-    const style = document.createElement('style')
-    style.id = '__nwbus_print_style__'
-    style.textContent = `
-      @media print {
-        body > *:not(#__nwbus_print_div__) { display:none!important; }
-        #__nwbus_print_div__ { display:block!important; position:static!important; }
-      }
-    `
-    document.head.appendChild(style)
-
-    // استخراج بلوك التنسيق من <head> حتى لا تضيع تنسيقات الـ classes عند الطباعة
-    const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/i)
-    const printCss = styleMatch ? styleMatch[1] : ''
-
-    const body = html
-      .replace(/[\s\S]*<body[^>]*>/i, '')
-      .replace(/<\/body>[\s\S]*/i, '')
-
-    const div = document.createElement('div')
-    div.id = '__nwbus_print_div__'
-    div.style.cssText = 'position:fixed;top:-99999px;left:0;width:100%;direction:' + (isAr ? 'rtl' : 'ltr')
-    // حقن التنسيق داخل عنصر الطباعة نفسه ليُطبَّق على الـ classes
-    div.innerHTML = `<style>${printCss}</style>${body}`
-    document.body.appendChild(div)
-
-    // استدعاء مباشر بدون timeout للحفاظ على user gesture
-    // try/finally ضروري حتى لا يبقى div مخفٍ للواجهة عند حدوث خطأ
-    try {
-      window.print()
-    } finally {
-      document.body.removeChild(div)
-      document.head.removeChild(style)
+    // فتح نافذة جديدة تحتوي المحتوى كاملاً — يعمل على الجوال والكمبيوتر
+    const win = window.open('', '_blank', 'width=800,height=900')
+    if (!win) return // المتصفح منع النافذة المنبثقة
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    // انتظار تحميل الخط قبل الطباعة
+    win.onload = () => {
+      setTimeout(() => {
+        win.print()
+        win.close()
+      }, 400)
     }
   }
 
