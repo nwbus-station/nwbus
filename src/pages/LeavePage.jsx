@@ -379,6 +379,9 @@ function NewLeaveForm({ profile, onSaved }) {
   const [timeFrom, setTimeFrom] = useState('08:00')
   const [timeTo, setTimeTo]     = useState('17:00')
   const [compReason, setCompReason] = useState('before_rest')
+  const [bypassDeadline, setBypassDeadline] = useState(false)
+
+  const isAdmin = profile?.role === 'general_admin'
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -413,8 +416,8 @@ function NewLeaveForm({ profile, onSaved }) {
     if (form.leave_type === 'casual' && !form.notes?.trim()) { setError('سبب الإجازة إلزامي'); return }
     if (maxDays && days > maxDays) { setError(`هذه الإجازة لا تتجاوز ${maxDays} أيام`); return }
 
-    // التحقق من مواعيد التقديم حسب السياسة
-    if (form.start_date) {
+    // التحقق من مواعيد التقديم حسب السياسة (الأدمن يمكنه تجاوزها)
+    if (form.start_date && !bypassDeadline) {
       const today = new Date(); today.setHours(0,0,0,0)
       const startD = new Date(form.start_date); startD.setHours(0,0,0,0)
       const daysUntilStart = Math.round((startD - today) / 86400000)
@@ -427,8 +430,8 @@ function NewLeaveForm({ profile, onSaved }) {
       }
     }
 
-    // الإجازة السنوية: فترتان فقط في السنة
-    if (form.leave_type === 'annual') {
+    // الإجازة السنوية: فترتان فقط في السنة (الأدمن يمكنه تجاوزها)
+    if (form.leave_type === 'annual' && !bypassDeadline) {
       const year = new Date().getFullYear()
       const { data: annualThisYear } = await supabase.from('leaves')
         .select('id')
@@ -592,6 +595,17 @@ function NewLeaveForm({ profile, onSaved }) {
         <div style={{ padding: '10px 14px', borderRadius: 9, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.78rem', color: '#92400e' }}>
           الإجازة المرضية يجب رفعها خلال <strong>5 أيام عمل</strong> من تاريخ المرض. تأكد من رفع التبليغ أولاً.
         </div>
+      )}
+
+      {/* استثناء الأدمن — تجاوز قيود المواعيد */}
+      {isAdmin && ['compensatory', 'annual'].includes(form.leave_type) && (
+        <button type="button" onClick={() => setBypassDeadline(b => !b)}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 9, border: `1.5px solid ${bypassDeadline ? '#dc2626' : '#e5e5e5'}`, background: bypassDeadline ? '#fef2f2' : '#fafafa', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, color: bypassDeadline ? '#dc2626' : '#888', transition: 'all 0.15s', width: '100%' }}>
+          <div style={{ width: 32, height: 18, borderRadius: 9, background: bypassDeadline ? '#dc2626' : '#d1d5db', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+            <div style={{ position: 'absolute', top: 2, right: bypassDeadline ? 2 : 14, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'right 0.2s' }} />
+          </div>
+          {bypassDeadline ? 'تجاوز قيود المواعيد مفعّل (استثناء أدمن)' : 'تفعيل استثناء الأدمن — تجاوز قيود المواعيد'}
+        </button>
       )}
 
       {/* تنبيه الإجازة التعويضية */}
