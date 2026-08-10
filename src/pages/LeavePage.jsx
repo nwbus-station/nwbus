@@ -413,6 +413,35 @@ function NewLeaveForm({ profile, onSaved }) {
     if (form.leave_type === 'casual' && !form.notes?.trim()) { setError('سبب الإجازة إلزامي'); return }
     if (maxDays && days > maxDays) { setError(`هذه الإجازة لا تتجاوز ${maxDays} أيام`); return }
 
+    // التحقق من مواعيد التقديم حسب السياسة
+    if (form.start_date) {
+      const today = new Date(); today.setHours(0,0,0,0)
+      const startD = new Date(form.start_date); startD.setHours(0,0,0,0)
+      const daysUntilStart = Math.round((startD - today) / 86400000)
+
+      if (form.leave_type === 'compensatory' && daysUntilStart < 2) {
+        setError('الإجازة التعويضية يجب تقديمها قبل الإجازة بيومين على الأقل'); return
+      }
+      if (form.leave_type === 'annual' && daysUntilStart < 10) {
+        setError('الإجازة السنوية يجب تقديمها قبل الإجازة بـ 10 أيام على الأقل'); return
+      }
+    }
+
+    // الإجازة السنوية: فترتان فقط في السنة
+    if (form.leave_type === 'annual') {
+      const year = new Date().getFullYear()
+      const { data: annualThisYear } = await supabase.from('leaves')
+        .select('id')
+        .eq('employee_id', profile.id)
+        .eq('leave_type', 'annual')
+        .gte('start_date', `${year}-01-01`)
+        .lte('start_date', `${year}-12-31`)
+        .neq('status', 'rejected')
+      if ((annualThisYear?.length ?? 0) >= 2) {
+        setError('لا يُسمح بأكثر من فترتين للإجازة السنوية في نفس العام'); return
+      }
+    }
+
     // التحقق من عدم وجود طلب معلق
     const { data: pending } = await supabase.from('leaves')
       .select('id').eq('employee_id', profile.id).eq('status', 'pending').limit(1)
@@ -562,6 +591,20 @@ function NewLeaveForm({ profile, onSaved }) {
       {form.leave_type === 'sick' && (
         <div style={{ padding: '10px 14px', borderRadius: 9, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.78rem', color: '#92400e' }}>
           الإجازة المرضية يجب رفعها خلال <strong>5 أيام عمل</strong> من تاريخ المرض. تأكد من رفع التبليغ أولاً.
+        </div>
+      )}
+
+      {/* تنبيه الإجازة التعويضية */}
+      {form.leave_type === 'compensatory' && (
+        <div style={{ padding: '10px 14px', borderRadius: 9, background: '#fef3c7', border: '1px solid #fbbf24', fontSize: '0.78rem', color: '#92400e' }}>
+          الإجازة التعويضية يجب تقديمها <strong>قبل الإجازة بيومين على الأقل</strong> — لن يُقبل الطلب إذا كان تاريخ البداية أقل من يومين من الآن.
+        </div>
+      )}
+
+      {/* تنبيه الإجازة السنوية */}
+      {form.leave_type === 'annual' && (
+        <div style={{ padding: '10px 14px', borderRadius: 9, background: '#fef3c7', border: '1px solid #fbbf24', fontSize: '0.78rem', color: '#92400e', marginTop: 4 }}>
+          الإجازة السنوية يجب تقديمها <strong>قبل الإجازة بـ 10 أيام على الأقل</strong>، والحد الأقصى <strong>فترتان فقط في السنة</strong>.
         </div>
       )}
 
