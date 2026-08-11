@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
       setProfile(data)
       setProfileError(null)
       // مشرف منطقة — نجلب محطاته المخصصة من user_stations
-      if (data.job_title === 'area_supervisor') {
+      if (data.role === 'area_supervisor') {
         const { data: us } = await supabase
           .from('user_stations')
           .select('station_id')
@@ -161,7 +161,7 @@ export function AuthProvider({ children }) {
   const isStationAdmin    = profile?.role === 'station_admin' || isShiftSupervisor
   const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true
   const isEmployee        = profile?.role === 'station_employee'
-  const isAreaSupervisor  = profile?.job_title === 'area_supervisor'
+  const isAreaSupervisor  = profile?.role === 'area_supervisor'
   const canManageUsers    = isGeneralAdmin
   const canViewAllStations = isGeneralAdmin
 

@@ -927,7 +927,7 @@ export default function LeavePage() {
   const { profile, isAreaSupervisor, allowedStationIds } = useAuth()
   const role        = profile?.role
   const isAdmin     = role === 'general_admin'
-  const isSupervisor = role === 'station_admin' || role === 'shift_supervisor' || isAreaSupervisor
+  const isSupervisor = role === 'station_admin' || role === 'shift_supervisor' || role === 'area_supervisor'
   const canSupervise = isAdmin || isSupervisor
 
   const [searchParams] = useSearchParams()

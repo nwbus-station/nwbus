@@ -25,8 +25,9 @@ export const BUS_TYPES = [
 export const USER_ROLES = [
   { value: 'station_employee',  ar: 'موظف',              en: 'Employee' },
   { value: 'accountant',        ar: 'محاسب',              en: 'Accountant' },
-  { value: 'station_admin',     ar: 'مشرف المحطة',        en: 'Supervisor' },
+  { value: 'station_admin',     ar: 'مشرف المحطة',        en: 'Station Supervisor' },
   { value: 'shift_supervisor',  ar: 'مشرف وردية',         en: 'Shift Supervisor' },
+  { value: 'area_supervisor',   ar: 'مشرف منطقة',         en: 'Area Supervisor' },
   { value: 'general_admin',     ar: 'أدمن عام',           en: 'General Admin' },
 ]
 

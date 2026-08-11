@@ -40,6 +40,7 @@ const JOB_TITLES = [
 
 const ROLE_COLORS = {
   general_admin:    'bg-red-100 text-red-700 border-red-200',
+  area_supervisor:  'bg-purple-100 text-purple-700 border-purple-200',
   station_admin:    'bg-amber-100 text-amber-700 border-amber-200',
   shift_supervisor: 'bg-orange-100 text-orange-700 border-orange-200',
   accountant:       'bg-blue-100 text-blue-700 border-blue-200',
@@ -168,7 +169,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
   // محطات المشرف المتعددة (station_admin) — تُحفظ في user_stations
   const [stationSet, setStationSet] = useState(new Set(user?.station_id ? [user.station_id] : []))
   useEffect(() => {
-    if (user?.id && (user.role === 'station_admin' || user.job_title === 'area_supervisor')) {
+    if (user?.id && (user.role === 'station_admin' || user.role === 'area_supervisor')) {
       supabase.from('user_stations').select('station_id').eq('user_id', user.id)
         .then(({ data }) => { if (data?.length) setStationSet(new Set(data.map(r => r.station_id))) })
     }
@@ -230,7 +231,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           created_by:   profile.id,
         }).select('id').single()
         if (insertErr) throw insertErr
-        if (inserted?.id && (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.job_title === 'area_supervisor')) await syncStations(inserted.id)
+        if (inserted?.id && (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor')) await syncStations(inserted.id)
 
         if (inserted?.id) {
           const extras = {}
@@ -277,7 +278,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           p_is_accountant:   isGeneralAdmin ? !!form.is_accountant : false,
         })
         if (updErr) throw updErr
-        if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.job_title === 'area_supervisor') await syncStations(user.id)
+        if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor') await syncStations(user.id)
 
         onSaved()
         onClose()
@@ -517,7 +518,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           </div>
 
           {/* Station — single (لغير المشرف) */}
-          {!(isGeneralAdmin && (form.role === 'station_admin' || form.job_title === 'area_supervisor')) && (
+          {!(isGeneralAdmin && (form.role === 'station_admin' || form.role === 'area_supervisor')) && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المحطة' : 'Station'}</label>
               <select className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}
@@ -531,7 +532,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           )}
 
           {/* Multi-station — for supervisor (station_admin) or area_supervisor, admin assigns */}
-          {isGeneralAdmin && (form.role === 'station_admin' || form.job_title === 'area_supervisor') && (
+          {isGeneralAdmin && (form.role === 'station_admin' || form.role === 'area_supervisor') && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {isAr ? 'محطات المشرف (يمكن اختيار أكثر من محطة)' : 'Supervisor Stations (multiple allowed)'}
