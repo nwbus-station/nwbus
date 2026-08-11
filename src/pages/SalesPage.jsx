@@ -734,7 +734,7 @@ function AuditModal({ sale, onClose }) {
 
 /* ─── Main Page ────────────────────────────────────────── */
 export default function SalesPage() {
-  const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee } = useAuth()
+  const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -774,8 +774,11 @@ export default function SalesPage() {
     if (isGeneralAdmin) {
       supabase.from('stations').select('id,name_ar,name_en').eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
+    } else if (isAreaSupervisor && allowedStationIds?.length) {
+      supabase.from('stations').select('id,name_ar,name_en').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
+        .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     }
-  }, [isGeneralAdmin])
+  }, [isGeneralAdmin, isAreaSupervisor, allowedStationIds])
 
   async function handleDelete(id) {
     setConfirmDel(id)
@@ -803,6 +806,9 @@ export default function SalesPage() {
     // ── Privacy filters ──────────────────────────────────
     if (isGeneralAdmin) {
       if (filterStation) q = q.eq('station_id', filterStation)
+    } else if (isAreaSupervisor && allowedStationIds?.length) {
+      const ids = filterStation ? [filterStation] : allowedStationIds
+      q = q.in('station_id', ids)
     } else if (isStationAdmin || isAccountant) {
       q = q.eq('station_id', profile.station_id)
     } else {
@@ -825,7 +831,7 @@ export default function SalesPage() {
     if (finalRows.length) setCached(cacheKey, finalRows)
     setRecords(finalRows)
     setLoading(false)
-  }, [filterDate, filterStation, profile?.id, profile?.station_id, isEmployee, isStationAdmin, isAccountant, isGeneralAdmin])
+  }, [filterDate, filterStation, profile?.id, profile?.station_id, isEmployee, isStationAdmin, isAccountant, isGeneralAdmin, isAreaSupervisor, allowedStationIds])
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
 
@@ -868,7 +874,7 @@ export default function SalesPage() {
         <span className="text-xs text-gray-400">{isAr ? 'التاريخ:' : 'Date:'}</span>
         <DatePicker value={filterDate} onChange={setFilterDate} isAr={isAr}
           className="border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
-        {isGeneralAdmin && stations.length > 0 && (
+        {(isGeneralAdmin || isAreaSupervisor) && stations.length > 0 && (
           <>
             <span className="text-xs text-gray-400">{isAr ? 'المحطة:' : 'Station:'}</span>
             <select value={filterStation} onChange={e => setStation(e.target.value)}

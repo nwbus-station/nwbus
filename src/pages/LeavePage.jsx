@@ -924,10 +924,10 @@ const TABS_CFG = [
 ]
 
 export default function LeavePage() {
-  const { profile } = useAuth()
+  const { profile, isAreaSupervisor, allowedStationIds } = useAuth()
   const role        = profile?.role
   const isAdmin     = role === 'general_admin'
-  const isSupervisor = role === 'station_admin' || role === 'shift_supervisor'
+  const isSupervisor = role === 'station_admin' || role === 'shift_supervisor' || isAreaSupervisor
   const canSupervise = isAdmin || isSupervisor
 
   const [searchParams] = useSearchParams()
@@ -950,10 +950,18 @@ export default function LeavePage() {
     let q = supabase.from('leaves').select('*').order('created_at', { ascending: false })
     if (tab === 'mine')    q = q.eq('employee_id', profile.id)
     if (tab === 'pending') {
-      if (isSupervisor && !isAdmin) q = q.eq('supervisor_status', 'pending').eq('station_id', profile.station_id)
-      if (isAdmin) q = q.eq('status', 'pending')
+      if (isAdmin) {
+        q = q.eq('status', 'pending')
+      } else if (isAreaSupervisor && allowedStationIds?.length) {
+        q = q.eq('supervisor_status', 'pending').in('station_id', allowedStationIds)
+      } else if (isSupervisor) {
+        q = q.eq('supervisor_status', 'pending').eq('station_id', profile.station_id)
+      }
     }
-    if (tab === 'all' && !isAdmin) q = q.eq('station_id', profile.station_id)
+    if (tab === 'all' && !isAdmin) {
+      if (isAreaSupervisor && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
+      else q = q.eq('station_id', profile.station_id)
+    }
     const { data } = await q
     if (data) { setCached(cacheKey, data); setLeaves(data) }
     setLoading(false)

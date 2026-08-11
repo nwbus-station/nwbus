@@ -115,7 +115,7 @@ function MoveTableComp({ list, color, label, isAr, storageKey }) {
 export default function ReportsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const { isGeneralAdmin, isAccountant, isStationAdmin, profile } = useAuth()
+  const { isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile } = useAuth()
 
   const [dateFrom, _setDateFrom] = useState(() => localStorage.getItem('rpt_dateFrom') || toLocalDateStr())
   const setDateFrom = v => { localStorage.setItem('rpt_dateFrom', v); _setDateFrom(v) }
@@ -197,10 +197,13 @@ export default function ReportsPage() {
 
   const seesAll = isGeneralAdmin   // الأدمن فقط؛ المحاسب محصور بمحطته
 
-  // جلب المحطات: الكل للأدمن/المحاسب، والمعيّنة للمشرف
+  // جلب المحطات: الكل للأدمن، محطاته لمشرف المنطقة، والمعيّنة للمشرف/المحاسب
   useEffect(() => {
     if (seesAll) {
       supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
+        .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
+    } else if (isAreaSupervisor && allowedStationIds?.length) {
+      supabase.from('stations').select('id, name_ar, name_en').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     } else if ((isStationAdmin || isAccountant) && profile?.id) {
       supabase.from('user_stations').select('station:station_id(id, name_ar, name_en)').eq('user_id', profile.id)
@@ -212,7 +215,7 @@ export default function ReportsPage() {
     } else if (profile?.station) {
       setStations([profile.station])
     }
-  }, [seesAll, isStationAdmin, isAccountant, profile?.id])
+  }, [seesAll, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, profile?.id])
 
   const myStationIds = stations.map(s => s.id)
 

@@ -420,7 +420,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
 /* ─── Main Page ─────────────────────────────────────────── */
 export default function TransportationPage() {
-  const { profile, isGeneralAdmin, isStationAdmin, isAccountant } = useAuth()
+  const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -471,10 +471,13 @@ export default function TransportationPage() {
   // الأدمن/المحاسب يتنقّلون بين كل المحطات؛ المشرف بين محطاته المعيّنة فقط
   const stationId = selectedStation || null
 
-  // جلب المحطات: الأدمن يرى الكل؛ المشرف والمحاسب محطاتهم فقط
+  // جلب المحطات: الأدمن يرى الكل؛ مشرف المنطقة محطاته؛ المشرف والمحاسب محطاتهم فقط
   useEffect(() => {
     if (isGeneralAdmin) {
       supabase.from('stations').select('id, name_ar, name_en, city_group').eq('is_active', true).order('name_ar')
+        .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
+    } else if (isAreaSupervisor && allowedStationIds?.length) {
+      supabase.from('stations').select('id, name_ar, name_en, city_group').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if ((isStationAdmin || isAccountant) && profile?.id) {
       supabase.from('user_stations').select('station:station_id(id, name_ar, name_en)').eq('user_id', profile.id)
@@ -484,7 +487,7 @@ export default function TransportationPage() {
           setStations(sts)
         })
     }
-  }, [isGeneralAdmin, isAccountant, isStationAdmin, profile?.id])
+  }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id])
 
   // اختيار محطة افتراضية
   useEffect(() => {

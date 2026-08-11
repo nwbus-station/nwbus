@@ -656,7 +656,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
 
 /* ─── Main Page ────────────────────────────────────────── */
 export default function UsersPage() {
-  const { profile, isGeneralAdmin, isStationAdmin, isAccountant } = useAuth()
+  const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -678,8 +678,10 @@ export default function UsersPage() {
       .select('*, station:station_id(name_ar, name_en)')
       .order('created_at', { ascending: false })
 
-    // Station admin only sees users of their station
-    if (isStationAdmin && !isGeneralAdmin) {
+    // Station admin only sees users of their station; area supervisor sees their assigned stations
+    if (isAreaSupervisor && allowedStationIds?.length) {
+      usersQuery = usersQuery.in('station_id', allowedStationIds)
+    } else if (isStationAdmin && !isGeneralAdmin) {
       usersQuery = usersQuery.eq('station_id', profile.station_id)
     }
 
@@ -694,7 +696,7 @@ export default function UsersPage() {
       setStations(filteredStations)
     }
     setLoading(false)
-  }, [isGeneralAdmin, isStationAdmin, profile?.station_id])
+  }, [isGeneralAdmin, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.station_id])
 
   useEffect(() => { fetchAll() }, [fetchAll])
 

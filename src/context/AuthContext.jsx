@@ -11,15 +11,16 @@ const LOGIN_AT_KEY   = 'nwbus_login_at'
 const TAB_AUTH_KEY   = 'nwbus_tab_auth'
 
 export function AuthProvider({ children }) {
-  const [session,      setSession]      = useState(null)
-  const [profile,      setProfile]      = useState(null)   // users table row
-  const [loading,      setLoading]      = useState(true)
-  const [profileError, setProfileError] = useState(null)  // debug error message
+  const [session,           setSession]           = useState(null)
+  const [profile,           setProfile]           = useState(null)   // users table row
+  const [loading,           setLoading]           = useState(true)
+  const [profileError,      setProfileError]      = useState(null)  // debug error message
+  const [allowedStationIds, setAllowedStationIds] = useState(null)  // null = all, array = restricted
   const profileIdRef = useRef(null)
 
   // Fetch the full user profile from the users table
   async function fetchProfile(authUser) {
-    if (!authUser) { setProfile(null); setLoading(false); return }
+    if (!authUser) { setProfile(null); setAllowedStationIds(null); setLoading(false); return }
     setLoading(true)
     setProfileError(null)
     const { data, error } = await supabase
@@ -31,10 +32,21 @@ export function AuthProvider({ children }) {
       profileIdRef.current = data.id
       setProfile(data)
       setProfileError(null)
+      // مشرف منطقة — نجلب محطاته المخصصة من user_stations
+      if (data.job_title === 'area_supervisor') {
+        const { data: us } = await supabase
+          .from('user_stations')
+          .select('station_id')
+          .eq('user_id', data.id)
+        setAllowedStationIds(us?.length ? us.map(r => r.station_id) : null)
+      } else {
+        setAllowedStationIds(null)
+      }
     } else {
       const msg = error?.message || 'No profile row found for auth_id: ' + authUser.id
       console.error('fetchProfile failed:', msg, error)
       setProfile(null)
+      setAllowedStationIds(null)
       setProfileError(msg)
     }
     setLoading(false)
@@ -149,6 +161,7 @@ export function AuthProvider({ children }) {
   const isStationAdmin    = profile?.role === 'station_admin' || isShiftSupervisor
   const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true
   const isEmployee        = profile?.role === 'station_employee'
+  const isAreaSupervisor  = profile?.job_title === 'area_supervisor'
   const canManageUsers    = isGeneralAdmin
   const canViewAllStations = isGeneralAdmin
 
@@ -165,6 +178,8 @@ export function AuthProvider({ children }) {
       isStationAdmin,
       isAccountant,
       isEmployee,
+      isAreaSupervisor,
+      allowedStationIds,
       canManageUsers,
       canViewAllStations,
     }}>
