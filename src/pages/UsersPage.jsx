@@ -168,7 +168,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
   // محطات المشرف المتعددة (station_admin) — تُحفظ في user_stations
   const [stationSet, setStationSet] = useState(new Set(user?.station_id ? [user.station_id] : []))
   useEffect(() => {
-    if (user?.id && user.role === 'station_admin') {
+    if (user?.id && (user.role === 'station_admin' || user.job_title === 'area_supervisor')) {
       supabase.from('user_stations').select('station_id').eq('user_id', user.id)
         .then(({ data }) => { if (data?.length) setStationSet(new Set(data.map(r => r.station_id))) })
     }
@@ -230,7 +230,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           created_by:   profile.id,
         }).select('id').single()
         if (insertErr) throw insertErr
-        if (inserted?.id && (form.role === 'station_admin' || form.role === 'shift_supervisor')) await syncStations(inserted.id)
+        if (inserted?.id && (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.job_title === 'area_supervisor')) await syncStations(inserted.id)
 
         if (inserted?.id) {
           const extras = {}
@@ -277,7 +277,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           p_is_accountant:   isGeneralAdmin ? !!form.is_accountant : false,
         })
         if (updErr) throw updErr
-        if (form.role === 'station_admin' || form.role === 'shift_supervisor') await syncStations(user.id)
+        if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.job_title === 'area_supervisor') await syncStations(user.id)
 
         onSaved()
         onClose()
@@ -517,7 +517,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           </div>
 
           {/* Station — single (لغير المشرف) */}
-          {!(isGeneralAdmin && form.role === 'station_admin') && (
+          {!(isGeneralAdmin && (form.role === 'station_admin' || form.job_title === 'area_supervisor')) && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المحطة' : 'Station'}</label>
               <select className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}
@@ -530,8 +530,8 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
             </div>
           )}
 
-          {/* Multi-station — for supervisor (station_admin), admin assigns */}
-          {isGeneralAdmin && form.role === 'station_admin' && (
+          {/* Multi-station — for supervisor (station_admin) or area_supervisor, admin assigns */}
+          {isGeneralAdmin && (form.role === 'station_admin' || form.job_title === 'area_supervisor') && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {isAr ? 'محطات المشرف (يمكن اختيار أكثر من محطة)' : 'Supervisor Stations (multiple allowed)'}
