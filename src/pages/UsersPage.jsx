@@ -665,8 +665,11 @@ export default function UsersPage() {
   const [stations, setStations] = useState([])
   const [loading,  setLoading]  = useState(true)
   const [modal,    setModal]    = useState(null)
-  const [search,   setSearch]   = useState('')
-  const [roleFilter, setRoleFilter] = useState('')
+  const [search,       setSearch]       = useState('')
+  const [roleFilter,   setRoleFilter]   = useState('')
+  const [stationFilter, setStationFilter] = useState('')
+  const [statusFilter,  setStatusFilter]  = useState('')   // '' | 'active' | 'inactive'
+  const [jobFilter,     setJobFilter]     = useState('')
   const [cardUser, setCardUser] = useState(null)
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm, onCancel? }
 
@@ -746,48 +749,114 @@ export default function UsersPage() {
     const matchSearch = !search ||
       (u.full_name_ar ?? '').toLowerCase().includes(q) ||
       (u.username     ?? '').toLowerCase().includes(q) ||
-      (u.full_name_en ?? '').toLowerCase().includes(q)
-    const matchRole = !roleFilter || u.role === roleFilter
-    return matchSearch && matchRole
+      (u.full_name_en ?? '').toLowerCase().includes(q) ||
+      (u.job_number   ?? '').includes(q) ||
+      (u.phone        ?? '').includes(q) ||
+      (u.national_id  ?? '').includes(q)
+    const matchRole    = !roleFilter    || u.role       === roleFilter
+    const matchStation = !stationFilter || u.station_id === stationFilter
+    const matchStatus  = !statusFilter  || (statusFilter === 'active' ? u.is_active : !u.is_active)
+    const matchJob     = !jobFilter     || u.job_title  === jobFilter
+    return matchSearch && matchRole && matchStation && matchStatus && matchJob
   })
+
+  const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter].filter(Boolean).length
 
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-bold text-nwbus-primary">{isAr ? 'إدارة الموظفين' : 'Staff Management'}</h1>
-          <p className="text-xs text-gray-400 mt-0.5">{isAr ? 'إدارة الموظفين وصلاحياتهم' : 'Manage staff and permissions'}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {isAr ? `${filtered.length} من ${users.length} موظف` : `${filtered.length} of ${users.length} staff`}
+          </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <input placeholder={isAr ? 'بحث بالاسم أو المستخدم...' : 'Search name or username...'}
-            value={search} onChange={e => setSearch(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none w-52" />
-          <button onClick={() => setModal('new')}
-            className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors whitespace-nowrap">
-            + {isAr ? 'جديد' : 'New'}
-          </button>
-        </div>
+        <button onClick={() => setModal('new')}
+          className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors whitespace-nowrap self-start sm:self-auto">
+          + {isAr ? 'جديد' : 'New'}
+        </button>
       </div>
 
-      {/* Role filter tabs — للأدمن العام فقط */}
-      {isGeneralAdmin && <div className="flex gap-2 mb-4 flex-wrap">
-        {[{ value: '', ar: 'الكل', en: 'All' }, ...USER_ROLES].map(r => (
-          <button key={r.value} onClick={() => setRoleFilter(r.value)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border
-              ${roleFilter === r.value
-                ? 'bg-nwbus-primary text-white border-nwbus-primary'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-nwbus-primary/50'}`}>
-            {isAr ? r.ar : r.en}
-            {r.value && (
-              <span className="ms-1.5 opacity-60">
-                ({users.filter(u => u.role === r.value).length})
-              </span>
-            )}
-          </button>
-        ))}
-      </div>}
+      {/* Search + Filters */}
+      <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 space-y-3">
+        {/* Search bar */}
+        <div className="relative">
+          <svg className="absolute top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none"
+            style={{ [isAr ? 'right' : 'left']: '10px' }}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            placeholder={isAr ? 'بحث بالاسم، المستخدم، الرقم الوظيفي، الجوال، الهوية...' : 'Search name, username, emp#, phone, ID...'}
+            value={search} onChange={e => setSearch(e.target.value)}
+            className={`w-full border rounded-lg py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-gray-50 ${isAr ? 'pr-9 pl-3' : 'pl-9 pr-3'}`}
+          />
+          {search && (
+            <button onClick={() => setSearch('')}
+              className={`absolute top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 ${isAr ? 'left-2' : 'right-2'}`}>
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* Filter row */}
+        <div className="flex gap-2 flex-wrap">
+          {/* Roles */}
+          {isGeneralAdmin && (
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
+              className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+              style={{ fontFamily: 'inherit' }}>
+              <option value="">{isAr ? 'كل الصلاحيات' : 'All Roles'}</option>
+              {USER_ROLES.map(r => (
+                <option key={r.value} value={r.value}>
+                  {isAr ? r.ar : r.en} ({users.filter(u => u.role === r.value).length})
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Station — للأدمن ومشرف المنطقة */}
+          {(isGeneralAdmin || isAreaSupervisor) && stations.length > 1 && (
+            <select value={stationFilter} onChange={e => setStationFilter(e.target.value)}
+              className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+              style={{ fontFamily: 'inherit' }}>
+              <option value="">{isAr ? 'كل المحطات' : 'All Stations'}</option>
+              {stations.map(s => (
+                <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Job Title */}
+          <select value={jobFilter} onChange={e => setJobFilter(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+            style={{ fontFamily: 'inherit' }}>
+            <option value="">{isAr ? 'كل المسميات' : 'All Titles'}</option>
+            {JOB_TITLES.map(j => (
+              <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>
+            ))}
+          </select>
+
+          {/* Status */}
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+            style={{ fontFamily: 'inherit' }}>
+            <option value="">{isAr ? 'كل الحالات' : 'All Status'}</option>
+            <option value="active">{isAr ? 'نشط فقط' : 'Active only'}</option>
+            <option value="inactive">{isAr ? 'معطّل فقط' : 'Inactive only'}</option>
+          </select>
+
+          {/* Clear all */}
+          {activeFilters > 0 && (
+            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter('') }}
+              className="px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors font-medium">
+              {isAr ? `مسح الفلاتر (${activeFilters})` : `Clear (${activeFilters})`}
+            </button>
+          )}
+        </div>
+      </div>
 
 
       {loading ? (
