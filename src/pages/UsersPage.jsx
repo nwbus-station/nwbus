@@ -736,7 +736,7 @@ export default function UsersPage() {
     fetchAll()
   }
 
-  const supervisors = users.filter(u => u.role === 'station_admin' || u.role === 'shift_supervisor')
+  const supervisors = users.filter(u => ['general_admin', 'station_admin', 'shift_supervisor'].includes(u.role))
 
   const filtered = users.filter(u => {
     const q = search.toLowerCase()
