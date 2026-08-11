@@ -4,8 +4,11 @@ import { supabase } from '../lib/supabase'
 const AuthContext = createContext(null)
 
 // مدة الجلسة القصوى: تسجيل خروج تلقائي بعدها (وردية كاملة)
-const SESSION_HOURS = 8
-const LOGIN_AT_KEY  = 'nwbus_login_at'
+const SESSION_HOURS  = 8
+const LOGIN_AT_KEY   = 'nwbus_login_at'
+// مفتاح sessionStorage — يُحدَّد عند تسجيل الدخول ويختفي عند إغلاق التبويب
+// إذا فُتح التبويب من رابط خارجي فالمفتاح غير موجود → خروج فوري
+const TAB_AUTH_KEY   = 'nwbus_tab_auth'
 
 export function AuthProvider({ children }) {
   const [session,      setSession]      = useState(null)
@@ -39,6 +42,14 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      // لو التبويب مفتوح من رابط خارجي (مشاركة رابط) → خروج فوري
+      if (session && !sessionStorage.getItem(TAB_AUTH_KEY)) {
+        supabase.auth.signOut()
+        setSession(null)
+        setProfile(null)
+        setLoading(false)
+        return
+      }
       setSession(session)
       fetchProfile(session?.user)
     })
@@ -101,6 +112,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setLoading(false); throw error }
     localStorage.setItem(LOGIN_AT_KEY, String(Date.now()))   // بداية عدّ الـ 8 ساعات
+    sessionStorage.setItem(TAB_AUTH_KEY, '1')              // علامة التبويب المصرّح
     if (data?.user) {
       await fetchProfile(data.user)
       // تحديث last_login — نعطّل الـ ref مؤقتاً لمنع الـ realtime من إعادة الجلب
@@ -115,6 +127,7 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     localStorage.removeItem(LOGIN_AT_KEY)
+    sessionStorage.removeItem(TAB_AUTH_KEY)
     await supabase.auth.signOut()
     setProfile(null)
     setLoading(false)
