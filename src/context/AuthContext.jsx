@@ -42,8 +42,18 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      // لو التبويب مفتوح من رابط خارجي (مشاركة رابط) → خروج فوري
       if (session && !sessionStorage.getItem(TAB_AUTH_KEY)) {
+        // ريفريش (F5) → sessionStorage يبقى، لكن كاحتياط إضافي نتحقق من نوع التنقل
+        const navType = performance?.getEntriesByType?.('navigation')?.[0]?.type
+        const isReload = navType === 'reload'
+        if (isReload) {
+          // ريفريش حقيقي — أعد تعيين المفتاح واسمح بالدخول
+          sessionStorage.setItem(TAB_AUTH_KEY, '1')
+          setSession(session)
+          fetchProfile(session?.user)
+          return
+        }
+        // تبويب جديد من رابط خارجي → خروج فوري
         supabase.auth.signOut()
         setSession(null)
         setProfile(null)
