@@ -167,7 +167,8 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
   }
 
   // محطات المشرف المتعددة (station_admin) — تُحفظ في user_stations
-  const [stationSet, setStationSet] = useState(new Set(user?.station_id ? [user.station_id] : []))
+  const [stationSet,    setStationSet]    = useState(new Set(user?.station_id ? [user.station_id] : []))
+  const [stationSearch, setStationSearch] = useState('')
   useEffect(() => {
     if (user?.id && (user.role === 'station_admin' || user.role === 'area_supervisor')) {
       supabase.from('user_stations').select('station_id').eq('user_id', user.id)
@@ -534,27 +535,49 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           {/* Multi-station — for supervisor (station_admin) or area_supervisor, admin assigns */}
           {isGeneralAdmin && (form.role === 'station_admin' || form.role === 'area_supervisor') && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {isAr ? 'محطات المشرف (يمكن اختيار أكثر من محطة)' : 'Supervisor Stations (multiple allowed)'}
-              </label>
-              <div className="border rounded-lg p-2 max-h-40 overflow-y-auto grid grid-cols-2 gap-1">
-                {stations.map(s => {
-                  const on = stationSet.has(s.id)
-                  return (
-                    <button type="button" key={s.id} onClick={() => toggleStation(s.id)}
-                      className={`flex items-center gap-2 text-right rounded px-2 py-1.5 text-sm transition
-                        ${on ? 'bg-blue-50 text-nwbus-primary font-medium' : 'hover:bg-gray-50 text-gray-600'}`}>
-                      <span className={`w-4 h-4 rounded grid place-items-center text-[10px] border shrink-0
-                        ${on ? 'bg-nwbus-primary border-nwbus-primary text-white' : 'border-gray-300'}`}>
-                        {on && '✓'}
-                      </span>
-                      <span className="truncate">{isAr ? s.name_ar : s.name_en}</span>
-                    </button>
-                  )
-                })}
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-gray-600">
+                  {isAr ? 'محطات المشرف (يمكن اختيار أكثر من محطة)' : 'Supervisor Stations (multiple allowed)'}
+                </label>
+                {stationSet.size > 0 && (
+                  <button type="button" onClick={() => setStationSet(new Set())}
+                    className="text-[11px] text-red-400 hover:text-red-600">
+                    {isAr ? 'مسح الكل' : 'Clear all'}
+                  </button>
+                )}
+              </div>
+              {/* Search inside station list */}
+              <input
+                type="text"
+                value={stationSearch}
+                onChange={e => setStationSearch(e.target.value)}
+                placeholder={isAr ? 'بحث عن محطة...' : 'Search station...'}
+                className="w-full border rounded-lg px-3 py-1.5 text-xs mb-1.5 focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
+              />
+              <div className="border rounded-lg p-2 max-h-48 overflow-y-auto grid grid-cols-2 gap-1">
+                {stations
+                  .filter(s => {
+                    const q = stationSearch.toLowerCase()
+                    return !q || (s.name_ar ?? '').toLowerCase().includes(q) || (s.name_en ?? '').toLowerCase().includes(q)
+                  })
+                  .map(s => {
+                    const on = stationSet.has(s.id)
+                    return (
+                      <button type="button" key={s.id} onClick={() => toggleStation(s.id)}
+                        className={`flex items-center gap-2 text-right rounded px-2 py-1.5 text-sm transition
+                          ${on ? 'bg-blue-50 text-nwbus-primary font-medium' : 'hover:bg-gray-50 text-gray-600'}`}>
+                        <span className={`w-4 h-4 rounded grid place-items-center text-[10px] border shrink-0
+                          ${on ? 'bg-nwbus-primary border-nwbus-primary text-white' : 'border-gray-300'}`}>
+                          {on && '✓'}
+                        </span>
+                        <span className="truncate">{isAr ? s.name_ar : s.name_en}</span>
+                      </button>
+                    )
+                  })}
               </div>
               <p className="text-[11px] text-gray-400 mt-1">
                 {isAr ? `المختارة: ${stationSet.size}` : `Selected: ${stationSet.size}`}
+                {stationSearch && ` — ${isAr ? 'تصفية نشطة' : 'filtered'}`}
               </p>
             </div>
           )}
