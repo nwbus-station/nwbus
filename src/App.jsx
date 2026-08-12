@@ -17,6 +17,7 @@ const MapPage = lazy(() => import('./pages/MapPage'))
 import SettingsPage     from './pages/SettingsPage'
 import LeavePage        from './pages/LeavePage'
 import SurveyPage       from './pages/SurveyPage'
+import EvaluationPage   from './pages/EvaluationPage'
 
 // Layout
 import AppLayout        from './components/layout/AppLayout'
@@ -113,7 +114,8 @@ export default function App() {
             <StationsPage />
           </RequireAuth>
         } />
-        <Route path="leaves"   element={<LeavePage />} />
+        <Route path="leaves"     element={<LeavePage />} />
+        <Route path="evaluation" element={<EvaluationPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 

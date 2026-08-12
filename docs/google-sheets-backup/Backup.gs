@@ -87,8 +87,10 @@ function backupTransportation() {
 function runBackup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  const stations = sbGet('stations', 'id,name_ar,name_en');
-  const records  = sbGet('trip_records', '*', 'order=record_date.desc');
+  const stations       = sbGet('stations', 'id,name_ar,name_en');
+  const records        = sbGet('trip_records', '*', 'order=record_date.desc');
+  const transitRecords = sbGet('trip_transit_records', '*', 'order=created_at.desc');
+  const schedule       = [];
 
   // اسم المحطة حسب المعرّف
   const stationName = {};
@@ -121,12 +123,18 @@ function runBackup() {
   // تبويب التحليل — أول تبويب في الملف
   const summary = buildAnalysisSheet(ss, stations, records, stationName);
 
+  // تقرير المحطات اليومي
+  const stationReport = buildStationDailyReport(stations, records, transitRecords, schedule, stationName);
+
+  // كتابة تقرير المحطات في تبويب مستقل
+  writeStationReportSheet(ss, stationReport);
+
   // تحديث وقت آخر نسخة
   updateStatusSheet(ss, stations.length, records.length, totalRaw);
 
   // إرسال النسخة للإيميل
   SpreadsheetApp.flush();
-  sendBackupEmail(ss, stations.length, records.length, totalRaw, summary);
+  sendBackupEmail(ss, stations.length, records.length, totalRaw, summary, stationReport);
 }
 
 /**
@@ -398,43 +406,22 @@ function updateStatusSheet(ss, stationCount, recordCount, totalRaw) {
 /**
  * تصدير الملف كـ Excel وإرساله بالإيميل.
  */
-function sendBackupEmail(ss, stationCount, recordCount, totalRaw, summary) {
+function sendBackupEmail(ss, stationCount, recordCount, totalRaw, summary, stationReport) {
   const tz = Session.getScriptTimeZone();
   const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-  const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm');
+  const now   = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm');
 
   const exportUrl = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=xlsx';
   const blob = UrlFetchApp.fetch(exportUrl, {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
   }).getBlob().setName('NWBUS_Backup_' + today + '.xlsx');
 
-  const kpi = function (label, value, color) {
-    return '<td style="border:1px solid #dde3ee;padding:10px 14px;text-align:center;background:#f8f9fb">' +
-      '<div style="font-size:11px;color:#777">' + label + '</div>' +
-      '<div style="font-size:20px;font-weight:bold;color:' + (color || C_PRIMARY) + '">' + value + '</div></td>';
-  };
+  const reportHtml = stationReport ? buildStationReportHtml(stationReport, now) : '';
 
   MailApp.sendEmail({
     to: BACKUP_EMAIL,
-    subject: '📦 NWBUS — التقرير اليومي والنسخة الاحتياطية · ' + (summary ? summary.yday : today),
-    htmlBody:
-      '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;font-size:14px;max-width:640px">' +
-      '<div style="background:' + C_PRIMARY + ';color:#fff;padding:14px 18px;font-weight:bold;font-size:16px">' +
-      'NORTH WEST BUS — التقرير اليومي' +
-      (summary ? '<div style="font-weight:normal;font-size:11px;opacity:.75;margin-top:2px">تقرير يوم ' + summary.yday + '</div>' : '') +
-      '</div>' +
-      (summary ?
-        '<table cellspacing="0" style="border-collapse:collapse;width:100%;margin-top:12px"><tr>' +
-        kpi('الرحلات', summary.trips) +
-        kpi('الركاب', summary.pax) +
-        kpi('المتخلفون', summary.missed) +
-        kpi('الانضباط', summary.onTimePct, summary.onTimePct === '—' ? '#777' : C_OK) +
-        kpi('متأخرة', summary.late, summary.late > 0 ? C_BAD : C_OK) +
-        '</tr></table>' : '') +
-      '<p style="margin-top:14px">📎 مرفق ملف Excel يحوي <b>تبويب التحليل</b> (مؤشرات أمس، آخر 7 أيام، أداء المحطات، الرسوم البيانية) ' +
-      'مع <b>النسخة الاحتياطية الكاملة</b> لكل الجداول (' + totalRaw + ' صف من ' + stationCount + ' محطة).</p>' +
-      '<p style="color:#888;font-size:11px">أُنشئ تلقائياً ' + now + ' · NWBUS — نسخ احتياطي يومي</p>' +
-      '</div>',
+    subject: '📋 NWBUS — التقرير اليومي · ' + (stationReport ? stationReport.yday : today),
+    htmlBody: reportHtml,
     attachments: [blob],
   });
 }
@@ -502,6 +489,269 @@ function sheetName(name) {
 }
 
 /**
+ * كتابة تقرير المحطات اليومي في تبويب Excel.
+ */
+function writeStationReportSheet(ss, report) {
+  const name = '📋 التقرير اليومي';
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name, 1);
+  sheet.clear();
+  sheet.setRightToLeft(true);
+
+  const yday = report.yday;
+  const rows = report.rows;
+  const W = 9;
+
+  // العنوان
+  sheet.getRange(1, 1, 1, W).merge()
+    .setValue('NORTH WEST BUS — التقرير اليومي التشغيلي · ' + yday)
+    .setBackground(C_PRIMARY).setFontColor('#ffffff').setFontWeight('bold').setFontSize(13)
+    .setHorizontalAlignment('center');
+  sheet.setRowHeight(1, 32);
+
+  // رأس الجدول
+  const headers = ['المحطة', 'رحلات المغادرة', 'ركاب المغادرة', 'رحلات الوصول', 'ركاب الوصول', 'المتخلفون', 'الانضباط %', 'رحلات متأخرة'];
+  sheet.getRange(2, 1, 1, W).setValues([headers])
+    .setBackground(C_BAND).setFontWeight('bold').setFontSize(10).setHorizontalAlignment('center');
+  sheet.setFrozenRows(2);
+
+  if (rows.length === 0) {
+    sheet.getRange(3, 1, 1, W).merge().setValue('لا توجد بيانات لهذا اليوم')
+      .setHorizontalAlignment('center').setFontColor('#888888');
+  } else {
+    const data = rows.map(function (r) {
+      return [
+        r.name,
+        r.depTrips,
+        r.depPax,
+        r.arrTrips,
+        r.arrPax,
+        r.missed,
+        r.punctPct !== null ? r.punctPct + '%' : '—',
+        r.late,
+        r.missing === 0 ? '✅ مكتملة' : '⚠️ ' + r.missing + ' رحلة',
+      ];
+    });
+    sheet.getRange(3, 1, data.length, W).setValues(data).setHorizontalAlignment('center').setFontSize(11);
+    sheet.getRange(3, 1, data.length, 1).setHorizontalAlignment('right').setFontWeight('bold').setFontColor(C_PRIMARY);
+
+    // تلوين خلايا الانضباط والمتخلفين
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const row = 3 + i;
+      // الانضباط
+      if (r.punctPct !== null) {
+        const c = r.punctPct >= 80 ? C_OK : r.punctPct >= 60 ? '#c8a25a' : C_BAD;
+        sheet.getRange(row, 7).setFontColor(c).setFontWeight('bold');
+      }
+      // المتخلفون
+      if (r.missed > 0) sheet.getRange(row, 6).setFontColor(C_BAD).setFontWeight('bold');
+      // غير مُدخلة
+      if (r.missing > 0) sheet.getRange(row, 9).setFontColor(C_BAD).setFontWeight('bold');
+      else sheet.getRange(row, 9).setFontColor(C_OK);
+      // تلوين صفوف متعاقبة
+      if (i % 2 === 1) sheet.getRange(row, 1, 1, W).setBackground('#f4f6fb');
+    }
+
+    // إطار الجدول
+    sheet.getRange(2, 1, rows.length + 1, W)
+      .setBorder(true, true, true, true, true, true, '#dddddd', SpreadsheetApp.BorderStyle.SOLID);
+  }
+
+  // عرض الأعمدة
+  sheet.setColumnWidth(1, 160);
+  for (let c = 2; c <= W; c++) sheet.setColumnWidth(c, 110);
+}
+
+/**
+ * تقرير يومي احترافي لكل محطة — يُرسَل مع النسخة الاحتياطية.
+ * يحوي: رحلات المغادرة، رحلات الوصول، التخلف، الرحلات غير المدخلة، الركاب.
+ */
+function buildStationDailyReport(stations, records, transitRecords, schedule, stationName) {
+  const tz  = Session.getScriptTimeZone();
+  const DAY = 24 * 3600 * 1000;
+  const yday = Utilities.formatDate(new Date(Date.now() - DAY), tz, 'yyyy-MM-dd');
+
+  // --- فهرس جدول الرحلات المجدولة حسب المحطة (للمقارنة مع المُدخلة) ---
+  // schedule: كل رحلة لها station_id (محطة المغادرة الأصلية)
+  const scheduledByStation = {};
+  schedule.forEach(function (s) {
+    const sid = s.from_station_id || s.station_id;
+    if (!sid) return;
+    if (!scheduledByStation[sid]) scheduledByStation[sid] = 0;
+    scheduledByStation[sid]++;
+  });
+
+  // --- سجلات أمس ---
+  const ydayDepartures = {}; // station_id → { trips, pax, missed }
+  const ydayTripIds    = {}; // station_id → Set of trip_schedule_id المُدخلة
+
+  records.forEach(function (r) {
+    const d = String(r.record_date).slice(0, 10);
+    if (d !== yday) return;
+    const sid = r.station_id;
+    if (!ydayDepartures[sid]) ydayDepartures[sid] = { trips: 0, pax: 0, missed: 0, onTime: 0, late: 0, accTotal: 0 };
+    if (!ydayTripIds[sid])    ydayTripIds[sid] = {};
+    ydayDepartures[sid].trips++;
+    ydayDepartures[sid].pax    += r.passenger_count || 0;
+    ydayDepartures[sid].missed += r.missed_count    || 0;
+    if (r.departure_accuracy) {
+      ydayDepartures[sid].accTotal++;
+      if (r.departure_accuracy === 'Early' || r.departure_accuracy === 'On Time') {
+        ydayDepartures[sid].onTime++;
+      } else {
+        ydayDepartures[sid].late++;
+      }
+    }
+    if (r.trip_schedule_id) ydayTripIds[sid][r.trip_schedule_id] = true;
+  });
+
+  // --- رحلات الوصول من transit_records ---
+  const ydayArrivals = {}; // station_id → { trips, pax }
+  transitRecords.forEach(function (r) {
+    const d = String(r.created_at || '').slice(0, 10);
+    if (d !== yday) return;
+    const sid = r.station_id;
+    if (!ydayArrivals[sid]) ydayArrivals[sid] = { trips: 0, pax: 0 };
+    ydayArrivals[sid].trips++;
+    ydayArrivals[sid].pax += r.passenger_count || 0;
+  });
+
+  // --- بناء بيانات كل محطة ---
+  const stationRows = stations.map(function (st) {
+    const dep   = ydayDepartures[st.id] || { trips: 0, pax: 0, missed: 0, onTime: 0, late: 0, accTotal: 0 };
+    const arr   = ydayArrivals[st.id]   || { trips: 0, pax: 0 };
+    const missing = 0;
+    const punctPct = dep.accTotal > 0 ? Math.round((dep.onTime / dep.accTotal) * 100) : null;
+    return {
+      name:      stationName[st.id],
+      depTrips:  dep.trips,
+      depPax:    dep.pax,
+      missed:    dep.missed,
+      arrTrips:  arr.trips,
+      arrPax:    arr.pax,
+      missing:   missing,
+      onTime:    dep.onTime,
+      late:      dep.late,
+      punctPct:  punctPct,   // نسبة الانضباط (null = لا بيانات)
+    };
+  }).filter(function (r) {
+    return r.depTrips > 0 || r.arrTrips > 0 || r.missing > 0;
+  });
+
+  return { yday: yday, rows: stationRows };
+}
+
+/**
+ * بناء HTML احترافي للتقرير اليومي لكل محطة.
+ */
+function buildStationReportHtml(report, now) {
+  const C1 = '#16315e', C2 = '#c8a25a', CRED = '#b02a37', CGRAY = '#f4f6fb';
+  const rows = report.rows;
+  const yday = report.yday;
+
+  const th = function (t) {
+    return '<th style="background:' + C1 + ';color:#fff;padding:8px 10px;font-size:12px;font-weight:bold;text-align:center;border:1px solid #2a4a80">' + t + '</th>';
+  };
+  const td = function (v, bold, color) {
+    return '<td style="padding:7px 10px;text-align:center;font-size:13px;border:1px solid #dde3ee' +
+      (bold ? ';font-weight:bold' : '') +
+      (color ? ';color:' + color : '') +
+      '">' + v + '</td>';
+  };
+
+  // حساب ملخص الرحلات غير المدخلة لكل المحطات
+  const missingStations = rows.filter(function (r) { return r.missing > 0; });
+
+  let tableRows = '';
+  rows.forEach(function (r, i) {
+    const bg = i % 2 === 0 ? '#ffffff' : CGRAY;
+    const punctTxt = r.punctPct === null ? '—' : r.punctPct + '%';
+    const punctColor = r.punctPct === null ? '#999' : r.punctPct >= 80 ? '#1e7e34' : r.punctPct >= 60 ? '#c8a25a' : CRED;
+    tableRows +=
+      '<tr style="background:' + bg + '">' +
+      '<td style="padding:7px 12px;font-size:13px;font-weight:bold;color:' + C1 + ';border:1px solid #dde3ee">' + r.name + '</td>' +
+      td(r.depTrips, true) +
+      td(r.depPax) +
+      td(r.arrTrips, true) +
+      td(r.arrPax) +
+      td(r.missed, false, r.missed > 0 ? CRED : '#1e7e34') +
+      td(punctTxt, true, punctColor) +
+      td(r.late > 0 ? r.late + ' رحلة' : '✅ لا يوجد', false, r.late > 0 ? CRED : '#1e7e34') +
+      td(r.missing === 0 ? '✅ مكتملة' : '⚠️ ' + r.missing + ' رحلة', false, r.missing > 0 ? CRED : '#1e7e34') +
+      '</tr>';
+  });
+
+  if (rows.length === 0) {
+    tableRows = '<tr><td colspan="9" style="text-align:center;padding:20px;color:#888">لا توجد بيانات لأمس</td></tr>';
+  }
+
+  // قسم تنبيه الرحلات غير المدخلة
+  let missingAlert = '';
+  if (missingStations.length > 0) {
+    const missingList = missingStations.map(function (r) {
+      return '<li style="margin:4px 0"><b>' + r.name + '</b>: ' + r.missing + ' رحلة غير مُدخلة</li>';
+    }).join('');
+    missingAlert =
+      '<div style="margin-top:14px;padding:12px 16px;background:#fff3f3;border:1.5px solid ' + CRED + ';border-radius:5px">' +
+      '<div style="font-weight:bold;color:' + CRED + ';font-size:13px;margin-bottom:6px">⚠️ محطات بها رحلات غير مُدخلة</div>' +
+      '<ul style="margin:0;padding-right:18px;color:#333;font-size:13px">' + missingList + '</ul>' +
+      '</div>';
+  } else {
+    missingAlert =
+      '<div style="margin-top:14px;padding:10px 16px;background:#f0fff4;border:1.5px solid #1e7e34;border-radius:5px;color:#1e7e34;font-weight:bold;font-size:13px">' +
+      '✅ جميع الرحلات المجدولة تم إدخالها' +
+      '</div>';
+  }
+
+  return (
+    '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;font-size:14px;max-width:860px;margin:0 auto">' +
+
+    // ترويسة
+    '<div style="background:' + C1 + ';padding:18px 20px;border-radius:6px 6px 0 0">' +
+    '<div style="color:#fff;font-size:20px;font-weight:bold;letter-spacing:.5px">NORTH WEST BUS</div>' +
+    '<div style="color:' + C2 + ';font-size:13px;margin-top:4px">التقرير اليومي التشغيلي — يوم ' + yday + '</div>' +
+    '</div>' +
+
+    // شريط المعلومات
+    '<div style="background:' + C2 + ';padding:8px 20px;font-size:11px;color:#5a3d00">' +
+    'أُنشئ تلقائياً · ' + now + ' · النظام: NWBUS' +
+    '</div>' +
+
+    // تنبيه الرحلات غير المدخلة
+    missingAlert +
+
+    // الجدول
+    '<div style="overflow-x:auto;margin-top:14px">' +
+    '<table cellspacing="0" style="border-collapse:collapse;width:100%;direction:rtl">' +
+    '<thead><tr>' +
+    th('المحطة') +
+    th('رحلات المغادرة') + th('ركاب المغادرة') +
+    th('رحلات الوصول')  + th('ركاب الوصول') +
+    th('المتخلفون') +
+    th('الانضباط %') +
+    th('رحلات متأخرة') +
+    th('رحلات غير مُدخلة') +
+    '</tr></thead>' +
+    '<tbody>' + tableRows + '</tbody>' +
+    '</table></div>' +
+
+    // توضيح الأعمدة
+    '<div style="margin-top:10px;padding:8px 14px;background:#f8f9fb;font-size:11px;color:#666;border-right:3px solid ' + C2 + '">' +
+    '<b>الانضباط%</b>: نسبة الرحلات المبكرة أو في الموعد · ' +
+    '<b>رحلات غير مُدخلة</b>: رحلات مجدولة لم يُسجَّل لها سجل ترحيل' +
+    '</div>' +
+
+    // ملاحظة المرفق
+    '<div style="margin-top:8px;padding:10px 14px;background:#f8f9fb;border-right:4px solid ' + C1 + ';font-size:12px;color:#555">' +
+    '📎 مرفق ملف Excel يحوي النسخة الاحتياطية الكاملة لجميع الجداول.' +
+    '</div>' +
+
+    '</div>'
+  );
+}
+
+/**
  * إعداد المُشغّل اليومي — شغّلها مرة واحدة فقط.
  */
 function createDailyTrigger() {
@@ -512,6 +762,6 @@ function createDailyTrigger() {
   ScriptApp.newTrigger('backupTransportation')
     .timeBased()
     .everyDays(1)
-    .atHour(7)       // 7 صباحاً — بعد انتهاء اليوم بـ7 ساعات (يغطي يوم أمس كاملاً)
+    .atHour(5)       // 5 فجراً — بعد انتهاء اليوم السابق كاملاً
     .create();
 }

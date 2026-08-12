@@ -200,6 +200,7 @@ const NAV_GROUPS = [
       { to: '/reports',        labelAr: 'التقارير',        labelEn: 'Reports',        icon: 'report',  roles: ['general_admin','station_admin','accountant'], module: 'reports' },
       { to: '/leaves',         labelAr: 'الإجازات',        labelEn: 'Leaves',         icon: 'leave',   roles: null, module: 'leaves' },
       { to: '/survey',         labelAr: 'تقييم الركاب',   labelEn: 'Passenger Rating', icon: 'star',  roles: null, module: null },
+      { to: '/evaluation',     labelAr: 'التقييم الوظيفي', labelEn: 'Evaluations',      icon: 'report', roles: ['general_admin','station_admin','shift_supervisor'], module: null },
     ]
   },
   {
@@ -213,7 +214,7 @@ const NAV_GROUPS = [
 ]
 
 const ROLE_LABELS = {
-  general_admin:    { ar: 'أدمن عام',    en: 'General Admin' },
+  general_admin:    { ar: 'المدير التنفيذي التجاري', en: 'Executive Director' },
   station_admin:    { ar: 'مشرف المحطة', en: 'Supervisor' },
   accountant:       { ar: 'محاسب',        en: 'Accountant' },
   station_employee: { ar: 'موظف',         en: 'Employee' },
