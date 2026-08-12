@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
+import { useParams } from 'react-router-dom'
 
 const BASE = 'https://nwbus.sa/survey.html?city='
 
@@ -93,7 +94,7 @@ export function SurveyOverlay({ city, onClose }) {
               تقييم تجربة الراكب
             </p>
             <p style={{ margin: 0, fontSize: '0.62rem', color: 'rgba(255,255,255,0.4)' }}>
-              هيئة النقل — {station?.ar}
+              {station?.ar}
             </p>
           </div>
         </div>
@@ -117,7 +118,7 @@ export function SurveyOverlay({ city, onClose }) {
 
       <iframe
         src={`${BASE}${city}`}
-        title="تقييم هيئة النقل"
+        title="تقييم تجربة الراكب"
         style={{ flex: 1, border: 'none', width: '100%' }}
       />
     </div>
@@ -180,14 +181,19 @@ const SURVEY_MOBILE_CSS = `
 
 // ── الصفحة الرئيسية ───────────────────────────────────────────
 export default function SurveyPage() {
-  const { profile } = useAuth()
+  const authCtx     = (() => { try { return useAuth() } catch { return {} } })()
+  const profile     = authCtx?.profile
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
-  const [activeCity, setActiveCity] = useState(null)
+  const params      = useParams()
 
-  const isAdmin     = profile?.role === 'general_admin'
-  const detectedCity = detectSurveyCity(profile?.station)
-  const cityInfo    = SURVEY_STATIONS.find(s => s.city === detectedCity)
+  // دعم /survey/:city مباشرة (رابط عام للراكب)
+  const paramCity   = params?.city
+  const [activeCity, setActiveCity] = useState(paramCity || null)
+
+  const isAdmin      = profile?.role === 'general_admin'
+  const detectedCity = paramCity || detectSurveyCity(profile?.station)
+  const cityInfo     = SURVEY_STATIONS.find(s => s.city === detectedCity)
 
   const handleOpen  = useCallback(city => setActiveCity(city), [])
   const handleClose = useCallback(() => setActiveCity(null), [])
@@ -221,7 +227,7 @@ export default function SurveyPage() {
                   تقييم تجربة الراكب
                 </h1>
                 <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-3)' }}>
-                  هيئة النقل العام — استبيان رضا الركاب
+                  استبيان رضا الركاب
                 </p>
               </div>
             </div>

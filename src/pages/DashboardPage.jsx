@@ -104,7 +104,7 @@ function SurveyWidget({ city, isAdmin, isAr, onLaunch, onNavigate }) {
             {isAr ? 'تقييم الركاب' : 'Passenger Rating'}
           </p>
           <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
-            {isAr ? 'استبيان هيئة النقل — جميع المحطات' : 'NTA survey — all stations'}
+            {isAr ? 'استبيان رضا الركاب — جميع المحطات' : 'Passenger survey — all stations'}
           </p>
         </div>
         <span style={{ color: 'var(--text-3)', flexShrink: 0 }}>
@@ -145,7 +145,7 @@ function SurveyWidget({ city, isAdmin, isAr, onLaunch, onNavigate }) {
               {isAr ? 'تقييم تجربة الراكب' : 'Passenger Survey'}
             </p>
             <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {isAr ? `هيئة النقل — ${cityInfo?.ar}` : `NTA — ${cityInfo?.en}`}
+              {isAr ? `استبيان الركاب — ${cityInfo?.ar}` : `Passenger survey — ${cityInfo?.en}`}
             </p>
           </div>
           <button

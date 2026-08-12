@@ -78,6 +78,10 @@ export default function App() {
         <RequireAuth><LiveBoard /></RequireAuth>
       } />
 
+      {/* صفحة التقييم — عامة بدون تسجيل دخول */}
+      <Route path="/survey/:city" element={<SurveyPage />} />
+      <Route path="/survey"       element={<SurveyPage />} />
+
       <Route path="/" element={
         <RequireAuth>
           <AppLayout />
@@ -110,7 +114,6 @@ export default function App() {
           </RequireAuth>
         } />
         <Route path="leaves"   element={<LeavePage />} />
-        <Route path="survey"   element={<SurveyPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 
