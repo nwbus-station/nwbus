@@ -430,62 +430,66 @@ export default function DashboardPage() {
           </div>
 
           {/* لوحة الإشعارات */}
-          <aside style={{ flex: '0 0 280px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
+          <aside style={{ flex: '0 0 290px', minWidth: 0, display: 'flex', flexDirection: 'column', borderRadius: 6, overflow: 'hidden', background: 'var(--card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
 
-            {/* رأس الإشعارات */}
-            <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)' }}>
+            {/* رأس */}
+            <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Svg paths={ICONS.bell} size={15} style={{ color: 'var(--text-3)' }} />
-                <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-1)' }}>
+                <div style={{ width: 3, height: 14, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.09em', fontFamily: MONO, textTransform: 'uppercase' }}>
                   {isAr ? 'الإشعارات' : 'Notifications'}
-                </p>
-                {unread === 0 && (
-                  <p style={{ margin: 0, fontSize: '0.68rem', color: 'var(--text-3)', fontFamily: MONO }}>
-                    {isAr ? 'لا يوجد جديد' : 'all caught up'}
-                  </p>
+                </span>
+                {unread > 0 && (
+                  <span style={{
+                    fontSize: '0.6rem', fontWeight: 800, fontFamily: MONO,
+                    background: 'var(--accent)', color: '#fff',
+                    borderRadius: 4, padding: '1px 6px', lineHeight: 1.6,
+                  }}>{unread}</span>
                 )}
               </div>
               {unread > 0 && (
                 <button onClick={markAllRead} style={{
-                  fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-3)',
-                  background: 'var(--surface)', border: '1px solid var(--border)',
-                  borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit',
-                  transition: 'all 0.12s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface)' }}>
+                  fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-3)',
+                  background: 'none', border: 'none',
+                  cursor: 'pointer', fontFamily: 'inherit', padding: '2px 0',
+                  textDecoration: 'underline', textUnderlineOffset: 3,
+                  opacity: 0.7,
+                }}>
                   {isAr ? 'قراءة الكل' : 'Mark all'}
                 </button>
               )}
             </div>
 
-            {/* قائمة الإشعارات */}
-            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+            {/* قائمة */}
+            <div style={{ overflowY: 'auto', flex: 1, maxHeight: 440 }}>
               {notifLoading ? (
-                <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  {[80, 60, 70].map((w, i) => (
-                    <div key={i}>
-                      <div style={{ height: 9, width: `${w}%`, background: 'var(--surface-2)', borderRadius: 3, marginBottom: 6 }} />
-                      <div style={{ height: 7, width: '45%', background: 'var(--surface)', borderRadius: 3 }} />
+                <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {[75, 55, 68].map((w, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--surface-2)', flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ height: 9, width: `${w}%`, background: 'var(--surface-2)', borderRadius: 4, marginBottom: 7 }} />
+                        <div style={{ height: 7, width: '42%', background: 'var(--surface)', borderRadius: 4 }} />
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : notifs.length === 0 ? (
-                <div style={{ padding: '40px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                <div style={{ padding: '44px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                   <div style={{
-                    width: 48, height: 48, borderRadius: 12,
+                    width: 44, height: 44, borderRadius: 12,
                     background: 'var(--surface)', border: '1px solid var(--border)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--border-2)', boxShadow: 'var(--shadow-sm)',
+                    color: 'var(--text-3)',
                   }}>
-                    <Svg paths={ICONS.bell} size={20} />
+                    <Svg paths={ICONS.bell} size={18} />
                   </div>
                   <div>
-                    <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-2)' }}>
+                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-2)' }}>
                       {isAr ? 'لا توجد إشعارات' : 'No notifications'}
                     </p>
-                    <p style={{ margin: '4px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', lineHeight: 1.5 }}>
-                      {isAr ? 'ستظهر هنا عند وصولها' : 'They\'ll appear here'}
+                    <p style={{ margin: '4px 0 0', fontSize: '0.67rem', color: 'var(--text-3)', lineHeight: 1.5 }}>
+                      {isAr ? 'ستظهر هنا عند وصولها' : "They'll appear here"}
                     </p>
                   </div>
                 </div>
@@ -494,29 +498,35 @@ export default function DashboardPage() {
                 return (
                   <div key={n.id} onClick={() => markRead(n.id)}
                     style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                      display: 'flex', alignItems: 'flex-start', gap: 11,
                       padding: '12px 16px',
                       borderBottom: i < notifs.length - 1 ? '1px solid var(--border)' : 'none',
-                      borderInlineStart: `3px solid ${n.is_read ? 'transparent' : dotColor}`,
-                      background: n.is_read ? 'transparent' : 'var(--gold-dim)',
+                      background: n.is_read ? 'transparent' : `${dotColor}08`,
                       cursor: 'pointer', transition: 'background 0.12s',
+                      position: 'relative',
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
-                    onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : 'var(--gold-dim)'}
+                    onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : `${dotColor}08`}
                   >
-                    {/* أيقونة النوع */}
+                    {/* شريط الجانب */}
+                    {!n.is_read && (
+                      <div style={{
+                        position: 'absolute', [isAr ? 'right' : 'left']: 0, top: 0, bottom: 0,
+                        width: 3, background: dotColor, borderRadius: isAr ? '0 3px 3px 0' : '3px 0 0 3px',
+                      }} />
+                    )}
+                    {/* أيقونة */}
                     <div style={{
-                      width: 28, height: 28, borderRadius: 6, flexShrink: 0,
-                      background: n.is_read ? 'var(--surface)' : `${dotColor}18`,
-                      border: `1px solid ${n.is_read ? 'var(--border)' : `${dotColor}30`}`,
+                      width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                      background: n.is_read ? 'var(--surface)' : `${dotColor}15`,
+                      border: `1px solid ${n.is_read ? 'var(--border)' : `${dotColor}25`}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: n.is_read ? 'var(--text-3)' : dotColor,
-                      marginTop: 1,
                     }}>
-                      <Svg paths={ICONS.bell} size={12} />
+                      <Svg paths={ICONS.bell} size={13} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: '0.77rem', fontWeight: n.is_read ? 400 : 700, color: n.is_read ? 'var(--text-3)' : 'var(--text-1)', lineHeight: 1.45 }}>{n.title}</p>
+                      <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: n.is_read ? 500 : 700, color: n.is_read ? 'var(--text-2)' : 'var(--text-1)', lineHeight: 1.45 }}>{n.title}</p>
                       {n.body && <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', lineHeight: 1.4 }}>{n.body}</p>}
                       <p style={{ margin: '5px 0 0', fontSize: '0.6rem', color: 'var(--text-3)', fontFamily: MONO, display: 'inline-block', background: 'var(--surface)', padding: '1px 6px', borderRadius: 3 }}>{timeAgo(n.created_at)}</p>
                     </div>
