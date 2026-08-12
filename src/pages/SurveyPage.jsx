@@ -59,18 +59,9 @@ function ArrowIcon({ size = 16 }) {
 }
 
 // ── Overlay التقييم ──────────────────────────────────────────
-const isMobile = () => window.innerWidth < 768
-
 export function SurveyOverlay({ city, onClose }) {
   const station = SURVEY_STATIONS.find(s => s.city === city)
   const url = `${BASE}${city}`
-
-  // على الجوال: افتح في تبويب جديد مباشرة
-  if (isMobile()) {
-    window.open(url, '_blank')
-    onClose()
-    return null
-  }
 
   return (
     <div style={{
