@@ -373,8 +373,12 @@ export default function EvaluationPage() {
 
     // الموظفون
     if (canEvalEmp || isAdmin) {
-      let q = supabase.from('users').select('id, full_name_ar, role, station_id, stations(name_ar, name_en)').neq('role', 'general_admin')
-      if (!isAdmin && profile?.station_id) q = q.eq('station_id', profile.station_id)
+      let q = supabase.from('users').select('id, full_name_ar, role, station_id, stations(name_ar, name_en)')
+        .neq('role', 'general_admin').neq('id', profile?.id)
+      if (!isAdmin) {
+        const stationId = profile?.station_id || profile?.station?.id
+        if (stationId) q = q.eq('station_id', stationId)
+      }
       promises.push(q.then(r => setEmployees(r.data || [])))
     }
 
