@@ -352,67 +352,68 @@ export default function DashboardPage() {
           </button>
         )}
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* عمود يسار */}
-          <div style={{ flex: '1 1 400px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* صف علوي: وصول سريع + معلومات الجلسة */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, width: '100%', alignItems: 'start' }}>
 
             {/* وصول سريع */}
-            {quickLinks.length > 0 && (
-              <div>
-                <p style={{ margin: '0 0 10px', fontSize: '0.63rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>
-                  {isAr ? 'وصول سريع' : 'QUICK ACCESS'}
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(quickLinks.length, 3)}, 1fr)`, gap: 12 }}>
-                  {quickLinks.map(l => (
-                    <button key={l.to} onClick={() => navigate(l.to)}
-                      style={{
-                        ...card, padding: '18px 16px',
-                        cursor: 'pointer', fontFamily: 'inherit',
-                        textAlign: isAr ? 'right' : 'left',
-                        display: 'flex', flexDirection: 'column', gap: 12,
-                        transition: 'box-shadow 0.14s',
-                        border: '1px solid var(--border)',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
-                      onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
-                    >
-                      <div style={{
-                        width: 38, height: 38, borderRadius: 8,
-                        background: 'var(--surface)', color: 'var(--text-1)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: 'var(--shadow-icon)',
-                      }}>
-                        <Svg paths={ICONS[l.icon]} size={16} />
-                      </div>
-                      <div>
-                        <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)' }}>{isAr ? l.ar : l.en}</p>
-                        <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>{isAr ? l.desc_ar : l.desc_en}</p>
-                      </div>
-                    </button>
-                  ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {quickLinks.length > 0 && (
+                <div>
+                  <p style={{ margin: '0 0 10px', fontSize: '0.63rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>
+                    {isAr ? 'وصول سريع' : 'QUICK ACCESS'}
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(quickLinks.length, 3)}, 1fr)`, gap: 12 }}>
+                    {quickLinks.map(l => (
+                      <button key={l.to} onClick={() => navigate(l.to)}
+                        style={{
+                          ...card, padding: '18px 16px',
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          textAlign: isAr ? 'right' : 'left',
+                          display: 'flex', flexDirection: 'column', gap: 12,
+                          transition: 'box-shadow 0.14s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
+                        onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
+                      >
+                        <div style={{
+                          width: 38, height: 38, borderRadius: 8,
+                          background: 'var(--surface)', color: 'var(--text-1)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: 'var(--shadow-icon)',
+                        }}>
+                          <Svg paths={ICONS[l.icon]} size={16} />
+                        </div>
+                        <div>
+                          <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)' }}>{isAr ? l.ar : l.en}</p>
+                          <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>{isAr ? l.desc_ar : l.desc_en}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* ── بطاقة التقييم ── */}
-            <SurveyWidget
-              city={surveyCity}
-              isAdmin={profile?.role === 'general_admin'}
-              isAr={isAr}
-              onLaunch={() => setSurveyOpen(true)}
-              onNavigate={() => navigate('/survey')}
-            />
+              {/* بطاقة التقييم */}
+              <SurveyWidget
+                city={surveyCity}
+                isAdmin={profile?.role === 'general_admin'}
+                isAr={isAr}
+                onLaunch={() => setSurveyOpen(true)}
+                onNavigate={() => navigate('/survey')}
+              />
+            </div>
 
             {/* معلومات الجلسة */}
-            <div style={card}>
+            <div style={{ ...card, minWidth: 220 }}>
               <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 3, height: 14, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
                 <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.09em', fontFamily: MONO, textTransform: 'uppercase' }}>
                   {isAr ? 'معلومات الجلسة' : 'Session Info'}
                 </span>
               </div>
-              <div style={{ padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
+              <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {infoRows.map(r => (
                   <div key={r.label}>
                     <p style={{ margin: 0, fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{r.label}</p>
@@ -429,12 +430,12 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* لوحة الإشعارات */}
-          <aside style={{ flex: '0 0 290px', minWidth: 0, display: 'flex', flexDirection: 'column', borderRadius: 6, overflow: 'hidden', background: 'var(--card)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
+          {/* ── الإشعارات — عرض كامل ── */}
+          <div style={{ width: '100%', ...card, overflow: 'hidden' }}>
 
             {/* رأس */}
-            <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 3, height: 14, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
                 <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.09em', fontFamily: MONO, textTransform: 'uppercase' }}>
                   {isAr ? 'الإشعارات' : 'Notifications'}
@@ -443,98 +444,97 @@ export default function DashboardPage() {
                   <span style={{
                     fontSize: '0.6rem', fontWeight: 800, fontFamily: MONO,
                     background: 'var(--accent)', color: '#fff',
-                    borderRadius: 4, padding: '1px 6px', lineHeight: 1.6,
+                    borderRadius: 4, padding: '1px 7px', lineHeight: 1.7,
                   }}>{unread}</span>
                 )}
               </div>
               {unread > 0 && (
                 <button onClick={markAllRead} style={{
-                  fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-3)',
-                  background: 'none', border: 'none',
-                  cursor: 'pointer', fontFamily: 'inherit', padding: '2px 0',
-                  textDecoration: 'underline', textUnderlineOffset: 3,
-                  opacity: 0.7,
+                  fontSize: '0.63rem', fontWeight: 600, color: 'var(--text-3)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontFamily: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, opacity: 0.7,
                 }}>
                   {isAr ? 'قراءة الكل' : 'Mark all'}
                 </button>
               )}
             </div>
 
-            {/* قائمة */}
-            <div style={{ overflowY: 'auto', flex: 1, maxHeight: 440 }}>
-              {notifLoading ? (
-                <div style={{ padding: '16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {[75, 55, 68].map((w, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--surface-2)', flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ height: 9, width: `${w}%`, background: 'var(--surface-2)', borderRadius: 4, marginBottom: 7 }} />
-                        <div style={{ height: 7, width: '42%', background: 'var(--surface)', borderRadius: 4 }} />
+            {/* قائمة — شبكة أفقية */}
+            {notifLoading ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 0 }}>
+                {[75, 55, 68, 80].map((w, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--surface-2)', flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ height: 9, width: `${w}%`, background: 'var(--surface-2)', borderRadius: 4, marginBottom: 8 }} />
+                      <div style={{ height: 7, width: '40%', background: 'var(--surface)', borderRadius: 4 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : notifs.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 12,
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--text-3)',
+                }}>
+                  <Svg paths={ICONS.bell} size={18} />
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-2)' }}>
+                    {isAr ? 'لا توجد إشعارات' : 'No notifications'}
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.67rem', color: 'var(--text-3)' }}>
+                    {isAr ? 'ستظهر هنا عند وصولها' : "They'll appear here"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+                {notifs.map((n, i) => {
+                  const dotColor = NOTIF_DOT[n.type] ?? NOTIF_DOT.info
+                  return (
+                    <div key={n.id} onClick={() => markRead(n.id)}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 12,
+                        padding: '14px 20px',
+                        borderBottom: '1px solid var(--border)',
+                        borderInlineEnd: '1px solid var(--border)',
+                        background: n.is_read ? 'transparent' : `${dotColor}07`,
+                        cursor: 'pointer', transition: 'background 0.12s',
+                        position: 'relative',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                      onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : `${dotColor}07`}
+                    >
+                      {!n.is_read && (
+                        <div style={{
+                          position: 'absolute', [isAr ? 'right' : 'left']: 0, top: 0, bottom: 0,
+                          width: 3, background: dotColor,
+                        }} />
+                      )}
+                      <div style={{
+                        width: 34, height: 34, borderRadius: 8, flexShrink: 0,
+                        background: n.is_read ? 'var(--surface)' : `${dotColor}15`,
+                        border: `1px solid ${n.is_read ? 'var(--border)' : `${dotColor}25`}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: n.is_read ? 'var(--text-3)' : dotColor,
+                      }}>
+                        <Svg paths={ICONS.bell} size={14} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: n.is_read ? 500 : 700, color: n.is_read ? 'var(--text-2)' : 'var(--text-1)', lineHeight: 1.45 }}>{n.title}</p>
+                        {n.body && <p style={{ margin: '3px 0 0', fontSize: '0.7rem', color: 'var(--text-3)', lineHeight: 1.4 }}>{n.body}</p>}
+                        <p style={{ margin: '6px 0 0', fontSize: '0.6rem', color: 'var(--text-3)', fontFamily: MONO, display: 'inline-block', background: 'var(--surface)', padding: '1px 6px', borderRadius: 3 }}>{timeAgo(n.created_at)}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : notifs.length === 0 ? (
-                <div style={{ padding: '44px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 12,
-                    background: 'var(--surface)', border: '1px solid var(--border)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--text-3)',
-                  }}>
-                    <Svg paths={ICONS.bell} size={18} />
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-2)' }}>
-                      {isAr ? 'لا توجد إشعارات' : 'No notifications'}
-                    </p>
-                    <p style={{ margin: '4px 0 0', fontSize: '0.67rem', color: 'var(--text-3)', lineHeight: 1.5 }}>
-                      {isAr ? 'ستظهر هنا عند وصولها' : "They'll appear here"}
-                    </p>
-                  </div>
-                </div>
-              ) : notifs.map((n, i) => {
-                const dotColor = NOTIF_DOT[n.type] ?? NOTIF_DOT.info
-                return (
-                  <div key={n.id} onClick={() => markRead(n.id)}
-                    style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 11,
-                      padding: '12px 16px',
-                      borderBottom: i < notifs.length - 1 ? '1px solid var(--border)' : 'none',
-                      background: n.is_read ? 'transparent' : `${dotColor}08`,
-                      cursor: 'pointer', transition: 'background 0.12s',
-                      position: 'relative',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
-                    onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : `${dotColor}08`}
-                  >
-                    {/* شريط الجانب */}
-                    {!n.is_read && (
-                      <div style={{
-                        position: 'absolute', [isAr ? 'right' : 'left']: 0, top: 0, bottom: 0,
-                        width: 3, background: dotColor, borderRadius: isAr ? '0 3px 3px 0' : '3px 0 0 3px',
-                      }} />
-                    )}
-                    {/* أيقونة */}
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                      background: n.is_read ? 'var(--surface)' : `${dotColor}15`,
-                      border: `1px solid ${n.is_read ? 'var(--border)' : `${dotColor}25`}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: n.is_read ? 'var(--text-3)' : dotColor,
-                    }}>
-                      <Svg paths={ICONS.bell} size={13} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: n.is_read ? 500 : 700, color: n.is_read ? 'var(--text-2)' : 'var(--text-1)', lineHeight: 1.45 }}>{n.title}</p>
-                      {n.body && <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', lineHeight: 1.4 }}>{n.body}</p>}
-                      <p style={{ margin: '5px 0 0', fontSize: '0.6rem', color: 'var(--text-3)', fontFamily: MONO, display: 'inline-block', background: 'var(--surface)', padding: '1px 6px', borderRadius: 3 }}>{timeAgo(n.created_at)}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </aside>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
         </div>
       </div>
