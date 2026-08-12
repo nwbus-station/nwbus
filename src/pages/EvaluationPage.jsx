@@ -374,8 +374,9 @@ export default function EvaluationPage() {
     // الموظفون
     if (canEvalEmp || isAdmin) {
       let q = supabase.from('users').select('id, full_name_ar, role, station_id, stations(name_ar, name_en)')
-        .neq('role', 'general_admin').neq('id', profile?.id)
+        .neq('role', 'general_admin')
       if (!isAdmin) {
+        q = q.eq('role', 'station_employee')
         const stationId = profile?.station_id || profile?.station?.id
         if (stationId) q = q.eq('station_id', stationId)
       }
