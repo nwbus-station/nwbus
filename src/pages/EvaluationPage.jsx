@@ -346,8 +346,8 @@ export default function EvaluationPage() {
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
   const isAdmin    = profile?.role === 'general_admin'
-  const canEvalEmp = ['general_admin','station_admin','shift_supervisor'].includes(profile?.role)
-  const canEvalStn = ['general_admin','station_admin'].includes(profile?.role)
+  const canEvalEmp = ['general_admin','station_admin','shift_supervisor','area_supervisor'].includes(profile?.role)
+  const canEvalStn = ['general_admin','station_admin','area_supervisor'].includes(profile?.role)
 
   const now = new Date()
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1)

@@ -200,7 +200,7 @@ const NAV_GROUPS = [
       { to: '/reports',        labelAr: 'التقارير',        labelEn: 'Reports',        icon: 'report',  roles: ['general_admin','station_admin','accountant'], module: 'reports' },
       { to: '/leaves',         labelAr: 'الإجازات',        labelEn: 'Leaves',         icon: 'leave',   roles: null, module: 'leaves' },
       { to: '/survey',         labelAr: 'تقييم الركاب',   labelEn: 'Passenger Rating', icon: 'star',  roles: null, module: null },
-      { to: '/evaluation',     labelAr: 'التقييم الوظيفي', labelEn: 'Evaluations',      icon: 'report', roles: ['general_admin','station_admin','shift_supervisor'], module: null },
+      { to: '/evaluation',     labelAr: 'التقييم الوظيفي', labelEn: 'Evaluations',      icon: 'report', roles: ['general_admin','station_admin','shift_supervisor','area_supervisor'], module: null },
     ]
   },
   {
