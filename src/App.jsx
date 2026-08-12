@@ -16,6 +16,7 @@ import LiveBoard        from './pages/LiveBoard'
 const MapPage = lazy(() => import('./pages/MapPage'))
 import SettingsPage     from './pages/SettingsPage'
 import LeavePage        from './pages/LeavePage'
+import SurveyPage       from './pages/SurveyPage'
 
 // Layout
 import AppLayout        from './components/layout/AppLayout'
@@ -109,6 +110,7 @@ export default function App() {
           </RequireAuth>
         } />
         <Route path="leaves"   element={<LeavePage />} />
+        <Route path="survey"   element={<SurveyPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 
