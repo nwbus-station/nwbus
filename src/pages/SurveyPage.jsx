@@ -1,125 +1,131 @@
 import { useState, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useTranslation } from 'react-i18next'
 
 const BASE = 'https://nwbus.sa/survey.html?city='
 
-const STATIONS = [
-  { city: 'Jeddah',  ar: 'جدة',        en: 'Jeddah'    },
-  { city: 'Tabuk',   ar: 'تبوك',        en: 'Tabuk'     },
-  { city: 'Makkah',  ar: 'مكة المكرمة', en: 'Makkah'    },
-  { city: 'T1',      ar: 'مطار T1',     en: 'Airport T1' },
-  { city: 'Hail',    ar: 'حائل',        en: 'Hail'      },
-  { city: 'Riyadh',  ar: 'الرياض',      en: 'Riyadh'    },
-  { city: 'jazan',   ar: 'جازان',       en: 'Jazan'     },
-  { city: 'Taif',    ar: 'الطائف',      en: 'Taif'      },
-  { city: 'Madinah', ar: 'المدينة المنورة', en: 'Al Madinah' },
-  { city: 'Yanbu',   ar: 'ينبع',        en: 'Yanbu'     },
+export const SURVEY_STATIONS = [
+  { city: 'Jeddah',  ar: 'جدة',             en: 'Jeddah',      color: '#2563EB' },
+  { city: 'Makkah',  ar: 'مكة المكرمة',      en: 'Makkah',      color: '#7C3AED' },
+  { city: 'Madinah', ar: 'المدينة المنورة',   en: 'Al Madinah',  color: '#059669' },
+  { city: 'Riyadh',  ar: 'الرياض',           en: 'Riyadh',      color: '#DC2626' },
+  { city: 'Tabuk',   ar: 'تبوك',             en: 'Tabuk',       color: '#D97706' },
+  { city: 'Hail',    ar: 'حائل',             en: 'Hail',        color: '#0891B2' },
+  { city: 'Taif',    ar: 'الطائف',           en: 'Taif',        color: '#BE185D' },
+  { city: 'jazan',   ar: 'جازان',            en: 'Jazan',       color: '#16A34A' },
+  { city: 'Yanbu',   ar: 'ينبع',             en: 'Yanbu',       color: '#9333EA' },
+  { city: 'T1',      ar: 'مطار جدة — صالة 1', en: 'Jeddah T1',  color: '#475569' },
 ]
 
-const KEYWORDS = {
-  Jeddah:  ['جدة', 'jeddah'],
-  Tabuk:   ['تبوك', 'tabuk'],
-  Makkah:  ['مكة', 'makkah', 'mecca'],
-  T1:      ['t1', 'مطار'],
-  Hail:    ['حائل', 'hail'],
-  Riyadh:  ['رياض', 'riyadh'],
-  jazan:   ['جازان', 'jazan', 'jizan'],
-  Taif:    ['طائف', 'taif'],
-  Madinah: ['مدينة', 'madinah', 'madina'],
-  Yanbu:   ['ينبع', 'yanbu'],
-}
-
-function detectStation(station) {
+export function detectSurveyCity(station) {
   if (!station) return null
-  // أولاً: العمود المباشر survey_city (الأدق)
   if (station.survey_city) return station.survey_city
-  // احتياط: كشف تلقائي من اسم المحطة
   const name = `${station.name_ar || ''} ${station.name_en || ''}`.toLowerCase()
-  for (const [city, keys] of Object.entries(KEYWORDS)) {
-    if (keys.some(k => name.includes(k.toLowerCase()))) return city
+  const map = {
+    Jeddah:  ['جدة','jeddah'], Makkah: ['مكة','makkah','mecca'],
+    Madinah: ['مدينة','madinah'], Riyadh: ['رياض','riyadh'],
+    Tabuk:   ['تبوك','tabuk'], Hail: ['حائل','hail'],
+    Taif:    ['طائف','taif'], jazan: ['جازان','jazan','jizan'],
+    Yanbu:   ['ينبع','yanbu'], T1: ['t1','صالة 1'],
   }
+  for (const [city, keys] of Object.entries(map))
+    if (keys.some(k => name.includes(k.toLowerCase()))) return city
   return null
 }
 
-function StarIcon({ size = 20 }) {
+function StarIcon({ size = 24 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
     </svg>
   )
 }
 
-function ChevronRight({ size = 14 }) {
+function CloseIcon({ size = 16 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18l6-6-6-6" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
   )
 }
 
-function CloseIcon({ size = 18 }) {
+function ArrowIcon({ size = 16 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14M12 5l7 7-7 7"/>
     </svg>
   )
 }
 
-// ── Iframe overlay مُغلِّف ────────────────────────────────────
-function SurveyOverlay({ city, onClose }) {
-  const station = STATIONS.find(s => s.city === city)
+// ── Overlay التقييم ──────────────────────────────────────────
+export function SurveyOverlay({ city, onClose }) {
+  const station = SURVEY_STATIONS.find(s => s.city === city)
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9999,
       background: '#000',
       display: 'flex', flexDirection: 'column',
+      animation: 'fadeIn 0.15s ease',
     }}>
-      {/* شريط علوي رفيع */}
+      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
+
+      {/* شريط علوي */}
       <div style={{
-        height: 44, flexShrink: 0,
-        background: 'rgba(10,10,10,0.95)',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 16px',
+        height: 48, flexShrink: 0,
+        background: 'linear-gradient(90deg, #0a0a0a 0%, #111 100%)',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', padding: '0 20px',
+        gap: 12,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#5B5BD6' }} />
-          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.02em' }}>
-            تقييم هيئة النقل — {station?.ar}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 7,
+            background: `${station?.color || '#5B5BD6'}22`,
+            border: `1px solid ${station?.color || '#5B5BD6'}44`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: station?.color || '#5B5BD6',
+          }}>
+            <StarIcon size={13} />
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>
+              تقييم تجربة الراكب
+            </p>
+            <p style={{ margin: 0, fontSize: '0.62rem', color: 'rgba(255,255,255,0.4)' }}>
+              هيئة النقل — {station?.ar}
+            </p>
+          </div>
         </div>
+
         <button onClick={onClose} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)',
-          borderRadius: 6, padding: '4px 12px', color: 'rgba(255,255,255,0.6)',
-          fontSize: '0.72rem', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: 7,
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.10)',
+          borderRadius: 7, padding: '6px 14px',
+          color: 'rgba(255,255,255,0.55)',
+          fontSize: '0.72rem', fontWeight: 600,
+          cursor: 'pointer', fontFamily: 'inherit',
           transition: 'all 0.12s',
         }}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.10)'; e.currentTarget.style.color = '#fff' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)' }}
-        >
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.55)' }}>
           <CloseIcon size={13} />
           إغلاق
         </button>
       </div>
 
-      {/* الـ iframe */}
       <iframe
         src={`${BASE}${city}`}
         title="تقييم هيئة النقل"
         style={{ flex: 1, border: 'none', width: '100%' }}
-        allow="fullscreen"
       />
     </div>
   )
 }
 
-// ── بطاقة محطة (للأدمن) ──────────────────────────────────────
-function StationCard({ station, onOpen }) {
+// ── بطاقة محطة للأدمن ────────────────────────────────────────
+function CityCard({ station, onOpen }) {
   const [hover, setHover] = useState(false)
   return (
     <button
@@ -128,170 +134,217 @@ function StationCard({ station, onOpen }) {
       onMouseLeave={() => setHover(false)}
       style={{
         background: hover ? 'var(--card-hover)' : 'var(--card)',
-        border: `1px solid ${hover ? '#5B5BD6' : 'var(--border)'}`,
-        borderRadius: 8, padding: '18px 20px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        border: `1px solid ${hover ? station.color + '60' : 'var(--border)'}`,
+        borderRadius: 10, padding: '16px 18px',
+        display: 'flex', alignItems: 'center', gap: 14,
         cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right',
-        transition: 'all 0.15s', boxShadow: hover ? '0 4px 16px rgba(91,91,214,0.12)' : 'var(--shadow-xs)',
+        transition: 'all 0.15s',
+        boxShadow: hover ? `0 4px 20px ${station.color}18` : 'var(--shadow-xs)',
         width: '100%',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 8,
-          background: hover ? 'rgba(91,91,214,0.15)' : 'var(--surface)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: hover ? '#5B5BD6' : 'var(--text-3)', flexShrink: 0,
-          transition: 'all 0.15s',
-        }}>
-          <StarIcon size={16} />
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-1)' }}>{station.ar}</p>
-          <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: 'var(--text-3)' }}>{station.en}</p>
-        </div>
+      <div style={{
+        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+        background: hover ? `${station.color}18` : 'var(--surface)',
+        border: `1px solid ${hover ? station.color + '40' : 'var(--border)'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: hover ? station.color : 'var(--text-3)',
+        transition: 'all 0.15s',
+      }}>
+        <StarIcon size={17} />
       </div>
-      <div style={{ color: hover ? '#5B5BD6' : 'var(--text-3)', transform: 'rotate(180deg)', transition: 'all 0.15s' }}>
-        <ChevronRight size={15} />
+      <div style={{ flex: 1, textAlign: 'right' }}>
+        <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-1)' }}>{station.ar}</p>
+        <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: 'var(--text-3)' }}>{station.en}</p>
+      </div>
+      <div style={{
+        color: hover ? station.color : 'var(--text-3)',
+        transform: 'rotate(180deg)', transition: 'all 0.15s',
+      }}>
+        <ArrowIcon size={14} />
       </div>
     </button>
   )
 }
 
-// ── واجهة إطلاق لموظف المحطة ─────────────────────────────────
-function StationLaunch({ city, stationName, onOpen }) {
-  const [hover, setHover] = useState(false)
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      minHeight: 'calc(100vh - 108px)', padding: '24px 16px', textAlign: 'center',
-    }}>
-      {/* أيقونة */}
-      <div style={{
-        width: 80, height: 80, borderRadius: 20,
-        background: 'rgba(91,91,214,0.10)',
-        border: '1px solid rgba(91,91,214,0.20)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#5B5BD6', marginBottom: 28,
-        boxShadow: '0 8px 32px rgba(91,91,214,0.12)',
-      }}>
-        <StarIcon size={34} />
-      </div>
-
-      {/* العنوان */}
-      <h1 style={{ margin: '0 0 8px', fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.3 }}>
-        تقييم تجربة الراكب
-      </h1>
-      <p style={{ margin: '0 0 4px', fontSize: '0.9rem', color: 'var(--text-2)' }}>
-        هيئة النقل — {stationName}
-      </p>
-      <p style={{ margin: '0 0 40px', fontSize: '0.78rem', color: 'var(--text-3)', maxWidth: 340, lineHeight: 1.6 }}>
-        اعرض الشاشة للراكب واطلب منه تقييم تجربته مع الخدمة
-      </p>
-
-      {/* زر التشغيل */}
-      <button
-        onClick={() => onOpen(city)}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          background: hover ? '#4A4ABF' : '#5B5BD6',
-          border: 'none', borderRadius: 10, padding: '14px 36px',
-          color: '#fff', fontSize: '1rem', fontWeight: 600,
-          cursor: 'pointer', fontFamily: 'inherit',
-          boxShadow: hover
-            ? '0 8px 24px rgba(91,91,214,0.35)'
-            : '0 4px 14px rgba(91,91,214,0.25)',
-          transition: 'all 0.15s',
-          transform: hover ? 'translateY(-1px)' : 'translateY(0)',
-        }}
-      >
-        <StarIcon size={18} />
-        ابدأ التقييم
-      </button>
-
-      {/* تلميح */}
-      <p style={{ margin: '24px 0 0', fontSize: '0.72rem', color: 'var(--text-3)' }}>
-        سيفتح الاستبيان في ملء الشاشة — اضغط "إغلاق" للعودة
-      </p>
-    </div>
-  )
+const SURVEY_MOBILE_CSS = `
+@media (max-width: 600px) {
+  .survey-hero { padding: 20px 16px 18px !important; }
+  .survey-main { padding: 16px 16px !important; }
+  .survey-launch-card { padding: 28px 18px !important; }
+  .survey-city-grid { grid-template-columns: 1fr !important; }
+  .survey-overlay-bar { padding: 0 14px !important; }
+  .survey-launch-btn { padding: 13px 28px !important; font-size: 0.95rem !important; }
 }
+`
 
 // ── الصفحة الرئيسية ───────────────────────────────────────────
 export default function SurveyPage() {
   const { profile } = useAuth()
+  const { i18n }   = useTranslation()
+  const isAr       = i18n.language === 'ar'
   const [activeCity, setActiveCity] = useState(null)
 
-  const isAdmin = profile?.role === 'general_admin'
-  const detectedCity = detectStation(profile?.station)
+  const isAdmin     = profile?.role === 'general_admin'
+  const detectedCity = detectSurveyCity(profile?.station)
+  const cityInfo    = SURVEY_STATIONS.find(s => s.city === detectedCity)
 
   const handleOpen  = useCallback(city => setActiveCity(city), [])
   const handleClose = useCallback(() => setActiveCity(null), [])
 
   return (
     <>
-      {/* Overlay عند فتح استبيان */}
+      <style>{SURVEY_MOBILE_CSS}</style>
       {activeCity && <SurveyOverlay city={activeCity} onClose={handleClose} />}
 
-      <div style={{ padding: '24px 20px', maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
 
-        {/* رأس الصفحة */}
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <div style={{ color: '#5B5BD6' }}><StarIcon size={18} /></div>
-            <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-1)' }}>
-              تقييم تجربة الراكب
-            </h2>
+        {/* ── Hero ── */}
+        <div className="survey-hero" style={{
+          background: 'var(--card)',
+          borderBottom: '1px solid var(--border)',
+          padding: '28px 28px 24px',
+        }}>
+          <div style={{ maxWidth: 860, margin: '0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
+              <div style={{
+                width: 42, height: 42, borderRadius: 11,
+                background: `${cityInfo?.color || '#5B5BD6'}15`,
+                border: `1px solid ${cityInfo?.color || '#5B5BD6'}30`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: cityInfo?.color || '#5B5BD6', flexShrink: 0,
+              }}>
+                <StarIcon size={20} />
+              </div>
+              <div>
+                <h1 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-1)' }}>
+                  تقييم تجربة الراكب
+                </h1>
+                <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-3)' }}>
+                  هيئة النقل العام — استبيان رضا الركاب
+                </p>
+              </div>
+            </div>
           </div>
-          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-3)' }}>
-            هيئة النقل العام — استبيان رضا الركاب
-          </p>
         </div>
 
-        {/* محتوى الصفحة */}
-        {isAdmin ? (
-          // للأدمن: شبكة جميع المحطات
-          <div>
-            <p style={{ margin: '0 0 16px', fontSize: '0.8rem', color: 'var(--text-2)', fontWeight: 500 }}>
-              اختر المحطة لفتح استبيان التقييم
-            </p>
+        <div className="survey-main" style={{ maxWidth: 860, margin: '0 auto', padding: '28px 28px' }}>
+
+          {/* ── موظف المحطة: زر إطلاق مباشر ── */}
+          {!isAdmin && detectedCity && (
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-              gap: 10,
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 14, overflow: 'hidden',
+              boxShadow: 'var(--shadow-md)',
+              marginBottom: 24,
             }}>
-              {STATIONS.map(s => (
-                <StationCard key={s.city} station={s} onOpen={handleOpen} />
-              ))}
+              {/* شريط لوني */}
+              <div style={{ height: 4, background: `linear-gradient(90deg, ${cityInfo?.color || '#5B5BD6'}, ${cityInfo?.color || '#5B5BD6'}88)` }} />
+
+              <div className="survey-launch-card" style={{ padding: '36px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 20 }}>
+                {/* أيقونة */}
+                <div style={{
+                  width: 72, height: 72, borderRadius: 18,
+                  background: `${cityInfo?.color || '#5B5BD6'}12`,
+                  border: `2px solid ${cityInfo?.color || '#5B5BD6'}25`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: cityInfo?.color || '#5B5BD6',
+                  boxShadow: `0 8px 32px ${cityInfo?.color || '#5B5BD6'}15`,
+                }}>
+                  <StarIcon size={32} />
+                </div>
+
+                <div>
+                  <h2 style={{ margin: '0 0 6px', fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-1)' }}>
+                    {profile?.station?.name_ar || profile?.station?.name_en}
+                  </h2>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-2)', lineHeight: 1.6, maxWidth: 380 }}>
+                    اعرض الشاشة للراكب واطلب منه تقييم تجربته مع خدمة النقل
+                  </p>
+                </div>
+
+                <LaunchButton color={cityInfo?.color || '#5B5BD6'} onClick={() => handleOpen(detectedCity)} />
+
+                <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-3)' }}>
+                  يفتح الاستبيان بملء الشاشة — اضغط "إغلاق" للعودة
+                </p>
+              </div>
             </div>
-          </div>
-        ) : detectedCity ? (
-          // لموظف المحطة: إطلاق مباشر
-          <StationLaunch
-            city={detectedCity}
-            stationName={profile?.station?.name_ar || profile?.station?.name_en || ''}
-            onOpen={handleOpen}
-          />
-        ) : (
-          // محطة غير معرّفة في الخريطة
-          <div>
-            <p style={{ margin: '0 0 16px', fontSize: '0.8rem', color: 'var(--text-2)', fontWeight: 500 }}>
-              اختر المحطة لفتح استبيان التقييم
-            </p>
+          )}
+
+          {/* ── رسالة لمن لا توجد لديه محطة مربوطة ── */}
+          {!isAdmin && !detectedCity && (
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-              gap: 10,
+              background: 'var(--card)', border: '1px solid var(--border)',
+              borderRadius: 12, padding: '24px 20px',
+              display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24,
             }}>
-              {STATIONS.map(s => (
-                <StationCard key={s.city} station={s} onOpen={handleOpen} />
-              ))}
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)', flexShrink: 0 }} />
+              <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-2)' }}>
+                لم يتم تحديد مدينة الاستبيان لمحطتك — اختر من القائمة أدناه أو تواصل مع المشرف
+              </p>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* ── شبكة المدن (للأدمن أو بدون محطة) ── */}
+          {(isAdmin || !detectedCity) && (
+            <div>
+              <p style={{ margin: '0 0 14px', fontSize: '0.63rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'IBM Plex Mono', monospace" }}>
+                {isAdmin ? 'اختر المدينة' : 'المدن المتاحة'}
+              </p>
+              <div className="survey-city-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: 10,
+              }}>
+                {SURVEY_STATIONS.map(s => (
+                  <CityCard key={s.city} station={s} onOpen={handleOpen} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+    </>
+  )
+}
+
+// ── زر الإطلاق بتأثير نبضة ──────────────────────────────────
+function LaunchButton({ color, onClick }) {
+  const [hover, setHover] = useState(false)
+  const [press, setPress] = useState(false)
+  return (
+    <>
+      <style>{`
+        @keyframes pulse {
+          0%,100% { box-shadow: 0 0 0 0 ${color}40; }
+          50%      { box-shadow: 0 0 0 12px ${color}00; }
+        }
+      `}</style>
+      <button
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => { setHover(false); setPress(false) }}
+        onMouseDown={() => setPress(true)}
+        onMouseUp={() => setPress(false)}
+        className="survey-launch-btn"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: color,
+          border: 'none', borderRadius: 12,
+          padding: '14px 40px',
+          color: '#fff', fontSize: '1rem', fontWeight: 700,
+          cursor: 'pointer', fontFamily: 'inherit',
+          animation: 'pulse 2.5s infinite',
+          transform: press ? 'scale(0.97)' : hover ? 'scale(1.02)' : 'scale(1)',
+          transition: 'transform 0.12s, opacity 0.12s',
+          opacity: hover ? 0.95 : 1,
+        }}
+      >
+        <StarIcon size={18} />
+        ابدأ التقييم الآن
+      </button>
     </>
   )
 }

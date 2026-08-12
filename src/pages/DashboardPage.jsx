@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { getCached, setCached } from '../lib/pageCache'
+import { SurveyOverlay, detectSurveyCity, SURVEY_STATIONS } from './SurveyPage'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -53,6 +54,124 @@ const ICONS = {
   arrow:   'M5 12h14M12 5l7 7-7 7',
 }
 
+function StarIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+    </svg>
+  )
+}
+
+const SURVEY_DASH_CSS = `
+@media (max-width: 480px) {
+  .dash-survey-inner { flex-wrap: wrap !important; }
+  .dash-survey-btn { width: 100% !important; justify-content: center !important; margin-top: 4px; }
+}
+`
+
+function SurveyWidget({ city, isAdmin, isAr, onLaunch, onNavigate }) {
+  const [hover, setHover] = useState(false)
+  const cityInfo = SURVEY_STATIONS.find(s => s.city === city)
+  const color = cityInfo?.color || '#5B5BD6'
+
+  if (isAdmin) {
+    return (
+      <button
+        onClick={onNavigate}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+          background: 'var(--card)', border: '1px solid var(--border)',
+          borderRadius: 6, padding: '14px 18px', cursor: 'pointer',
+          fontFamily: 'inherit', textAlign: isAr ? 'right' : 'left',
+          boxShadow: hover ? 'var(--shadow-md)' : 'var(--shadow-sm)',
+          transition: 'box-shadow 0.14s',
+        }}
+      >
+        <div style={{
+          width: 38, height: 38, borderRadius: 8, flexShrink: 0,
+          background: hover ? `${color}18` : 'var(--surface)',
+          border: `1px solid ${hover ? color + '40' : 'var(--border)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: hover ? color : 'var(--text-3)',
+          transition: 'all 0.14s',
+        }}>
+          <StarIcon size={16} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)' }}>
+            {isAr ? 'تقييم الركاب' : 'Passenger Rating'}
+          </p>
+          <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
+            {isAr ? 'استبيان هيئة النقل — جميع المحطات' : 'NTA survey — all stations'}
+          </p>
+        </div>
+        <span style={{ color: 'var(--text-3)', flexShrink: 0 }}>
+          <Svg paths={ICONS.arrow} size={15} />
+        </span>
+      </button>
+    )
+  }
+
+  if (!city) return null
+
+  return (
+    <>
+      <style>{`@keyframes dash-pulse{0%,100%{box-shadow:0 0 0 0 ${color}35}50%{box-shadow:0 0 0 8px ${color}00}}`}</style>
+      <div style={{
+        background: 'var(--card)',
+        border: `1px solid ${hover ? color + '50' : 'var(--border)'}`,
+        borderRadius: 6,
+        boxShadow: hover ? `0 2px 16px ${color}18` : 'var(--shadow-sm)',
+        overflow: 'hidden',
+        transition: 'all 0.15s',
+      }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
+        <div style={{ height: 3, background: `linear-gradient(90deg, ${color}, ${color}66)` }} />
+        <div className="dash-survey-inner" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            width: 42, height: 42, borderRadius: 10, flexShrink: 0,
+            background: `${color}12`, border: `1px solid ${color}25`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: color,
+          }}>
+            <StarIcon size={19} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)' }}>
+              {isAr ? 'تقييم تجربة الراكب' : 'Passenger Survey'}
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {isAr ? `هيئة النقل — ${cityInfo?.ar}` : `NTA — ${cityInfo?.en}`}
+            </p>
+          </div>
+          <button
+            onClick={onLaunch}
+            className="dash-survey-btn"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              background: color, border: 'none', borderRadius: 8,
+              padding: '9px 16px', color: '#fff',
+              fontSize: '0.78rem', fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+              animation: 'dash-pulse 2.8s infinite',
+              transition: 'opacity 0.12s, transform 0.12s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'scale(1.03)' }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1)' }}
+          >
+            <StarIcon size={13} />
+            {isAr ? 'ابدأ' : 'Launch'}
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
 export default function DashboardPage() {
   const { profile } = useAuth()
   const { i18n } = useTranslation()
@@ -69,6 +188,8 @@ export default function DashboardPage() {
   const stationName = profile?.station ? (isAr ? profile.station.name_ar : profile.station.name_en) : null
   const userName    = profile?.full_name_ar ?? ''
   const isAdmin     = profile?.role === 'general_admin' || profile?.role === 'station_admin'
+  const [surveyCity, setSurveyCity] = useState(null)
+  useEffect(() => { setSurveyCity(detectSurveyCity(profile?.station)) }, [profile?.station])
   const mods        = profile?.allowed_modules
 
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
@@ -157,10 +278,15 @@ export default function DashboardPage() {
     { label: isAr ? 'التاريخ' : 'Date',    value: now.toLocaleDateString('en-GB') },
   ]
 
+  const [surveyOpen, setSurveyOpen] = useState(false)
+
   const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: 'var(--shadow-sm)' }
 
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }}>
+
+      <style>{SURVEY_DASH_CSS}</style>
+      {surveyOpen && surveyCity && <SurveyOverlay city={surveyCity} onClose={() => setSurveyOpen(false)} />}
 
       {/* ── شريط الترحيب ── */}
       <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '16px 28px' }}>
@@ -268,6 +394,15 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+
+            {/* ── بطاقة التقييم ── */}
+            <SurveyWidget
+              city={surveyCity}
+              isAdmin={profile?.role === 'general_admin'}
+              isAr={isAr}
+              onLaunch={() => setSurveyOpen(true)}
+              onNavigate={() => navigate('/survey')}
+            />
 
             {/* معلومات الجلسة */}
             <div style={card}>
