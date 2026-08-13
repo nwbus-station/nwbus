@@ -816,6 +816,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   const [rangeEnd,     setRangeEnd]     = useState({ month: selMonth, year: selYear })
   const [rangeData,    setRangeData]    = useState(null)
   const [loading,      setLoading]      = useState(false)
+  const [modalErr,     setModalErr]     = useState('')
   const [stnSearch,    setStnSearch]    = useState('')
   const [empSearch,    setEmpSearch]    = useState('')
   const [empDropOpen,  setEmpDropOpen]  = useState(false)
@@ -858,6 +859,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   async function loadRange() {
     setLoading(true)
     setRangeData(null)
+    setModalErr('')
     const months = monthsBetween(rangeStart, rangeEnd)
     if (rangeMode === 'employees') {
       const empId = selEmployee === 'all' ? null : selEmployee
@@ -914,12 +916,12 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
         return { name: s.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
       })
       .filter(r => r.score != null)
-    if (rows.length === 0) { alert('لا توجد محطات مقيّمة في الفترة المحددة'); return }
+    if (rows.length === 0) { setModalErr('لا توجد محطات مقيّمة في الفترة المحددة'); return }
     printHtml(buildStationReportHtml(rows, selMonth, selYear))
   }
 
   function printRange() {
-    if (!rangeData || rangeData.length === 0) { alert('لا توجد بيانات في هذه الفترة'); return }
+    if (!rangeData || rangeData.length === 0) { setModalErr('لا توجد بيانات في هذه الفترة'); return }
     if (rangeMode === 'employees') {
       printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmployee, employees))
     } else {
@@ -1132,6 +1134,13 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
           )}
         </div>
 
+        {modalErr && (
+          <div style={{ margin: '0 22px 0', padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: '#DC2626', fontWeight: 600 }}>{modalErr}</p>
+            <button onClick={() => setModalErr('')} style={{ marginRight: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', fontSize: 16, lineHeight: 1, padding: '0 2px' }}>×</button>
+          </div>
+        )}
         <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
           <span style={{ fontSize: '0.67rem', color: 'var(--text-3)', marginLeft: 'auto' }}>NORTH WEST BUS</span>
           <button onClick={onClose} style={{ padding: '9px 20px', background: 'transparent', border: '1.5px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)' }}>إلغاء</button>
