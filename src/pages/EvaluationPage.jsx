@@ -1064,82 +1064,66 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
 // ── CSS مشترك للتقارير ────────────────────────────────────────
 function reportCss() {
   return `
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700;800&display=swap');
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'IBM Plex Sans Arabic','Segoe UI',Arial,sans-serif;background:#f4f4f8;color:#111;direction:rtl}
-  .wrap{max-width:960px;margin:0 auto;padding:32px 28px}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#1a1a1a;direction:rtl;font-size:13px}
+  .wrap{max-width:960px;margin:0 auto;padding:28px 32px}
 
   /* ── رأس الصفحة ── */
-  .cover{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-radius:16px;padding:36px 40px;margin-bottom:28px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden}
-  .cover::before{content:'';position:absolute;top:-60px;left:-60px;width:260px;height:260px;border-radius:50%;background:rgba(91,91,214,0.18);pointer-events:none}
-  .cover::after{content:'';position:absolute;bottom:-80px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(91,91,214,0.12);pointer-events:none}
-  .cover-right{position:relative;z-index:1}
-  .logo-mark{font-size:13px;font-weight:800;letter-spacing:0.12em;color:rgba(255,255,255,0.45);text-transform:uppercase;margin-bottom:10px}
-  .cover-title{font-size:26px;font-weight:800;color:#fff;line-height:1.2;margin-bottom:6px}
-  .cover-sub{font-size:13px;color:rgba(255,255,255,0.55);font-weight:400}
-  .cover-left{position:relative;z-index:1;text-align:left;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-  .nw-logo{font-size:13px;font-weight:900;color:#fff;letter-spacing:0.18em;line-height:1.2;text-transform:uppercase;opacity:0.9}
-  .nw-logo-line{width:40px;height:2px;background:#5B5BD6;border-radius:1px;margin:4px 0}
-  .cover-date{font-size:11px;color:rgba(255,255,255,0.4);font-family:monospace;letter-spacing:0.06em}
+  .cover{background:#1C2B4A;padding:28px 36px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between}
+  .cover-right{}
+  .logo-mark{font-size:10px;font-weight:600;letter-spacing:0.2em;color:rgba(255,255,255,0.4);text-transform:uppercase;margin-bottom:8px}
+  .cover-title{font-size:22px;font-weight:700;color:#fff;line-height:1.25;margin-bottom:4px}
+  .cover-sub{font-size:12px;color:rgba(255,255,255,0.5);font-weight:400}
+  .cover-left{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+  .nw-logo{font-size:10px;font-weight:700;color:rgba(255,255,255,0.85);letter-spacing:0.22em;text-transform:uppercase}
+  .nw-logo-line{width:32px;height:1px;background:rgba(255,255,255,0.2);margin:5px 0}
+  .cover-date{font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:0.05em}
 
   /* ── إحصاءات ── */
-  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
-  .stat{background:#fff;border-radius:12px;padding:20px 22px;border:1px solid #e8e8f0;position:relative;overflow:hidden}
-  .stat::before{content:'';position:absolute;top:0;right:0;width:4px;height:100%;border-radius:0 12px 12px 0}
-  .stat.purple::before{background:#5B5BD6}
-  .stat.green::before{background:#059669}
-  .stat.gold::before{background:#F59E0B}
-  .stat-val{font-size:32px;font-weight:900;line-height:1;margin-bottom:6px}
-  .stat-lbl{font-size:12px;color:#6b7280;font-weight:500}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e5e7eb;border:1px solid #e5e7eb;margin-bottom:20px}
+  .stat{background:#fff;padding:18px 24px}
+  .stat-val{font-size:30px;font-weight:800;line-height:1;margin-bottom:5px;color:#1C2B4A}
+  .stat-lbl{font-size:11px;color:#9ca3af;font-weight:400;letter-spacing:0.03em}
 
   /* ── الجدول ── */
-  .table-wrap{background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e8e8f0;margin-bottom:24px}
-  .table-head{background:#1a1a2e;padding:14px 20px;display:flex;align-items:center;gap:10px}
-  .table-head-dot{width:8px;height:8px;border-radius:50%;background:#5B5BD6}
-  .table-head-title{font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:0.1em;text-transform:uppercase}
+  .table-wrap{border:1px solid #e5e7eb;margin-bottom:20px}
+  .table-head{background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+  .table-head-title{font-size:11px;font-weight:600;color:#6b7280;letter-spacing:0.08em;text-transform:uppercase}
   table{width:100%;border-collapse:collapse}
-  th{background:#f8f8fc;color:#374151;padding:11px 16px;font-size:11px;font-weight:700;text-align:right;border-bottom:2px solid #e8e8f0;letter-spacing:0.04em}
-  td{padding:12px 16px;font-size:13px;border-bottom:1px solid #f0f0f6;vertical-align:middle}
+  th{background:#f9fafb;color:#6b7280;padding:10px 16px;font-size:10px;font-weight:600;text-align:right;border-bottom:1px solid #e5e7eb;letter-spacing:0.06em;text-transform:uppercase}
+  td{padding:11px 16px;font-size:12.5px;border-bottom:1px solid #f3f4f6;vertical-align:middle;color:#374151}
   tr:last-child td{border-bottom:none}
-  tr:hover td{background:#fafafe}
 
   /* ── شريط النتيجة ── */
-  .bar-wrap{display:flex;align-items:center;gap:10px;min-width:120px}
-  .bar{height:7px;border-radius:4px;flex:1;background:#eef0f6;overflow:hidden}
-  .bar-fill{height:100%;border-radius:4px}
-  .score-num{font-family:monospace;font-weight:800;font-size:14px;min-width:46px;text-align:left}
+  .bar-wrap{display:flex;align-items:center;gap:8px;min-width:110px}
+  .bar{height:5px;border-radius:2px;flex:1;background:#f3f4f6;overflow:hidden}
+  .bar-fill{height:100%;border-radius:2px}
+  .score-num{font-weight:700;font-size:12px;min-width:40px;text-align:left;color:#1C2B4A}
 
   /* ── بادجات ── */
-  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
-  .badge-star{background:#FEF3C7;color:#B45309;border:1px solid #FDE68A}
-  .badge-great{background:#EDE9FE;color:#6D28D9;border:1px solid #DDD6FE}
-  .badge-good{background:#D1FAE5;color:#065F46;border:1px solid #A7F3D0}
-  .badge-ok{background:#DBEAFE;color:#1E40AF;border:1px solid #BFDBFE}
-  .badge-avg{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
-  .badge-low{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA}
-  .badge-none{background:#F3F4F6;color:#9CA3AF;border:1px solid #E5E7EB}
-  .job-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;font-weight:700;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE}
-  .emp-name{font-weight:700;font-size:13px;color:#111;line-height:1.3}
-  .emp-sub{font-size:11px;color:#9CA3AF;font-family:monospace;margin-top:2px}
-  .row-num{font-family:monospace;font-size:12px;color:#d1d5db;font-weight:700}
+  .badge{display:inline-block;padding:2px 9px;border-radius:3px;font-size:10.5px;font-weight:600;white-space:nowrap}
+  .badge-great{background:#EEF2FF;color:#4338CA}
+  .badge-good{background:#F0FDF4;color:#166534}
+  .badge-ok{background:#EFF6FF;color:#1D4ED8}
+  .badge-avg{background:#FFFBEB;color:#92400E}
+  .badge-low{background:#FEF2F2;color:#991B1B}
+  .badge-none{background:#F9FAFB;color:#9CA3AF}
+  .job-tag{display:inline-block;padding:2px 7px;border-radius:3px;font-family:monospace;font-size:11px;font-weight:600;background:#F5F3FF;color:#5B21B6}
+  .emp-name{font-weight:600;font-size:13px;color:#111827;line-height:1.3}
+  .emp-sub{font-size:10.5px;color:#9CA3AF;font-family:monospace;margin-top:2px}
+  .row-num{font-size:11px;color:#d1d5db;font-weight:600}
   .station-text{font-size:12px;color:#6B7280}
   .role-text{font-size:11px;color:#9CA3AF}
 
   /* ── تذييل ── */
-  .footer{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:#fff;border-radius:12px;border:1px solid #e8e8f0}
-  .footer-brand{font-size:13px;font-weight:800;color:#1a1a2e;letter-spacing:-0.3px}
-  .footer-brand span{color:#5B5BD6}
-  .footer-meta{font-size:11px;color:#9CA3AF;font-family:monospace}
+  .footer{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid #e5e7eb;margin-top:4px}
+  .footer-brand{font-size:10px;font-weight:600;color:#9ca3af;letter-spacing:0.1em;text-transform:uppercase}
+  .footer-meta{font-size:10px;color:#d1d5db;letter-spacing:0.04em}
 
   @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
     body{background:#fff}
     .wrap{padding:16px}
-    .cover{border-radius:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .stat{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .table-head{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .bar-fill{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .badge{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .job-tag{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }`
 }
 
