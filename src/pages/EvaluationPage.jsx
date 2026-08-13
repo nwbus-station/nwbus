@@ -934,27 +934,39 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   const MODAL_TITLES = { employees: 'طباعة تقييم الموظفين', stations: 'طباعة تقييم المحطات', range: 'تقرير فترة زمنية' }
   const MODAL_ICONS  = { employees: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75', stations: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z', range: 'M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z' }
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,20,40,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(3px)' }}>
-      <div style={{ background: 'var(--card)', borderRadius: 14, width: '100%', maxWidth: 600, boxShadow: '0 32px 80px rgba(0,0,0,0.3)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+  const LABEL_S = { margin: '0 0 8px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }
+  const BTN_BASE = { fontFamily: 'inherit', cursor: 'pointer', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem', padding: '11px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', transition: 'opacity 0.15s' }
 
-        {/* رأس النافذة */}
-        <div style={{ background: '#1C2B4A', padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={MODAL_ICONS[type]} /></svg>
+  return (
+    <>
+    <style>{`
+      @keyframes modalIn { from { opacity:0; transform:translateY(12px) scale(0.98) } to { opacity:1; transform:none } }
+      @media (max-width:600px) {
+        .nw-modal-wrap { padding: 0 !important; align-items: flex-end !important; }
+        .nw-modal-box  { max-width: 100% !important; border-radius: 20px 20px 0 0 !important; max-height: 95vh !important; }
+        .nw-modal-foot { padding: 12px 18px 22px !important; }
+        .nw-modal-body { padding: 16px 18px !important; }
+        .nw-modal-head { padding: 16px 18px !important; }
+      }
+    `}</style>
+    <div className="nw-modal-wrap" style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
+      <div className="nw-modal-box" style={{ background: 'var(--card)', borderRadius: 18, width: '100%', maxWidth: 680, boxShadow: '0 24px 64px rgba(0,0,0,0.18)', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'modalIn 0.2s ease' }}>
+
+        {/* رأس */}
+        <div className="nw-modal-head" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: '#F0F4FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#4A6FA5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={MODAL_ICONS[type]} /></svg>
           </div>
           <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, fontWeight: 800, fontSize: '0.95rem', color: '#fff' }}>{MODAL_TITLES[type]}</p>
-            <p style={{ margin: '2px 0 0', fontSize: '0.67rem', color: 'rgba(255,255,255,0.45)' }}>
-              {MONTHS_AR[selMonth-1]} {selYear}
-            </p>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: '1rem', color: 'var(--text-1)' }}>{MODAL_TITLES[type]}</p>
+            <p style={{ margin: '3px 0 0', fontSize: '0.72rem', color: 'var(--text-3)' }}>{MONTHS_AR[selMonth-1]} {selYear}</p>
           </div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={onClose} style={{ background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-3)', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Svg d="M18 6L6 18M6 6l12 12" size={16} />
           </button>
         </div>
 
-        <div style={{ overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="nw-modal-body" style={{ overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
           {/* تحديد المحطات */}
           {(type === 'employees' || type === 'stations') && (
@@ -1135,25 +1147,28 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
         </div>
 
         {modalErr && (
-          <div style={{ margin: '0 22px 0', padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <p style={{ margin: 0, fontSize: '0.78rem', color: '#DC2626', fontWeight: 600 }}>{modalErr}</p>
-            <button onClick={() => setModalErr('')} style={{ marginRight: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', fontSize: 16, lineHeight: 1, padding: '0 2px' }}>×</button>
+          <div style={{ margin: '0 24px 8px', padding: '12px 16px', background: '#FFF5F5', border: '1px solid #FED7D7', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#E53E3E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: '#C53030', fontWeight: 600, flex: 1 }}>{modalErr}</p>
+            <button onClick={() => setModalErr('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C53030', fontSize: 18, lineHeight: 1 }}>×</button>
           </div>
         )}
-        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.67rem', color: 'var(--text-3)', marginLeft: 'auto' }}>NORTH WEST BUS</span>
-          <button onClick={onClose} style={{ padding: '9px 20px', background: 'transparent', border: '1.5px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)' }}>إلغاء</button>
+
+        <div className="nw-modal-foot" style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>
+          <button onClick={onClose} style={{ ...BTN_BASE, flex: 1, background: 'var(--surface)', border: '1.5px solid var(--border)', color: 'var(--text-2)' }}>
+            إلغاء
+          </button>
           <button
             disabled={type === 'range' && !rangeData}
             onClick={type === 'employees' ? printEmployees : type === 'stations' ? printStations : printRange}
-            style={{ padding: '9px 28px', background: '#1C2B4A', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700, opacity: type === 'range' && !rangeData ? 0.45 : 1, display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 2px 10px rgba(28,43,74,0.3)' }}>
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            style={{ ...BTN_BASE, flex: 2, background: '#4A6FA5', color: '#fff', opacity: type === 'range' && !rangeData ? 0.45 : 1 }}>
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             طباعة التقرير
           </button>
         </div>
       </div>
     </div>
+    </>
   )
 }
 
