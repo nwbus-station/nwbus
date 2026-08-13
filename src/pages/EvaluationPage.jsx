@@ -827,16 +827,19 @@ export default function EvaluationPage() {
 // ── مودال الطباعة المتقدمة ────────────────────────────────────
 function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, selYear, onClose }) {
   const now = new Date()
-  const [selStations, setSelStations] = useState(new Set(stations.map(s => s.id)))
-  const [selEmployee, setSelEmployee] = useState('all')
-  const [rangeStart, setRangeStart] = useState({ month: selMonth, year: selYear })
-  const [rangeEnd,   setRangeEnd]   = useState({ month: selMonth, year: selYear })
-  const [rangeData,  setRangeData]  = useState(null)
-  const [loading,    setLoading]    = useState(false)
-  const [stnSearch,  setStnSearch]  = useState('')
-  const [empSearch,  setEmpSearch]  = useState('')
-  const [empDropOpen, setEmpDropOpen] = useState(false)
-  const [empSelected, setEmpSelected] = useState(null)
+  const [selStations,  setSelStations]  = useState(new Set(stations.map(s => s.id)))
+  const [selEmployee,  setSelEmployee]  = useState('all')
+  const [rangeStart,   setRangeStart]   = useState({ month: selMonth, year: selYear })
+  const [rangeEnd,     setRangeEnd]     = useState({ month: selMonth, year: selYear })
+  const [rangeData,    setRangeData]    = useState(null)
+  const [loading,      setLoading]      = useState(false)
+  const [stnSearch,    setStnSearch]    = useState('')
+  const [empSearch,    setEmpSearch]    = useState('')
+  const [empDropOpen,  setEmpDropOpen]  = useState(false)
+  const [empSelected,  setEmpSelected]  = useState(null)
+  const [rangeMode,    setRangeMode]    = useState('employees') // 'employees' | 'stations'
+  const [selStnRange,  setSelStnRange]  = useState('all')
+  const [stnRangeSearch, setStnRangeSearch] = useState('')
   const empRef = useRef(null)
 
   useEffect(() => {
@@ -871,16 +874,29 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
 
   async function loadRange() {
     setLoading(true)
+    setRangeData(null)
     const months = monthsBetween(rangeStart, rangeEnd)
-    const empId = selEmployee === 'all' ? null : selEmployee
-    const results = await Promise.all(months.map(async ({ month, year }) => {
-      let q = supabase.from('employee_evaluations').select('*, employee:employee_id(full_name_ar, username, job_number, role, station:station_id(name_ar))')
-        .eq('eval_month', month).eq('eval_year', year)
-      if (empId) q = q.eq('employee_id', empId)
-      const { data } = await q
-      return (data || []).map(r => ({ ...r, month, year }))
-    }))
-    setRangeData(results.flat())
+    if (rangeMode === 'employees') {
+      const empId = selEmployee === 'all' ? null : selEmployee
+      const results = await Promise.all(months.map(async ({ month, year }) => {
+        let q = supabase.from('employee_evaluations').select('*, employee:employee_id(full_name_ar, username, job_number, role, station:station_id(name_ar))')
+          .eq('eval_month', month).eq('eval_year', year)
+        if (empId) q = q.eq('employee_id', empId)
+        const { data } = await q
+        return (data || []).map(r => ({ ...r, month, year }))
+      }))
+      setRangeData(results.flat())
+    } else {
+      const stnId = selStnRange === 'all' ? null : selStnRange
+      const results = await Promise.all(months.map(async ({ month, year }) => {
+        let q = supabase.from('station_evaluations').select('*, station:station_id(name_ar, name_en)')
+          .eq('eval_month', month).eq('eval_year', year)
+        if (stnId) q = q.eq('station_id', stnId)
+        const { data } = await q
+        return (data || []).map(r => ({ ...r, month, year }))
+      }))
+      setRangeData(results.flat())
+    }
     setLoading(false)
   }
 
@@ -920,8 +936,12 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   }
 
   function printRange() {
-    if (!rangeData) return
-    printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmployee, employees))
+    if (!rangeData || rangeData.length === 0) { alert('لا توجد بيانات في هذه الفترة'); return }
+    if (rangeMode === 'employees') {
+      printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmployee, employees))
+    } else {
+      printHtml(buildStnRangeReportHtml(rangeData, rangeStart, rangeEnd, selStnRange, stations))
+    }
   }
 
   const inp = { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }
@@ -970,6 +990,21 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
           {/* تقرير فترة */}
           {type === 'range' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+              {/* تبديل الوضع */}
+              <div style={{ display: 'flex', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                {[{ id: 'employees', label: 'موظفين' }, { id: 'stations', label: 'محطات' }].map(m => (
+                  <button key={m.id} onClick={() => { setRangeMode(m.id); setRangeData(null) }} style={{
+                    flex: 1, padding: '8px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700,
+                    background: rangeMode === m.id ? '#1C2B4A' : 'transparent',
+                    color: rangeMode === m.id ? '#fff' : 'var(--text-3)',
+                    transition: 'all 0.15s',
+                  }}>{m.label}</button>
+                ))}
+              </div>
+
+              {/* بحث الموظف */}
+              {rangeMode === 'employees' && (
               <div>
                 <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>الموظف</p>
                 <div ref={empRef} style={{ position: 'relative' }}>
@@ -1031,6 +1066,32 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
                   )}
                 </div>
               </div>
+              )}
+
+              {/* بحث المحطة */}
+              {rangeMode === 'stations' && (
+                <div>
+                  <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>المحطة</p>
+                  <input
+                    value={stnRangeSearch} onChange={e => setStnRangeSearch(e.target.value)}
+                    placeholder="بحث باسم المحطة..."
+                    style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', outline: 'none' }}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 0' }}>
+                      <input type="radio" name="stnRange" checked={selStnRange === 'all'} onChange={() => setSelStnRange('all')} style={{ accentColor: '#1C2B4A' }} />
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-2)', fontWeight: 600 }}>كل المحطات</span>
+                    </label>
+                    {stations.filter(s => !stnRangeSearch || s.name_ar.includes(stnRangeSearch) || (s.name_en||'').toLowerCase().includes(stnRangeSearch.toLowerCase())).map(s => (
+                      <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 0' }}>
+                        <input type="radio" name="stnRange" checked={selStnRange === s.id} onChange={() => setSelStnRange(s.id)} style={{ accentColor: '#1C2B4A' }} />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-1)' }}>{s.name_ar}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>من</p>
@@ -1327,6 +1388,48 @@ function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmployee, employees
       <td>${r.employee?.job_number?`<span class="job-tag">${r.employee.job_number}</span>`:'<span style="color:#d1d5db">—</span>'}</td>
       <td><span style="font-family:monospace;font-size:12px;color:#6B7280">${MN[r.month-1]} ${r.year}</span></td>
       <td><span class="station-text">${r.employee?.station?.name_ar||'—'}</span></td>
+      <td>${scoreBarHtml(r.total_score)}</td>
+      <td>${scoreBadge(r.total_score)}</td>
+    </tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="footer"><div class="footer-brand">NORTH WEST BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
+</div></body></html>`
+}
+
+// ── HTML تقرير فترة المحطات ───────────────────────────────────
+function buildStnRangeReportHtml(data, rangeStart, rangeEnd, selStnRange, stations) {
+  const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+  const stnName = selStnRange === 'all' ? 'جميع المحطات' : stations.find(s => s.id === selStnRange)?.name_ar || ''
+  const sorted = [...data].sort((a,b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+<title>تقرير فترة تقييم المحطات</title>
+<style>${reportCss()}</style></head><body>
+<div class="wrap">
+  <div class="cover">
+    <div class="cover-right">
+      <div class="logo-mark"></div>
+      <div class="cover-title">تقرير فترة تقييم المحطات</div>
+      <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${stnName}</div>
+    </div>
+    <div class="cover-left">
+      <div class="nw-logo">NORTH WEST BUS</div>
+      <div class="nw-logo-line"></div>
+      <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat purple"><div class="stat-val" style="color:#5B5BD6">${sorted.length}</div><div class="stat-lbl">إجمالي التقييمات</div></div>
+    <div class="stat green"><div class="stat-val" style="color:#059669">${sorted.filter(r=>r.total_score>=85).length}</div><div class="stat-lbl">ممتاز وما فوق</div></div>
+    <div class="stat gold"><div class="stat-val" style="color:#B45309">${sorted.filter(r=>r.total_score>=98).length}</div><div class="stat-lbl">متميزة ★</div></div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-head"><div class="table-head-dot"></div><div class="table-head-title">سجل تقييمات المحطات</div></div>
+    <table><thead><tr><th style="width:36px">#</th><th>المحطة</th><th>الشهر</th><th>النتيجة</th><th>التقدير</th></tr></thead><tbody>
+    ${sorted.map((r,i) => `<tr>
+      <td><span class="row-num">${i+1}</span></td>
+      <td><div class="emp-name">${r.station?.name_ar||'—'}</div></td>
+      <td><span style="font-family:monospace;font-size:12px;color:#6B7280">${MN[r.month-1]} ${r.year}</span></td>
       <td>${scoreBarHtml(r.total_score)}</td>
       <td>${scoreBadge(r.total_score)}</td>
     </tr>`).join('')}
