@@ -162,11 +162,20 @@ function ScoreBar({ score }) {
 }
 
 // ── صفحة تقييم الموظف (نموذج) ────────────────────────────────
+function useEscClose(onClose) {
+  useEffect(() => {
+    const h = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+}
+
 function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, isAdmin, evaluatorId }) {
   const [scores, setScores] = useState(existing?.scores || {})
   const [notes, setNotes]   = useState(existing?.notes || '')
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState(null)
+  useEscClose(onClose)
 
   const totalScore = calcScore(scores, EMP_CRITERIA)
   const allFilled  = EMP_CRITERIA.every(c => scores[c.key] > 0)
@@ -263,6 +272,7 @@ function StationEvalModal({ station, month, year, existing, onClose, onSave, eva
   const [notes, setNotes]   = useState(existing?.notes || '')
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState(null)
+  useEscClose(onClose)
 
   const totalScore = calcScore(scores, STN_CRITERIA)
   const allFilled  = STN_CRITERIA.every(c => scores[c.key] > 0)
@@ -811,6 +821,7 @@ export default function EvaluationPage() {
 // ── مودال الطباعة المتقدمة ────────────────────────────────────
 function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, selYear, onClose }) {
   const now = new Date()
+  useEscClose(onClose)
   const [selStations,  setSelStations]  = useState(new Set(stations.map(s => s.id)))
   const [selEmployee,  setSelEmployee]  = useState('all')
   const [rangeStart,   setRangeStart]   = useState({ month: selMonth, year: selYear })
