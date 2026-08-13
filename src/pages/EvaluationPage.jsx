@@ -993,7 +993,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
               </div>
               <input className="nw-inp" value={stnSearch} onChange={e => setStnSearch(e.target.value)}
                 placeholder="بحث باسم المحطة..." style={{ ...INP }} />
-              <div style={{ display:'flex', flexDirection:'column', maxHeight:190, overflowY:'auto', borderRadius:12, border:'1px solid var(--border)', overflow:'hidden' }}>
+              <div style={{ display:'flex', flexDirection:'column', maxHeight:190, overflowY:'auto', overflowX:'hidden', borderRadius:12, border:'1px solid var(--border)' }}>
                 {stations.filter(s => !stnSearch || s.name_ar.includes(stnSearch) || (s.name_en||'').toLowerCase().includes(stnSearch.toLowerCase())).map((s, i, arr) => (
                   <label key={s.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'10px 16px', background:'transparent', borderBottom: i < arr.length-1 ? '1px solid var(--border)' : 'none' }}>
                     <input type="checkbox" checked={selStations.has(s.id)} onChange={() => toggleStation(s.id)} style={{ width:16, height:16, accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
@@ -1033,7 +1033,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
                 </div>
                 <input className="nw-inp" value={empRangeSearch} onChange={e => setEmpRangeSearch(e.target.value)}
                   placeholder="بحث بالاسم أو الرقم الوظيفي..." style={{ ...INP }} />
-                <div style={{ display:'flex', flexDirection:'column', maxHeight:200, overflowY:'auto', borderRadius:12, border:'1px solid var(--border)', overflow:'hidden' }}>
+                <div style={{ display:'flex', flexDirection:'column', maxHeight:200, overflowY:'auto', overflowX:'hidden', borderRadius:12, border:'1px solid var(--border)' }}>
                   {employees
                     .filter(e => !empRangeSearch ||
                       (e.full_name_ar||'').includes(empRangeSearch) ||
@@ -1058,7 +1058,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
                   <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>المحطة</p>
                   <input className="nw-inp" value={stnRangeSearch} onChange={e => setStnRangeSearch(e.target.value)}
                     placeholder="بحث باسم المحطة..." style={{ ...INP }} />
-                  <div style={{ display:'flex', flexDirection:'column', maxHeight:150, overflowY:'auto', borderRadius:12, border:'1px solid var(--border)', overflow:'hidden' }}>
+                  <div style={{ display:'flex', flexDirection:'column', maxHeight:150, overflowY:'auto', overflowX:'hidden', borderRadius:12, border:'1px solid var(--border)' }}>
                     {[{ id:'all', name_ar:'كل المحطات' }, ...stations.filter(s => !stnRangeSearch || s.name_ar.includes(stnRangeSearch) || (s.name_en||'').toLowerCase().includes(stnRangeSearch.toLowerCase()))].map((s, i, arr) => (
                       <label key={s.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'10px 16px', background:'transparent', borderBottom: i < arr.length-1 ? '1px solid var(--border)' : 'none' }}>
                         <input type="radio" name="stnRange" checked={selStnRange === s.id} onChange={() => setSelStnRange(s.id)} style={{ accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
