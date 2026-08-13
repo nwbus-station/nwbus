@@ -1071,7 +1071,7 @@ function reportCss() {
   /* ── رأس الصفحة ── */
   .cover{background:#1C2B4A;padding:28px 36px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between}
   .cover-right{}
-  .logo-mark{font-size:10px;font-weight:600;letter-spacing:0.2em;color:rgba(255,255,255,0.4);text-transform:uppercase;margin-bottom:8px}
+  .logo-mark{display:none}
   .cover-title{font-size:22px;font-weight:700;color:#fff;line-height:1.25;margin-bottom:4px}
   .cover-sub{font-size:12px;color:rgba(255,255,255,0.5);font-weight:400}
   .cover-left{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
@@ -1122,8 +1122,11 @@ function reportCss() {
 
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-    body{background:#fff}
+    body{background:#fff;font-size:13px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
     .wrap{padding:16px}
+    .cover{page-break-inside:avoid}
+    table{page-break-inside:auto}
+    tr{page-break-inside:avoid;page-break-after:auto}
   }`
 }
 
