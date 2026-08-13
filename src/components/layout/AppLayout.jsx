@@ -272,6 +272,20 @@ export default function AppLayout() {
   }, [dark])
 
   const mods = profile?.allowed_modules
+
+  // نجمة التميز — تقييم الشهر الحالي
+  const [hasStar, setHasStar] = useState(false)
+  useEffect(() => {
+    if (!profile?.id) return
+    const now = new Date()
+    supabase.from('employee_evaluations')
+      .select('total_score')
+      .eq('employee_id', profile.id)
+      .eq('eval_month', now.getMonth() + 1)
+      .eq('eval_year', now.getFullYear())
+      .maybeSingle()
+      .then(({ data }) => setHasStar((data?.total_score ?? 0) >= 98))
+  }, [profile?.id])
   const visibleGroups = NAV_GROUPS.map(g => ({
     ...g,
     items: g.items.filter(n => {
@@ -360,6 +374,7 @@ export default function AppLayout() {
           <div style={{ textAlign: isAr ? 'right' : 'left', lineHeight: 1.2 }} className="hidden sm:block">
             <p style={{ margin: 0, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-1)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {profile?.full_name_ar}
+              {hasStar && <span style={{ color: '#F59E0B', fontSize: '0.85rem', marginRight: 4 }}>★</span>}
             </p>
           </div>
           <button onClick={handleLogout} title={isAr ? 'تسجيل الخروج' : 'Sign Out'}
