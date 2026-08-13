@@ -932,86 +932,82 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   const inp = { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }
 
   const MODAL_TITLES = { employees: 'طباعة تقييم الموظفين', stations: 'طباعة تقييم المحطات', range: 'تقرير فترة زمنية' }
-  const MODAL_ICONS  = { employees: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75', stations: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z', range: 'M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z' }
-
-  const LABEL_S = { margin: '0 0 8px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }
-  const BTN_BASE = { fontFamily: 'inherit', cursor: 'pointer', borderRadius: 10, fontWeight: 700, fontSize: '0.85rem', padding: '11px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', transition: 'opacity 0.15s' }
+  const F = { fontFamily: 'inherit' }
+  const INP = { ...F, width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontSize: '0.85rem', outline: 'none' }
 
   return (
     <>
     <style>{`
-      @keyframes modalIn { from { opacity:0; transform:translateY(12px) scale(0.98) } to { opacity:1; transform:none } }
+      @keyframes nwIn { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none} }
+      .nw-inp:focus { border-color: #4A6FA5 !important; box-shadow: 0 0 0 3px rgba(74,111,165,0.12) !important; }
+      .nw-tab-btn { transition: all 0.18s; }
+      .nw-row-lbl:hover { background: var(--surface) !important; }
+      .nw-load-btn:hover:not(:disabled) { background: #f1f5f9 !important; }
+      .nw-sel:focus { border-color: #4A6FA5 !important; outline: none; }
       @media (max-width:600px) {
-        .nw-modal-wrap { padding: 0 !important; align-items: flex-end !important; }
-        .nw-modal-box  { max-width: 100% !important; border-radius: 20px 20px 0 0 !important; max-height: 95vh !important; }
-        .nw-modal-foot { padding: 12px 18px 22px !important; }
-        .nw-modal-body { padding: 16px 18px !important; }
-        .nw-modal-head { padding: 16px 18px !important; }
+        .nw-modal-wrap { padding:0 !important; align-items:flex-end !important; }
+        .nw-modal-box  { max-width:100% !important; border-radius:22px 22px 0 0 !important; max-height:96vh !important; }
+        .nw-modal-foot { padding:14px 20px 28px !important; }
+        .nw-modal-body { padding:18px 20px !important; }
+        .nw-modal-head { padding:18px 20px !important; }
       }
     `}</style>
-    <div className="nw-modal-wrap" style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
-      <div className="nw-modal-box" style={{ background: 'var(--card)', borderRadius: 18, width: '100%', maxWidth: 680, boxShadow: '0 24px 64px rgba(0,0,0,0.18)', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'modalIn 0.2s ease' }}>
 
-        {/* رأس */}
-        <div className="nw-modal-head" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 12, background: '#F0F4FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#4A6FA5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={MODAL_ICONS[type]} /></svg>
+    <div className="nw-modal-wrap" style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.35)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, backdropFilter:'blur(6px)' }}>
+      <div className="nw-modal-box" style={{ background:'var(--card)', borderRadius:20, width:'100%', maxWidth:660, boxShadow:'0 32px 80px rgba(0,0,0,0.2)', maxHeight:'90vh', display:'flex', flexDirection:'column', overflow:'hidden', animation:'nwIn 0.22s cubic-bezier(.22,.68,0,1.2)' }}>
+
+        {/* ── رأس ── */}
+        <div className="nw-modal-head" style={{ padding:'22px 28px 18px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12 }}>
+          <div>
+            <p style={{ margin:0, fontWeight:800, fontSize:'1.05rem', color:'var(--text-1)', lineHeight:1.3 }}>{MODAL_TITLES[type]}</p>
+            <p style={{ margin:'4px 0 0', fontSize:'0.73rem', color:'var(--text-3)', fontWeight:500 }}>{MONTHS_AR[selMonth-1]} {selYear}</p>
           </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, fontWeight: 800, fontSize: '1rem', color: 'var(--text-1)' }}>{MODAL_TITLES[type]}</p>
-            <p style={{ margin: '3px 0 0', fontSize: '0.72rem', color: 'var(--text-3)' }}>{MONTHS_AR[selMonth-1]} {selYear}</p>
-          </div>
-          <button onClick={onClose} style={{ background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-3)', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Svg d="M18 6L6 18M6 6l12 12" size={16} />
+          <button onClick={onClose} style={{ background:'var(--surface)', border:'1px solid var(--border)', cursor:'pointer', color:'var(--text-3)', borderRadius:10, width:34, height:34, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:2 }}>
+            <Svg d="M18 6L6 18M6 6l12 12" size={15} />
           </button>
         </div>
 
-        <div className="nw-modal-body" style={{ overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {/* فاصل */}
+        <div style={{ height:1, background:'var(--border)', margin:'0 28px' }} />
+
+        <div className="nw-modal-body" style={{ overflowY:'auto', padding:'22px 28px', display:'flex', flexDirection:'column', gap:20 }}>
 
           {/* تحديد المحطات */}
           {(type === 'employees' || type === 'stations') && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <p style={{ margin: 0, fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>المحطات المضمّنة في التقرير</p>
-                <button onClick={toggleAll} style={{ fontSize: '0.68rem', color: '#1C2B4A', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>اختر المحطات</p>
+                <button onClick={toggleAll} style={{ fontFamily:'inherit', fontSize:'0.72rem', color:'#4A6FA5', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0 }}>
                   {selStations.size === stations.length ? 'إلغاء الكل' : 'تحديد الكل'}
                 </button>
               </div>
-              <input
-                value={stnSearch} onChange={e => setStnSearch(e.target.value)}
-                placeholder="🔍  بحث باسم المحطة..."
-                style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: '8px 13px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', outline: 'none' }}
-              />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 200, overflowY: 'auto', borderRadius: 8, border: '1.5px solid var(--border)', padding: '6px 0' }}>
-                {stations.filter(s => !stnSearch || s.name_ar.includes(stnSearch) || (s.name_en || '').toLowerCase().includes(stnSearch.toLowerCase())).map(s => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '7px 14px', borderRadius: 0, transition: 'background 0.1s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <input type="checkbox" checked={selStations.has(s.id)} onChange={() => toggleStation(s.id)}
-                      style={{ width: 15, height: 15, accentColor: '#1C2B4A', cursor: 'pointer' }} />
-                    <span style={{ fontSize: '0.82rem', color: 'var(--text-1)', fontWeight: 500 }}>{s.name_ar}</span>
+              <input className="nw-inp" value={stnSearch} onChange={e => setStnSearch(e.target.value)}
+                placeholder="بحث باسم المحطة..." style={{ ...INP }} />
+              <div style={{ display:'flex', flexDirection:'column', maxHeight:190, overflowY:'auto', borderRadius:12, border:'1px solid var(--border)', overflow:'hidden' }}>
+                {stations.filter(s => !stnSearch || s.name_ar.includes(stnSearch) || (s.name_en||'').toLowerCase().includes(stnSearch.toLowerCase())).map((s, i, arr) => (
+                  <label key={s.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'10px 16px', background:'transparent', borderBottom: i < arr.length-1 ? '1px solid var(--border)' : 'none' }}>
+                    <input type="checkbox" checked={selStations.has(s.id)} onChange={() => toggleStation(s.id)} style={{ width:16, height:16, accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
+                    <span style={{ fontSize:'0.85rem', color:'var(--text-1)', fontWeight:500 }}>{s.name_ar}</span>
                   </label>
                 ))}
               </div>
-              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: selStations.size > 0 ? '#059669' : 'var(--border)' }} />
-                <p style={{ margin: 0, fontSize: '0.67rem', color: 'var(--text-3)', fontFamily: MONO }}>{selStations.size} من {stations.length} محطة محددة</p>
-              </div>
+              <p style={{ margin:0, fontSize:'0.68rem', color:'var(--text-3)' }}>{selStations.size} من {stations.length} محطة</p>
             </div>
           )}
 
           {/* تقرير فترة */}
           {type === 'range' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
 
-              {/* تبديل الوضع */}
-              <div style={{ display: 'flex', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                {[{ id: 'employees', label: 'موظفين' }, { id: 'stations', label: 'محطات' }].map(m => (
-                  <button key={m.id} onClick={() => { setRangeMode(m.id); setRangeData(null) }} style={{
-                    flex: 1, padding: '8px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700,
-                    background: rangeMode === m.id ? '#1C2B4A' : 'transparent',
+              {/* تبديل الوضع — pill style */}
+              <div style={{ display:'flex', gap:6 }}>
+                {[{ id:'employees', label:'موظفين' }, { id:'stations', label:'محطات' }].map(m => (
+                  <button key={m.id} className="nw-tab-btn" onClick={() => { setRangeMode(m.id); setRangeData(null) }} style={{
+                    fontFamily:'inherit', padding:'8px 22px', borderRadius:50, border:'1.5px solid',
+                    borderColor: rangeMode === m.id ? '#4A6FA5' : 'var(--border)',
+                    background: rangeMode === m.id ? '#4A6FA5' : 'transparent',
                     color: rangeMode === m.id ? '#fff' : 'var(--text-3)',
-                    transition: 'all 0.15s',
+                    fontSize:'0.83rem', fontWeight:700, cursor:'pointer',
                   }}>{m.label}</button>
                 ))}
               </div>
@@ -1019,15 +1015,15 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
               {/* بحث الموظف */}
               {rangeMode === 'employees' && (
               <div>
-                <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>الموظف</p>
+                <p style={{ margin:'0 0 10px', fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>الموظف</p>
                 <div ref={empRef} style={{ position: 'relative' }}>
                   <div style={{ position: 'relative' }}>
-                    <input
+                    <input className="nw-inp"
                       value={empSearch}
                       onChange={e => { setEmpSearch(e.target.value); setEmpDropOpen(true); if (!e.target.value) { setSelEmployee('all'); setEmpSelected(null) } }}
                       onFocus={() => setEmpDropOpen(true)}
                       placeholder="ابحث بالاسم أو الرقم الوظيفي..."
-                      style={{ width: '100%', boxSizing: 'border-box', padding: '9px 36px 9px 12px', borderRadius: 6, border: '1px solid var(--accent)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.82rem', outline: 'none' }}
+                      style={{ ...INP, paddingLeft:36 }}
                     />
                     {empSelected && (
                       <button onClick={() => { setEmpSearch(''); setEmpSelected(null); setSelEmployee('all') }}
@@ -1083,63 +1079,52 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
 
               {/* بحث المحطة */}
               {rangeMode === 'stations' && (
-                <div>
-                  <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>المحطة</p>
-                  <input
-                    value={stnRangeSearch} onChange={e => setStnRangeSearch(e.target.value)}
-                    placeholder="بحث باسم المحطة..."
-                    style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', outline: 'none' }}
-                  />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 0' }}>
-                      <input type="radio" name="stnRange" checked={selStnRange === 'all'} onChange={() => setSelStnRange('all')} style={{ accentColor: '#1C2B4A' }} />
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-2)', fontWeight: 600 }}>كل المحطات</span>
-                    </label>
-                    {stations.filter(s => !stnRangeSearch || s.name_ar.includes(stnRangeSearch) || (s.name_en||'').toLowerCase().includes(stnRangeSearch.toLowerCase())).map(s => (
-                      <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 0' }}>
-                        <input type="radio" name="stnRange" checked={selStnRange === s.id} onChange={() => setSelStnRange(s.id)} style={{ accentColor: '#1C2B4A' }} />
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-1)' }}>{s.name_ar}</span>
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>المحطة</p>
+                  <input className="nw-inp" value={stnRangeSearch} onChange={e => setStnRangeSearch(e.target.value)}
+                    placeholder="بحث باسم المحطة..." style={{ ...INP }} />
+                  <div style={{ display:'flex', flexDirection:'column', maxHeight:150, overflowY:'auto', borderRadius:12, border:'1px solid var(--border)', overflow:'hidden' }}>
+                    {[{ id:'all', name_ar:'كل المحطات' }, ...stations.filter(s => !stnRangeSearch || s.name_ar.includes(stnRangeSearch) || (s.name_en||'').toLowerCase().includes(stnRangeSearch.toLowerCase()))].map((s, i, arr) => (
+                      <label key={s.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'10px 16px', background:'transparent', borderBottom: i < arr.length-1 ? '1px solid var(--border)' : 'none' }}>
+                        <input type="radio" name="stnRange" checked={selStnRange === s.id} onChange={() => setSelStnRange(s.id)} style={{ accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
+                        <span style={{ fontSize:'0.85rem', color: s.id==='all' ? 'var(--text-2)' : 'var(--text-1)', fontWeight: s.id==='all' ? 600 : 500 }}>{s.name_ar}</span>
                       </label>
                     ))}
                   </div>
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>من</p>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <select value={rangeStart.month} onChange={e => setRangeStart(p => ({ ...p, month: +e.target.value }))} style={inp}>
-                      {MONTHS_AR.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
-                    </select>
-                    <select value={rangeStart.year} onChange={e => setRangeStart(p => ({ ...p, year: +e.target.value }))} style={inp}>
-                      {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
+              {/* من / إلى */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+                {[
+                  { label:'من', month: rangeStart.month, year: rangeStart.year, setM: v => setRangeStart(p=>({...p,month:v})), setY: v => setRangeStart(p=>({...p,year:v})) },
+                  { label:'إلى', month: rangeEnd.month,   year: rangeEnd.year,   setM: v => setRangeEnd(p=>({...p,month:v})),   setY: v => setRangeEnd(p=>({...p,year:v})) },
+                ].map(r => (
+                  <div key={r.label}>
+                    <p style={{ margin:'0 0 8px', fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>{r.label}</p>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <select className="nw-sel" value={r.month} onChange={e => r.setM(+e.target.value)} style={{ ...INP, flex:1, padding:'9px 10px' }}>
+                        {MONTHS_AR.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
+                      </select>
+                      <select className="nw-sel" value={r.year} onChange={e => r.setY(+e.target.value)} style={{ ...INP, width:80, padding:'9px 10px' }}>
+                        {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
                   </div>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>إلى</p>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <select value={rangeEnd.month} onChange={e => setRangeEnd(p => ({ ...p, month: +e.target.value }))} style={inp}>
-                      {MONTHS_AR.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
-                    </select>
-                    <select value={rangeEnd.year} onChange={e => setRangeEnd(p => ({ ...p, year: +e.target.value }))} style={inp}>
-                      {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </div>
-                </div>
+                ))}
               </div>
-              <button onClick={loadRange} disabled={loading} style={{ padding: '10px', background: 'var(--surface)', border: '1.5px solid var(--border)', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                {loading ? (
-                  <><span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: '#1C2B4A', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />جارٍ التحميل…</>
-                ) : (
-                  <><svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>تحميل البيانات</>
-                )}
+
+              <button className="nw-load-btn" onClick={loadRange} disabled={loading} style={{ padding:'11px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, cursor: loading ? 'not-allowed' : 'pointer', fontFamily:'inherit', fontWeight:700, fontSize:'0.85rem', color:'var(--text-1)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                {loading
+                  ? <><span style={{ width:14, height:14, borderRadius:'50%', border:'2px solid var(--border)', borderTopColor:'#4A6FA5', display:'inline-block', animation:'spin 0.7s linear infinite' }} />جارٍ التحميل…</>
+                  : <><svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>تحميل البيانات</>
+                }
               </button>
+
               {rangeData && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8 }}>
-                  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#059669', fontFamily: MONO, fontWeight: 600 }}>تم تحميل {rangeData.length} تقييم بنجاح</p>
+                <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 16px', background:'#F0FDF4', borderRadius:12 }}>
+                  <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span style={{ fontSize:'0.82rem', color:'#15803d', fontWeight:600 }}>تم تحميل {rangeData.length} تقييم</span>
                 </div>
               )}
             </div>
@@ -1147,25 +1132,29 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
         </div>
 
         {modalErr && (
-          <div style={{ margin: '0 24px 8px', padding: '12px 16px', background: '#FFF5F5', border: '1px solid #FED7D7', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#E53E3E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: '#C53030', fontWeight: 600, flex: 1 }}>{modalErr}</p>
-            <button onClick={() => setModalErr('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#C53030', fontSize: 18, lineHeight: 1 }}>×</button>
+          <div style={{ margin:'0 28px 10px', padding:'12px 16px', background:'#FFF5F5', borderRadius:12, display:'flex', alignItems:'center', gap:10 }}>
+            <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="#E53E3E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p style={{ margin:0, fontSize:'0.82rem', color:'#C53030', fontWeight:600, flex:1 }}>{modalErr}</p>
+            <button onClick={() => setModalErr('')} style={{ background:'none', border:'none', cursor:'pointer', color:'#C53030', fontSize:18, lineHeight:1 }}>×</button>
           </div>
         )}
 
-        <div className="nw-modal-foot" style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ ...BTN_BASE, flex: 1, background: 'var(--surface)', border: '1.5px solid var(--border)', color: 'var(--text-2)' }}>
+        {/* فاصل */}
+        <div style={{ height:1, background:'var(--border)', margin:'0 28px' }} />
+
+        <div className="nw-modal-foot" style={{ padding:'18px 28px', display:'flex', gap:10 }}>
+          <button onClick={onClose} style={{ fontFamily:'inherit', flex:1, padding:'12px', borderRadius:12, border:'1.5px solid var(--border)', background:'transparent', color:'var(--text-2)', fontSize:'0.85rem', fontWeight:700, cursor:'pointer' }}>
             إلغاء
           </button>
           <button
             disabled={type === 'range' && !rangeData}
             onClick={type === 'employees' ? printEmployees : type === 'stations' ? printStations : printRange}
-            style={{ ...BTN_BASE, flex: 2, background: '#4A6FA5', color: '#fff', opacity: type === 'range' && !rangeData ? 0.45 : 1 }}>
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            style={{ fontFamily:'inherit', flex:2, padding:'12px', borderRadius:12, border:'none', background:'#4A6FA5', color:'#fff', fontSize:'0.88rem', fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, opacity: type==='range' && !rangeData ? 0.4 : 1 }}>
+            <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             طباعة التقرير
           </button>
         </div>
+
       </div>
     </div>
     </>
