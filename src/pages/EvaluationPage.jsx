@@ -909,10 +909,13 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
 
   function printStations() {
     const filtered = stations.filter(s => selStations.has(s.id))
-    const rows = filtered.map(s => {
-      const ev = stnEvals.find(x => x.station_id === s.id)
-      return { name: s.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
-    })
+    const rows = filtered
+      .map(s => {
+        const ev = stnEvals.find(x => x.station_id === s.id)
+        return { name: s.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
+      })
+      .filter(r => r.score != null)
+    if (rows.length === 0) { alert('لا توجد محطات مقيّمة في الفترة المحددة'); return }
     printHtml(buildStationReportHtml(rows, selMonth, selYear))
   }
 
