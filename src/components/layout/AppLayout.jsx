@@ -273,18 +273,32 @@ export default function AppLayout() {
 
   const mods = profile?.allowed_modules
 
-  // نجمة التميز — تقييم الشهر الحالي
-  const [hasStar, setHasStar] = useState(false)
+  // نجمة التميز — تبقى ثابتة طوال شهر التقييم
+  const STAR_KEY = profile?.id ? `nwbus_star_${profile.id}` : null
+  const [hasStar, setHasStar] = useState(() => {
+    if (!STAR_KEY) return false
+    try {
+      const cached = JSON.parse(localStorage.getItem(STAR_KEY) || 'null')
+      const now = new Date()
+      if (cached?.month === now.getMonth() + 1 && cached?.year === now.getFullYear())
+        return cached.star
+    } catch {}
+    return false
+  })
   useEffect(() => {
-    if (!profile?.id) return
+    if (!profile?.id || !STAR_KEY) return
     const now = new Date()
+    const m = now.getMonth() + 1, y = now.getFullYear()
     supabase.from('employee_evaluations')
       .select('total_score')
       .eq('employee_id', profile.id)
-      .eq('eval_month', now.getMonth() + 1)
-      .eq('eval_year', now.getFullYear())
+      .eq('eval_month', m).eq('eval_year', y)
       .maybeSingle()
-      .then(({ data }) => setHasStar((data?.total_score ?? 0) >= 98))
+      .then(({ data }) => {
+        const star = (data?.total_score ?? 0) >= 98
+        setHasStar(star)
+        localStorage.setItem(STAR_KEY, JSON.stringify({ month: m, year: y, star }))
+      })
   }, [profile?.id])
   const visibleGroups = NAV_GROUPS.map(g => ({
     ...g,
