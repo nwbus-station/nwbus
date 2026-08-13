@@ -26,8 +26,8 @@ const STN_CRITERIA = [
   { key: 'cleanliness',   ar: 'نظافة المحطة ودورات المياه',           weight: 20 },
   { key: 'security',      ar: 'الحراسات الأمنية',                     weight: 15 },
   { key: 'safety',        ar: 'أدوات السلامة والإسعافات الأولية',     weight: 15 },
-  { key: 'disability',    ar: 'خدمات ذوي الاحتياجات الخاصة',          weight: 15 },
-  { key: 'compliance',    ar: 'الالتزام بالتعليمات',                  weight: 5  },
+  { key: 'disability',    ar: 'خدمات ذوي الاحتياجات الخاصة',          weight: 10 },
+  { key: 'compliance',    ar: 'الالتزام بالتعليمات',                  weight: 10 },
   { key: 'emp_appear',    ar: 'المظهر الخارجي للموظف',                weight: 5  },
   { key: 'stn_appear',    ar: 'المظهر الخارجي للمحطة',                weight: 5  },
 ]
