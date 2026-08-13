@@ -373,7 +373,7 @@ export default function EvaluationPage() {
 
     // الموظفون
     if (canEvalEmp || isAdmin) {
-      let q = supabase.from('users').select('id, full_name_ar, role, station_id, stations(name_ar, name_en)')
+      let q = supabase.from('users').select('id, full_name_ar, role, station_id, station:station_id(name_ar, name_en)')
         .neq('role', 'general_admin')
       if (!isAdmin) {
         q = q.eq('role', 'station_employee')
@@ -433,7 +433,7 @@ export default function EvaluationPage() {
     const rows = (filterStation === 'all' ? employees : filteredEmployees)
       .map(e => {
         const ev = empEvals.find(x => x.employee_id === e.id)
-        return { name: e.full_name_ar, station: e.stations?.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
+        return { name: e.full_name_ar, station: e.station?.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
       })
     const html = buildReportHtml(rows, selMonth, selYear, filterStation, stations)
     const w = window.open('', '_blank')
