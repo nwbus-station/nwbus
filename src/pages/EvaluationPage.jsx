@@ -142,22 +142,20 @@ function EvalForm({ criteria, scores, onChange, notes, onNotes, disabled }) {
 
 // ── شريط النتيجة ───────────────────────────────────────────────
 function ScoreBar({ score }) {
-  const color = score >= 98 ? '#7C3AED' : score >= 85 ? '#059669' : score >= 70 ? '#2563EB' : score >= 50 ? '#D97706' : '#DC2626'
+  const color = score >= 98 ? '#6D28D9' : score >= 85 ? '#059669' : score >= 70 ? '#2563EB' : score >= 50 ? '#D97706' : '#DC2626'
   const outOf10 = (score / 10).toFixed(1)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <div style={{ flex: 1, height: 8, background: 'var(--surface-2)', borderRadius: 4, overflow: 'hidden' }}>
-        <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.3s' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ flex: 1, height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', minWidth: 80 }}>
+        <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.3s' }} />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 68 }}>
-        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1rem', color, lineHeight: 1 }}>
-          {outOf10}<span style={{ fontSize: '0.7rem', opacity: 0.6 }}>/10</span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 60, lineHeight: 1.2 }}>
+        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.92rem', color }}>
+          {outOf10}<span style={{ fontSize: '0.65rem', color: 'var(--text-3)', fontWeight: 500 }}>/10</span>
         </span>
-        <span style={{ fontFamily: MONO, fontSize: '0.72rem', color, opacity: 0.7, marginTop: 1 }}>
-          {score}%
-        </span>
+        <span style={{ fontFamily: MONO, fontSize: '0.65rem', color: 'var(--text-3)' }}>{score}%</span>
       </div>
-      {score >= STAR_THRESHOLD && <StarBadge size={18} />}
+      {score >= STAR_THRESHOLD && <StarBadge size={14} />}
     </div>
   )
 }
@@ -490,28 +488,28 @@ export default function EvaluationPage() {
               {isAdmin && (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setPrintModal('employees')} style={{
-                    display: 'flex', alignItems: 'center', gap: 7,
-                    padding: '7px 16px', background: 'var(--accent)', color: '#fff',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '7px 16px', background: '#1C2B4A', color: '#fff',
                     border: 'none', borderRadius: 6, cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700,
+                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600,
                   }}>
                     <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={14} />
                     طباعة موظفين
                   </button>
                   <button onClick={() => setPrintModal('stations')} style={{
-                    display: 'flex', alignItems: 'center', gap: 7,
-                    padding: '7px 16px', background: 'var(--surface)', color: 'var(--text-1)',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '7px 16px', background: 'var(--card)', color: 'var(--text-1)',
                     border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700,
+                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600,
                   }}>
                     <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={14} />
                     طباعة محطات
                   </button>
                   <button onClick={() => setPrintModal('range')} style={{
-                    display: 'flex', alignItems: 'center', gap: 7,
-                    padding: '7px 16px', background: 'var(--surface)', color: 'var(--text-1)',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '7px 16px', background: 'var(--card)', color: 'var(--text-1)',
                     border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700,
+                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600,
                   }}>
                     <Svg d="M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z" size={14} />
                     تقرير فترة
@@ -543,28 +541,30 @@ export default function EvaluationPage() {
         {tab === 'employees' && canEvalEmp && (
           <div>
             {/* فلتر + إحصاء */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input
                   value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                   placeholder="بحث: اسم، رقم وظيفي، محطة..."
-                  style={{ padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', minWidth: 220, outline: 'none' }}
+                  style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', minWidth: 220, outline: 'none' }}
                 />
                 {isAdmin && (
                   <select value={filterStation} onChange={e => setFilterStation(e.target.value)}
-                    style={{ padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }}>
+                    style={{ padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }}>
                     <option value="all">كل المحطات</option>
                     {stations.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
                   </select>
                 )}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <span style={{ padding: '4px 12px', borderRadius: 20, background: '#05966920', color: '#059669', fontSize: '0.68rem', fontWeight: 700, fontFamily: MONO }}>
-                    ✓ تم تقييمهم: {empEvals.length}
-                  </span>
-                  <span style={{ padding: '4px 12px', borderRadius: 20, background: '#DC262620', color: '#DC2626', fontSize: '0.68rem', fontWeight: 700, fontFamily: MONO }}>
-                    ✗ لم يُقيَّموا: {notEvaluated.length}
-                  </span>
-                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, background: 'var(--card)', border: '1px solid var(--border)', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#059669', flexShrink: 0 }} />
+                  تم تقييمهم: <strong style={{ fontFamily: MONO }}>{empEvals.length}</strong>
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, background: 'var(--card)', border: '1px solid var(--border)', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--border)', flexShrink: 0 }} />
+                  لم يُقيَّموا: <strong style={{ fontFamily: MONO }}>{notEvaluated.length}</strong>
+                </span>
               </div>
             </div>
 
@@ -590,58 +590,53 @@ export default function EvaluationPage() {
                 const hasStar = ev?.total_score >= STAR_THRESHOLD
                 return (
                   <div key={emp.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 14, padding: '13px 16px',
+                    display: 'flex', alignItems: 'center', gap: 16, padding: '13px 18px',
                     borderBottom: i < filteredEmployees.length - 1 ? '1px solid var(--border)' : 'none',
-                    background: ev ? 'transparent' : 'var(--surface)',
                   }}>
-                    {/* أيقونة الحالة */}
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                      background: ev ? '#05966918' : '#DC262618',
-                      border: `1px solid ${ev ? '#05966930' : '#DC262630'}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.75rem', fontWeight: 800, fontFamily: MONO,
-                      color: ev ? '#059669' : '#DC2626',
-                    }}>
-                      {ev ? '✓' : '—'}
-                    </div>
+                    {/* رقم الصف */}
+                    <span style={{ fontFamily: MONO, fontSize: '0.68rem', color: 'var(--text-3)', minWidth: 20, textAlign: 'center', flexShrink: 0 }}>{i + 1}</span>
+
+                    {/* مؤشر الحالة */}
+                    <span style={{ flexShrink: 0, width: 7, height: 7, borderRadius: '50%', background: ev ? '#059669' : 'var(--border)' }} />
 
                     {/* اسم الموظف */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>
                           {emp.full_name_ar || '—'}
-                        </p>
-                        {hasStar && <StarBadge size={14} />}
+                        </span>
+                        {hasStar && <StarBadge size={13} />}
                       </div>
-                      <p style={{ margin: '2px 0 0', fontSize: '0.66rem', color: 'var(--text-3)', fontFamily: MONO }}>
-                        {emp.job_number && <span style={{ color: 'var(--accent)', marginLeft: 6 }}>{emp.job_number}</span>}
-                        {emp.username && <span style={{ marginLeft: 6 }}>· {emp.username}</span>}
-                        {emp.station?.name_ar && <span style={{ marginLeft: 6 }}>· {emp.station.name_ar}</span>}
-                        <span style={{ marginLeft: 6, color: 'var(--text-3)' }}>· {ROLE_LABELS[emp.role]}</span>
-                      </p>
+                      <div style={{ marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {emp.job_number && (
+                          <span style={{ fontFamily: MONO, fontSize: '0.67rem', color: 'var(--text-3)', background: 'var(--surface)', border: '1px solid var(--border)', padding: '1px 6px', borderRadius: 4 }}>
+                            {emp.job_number}
+                          </span>
+                        )}
+                        {emp.station?.name_ar && <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{emp.station.name_ar}</span>}
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>· {ROLE_LABELS[emp.role]}</span>
+                      </div>
                     </div>
 
                     {/* النتيجة */}
-                    {ev && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 140 }}>
-                        <ScoreBar score={ev.total_score} />
-                      </div>
-                    )}
+                    <div style={{ minWidth: 170 }}>
+                      {ev ? <ScoreBar score={ev.total_score} /> : (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>لم يُقيَّم بعد</span>
+                      )}
+                    </div>
 
                     {/* زر التقييم */}
                     <button
                       onClick={() => setEmpModal({ employee: emp, existing: ev || null })}
                       style={{
-                        padding: '7px 16px', borderRadius: 6,
-                        background: ev ? 'var(--surface)' : 'var(--accent)',
+                        padding: '6px 18px', borderRadius: 6, flexShrink: 0,
+                        background: ev ? 'var(--card)' : '#1C2B4A',
                         border: ev ? '1px solid var(--border)' : 'none',
                         color: ev ? 'var(--text-2)' : '#fff',
-                        fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 700,
-                        cursor: 'pointer', flexShrink: 0,
-                        transition: 'all 0.12s',
+                        fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600,
+                        cursor: 'pointer',
                       }}>
-                      {ev ? 'عرض / تعديل' : 'تقييم'}
+                      {ev ? 'تعديل' : 'تقييم'}
                     </button>
                   </div>
                 )
@@ -666,35 +661,29 @@ export default function EvaluationPage() {
               const ev = stnEvals.find(x => x.station_id === stn.id)
               return (
                 <div key={stn.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 14, padding: '13px 16px',
+                  display: 'flex', alignItems: 'center', gap: 16, padding: '13px 18px',
                   borderBottom: i < stations.length - 1 ? '1px solid var(--border)' : 'none',
                 }}>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                    background: ev ? '#05966918' : '#DC262618',
-                    border: `1px solid ${ev ? '#05966930' : '#DC262630'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '0.75rem', fontWeight: 800, fontFamily: MONO,
-                    color: ev ? '#059669' : '#DC2626',
-                  }}>
-                    {ev ? '✓' : '—'}
-                  </div>
+                  <span style={{ fontFamily: MONO, fontSize: '0.68rem', color: 'var(--text-3)', minWidth: 20, textAlign: 'center', flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ flexShrink: 0, width: 7, height: 7, borderRadius: '50%', background: ev ? '#059669' : 'var(--border)' }} />
                   <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)' }}>{stn.name_ar}</p>
-                    <p style={{ margin: '2px 0 0', fontSize: '0.66rem', color: 'var(--text-3)', fontFamily: MONO }}>{stn.name_en}</p>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{stn.name_ar}</span>
+                    <div style={{ marginTop: 2, fontSize: '0.7rem', color: 'var(--text-3)' }}>{stn.name_en}</div>
                   </div>
-                  {ev && <div style={{ minWidth: 160 }}><ScoreBar score={ev.total_score} /></div>}
+                  <div style={{ minWidth: 170 }}>
+                    {ev ? <ScoreBar score={ev.total_score} /> : <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>لم تُقيَّم بعد</span>}
+                  </div>
                   <button
                     onClick={() => setStnModal({ station: stn, existing: ev || null })}
                     style={{
-                      padding: '7px 16px', borderRadius: 6,
-                      background: ev ? 'var(--surface)' : 'var(--accent)',
+                      padding: '6px 18px', borderRadius: 6, flexShrink: 0,
+                      background: ev ? 'var(--card)' : '#1C2B4A',
                       border: ev ? '1px solid var(--border)' : 'none',
                       color: ev ? 'var(--text-2)' : '#fff',
-                      fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 700,
-                      cursor: 'pointer', flexShrink: 0,
+                      fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600,
+                      cursor: 'pointer',
                     }}>
-                    {ev ? 'عرض / تعديل' : 'تقييم'}
+                    {ev ? 'تعديل' : 'تقييم'}
                   </button>
                 </div>
               )
