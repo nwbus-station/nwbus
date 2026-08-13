@@ -810,6 +810,7 @@ export default function EvaluationPage() {
           stnEvals={stnEvals}
           selMonth={selMonth}
           selYear={selYear}
+          isAdmin={isAdmin}
           onClose={() => setPrintModal(null)}
         />
       )}
@@ -819,7 +820,7 @@ export default function EvaluationPage() {
 }
 
 // ── مودال الطباعة المتقدمة ────────────────────────────────────
-function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, selYear, onClose }) {
+function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, selYear, isAdmin, onClose }) {
   const now = new Date()
   useEscClose(onClose)
   useEffect(() => {
@@ -827,6 +828,45 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = prev }
   }, [])
+
+  // محطات محفوظة (محطات / محطات الوكلاء)
+  const [savedGroups,   setSavedGroups]   = useState({ stations: new Set(), agent_stations: new Set() })
+  const [editingGroup,  setEditingGroup]  = useState(null)   // 'stations' | 'agent_stations' | null
+  const [groupDraft,    setGroupDraft]    = useState(new Set())
+  const [groupSaving,   setGroupSaving]   = useState(false)
+
+  useEffect(() => {
+    supabase.from('saved_station_groups').select('group_name, station_id').then(({ data }) => {
+      const g = { stations: new Set(), agent_stations: new Set() }
+      ;(data || []).forEach(r => { if (g[r.group_name]) g[r.group_name].add(r.station_id) })
+      setSavedGroups(g)
+    })
+  }, [])
+
+  function startEditGroup(group) {
+    setGroupDraft(new Set(savedGroups[group]))
+    setEditingGroup(group)
+    setRangeData(null)
+  }
+
+  const toggleGroupDraft = id => setGroupDraft(prev => {
+    const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s
+  })
+  const toggleAllGroupDraft = () => setGroupDraft(prev =>
+    prev.size === stations.length ? new Set() : new Set(stations.map(s => s.id))
+  )
+
+  async function saveGroup() {
+    if (!editingGroup) return
+    setGroupSaving(true)
+    await supabase.from('saved_station_groups').delete().eq('group_name', editingGroup)
+    if (groupDraft.size > 0)
+      await supabase.from('saved_station_groups').insert([...groupDraft].map(id => ({ group_name: editingGroup, station_id: id })))
+    setSavedGroups(prev => ({ ...prev, [editingGroup]: new Set(groupDraft) }))
+    setEditingGroup(null)
+    setGroupSaving(false)
+  }
+
   const [selStations,  setSelStations]  = useState(new Set(stations.map(s => s.id)))
   const [selEmpSet,    setSelEmpSet]    = useState(new Set())  // empty = all
   const [rangeStart,   setRangeStart]   = useState({ month: selMonth, year: selYear })
@@ -877,6 +917,17 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
         let q = supabase.from('employee_evaluations').select('*, employee:employee_id(full_name_ar, username, job_number, role, station:station_id(name_ar))')
           .eq('eval_month', month).eq('eval_year', year)
         if (empIds) q = q.in('employee_id', empIds)
+        const { data } = await q
+        return (data || []).map(r => ({ ...r, month, year }))
+      }))
+      setRangeData(results.flat())
+    } else if (rangeMode === 'agent_stations' || rangeMode === 'stations') {
+      const savedIds = savedGroups[rangeMode]
+      const ids = savedIds.size > 0 ? [...savedIds] : null
+      const results = await Promise.all(months.map(async ({ month, year }) => {
+        let q = supabase.from('station_evaluations').select('*, station:station_id(name_ar, name_en)')
+          .eq('eval_month', month).eq('eval_year', year)
+        if (ids) q = q.in('station_id', ids)
         const { data } = await q
         return (data || []).map(r => ({ ...r, month, year }))
       }))
@@ -935,7 +986,8 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
     if (rangeMode === 'employees') {
       printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmpSet, employees))
     } else {
-      printHtml(buildStnRangeReportHtml(rangeData, rangeStart, rangeEnd, selStnRange, stations, rangeMode === 'agent_stations' ? 'محطات الوكلاء' : 'المحطات'))
+      const label = rangeMode === 'agent_stations' ? 'محطات الوكلاء' : 'المحطات'
+      printHtml(buildStnRangeReportHtml(rangeData, rangeStart, rangeEnd, 'all', stations, label))
     }
   }
 
@@ -1052,22 +1104,54 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
               </div>
               )}
 
-              {/* بحث المحطة / محطات الوكلاء */}
-              {(rangeMode === 'stations' || rangeMode === 'agent_stations') && (
-                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>{rangeMode === 'agent_stations' ? 'محطات الوكلاء' : 'المحطة'}</p>
-                  <input className="nw-inp" value={stnRangeSearch} onChange={e => setStnRangeSearch(e.target.value)}
-                    placeholder="بحث باسم المحطة..." style={{ ...INP }} />
-                  <div style={{ display:'flex', flexDirection:'column', maxHeight:150, overflowY:'auto', overflowX:'hidden', borderRadius:12, border:'1px solid var(--border)' }}>
-                    {[{ id:'all', name_ar: rangeMode === 'agent_stations' ? 'كل محطات الوكلاء' : 'كل المحطات' }, ...stations.filter(s => !stnRangeSearch || s.name_ar.includes(stnRangeSearch) || (s.name_en||'').toLowerCase().includes(stnRangeSearch.toLowerCase()))].map((s, i, arr) => (
-                      <label key={s.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'10px 16px', background:'transparent', borderBottom: i < arr.length-1 ? '1px solid var(--border)' : 'none' }}>
-                        <input type="radio" name="stnRange" checked={selStnRange === s.id} onChange={() => setSelStnRange(s.id)} style={{ accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
-                        <span style={{ fontSize:'0.85rem', color: s.id==='all' ? 'var(--text-2)' : 'var(--text-1)', fontWeight: s.id==='all' ? 600 : 500 }}>{s.name_ar}</span>
-                      </label>
-                    ))}
+              {/* محطات / محطات الوكلاء — ثابتة محفوظة */}
+              {(rangeMode === 'stations' || rangeMode === 'agent_stations') && (() => {
+                const grpLabel = rangeMode === 'agent_stations' ? 'محطات الوكلاء' : 'المحطات'
+                const saved    = savedGroups[rangeMode]
+                const isEditing = editingGroup === rangeMode
+                const draft    = groupDraft
+                const displayed = isEditing ? draft : saved
+                const filteredStns = stations.filter(s => !stnRangeSearch || s.name_ar.includes(stnRangeSearch) || (s.name_en||'').toLowerCase().includes(stnRangeSearch.toLowerCase()))
+                return (
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                      <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>
+                        {grpLabel} {!isEditing && <span style={{ color:'var(--text-3)', fontWeight:400 }}>({saved.size} محطة)</span>}
+                      </p>
+                      {isAdmin && !isEditing && (
+                        <button onClick={() => startEditGroup(rangeMode)} style={{ fontFamily:'inherit', fontSize:'0.72rem', color:'#4A6FA5', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0 }}>تعديل التحديد</button>
+                      )}
+                      {isEditing && (
+                        <div style={{ display:'flex', gap:8 }}>
+                          <button onClick={toggleAllGroupDraft} style={{ fontFamily:'inherit', fontSize:'0.7rem', color:'#4A6FA5', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0 }}>
+                            {draft.size === stations.length ? 'إلغاء الكل' : 'تحديد الكل'}
+                          </button>
+                          <button onClick={saveGroup} disabled={groupSaving} style={{ fontFamily:'inherit', fontSize:'0.7rem', color:'#fff', background:'#4A6FA5', border:'none', borderRadius:6, padding:'3px 10px', cursor:'pointer', fontWeight:600 }}>
+                            {groupSaving ? '...' : 'حفظ'}
+                          </button>
+                          <button onClick={() => setEditingGroup(null)} style={{ fontFamily:'inherit', fontSize:'0.7rem', color:'var(--text-3)', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0 }}>إلغاء</button>
+                        </div>
+                      )}
+                    </div>
+                    <input className="nw-inp" value={stnRangeSearch} onChange={e => setStnRangeSearch(e.target.value)}
+                      placeholder="بحث باسم المحطة..." style={{ ...INP }} />
+                    <div style={{ display:'flex', flexDirection:'column', maxHeight:160, overflowY:'auto', overflowX:'hidden', borderRadius:12, border:'1px solid var(--border)' }}>
+                      {filteredStns.map((s, i, arr) => (
+                        <label key={s.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, padding:'9px 16px', background: !isEditing && displayed.has(s.id) ? 'var(--surface)' : 'transparent', borderBottom: i < arr.length-1 ? '1px solid var(--border)' : 'none', cursor: isEditing ? 'pointer' : 'default' }}>
+                          {isEditing
+                            ? <input type="checkbox" checked={draft.has(s.id)} onChange={() => toggleGroupDraft(s.id)} style={{ width:16, height:16, accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
+                            : <span style={{ width:8, height:8, borderRadius:'50%', background: displayed.has(s.id) ? '#4A6FA5' : 'var(--border)', flexShrink:0 }} />
+                          }
+                          <span style={{ flex:1, fontSize:'0.84rem', color: displayed.has(s.id) ? 'var(--text-1)' : 'var(--text-3)', fontWeight: displayed.has(s.id) ? 600 : 400 }}>{s.name_ar}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {!isEditing && saved.size === 0 && isAdmin && (
+                      <p style={{ margin:0, fontSize:'0.7rem', color:'#E57373', textAlign:'center' }}>لم يتم تحديد أي محطات — اضغط "تعديل التحديد" لتحديدها</p>
+                    )}
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* من / إلى */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
