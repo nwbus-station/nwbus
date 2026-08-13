@@ -495,7 +495,7 @@ export default function EvaluationPage() {
                     fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600,
                   }}>
                     <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={14} />
-                    طباعة موظفين
+                    طباعة تقييم الموظفين
                   </button>
                   <button onClick={() => setPrintModal('stations')} style={{
                     display: 'flex', alignItems: 'center', gap: 6,
@@ -504,7 +504,7 @@ export default function EvaluationPage() {
                     fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600,
                   }}>
                     <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={14} />
-                    طباعة محطات
+                    طباعة تقييم المحطات
                   </button>
                   <button onClick={() => setPrintModal('range')} style={{
                     display: 'flex', alignItems: 'center', gap: 6,
