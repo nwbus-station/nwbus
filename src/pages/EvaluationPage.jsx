@@ -200,7 +200,7 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
     if (error) return setErr(error.message)
     // إشعار للموظف
     const isStar = totalScore >= 98
-    await supabase.from('notifications').insert({
+    const { error: nErr } = await supabase.from('notifications').insert({
       user_id: employee.id,
       type: isStar ? 'success' : 'info',
       title: isStar ? `تقييمك ${totalScore}/10 ⭐ — ممتاز!` : `صدر تقييمك لشهر ${MONTHS_AR[month - 1]}`,
@@ -209,6 +209,7 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
         : `نتيجتك: ${totalScore}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
       is_read: false,
     })
+    if (nErr) console.error('notification insert error:', nErr.message)
     onSave()
   }
 
