@@ -361,6 +361,7 @@ export default function EvaluationPage() {
   const [myEval,       setMyEval]       = useState(null)
 
   const [filterStation, setFilterStation] = useState('all')
+  const [searchQuery,   setSearchQuery]   = useState('')
   const [loading,       setLoading]       = useState(true)
 
   const [empModal,    setEmpModal]    = useState(null)
@@ -423,9 +424,14 @@ export default function EvaluationPage() {
   useEffect(() => { load() }, [load])
 
   // ── فلترة ─────────────────────────────────────────────────
-  const filteredEmployees = filterStation === 'all'
-    ? employees
-    : employees.filter(e => e.station_id === filterStation)
+  const filteredEmployees = employees
+    .filter(e => filterStation === 'all' || e.station_id === filterStation)
+    .filter(e => !searchQuery ||
+      (e.full_name_ar || '').includes(searchQuery) ||
+      (e.job_number   || '').includes(searchQuery) ||
+      (e.username     || '').includes(searchQuery) ||
+      (e.station?.name_ar || '').includes(searchQuery)
+    )
 
   const notEvaluated = filteredEmployees.filter(e => !empEvals.find(ev => ev.employee_id === e.id))
 
@@ -533,6 +539,11 @@ export default function EvaluationPage() {
             {/* فلتر + إحصاء */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="بحث: اسم، رقم وظيفي، محطة..."
+                  style={{ padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', minWidth: 220, outline: 'none' }}
+                />
                 {isAdmin && (
                   <select value={filterStation} onChange={e => setFilterStation(e.target.value)}
                     style={{ padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }}>
@@ -807,6 +818,8 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   const [rangeEnd,   setRangeEnd]   = useState({ month: selMonth, year: selYear })
   const [rangeData,  setRangeData]  = useState(null)
   const [loading,    setLoading]    = useState(false)
+  const [stnSearch,  setStnSearch]  = useState('')
+  const [empSearch,  setEmpSearch]  = useState('')
 
   function toggleStation(id) {
     setSelStations(prev => {
@@ -847,14 +860,27 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
     setLoading(false)
   }
 
+  function printHtml(html) {
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none'
+    document.body.appendChild(iframe)
+    iframe.contentDocument.open()
+    iframe.contentDocument.write(html)
+    iframe.contentDocument.close()
+    iframe.contentWindow.focus()
+    setTimeout(() => {
+      iframe.contentWindow.print()
+      setTimeout(() => document.body.removeChild(iframe), 1000)
+    }, 300)
+  }
+
   function printEmployees() {
     const filtered = employees.filter(e => selStations.has(e.station_id))
     const rows = filtered.map(e => {
       const ev = empEvals.find(x => x.employee_id === e.id)
       return { name: e.full_name_ar, job_number: e.job_number, username: e.username, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
     })
-    const html = buildReportHtml(rows, selMonth, selYear, [...selStations], stations)
-    const w = window.open('', '_blank'); w.document.write(html); w.document.close(); w.print()
+    printHtml(buildReportHtml(rows, selMonth, selYear, [...selStations], stations))
   }
 
   function printStations() {
@@ -863,14 +889,12 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
       const ev = stnEvals.find(x => x.station_id === s.id)
       return { name: s.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
     })
-    const html = buildStationReportHtml(rows, selMonth, selYear)
-    const w = window.open('', '_blank'); w.document.write(html); w.document.close(); w.print()
+    printHtml(buildStationReportHtml(rows, selMonth, selYear))
   }
 
   function printRange() {
     if (!rangeData) return
-    const html = buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmployee, employees)
-    const w = window.open('', '_blank'); w.document.write(html); w.document.close(); w.print()
+    printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmployee, employees))
   }
 
   const inp = { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }
@@ -892,14 +916,19 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
           {/* تحديد المحطات */}
           {(type === 'employees' || type === 'stations') && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>اختر المحطات</p>
                 <button onClick={toggleAll} style={{ fontSize: '0.68rem', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
                   {selStations.size === stations.length ? 'إلغاء الكل' : 'تحديد الكل'}
                 </button>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
-                {stations.map(s => (
+              <input
+                value={stnSearch} onChange={e => setStnSearch(e.target.value)}
+                placeholder="بحث باسم المحطة..."
+                style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', outline: 'none' }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
+                {stations.filter(s => !stnSearch || s.name_ar.includes(stnSearch) || (s.name_en || '').toLowerCase().includes(stnSearch.toLowerCase())).map(s => (
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
                     <input type="checkbox" checked={selStations.has(s.id)} onChange={() => toggleStation(s.id)}
                       style={{ width: 15, height: 15, accentColor: 'var(--accent)', cursor: 'pointer' }} />
@@ -916,9 +945,22 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>الموظف</p>
+                <input
+                  value={empSearch} onChange={e => setEmpSearch(e.target.value)}
+                  placeholder="بحث بالاسم أو الرقم الوظيفي أو المحطة..."
+                  style={{ width: '100%', boxSizing: 'border-box', marginBottom: 6, padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', outline: 'none' }}
+                />
                 <select value={selEmployee} onChange={e => setSelEmployee(e.target.value)} style={{ ...inp, width: '100%' }}>
                   <option value="all">كل الموظفين</option>
-                  {employees.map(e => <option key={e.id} value={e.id}>{e.full_name_ar} {e.job_number ? `(${e.job_number})` : ''}</option>)}
+                  {employees
+                    .filter(e => !empSearch ||
+                      (e.full_name_ar || '').includes(empSearch) ||
+                      (e.job_number || '').includes(empSearch) ||
+                      (e.username || '').includes(empSearch) ||
+                      (e.station?.name_ar || '').includes(empSearch)
+                    )
+                    .map(e => <option key={e.id} value={e.id}>{e.full_name_ar} {e.job_number ? `(${e.job_number})` : ''} {e.station?.name_ar ? `· ${e.station.name_ar}` : ''}</option>)
+                  }
                 </select>
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
