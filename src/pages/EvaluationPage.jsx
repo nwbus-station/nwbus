@@ -820,6 +820,15 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   const [loading,    setLoading]    = useState(false)
   const [stnSearch,  setStnSearch]  = useState('')
   const [empSearch,  setEmpSearch]  = useState('')
+  const [empDropOpen, setEmpDropOpen] = useState(false)
+  const [empSelected, setEmpSelected] = useState(null)
+  const empRef = useRef(null)
+
+  useEffect(() => {
+    function h(e) { if (empRef.current && !empRef.current.contains(e.target)) setEmpDropOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
 
   function toggleStation(id) {
     setSelStations(prev => {
@@ -945,23 +954,64 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>الموظف</p>
-                <input
-                  value={empSearch} onChange={e => setEmpSearch(e.target.value)}
-                  placeholder="بحث بالاسم أو الرقم الوظيفي أو المحطة..."
-                  style={{ width: '100%', boxSizing: 'border-box', marginBottom: 6, padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', outline: 'none' }}
-                />
-                <select value={selEmployee} onChange={e => setSelEmployee(e.target.value)} style={{ ...inp, width: '100%' }}>
-                  <option value="all">كل الموظفين</option>
-                  {employees
-                    .filter(e => !empSearch ||
-                      (e.full_name_ar || '').includes(empSearch) ||
-                      (e.job_number || '').includes(empSearch) ||
-                      (e.username || '').includes(empSearch) ||
-                      (e.station?.name_ar || '').includes(empSearch)
-                    )
-                    .map(e => <option key={e.id} value={e.id}>{e.full_name_ar} {e.job_number ? `(${e.job_number})` : ''} {e.station?.name_ar ? `· ${e.station.name_ar}` : ''}</option>)
-                  }
-                </select>
+                <div ref={empRef} style={{ position: 'relative' }}>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      value={empSearch}
+                      onChange={e => { setEmpSearch(e.target.value); setEmpDropOpen(true); if (!e.target.value) { setSelEmployee('all'); setEmpSelected(null) } }}
+                      onFocus={() => setEmpDropOpen(true)}
+                      placeholder="ابحث بالاسم أو الرقم الوظيفي..."
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '9px 36px 9px 12px', borderRadius: 6, border: '1px solid var(--accent)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.82rem', outline: 'none' }}
+                    />
+                    {empSelected && (
+                      <button onClick={() => { setEmpSearch(''); setEmpSelected(null); setSelEmployee('all') }}
+                        style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 16, lineHeight: 1 }}>×</button>
+                    )}
+                  </div>
+                  {empSelected && (
+                    <div style={{ marginTop: 6, padding: '7px 12px', background: '#5B5BD615', border: '1px solid #5B5BD630', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-1)' }}>{empSelected.name}</span>
+                        {empSelected.job && <span style={{ fontSize: '0.68rem', color: 'var(--accent)', fontFamily: MONO, marginRight: 8 }}>{empSelected.job}</span>}
+                        {empSelected.station && <span style={{ fontSize: '0.68rem', color: 'var(--text-3)' }}> · {empSelected.station}</span>}
+                      </div>
+                    </div>
+                  )}
+                  {empDropOpen && empSearch && (
+                    <div style={{ position: 'absolute', top: '100%', right: 0, left: 0, zIndex: 10, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', maxHeight: 220, overflowY: 'auto', marginTop: 4 }}>
+                      <div
+                        onClick={() => { setSelEmployee('all'); setEmpSelected(null); setEmpSearch(''); setEmpDropOpen(false) }}
+                        style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 600 }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >كل الموظفين</div>
+                      {employees
+                        .filter(e =>
+                          (e.full_name_ar || '').includes(empSearch) ||
+                          (e.job_number   || '').includes(empSearch) ||
+                          (e.username     || '').includes(empSearch)
+                        )
+                        .slice(0, 12)
+                        .map(e => (
+                          <div key={e.id}
+                            onClick={() => { setSelEmployee(e.id); setEmpSelected({ name: e.full_name_ar, job: e.job_number, station: e.station?.name_ar }); setEmpSearch(e.full_name_ar || ''); setEmpDropOpen(false) }}
+                            style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{e.full_name_ar}</span>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              {e.job_number && <span style={{ fontSize: '0.68rem', fontFamily: MONO, color: 'var(--accent)', background: '#5B5BD612', padding: '2px 7px', borderRadius: 4 }}>{e.job_number}</span>}
+                              {e.station?.name_ar && <span style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{e.station.name_ar}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      {employees.filter(e => (e.full_name_ar||'').includes(empSearch)||(e.job_number||'').includes(empSearch)||(e.username||'').includes(empSearch)).length === 0 && (
+                        <div style={{ padding: '14px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.78rem' }}>لا نتائج</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 1 }}>
