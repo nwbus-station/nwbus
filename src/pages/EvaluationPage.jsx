@@ -27,8 +27,9 @@ const STN_CRITERIA = [
   { key: 'security',      ar: 'الحراسات الأمنية',                     weight: 15 },
   { key: 'safety',        ar: 'أدوات السلامة والإسعافات الأولية',     weight: 15 },
   { key: 'disability',    ar: 'خدمات ذوي الاحتياجات الخاصة',          weight: 15 },
-  { key: 'compliance',    ar: 'الالتزام بالتعليمات',                  weight: 10 },
-  { key: 'appearance',    ar: 'المظهر الخارجي للموظف والمحطة',        weight: 5  },
+  { key: 'compliance',    ar: 'الالتزام بالتعليمات',                  weight: 5  },
+  { key: 'emp_appear',    ar: 'المظهر الخارجي للموظف',                weight: 5  },
+  { key: 'stn_appear',    ar: 'المظهر الخارجي للمحطة',                weight: 5  },
 ]
 
 const SCORE_LABELS = ['', 'ضعيف', 'مقبول', 'جيد', 'جيد جداً', 'ممتاز']
