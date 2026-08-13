@@ -823,26 +823,19 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   const now = new Date()
   useEscClose(onClose)
   const [selStations,  setSelStations]  = useState(new Set(stations.map(s => s.id)))
-  const [selEmployee,  setSelEmployee]  = useState('all')
+  const [selEmpSet,    setSelEmpSet]    = useState(new Set())  // empty = all
   const [rangeStart,   setRangeStart]   = useState({ month: selMonth, year: selYear })
   const [rangeEnd,     setRangeEnd]     = useState({ month: selMonth, year: selYear })
   const [rangeData,    setRangeData]    = useState(null)
   const [loading,      setLoading]      = useState(false)
   const [modalErr,     setModalErr]     = useState('')
   const [stnSearch,    setStnSearch]    = useState('')
-  const [empSearch,    setEmpSearch]    = useState('')
-  const [empDropOpen,  setEmpDropOpen]  = useState(false)
-  const [empSelected,  setEmpSelected]  = useState(null)
-  const [rangeMode,    setRangeMode]    = useState('employees') // 'employees' | 'stations'
+  const [empRangeSearch, setEmpRangeSearch] = useState('')
+  const [rangeMode,    setRangeMode]    = useState('employees')
   const [selStnRange,  setSelStnRange]  = useState('all')
   const [stnRangeSearch, setStnRangeSearch] = useState('')
-  const empRef = useRef(null)
-
-  useEffect(() => {
-    function h(e) { if (empRef.current && !empRef.current.contains(e.target)) setEmpDropOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
+  const toggleEmp = id => setSelEmpSet(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  const toggleAllEmps = () => setSelEmpSet(prev => prev.size === employees.length ? new Set() : new Set(employees.map(e => e.id)))
 
   function toggleStation(id) {
     setSelStations(prev => {
@@ -874,11 +867,11 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
     setModalErr('')
     const months = monthsBetween(rangeStart, rangeEnd)
     if (rangeMode === 'employees') {
-      const empId = selEmployee === 'all' ? null : selEmployee
+      const empIds = selEmpSet.size > 0 ? [...selEmpSet] : null
       const results = await Promise.all(months.map(async ({ month, year }) => {
         let q = supabase.from('employee_evaluations').select('*, employee:employee_id(full_name_ar, username, job_number, role, station:station_id(name_ar))')
           .eq('eval_month', month).eq('eval_year', year)
-        if (empId) q = q.eq('employee_id', empId)
+        if (empIds) q = q.in('employee_id', empIds)
         const { data } = await q
         return (data || []).map(r => ({ ...r, month, year }))
       }))
@@ -935,7 +928,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   function printRange() {
     if (!rangeData || rangeData.length === 0) { setModalErr('لا توجد بيانات في هذه الفترة'); return }
     if (rangeMode === 'employees') {
-      printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmployee, employees))
+      printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmpSet, employees))
     } else {
       printHtml(buildStnRangeReportHtml(rangeData, rangeStart, rangeEnd, selStnRange, stations))
     }
@@ -1024,68 +1017,33 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
                 ))}
               </div>
 
-              {/* بحث الموظف */}
+              {/* اختيار الموظفين */}
               {rangeMode === 'employees' && (
-              <div>
-                <p style={{ margin:'0 0 10px', fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>الموظف</p>
-                <div ref={empRef} style={{ position: 'relative' }}>
-                  <div style={{ position: 'relative' }}>
-                    <input className="nw-inp"
-                      value={empSearch}
-                      onChange={e => { setEmpSearch(e.target.value); setEmpDropOpen(true); if (!e.target.value) { setSelEmployee('all'); setEmpSelected(null) } }}
-                      onFocus={() => setEmpDropOpen(true)}
-                      placeholder="ابحث بالاسم أو الرقم الوظيفي..."
-                      style={{ ...INP, paddingLeft:36 }}
-                    />
-                    {empSelected && (
-                      <button onClick={() => { setEmpSearch(''); setEmpSelected(null); setSelEmployee('all') }}
-                        style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 16, lineHeight: 1 }}>×</button>
-                    )}
-                  </div>
-                  {empSelected && (
-                    <div style={{ marginTop: 6, padding: '7px 12px', background: '#5B5BD615', border: '1px solid #5B5BD630', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-1)' }}>{empSelected.name}</span>
-                        {empSelected.job && <span style={{ fontSize: '0.68rem', color: 'var(--accent)', fontFamily: MONO, marginRight: 8 }}>{empSelected.job}</span>}
-                        {empSelected.station && <span style={{ fontSize: '0.68rem', color: 'var(--text-3)' }}> · {empSelected.station}</span>}
-                      </div>
-                    </div>
-                  )}
-                  {empDropOpen && empSearch && (
-                    <div style={{ position: 'absolute', top: '100%', right: 0, left: 0, zIndex: 10, background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', maxHeight: 220, overflowY: 'auto', marginTop: 4 }}>
-                      <div
-                        onClick={() => { setSelEmployee('all'); setEmpSelected(null); setEmpSearch(''); setEmpDropOpen(false) }}
-                        style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 600 }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >كل الموظفين</div>
-                      {employees
-                        .filter(e =>
-                          (e.full_name_ar || '').includes(empSearch) ||
-                          (e.job_number   || '').includes(empSearch) ||
-                          (e.username     || '').includes(empSearch)
-                        )
-                        .slice(0, 12)
-                        .map(e => (
-                          <div key={e.id}
-                            onClick={() => { setSelEmployee(e.id); setEmpSelected({ name: e.full_name_ar, job: e.job_number, station: e.station?.name_ar }); setEmpSearch(e.full_name_ar || ''); setEmpDropOpen(false) }}
-                            style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                          >
-                            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{e.full_name_ar}</span>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              {e.job_number && <span style={{ fontSize: '0.68rem', fontFamily: MONO, color: 'var(--accent)', background: '#5B5BD612', padding: '2px 7px', borderRadius: 4 }}>{e.job_number}</span>}
-                              {e.station?.name_ar && <span style={{ fontSize: '0.65rem', color: 'var(--text-3)' }}>{e.station.name_ar}</span>}
-                            </div>
-                          </div>
-                        ))}
-                      {employees.filter(e => (e.full_name_ar||'').includes(empSearch)||(e.job_number||'').includes(empSearch)||(e.username||'').includes(empSearch)).length === 0 && (
-                        <div style={{ padding: '14px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.78rem' }}>لا نتائج</div>
-                      )}
-                    </div>
-                  )}
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>الموظفون</p>
+                  <button onClick={toggleAllEmps} style={{ fontFamily:'inherit', fontSize:'0.72rem', color:'#4A6FA5', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0 }}>
+                    {selEmpSet.size === employees.length ? 'إلغاء الكل' : 'تحديد الكل'}
+                  </button>
                 </div>
+                <input className="nw-inp" value={empRangeSearch} onChange={e => setEmpRangeSearch(e.target.value)}
+                  placeholder="بحث بالاسم أو الرقم الوظيفي..." style={{ ...INP }} />
+                <div style={{ display:'flex', flexDirection:'column', maxHeight:200, overflowY:'auto', borderRadius:12, border:'1px solid var(--border)', overflow:'hidden' }}>
+                  {employees
+                    .filter(e => !empRangeSearch ||
+                      (e.full_name_ar||'').includes(empRangeSearch) ||
+                      (e.job_number||'').includes(empRangeSearch))
+                    .map((e, i, arr) => (
+                      <label key={e.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'9px 16px', background:'transparent', borderBottom: i < arr.length-1 ? '1px solid var(--border)' : 'none' }}>
+                        <input type="checkbox" checked={selEmpSet.has(e.id)} onChange={() => toggleEmp(e.id)} style={{ width:16, height:16, accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
+                        <span style={{ flex:1, fontSize:'0.84rem', color:'var(--text-1)', fontWeight:500 }}>{e.full_name_ar}</span>
+                        {e.job_number && <span style={{ fontSize:'0.68rem', fontFamily:MONO, color:'var(--text-3)' }}>{e.job_number}</span>}
+                      </label>
+                    ))}
+                </div>
+                <p style={{ margin:0, fontSize:'0.68rem', color:'var(--text-3)' }}>
+                  {selEmpSet.size === 0 ? 'كل الموظفين' : `${selEmpSet.size} موظف محدد`}
+                </p>
               </div>
               )}
 
@@ -1386,9 +1344,9 @@ function buildStationReportHtml(rows, month, year) {
 }
 
 // ── HTML تقرير الفترة ─────────────────────────────────────────
-function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmployee, employees) {
+function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmpSet, employees) {
   const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
-  const empName = selEmployee === 'all' ? 'جميع الموظفين' : employees.find(e => e.id === selEmployee)?.full_name_ar || ''
+  const empName = selEmpSet.size === 0 ? 'جميع الموظفين' : [...selEmpSet].map(id => employees.find(e => e.id === id)?.full_name_ar || '').filter(Boolean).join('، ')
   const sorted = [...data].sort((a,b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
 
   return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
