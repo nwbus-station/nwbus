@@ -364,8 +364,9 @@ export default function EvaluationPage() {
   const [stnEvals,     setStnEvals]     = useState([])
   const [myEval,       setMyEval]       = useState(null)
 
-  const [filterStation, setFilterStation] = useState('all')
-  const [searchQuery,   setSearchQuery]   = useState('')
+  const [filterStation,   setFilterStation]   = useState('all')
+  const [searchQuery,     setSearchQuery]     = useState('')
+  const [stnSearchQuery,  setStnSearchQuery]  = useState('')
   const [loading,       setLoading]       = useState(true)
 
   const [empModal,    setEmpModal]    = useState(null)
@@ -647,9 +648,19 @@ export default function EvaluationPage() {
 
         {/* ══ تقييم المحطات ══ */}
         {tab === 'stations' && canEvalStn && (
+          <div>
+            {/* بحث المحطات */}
+            <div style={{ marginBottom: 14 }}>
+              <input
+                value={stnSearchQuery} onChange={e => setStnSearchQuery(e.target.value)}
+                placeholder="بحث باسم المحطة..."
+                style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', minWidth: 240, outline: 'none' }}
+              />
+            </div>
+
           <div style={{ ...card, overflow: 'hidden' }}>
             <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 3, height: 14, background: 'var(--accent)', borderRadius: 2 }} />
+              <div style={{ width: 3, height: 14, background: 'var(--border)', borderRadius: 2 }} />
               <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.09em', fontFamily: MONO, textTransform: 'uppercase' }}>
                 تقييم المحطات — {MONTHS_AR[selMonth-1]} {selYear}
               </span>
@@ -657,7 +668,15 @@ export default function EvaluationPage() {
 
             {loading ? (
               <div style={{ padding: 20 }}><div style={{ height: 60, background: 'var(--surface)', borderRadius: 6 }} /></div>
-            ) : stations.map((stn, i) => {
+            ) : (() => {
+              const filtered = stations.filter(s =>
+                !stnSearchQuery ||
+                s.name_ar.includes(stnSearchQuery) ||
+                (s.name_en || '').toLowerCase().includes(stnSearchQuery.toLowerCase())
+              )
+              return filtered.length === 0 ? (
+                <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.82rem' }}>لا توجد نتائج</div>
+              ) : filtered.map((stn, i) => {
               const ev = stnEvals.find(x => x.station_id === stn.id)
               return (
                 <div key={stn.id} style={{
@@ -687,7 +706,8 @@ export default function EvaluationPage() {
                   </button>
                 </div>
               )
-            })}
+            })})()}
+          </div>
           </div>
         )}
 
