@@ -22,13 +22,13 @@ const EMP_CRITERIA = [
 
 // ── معايير تقييم المحطات ──────────────────────────────────────
 const STN_CRITERIA = [
-  { key: 'sales',         ar: 'أداء المبيعات',           weight: 20 },
-  { key: 'trips',         ar: 'انضباط الرحلات والترحيل', weight: 20 },
-  { key: 'safety',        ar: 'السلامة التشغيلية',       weight: 15 },
-  { key: 'cleanliness',   ar: 'نظافة المحطة وصيانتها',   weight: 15 },
-  { key: 'satisfaction',  ar: 'رضا الركاب',              weight: 15 },
-  { key: 'hospitality',   ar: 'الضيافة والخدمات',        weight: 10 },
-  { key: 'procedures',    ar: 'الالتزام بالإجراءات',     weight: 5  },
+  { key: 'quality',       ar: 'الجودة والمحافظة على الممتلكات',       weight: 20 },
+  { key: 'cleanliness',   ar: 'نظافة المحطة ودورات المياه',           weight: 20 },
+  { key: 'security',      ar: 'الحراسات الأمنية',                     weight: 15 },
+  { key: 'safety',        ar: 'أدوات السلامة والإسعافات الأولية',     weight: 15 },
+  { key: 'disability',    ar: 'خدمات ذوي الاحتياجات الخاصة',          weight: 15 },
+  { key: 'compliance',    ar: 'الالتزام بالتعليمات',                  weight: 10 },
+  { key: 'appearance',    ar: 'المظهر الخارجي للموظف والمحطة',        weight: 5  },
 ]
 
 const SCORE_LABELS = ['', 'ضعيف', 'مقبول', 'جيد', 'جيد جداً', 'ممتاز']
