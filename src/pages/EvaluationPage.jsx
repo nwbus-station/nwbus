@@ -935,7 +935,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
     if (rangeMode === 'employees') {
       printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmpSet, employees))
     } else {
-      printHtml(buildStnRangeReportHtml(rangeData, rangeStart, rangeEnd, selStnRange, stations))
+      printHtml(buildStnRangeReportHtml(rangeData, rangeStart, rangeEnd, selStnRange, stations, rangeMode === 'agent_stations' ? 'محطات الوكلاء' : 'المحطات'))
     }
   }
 
@@ -1011,7 +1011,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
 
               {/* تبديل الوضع — pill style */}
               <div style={{ display:'flex', gap:6 }}>
-                {[{ id:'employees', label:'موظفين' }, { id:'stations', label:'محطات' }].map(m => (
+                {[{ id:'employees', label:'موظفين' }, { id:'stations', label:'محطات' }, { id:'agent_stations', label:'محطات الوكلاء' }].map(m => (
                   <button key={m.id} className="nw-tab-btn" onClick={() => { setRangeMode(m.id); setRangeData(null) }} style={{
                     fontFamily:'inherit', padding:'8px 22px', borderRadius:50, border:'1.5px solid',
                     borderColor: rangeMode === m.id ? '#4A6FA5' : 'var(--border)',
@@ -1052,14 +1052,14 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
               </div>
               )}
 
-              {/* بحث المحطة */}
-              {rangeMode === 'stations' && (
+              {/* بحث المحطة / محطات الوكلاء */}
+              {(rangeMode === 'stations' || rangeMode === 'agent_stations') && (
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>المحطة</p>
+                  <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>{rangeMode === 'agent_stations' ? 'محطات الوكلاء' : 'المحطة'}</p>
                   <input className="nw-inp" value={stnRangeSearch} onChange={e => setStnRangeSearch(e.target.value)}
                     placeholder="بحث باسم المحطة..." style={{ ...INP }} />
                   <div style={{ display:'flex', flexDirection:'column', maxHeight:150, overflowY:'auto', overflowX:'hidden', borderRadius:12, border:'1px solid var(--border)' }}>
-                    {[{ id:'all', name_ar:'كل المحطات' }, ...stations.filter(s => !stnRangeSearch || s.name_ar.includes(stnRangeSearch) || (s.name_en||'').toLowerCase().includes(stnRangeSearch.toLowerCase()))].map((s, i, arr) => (
+                    {[{ id:'all', name_ar: rangeMode === 'agent_stations' ? 'كل محطات الوكلاء' : 'كل المحطات' }, ...stations.filter(s => !stnRangeSearch || s.name_ar.includes(stnRangeSearch) || (s.name_en||'').toLowerCase().includes(stnRangeSearch.toLowerCase()))].map((s, i, arr) => (
                       <label key={s.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'10px 16px', background:'transparent', borderBottom: i < arr.length-1 ? '1px solid var(--border)' : 'none' }}>
                         <input type="radio" name="stnRange" checked={selStnRange === s.id} onChange={() => setSelStnRange(s.id)} style={{ accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
                         <span style={{ fontSize:'0.85rem', color: s.id==='all' ? 'var(--text-2)' : 'var(--text-1)', fontWeight: s.id==='all' ? 600 : 500 }}>{s.name_ar}</span>
@@ -1394,18 +1394,19 @@ function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmpSet, employees) 
 }
 
 // ── HTML تقرير فترة المحطات ───────────────────────────────────
-function buildStnRangeReportHtml(data, rangeStart, rangeEnd, selStnRange, stations) {
+function buildStnRangeReportHtml(data, rangeStart, rangeEnd, selStnRange, stations, reportLabel = 'المحطات') {
   const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
-  const stnName = selStnRange === 'all' ? 'جميع المحطات' : stations.find(s => s.id === selStnRange)?.name_ar || ''
+  const allLabel = reportLabel === 'محطات الوكلاء' ? 'جميع محطات الوكلاء' : 'جميع المحطات'
+  const stnName = selStnRange === 'all' ? allLabel : stations.find(s => s.id === selStnRange)?.name_ar || ''
   const sorted = [...data].sort((a,b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
   return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
-<title>تقرير فترة تقييم المحطات</title>
+<title>تقرير فترة تقييم ${reportLabel}</title>
 <style>${reportCss()}</style></head><body>
 <div class="wrap">
   <div class="cover">
     <div class="cover-right">
       <div class="logo-mark"></div>
-      <div class="cover-title">تقرير فترة تقييم المحطات</div>
+      <div class="cover-title">تقرير فترة تقييم ${reportLabel}</div>
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
