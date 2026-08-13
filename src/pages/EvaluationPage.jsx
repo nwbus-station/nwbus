@@ -1061,125 +1061,262 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
   )
 }
 
-// ── HTML تقرير الطباعة ────────────────────────────────────────
+// ── CSS مشترك للتقارير ────────────────────────────────────────
+function reportCss() {
+  return `
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'IBM Plex Sans Arabic','Segoe UI',Arial,sans-serif;background:#f4f4f8;color:#111;direction:rtl}
+  .wrap{max-width:960px;margin:0 auto;padding:32px 28px}
+
+  /* ── رأس الصفحة ── */
+  .cover{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);border-radius:16px;padding:36px 40px;margin-bottom:28px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;top:-60px;left:-60px;width:260px;height:260px;border-radius:50%;background:rgba(91,91,214,0.18);pointer-events:none}
+  .cover::after{content:'';position:absolute;bottom:-80px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(91,91,214,0.12);pointer-events:none}
+  .cover-right{position:relative;z-index:1}
+  .logo-mark{font-size:13px;font-weight:800;letter-spacing:0.12em;color:rgba(255,255,255,0.45);text-transform:uppercase;margin-bottom:10px}
+  .cover-title{font-size:26px;font-weight:800;color:#fff;line-height:1.2;margin-bottom:6px}
+  .cover-sub{font-size:13px;color:rgba(255,255,255,0.55);font-weight:400}
+  .cover-left{position:relative;z-index:1;text-align:left;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+  .nw-logo{font-size:38px;font-weight:900;color:#fff;letter-spacing:-2px;line-height:1}
+  .nw-logo span{color:#5B5BD6}
+  .cover-date{font-size:11px;color:rgba(255,255,255,0.4);font-family:monospace;letter-spacing:0.06em}
+
+  /* ── إحصاءات ── */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
+  .stat{background:#fff;border-radius:12px;padding:20px 22px;border:1px solid #e8e8f0;position:relative;overflow:hidden}
+  .stat::before{content:'';position:absolute;top:0;right:0;width:4px;height:100%;border-radius:0 12px 12px 0}
+  .stat.purple::before{background:#5B5BD6}
+  .stat.green::before{background:#059669}
+  .stat.gold::before{background:#F59E0B}
+  .stat-val{font-size:32px;font-weight:900;line-height:1;margin-bottom:6px}
+  .stat-lbl{font-size:12px;color:#6b7280;font-weight:500}
+
+  /* ── الجدول ── */
+  .table-wrap{background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e8e8f0;margin-bottom:24px}
+  .table-head{background:#1a1a2e;padding:14px 20px;display:flex;align-items:center;gap:10px}
+  .table-head-dot{width:8px;height:8px;border-radius:50%;background:#5B5BD6}
+  .table-head-title{font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:0.1em;text-transform:uppercase}
+  table{width:100%;border-collapse:collapse}
+  th{background:#f8f8fc;color:#374151;padding:11px 16px;font-size:11px;font-weight:700;text-align:right;border-bottom:2px solid #e8e8f0;letter-spacing:0.04em}
+  td{padding:12px 16px;font-size:13px;border-bottom:1px solid #f0f0f6;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#fafafe}
+
+  /* ── شريط النتيجة ── */
+  .bar-wrap{display:flex;align-items:center;gap:10px;min-width:120px}
+  .bar{height:7px;border-radius:4px;flex:1;background:#eef0f6;overflow:hidden}
+  .bar-fill{height:100%;border-radius:4px}
+  .score-num{font-family:monospace;font-weight:800;font-size:14px;min-width:46px;text-align:left}
+
+  /* ── بادجات ── */
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+  .badge-star{background:#FEF3C7;color:#B45309;border:1px solid #FDE68A}
+  .badge-great{background:#EDE9FE;color:#6D28D9;border:1px solid #DDD6FE}
+  .badge-good{background:#D1FAE5;color:#065F46;border:1px solid #A7F3D0}
+  .badge-ok{background:#DBEAFE;color:#1E40AF;border:1px solid #BFDBFE}
+  .badge-avg{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
+  .badge-low{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA}
+  .badge-none{background:#F3F4F6;color:#9CA3AF;border:1px solid #E5E7EB}
+  .job-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px;font-weight:700;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE}
+  .emp-name{font-weight:700;font-size:13px;color:#111;line-height:1.3}
+  .emp-sub{font-size:11px;color:#9CA3AF;font-family:monospace;margin-top:2px}
+  .row-num{font-family:monospace;font-size:12px;color:#d1d5db;font-weight:700}
+  .station-text{font-size:12px;color:#6B7280}
+  .role-text{font-size:11px;color:#9CA3AF}
+
+  /* ── تذييل ── */
+  .footer{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:#fff;border-radius:12px;border:1px solid #e8e8f0}
+  .footer-brand{font-size:13px;font-weight:800;color:#1a1a2e;letter-spacing:-0.3px}
+  .footer-brand span{color:#5B5BD6}
+  .footer-meta{font-size:11px;color:#9CA3AF;font-family:monospace}
+
+  @media print{
+    body{background:#fff}
+    .wrap{padding:16px}
+    .cover{border-radius:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .stat{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .table-head{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .bar-fill{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .badge{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .job-tag{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }`
+}
+
+function scoreBadge(s) {
+  if (s == null) return '<span class="badge badge-none">لم يُقيَّم</span>'
+  if (s >= 98)   return '<span class="badge badge-great">متميز ★</span>'
+  if (s >= 85)   return '<span class="badge badge-good">ممتاز</span>'
+  if (s >= 70)   return '<span class="badge badge-ok">جيد جداً</span>'
+  if (s >= 50)   return '<span class="badge badge-avg">جيد</span>'
+  return '<span class="badge badge-low">يحتاج تحسين</span>'
+}
+
+function scoreBarHtml(s) {
+  if (s == null) return '<span style="color:#d1d5db">—</span>'
+  const color = s >= 98 ? '#7C3AED' : s >= 85 ? '#059669' : s >= 70 ? '#3B82F6' : s >= 50 ? '#F59E0B' : '#EF4444'
+  return `<div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:${s}%;background:${color}"></div></div><span class="score-num" style="color:${color}">${s}%</span></div>`
+}
+
+// ── HTML تقرير الموظفين ───────────────────────────────────────
 function buildReportHtml(rows, month, year, selStationIds, stations) {
+  const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
   const stnName = (!selStationIds || selStationIds.length === stations.length) ? 'جميع المحطات'
     : selStationIds.map(id => stations.find(s => s.id === id)?.name_ar).filter(Boolean).join('، ')
-  const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
-  const monthName = MONTHS_AR[month - 1]
-  const scoreColor = s => s >= 98 ? '#7C3AED' : s >= 85 ? '#059669' : s >= 70 ? '#2563EB' : s >= 50 ? '#D97706' : '#DC2626'
+  const evaluated = rows.filter(r => r.score != null).length
+  const stars = rows.filter(r => r.has_star).length
 
-  return `<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-<meta charset="UTF-8">
-<title>تقرير التقييم — ${monthName} ${year}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #111; background: #fff; }
-  .page { max-width: 900px; margin: 0 auto; padding: 40px 36px; }
-  .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 3px solid #5B5BD6; }
-  .logo { font-size: 22px; font-weight: 900; color: #111; letter-spacing: -0.5px; }
-  .header-info { text-align: left; }
-  .header-info h1 { font-size: 16px; font-weight: 800; color: #111; }
-  .header-info p { font-size: 12px; color: #666; margin-top: 4px; }
-  .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 28px; }
-  .stat-card { padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb; }
-  .stat-card .val { font-size: 24px; font-weight: 900; font-family: monospace; }
-  .stat-card .lbl { font-size: 11px; color: #666; margin-top: 4px; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #5B5BD6; color: #fff; padding: 10px 14px; font-size: 12px; font-weight: 700; text-align: right; }
-  td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #e5e7eb; }
-  tr:nth-child(even) td { background: #f9fafb; }
-  .bar-wrap { display: flex; align-items: center; gap: 8px; }
-  .bar { height: 6px; border-radius: 3px; flex: 1; background: #e5e7eb; }
-  .bar-fill { height: 100%; border-radius: 3px; }
-  .score-val { font-family: monospace; font-weight: 800; font-size: 13px; min-width: 44px; }
-  .star { color: #F59E0B; font-size: 14px; }
-  .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; font-size: 11px; color: #999; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-</style>
-</head>
-<body>
-<div class="page">
-  <div class="header">
-    <div class="logo">NW<span style="color:#5B5BD6">●</span></div>
-    <div class="header-info">
-      <h1>تقرير تقييم الموظفين</h1>
-      <p>${monthName} ${year} · ${stnName}</p>
+  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+<title>تقرير التقييم — ${MN[month-1]} ${year}</title>
+<style>${reportCss()}</style></head><body>
+<div class="wrap">
+  <div class="cover">
+    <div class="cover-right">
+      <div class="logo-mark">Northwest Bus · تقرير رسمي</div>
+      <div class="cover-title">تقرير تقييم الموظفين</div>
+      <div class="cover-sub">${MN[month-1]} ${year} &nbsp;·&nbsp; ${stnName}</div>
+    </div>
+    <div class="cover-left">
+      <div class="nw-logo">NW<span>●</span></div>
+      <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
+
   <div class="stats">
-    <div class="stat-card">
-      <div class="val" style="color:#5B5BD6">${rows.length}</div>
-      <div class="lbl">إجمالي الموظفين</div>
+    <div class="stat purple">
+      <div class="stat-val" style="color:#5B5BD6">${rows.length}</div>
+      <div class="stat-lbl">إجمالي الموظفين</div>
     </div>
-    <div class="stat-card">
-      <div class="val" style="color:#059669">${rows.filter(r => r.score != null).length}</div>
-      <div class="lbl">تم تقييمهم</div>
+    <div class="stat green">
+      <div class="stat-val" style="color:#059669">${evaluated}</div>
+      <div class="stat-lbl">تم تقييمهم</div>
     </div>
-    <div class="stat-card">
-      <div class="val" style="color:#F59E0B">${rows.filter(r => r.has_star).length}</div>
-      <div class="lbl">موظف متميز ★</div>
+    <div class="stat gold">
+      <div class="stat-val" style="color:#B45309">${stars}</div>
+      <div class="stat-lbl">موظف متميز ★</div>
     </div>
   </div>
-  <table>
-    <thead>
-      <tr><th>#</th><th>الموظف</th><th>الرقم الوظيفي</th><th>المحطة</th><th>الوظيفة</th><th>النتيجة</th><th>التقييم</th></tr>
-    </thead>
-    <tbody>
-      ${rows.map((r, i) => `
-      <tr>
-        <td style="color:#999;font-family:monospace">${i+1}</td>
-        <td><strong>${r.name || '—'}</strong>${r.has_star ? ' <span class="star">★</span>' : ''}<br><span style="font-size:11px;color:#888;font-family:monospace">${r.username || ''}</span></td>
-        <td style="font-family:monospace;color:#5B5BD6">${r.job_number || '—'}</td>
-        <td style="color:#666">${r.station || '—'}</td>
-        <td style="color:#888;font-size:12px">${r.role || '—'}</td>
-        <td>${r.score != null ? `
-          <div class="bar-wrap">
-            <div class="bar"><div class="bar-fill" style="width:${r.score}%;background:${scoreColor(r.score)}"></div></div>
-            <span class="score-val" style="color:${scoreColor(r.score)}">${r.score}%</span>
-          </div>` : '<span style="color:#ccc">—</span>'}</td>
-        <td style="font-weight:700;color:${r.score == null ? '#ccc' : r.score >= 98 ? '#7C3AED' : r.score >= 85 ? '#059669' : r.score >= 70 ? '#2563EB' : r.score >= 50 ? '#D97706' : '#DC2626'}">
-          ${r.score == null ? 'لم يُقيَّم' : r.score >= 98 ? 'متميز' : r.score >= 85 ? 'ممتاز' : r.score >= 70 ? 'جيد جداً' : r.score >= 50 ? 'جيد' : 'يحتاج تحسين'}
+
+  <div class="table-wrap">
+    <div class="table-head">
+      <div class="table-head-dot"></div>
+      <div class="table-head-title">قائمة الموظفين — ${MN[month-1]} ${year}</div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:36px">#</th>
+        <th>الموظف</th>
+        <th>الرقم الوظيفي</th>
+        <th>المحطة</th>
+        <th>الوظيفة</th>
+        <th>النتيجة</th>
+        <th>التقدير</th>
+      </tr></thead>
+      <tbody>
+      ${rows.map((r, i) => `<tr>
+        <td><span class="row-num">${i+1}</span></td>
+        <td>
+          <div class="emp-name">${r.name || '—'}${r.has_star ? ' <span style="color:#F59E0B">★</span>' : ''}</div>
+          ${r.username ? `<div class="emp-sub">${r.username}</div>` : ''}
         </td>
+        <td>${r.job_number ? `<span class="job-tag">${r.job_number}</span>` : '<span style="color:#d1d5db">—</span>'}</td>
+        <td><span class="station-text">${r.station || '—'}</span></td>
+        <td><span class="role-text">${r.role || '—'}</span></td>
+        <td>${scoreBarHtml(r.score)}</td>
+        <td>${scoreBadge(r.score)}</td>
       </tr>`).join('')}
-    </tbody>
-  </table>
-  <div class="footer">
-    <span>نظام NWBUS — www.nwstation.com</span>
-    <span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span>
+      </tbody>
+    </table>
   </div>
-</div>
-</body>
-</html>`
+
+  <div class="footer">
+    <div class="footer-brand">NW<span>●</span>BUS &nbsp;—&nbsp; www.nwstation.com</div>
+    <div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div>
+  </div>
+</div></body></html>`
 }
 
 // ── HTML تقرير المحطات ────────────────────────────────────────
 function buildStationReportHtml(rows, month, year) {
-  const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
-  const monthName = MONTHS_AR[month - 1]
-  const scoreColor = s => s >= 98 ? '#7C3AED' : s >= 85 ? '#059669' : s >= 70 ? '#2563EB' : s >= 50 ? '#D97706' : '#DC2626'
-  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير المحطات — ${monthName} ${year}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;color:#111;background:#fff}.page{max-width:900px;margin:0 auto;padding:40px 36px}.header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #5B5BD6}.logo{font-size:22px;font-weight:900;color:#111}.header-info h1{font-size:16px;font-weight:800}.header-info p{font-size:12px;color:#666;margin-top:4px}table{width:100%;border-collapse:collapse}th{background:#5B5BD6;color:#fff;padding:10px 14px;font-size:12px;font-weight:700;text-align:right}td{padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb}tr:nth-child(even) td{background:#f9fafb}.bar-wrap{display:flex;align-items:center;gap:8px}.bar{height:6px;border-radius:3px;flex:1;background:#e5e7eb}.bar-fill{height:100%;border-radius:3px}.score-val{font-family:monospace;font-weight:800;font-size:13px;min-width:44px}.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:11px;color:#999}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="page">
-<div class="header"><div class="logo">NW<span style="color:#5B5BD6">●</span></div><div class="header-info"><h1>تقرير تقييم المحطات</h1><p>${monthName} ${year}</p></div></div>
-<table><thead><tr><th>#</th><th>المحطة</th><th>النتيجة</th><th>التقييم</th></tr></thead><tbody>
-${rows.map((r,i) => `<tr><td style="color:#999;font-family:monospace">${i+1}</td><td><strong>${r.name||'—'}</strong>${r.has_star?' <span style="color:#F59E0B">★</span>':''}</td><td>${r.score!=null?`<div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:${r.score}%;background:${scoreColor(r.score)}"></div></div><span class="score-val" style="color:${scoreColor(r.score)}">${r.score}%</span></div>`:'<span style="color:#ccc">—</span>'}</td><td style="font-weight:700;color:${r.score==null?'#ccc':scoreColor(r.score)}">${r.score==null?'لم يُقيَّم':r.score>=98?'متميزة':r.score>=85?'ممتازة':r.score>=70?'جيدة جداً':r.score>=50?'جيدة':'تحتاج تحسين'}</td></tr>`).join('')}
-</tbody></table>
-<div class="footer"><span>نظام NWBUS — www.nwstation.com</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div></div></body></html>`
+  const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+  const evaluated = rows.filter(r => r.score != null).length
+  const stars = rows.filter(r => r.has_star).length
+
+  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+<title>تقرير تقييم المحطات — ${MN[month-1]} ${year}</title>
+<style>${reportCss()}</style></head><body>
+<div class="wrap">
+  <div class="cover">
+    <div class="cover-right">
+      <div class="logo-mark">Northwest Bus · تقرير رسمي</div>
+      <div class="cover-title">تقرير تقييم المحطات</div>
+      <div class="cover-sub">${MN[month-1]} ${year}</div>
+    </div>
+    <div class="cover-left">
+      <div class="nw-logo">NW<span>●</span></div>
+      <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat purple"><div class="stat-val" style="color:#5B5BD6">${rows.length}</div><div class="stat-lbl">إجمالي المحطات</div></div>
+    <div class="stat green"><div class="stat-val" style="color:#059669">${evaluated}</div><div class="stat-lbl">تم تقييمها</div></div>
+    <div class="stat gold"><div class="stat-val" style="color:#B45309">${stars}</div><div class="stat-lbl">محطة متميزة ★</div></div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-head"><div class="table-head-dot"></div><div class="table-head-title">قائمة المحطات — ${MN[month-1]} ${year}</div></div>
+    <table><thead><tr><th style="width:36px">#</th><th>المحطة</th><th>النتيجة</th><th>التقدير</th></tr></thead><tbody>
+    ${rows.map((r,i) => `<tr>
+      <td><span class="row-num">${i+1}</span></td>
+      <td><div class="emp-name">${r.name||'—'}${r.has_star?' <span style="color:#F59E0B">★</span>':''}</div></td>
+      <td>${scoreBarHtml(r.score)}</td>
+      <td>${scoreBadge(r.score)}</td>
+    </tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="footer"><div class="footer-brand">NW<span>●</span>BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
+</div></body></html>`
 }
 
 // ── HTML تقرير الفترة ─────────────────────────────────────────
 function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmployee, employees) {
-  const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+  const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
   const empName = selEmployee === 'all' ? 'جميع الموظفين' : employees.find(e => e.id === selEmployee)?.full_name_ar || ''
-  const scoreColor = s => s >= 98 ? '#7C3AED' : s >= 85 ? '#059669' : s >= 70 ? '#2563EB' : s >= 50 ? '#D97706' : '#DC2626'
   const sorted = [...data].sort((a,b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
-  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير الفترة</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;color:#111;background:#fff}.page{max-width:900px;margin:0 auto;padding:40px 36px}.header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #5B5BD6}.logo{font-size:22px;font-weight:900}.header-info h1{font-size:16px;font-weight:800}.header-info p{font-size:12px;color:#666;margin-top:4px}table{width:100%;border-collapse:collapse}th{background:#5B5BD6;color:#fff;padding:10px 14px;font-size:12px;font-weight:700;text-align:right}td{padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb}tr:nth-child(even) td{background:#f9fafb}.bar-wrap{display:flex;align-items:center;gap:8px}.bar{height:6px;border-radius:3px;flex:1;background:#e5e7eb}.bar-fill{height:100%;border-radius:3px}.score-val{font-family:monospace;font-weight:800;font-size:13px;min-width:44px}.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:11px;color:#999}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="page">
-<div class="header"><div class="logo">NW<span style="color:#5B5BD6">●</span></div><div class="header-info"><h1>تقرير فترة التقييم</h1><p>${MONTHS_AR[rangeStart.month-1]} ${rangeStart.year} — ${MONTHS_AR[rangeEnd.month-1]} ${rangeEnd.year} · ${empName}</p></div></div>
-<table><thead><tr><th>#</th><th>الموظف</th><th>الرقم الوظيفي</th><th>الشهر</th><th>المحطة</th><th>النتيجة</th><th>التقييم</th></tr></thead><tbody>
-${sorted.map((r,i) => `<tr><td style="color:#999;font-family:monospace">${i+1}</td><td><strong>${r.employee?.full_name_ar||'—'}</strong></td><td style="font-family:monospace;color:#5B5BD6">${r.employee?.job_number||'—'}</td><td style="font-family:monospace">${MONTHS_AR[r.month-1]} ${r.year}</td><td style="color:#666">${r.employee?.station?.name_ar||'—'}</td><td><div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:${r.total_score}%;background:${scoreColor(r.total_score)}"></div></div><span class="score-val" style="color:${scoreColor(r.total_score)}">${r.total_score}%</span></div></td><td style="font-weight:700;color:${scoreColor(r.total_score)}">${r.total_score>=98?'متميز':r.total_score>=85?'ممتاز':r.total_score>=70?'جيد جداً':r.total_score>=50?'جيد':'يحتاج تحسين'}</td></tr>`).join('')}
-</tbody></table>
-<div class="footer"><span>نظام NWBUS — www.nwstation.com</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div></div></body></html>`
+
+  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+<title>تقرير فترة التقييم</title>
+<style>${reportCss()}</style></head><body>
+<div class="wrap">
+  <div class="cover">
+    <div class="cover-right">
+      <div class="logo-mark">Northwest Bus · تقرير رسمي</div>
+      <div class="cover-title">تقرير فترة التقييم</div>
+      <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${empName}</div>
+    </div>
+    <div class="cover-left">
+      <div class="nw-logo">NW<span>●</span></div>
+      <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat purple"><div class="stat-val" style="color:#5B5BD6">${sorted.length}</div><div class="stat-lbl">إجمالي التقييمات</div></div>
+    <div class="stat green"><div class="stat-val" style="color:#059669">${sorted.filter(r=>r.total_score>=85).length}</div><div class="stat-lbl">ممتاز وما فوق</div></div>
+    <div class="stat gold"><div class="stat-val" style="color:#B45309">${sorted.filter(r=>r.total_score>=98).length}</div><div class="stat-lbl">متميز ★</div></div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-head"><div class="table-head-dot"></div><div class="table-head-title">سجل التقييمات</div></div>
+    <table><thead><tr><th style="width:36px">#</th><th>الموظف</th><th>الرقم الوظيفي</th><th>الشهر</th><th>المحطة</th><th>النتيجة</th><th>التقدير</th></tr></thead><tbody>
+    ${sorted.map((r,i) => `<tr>
+      <td><span class="row-num">${i+1}</span></td>
+      <td><div class="emp-name">${r.employee?.full_name_ar||'—'}</div></td>
+      <td>${r.employee?.job_number?`<span class="job-tag">${r.employee.job_number}</span>`:'<span style="color:#d1d5db">—</span>'}</td>
+      <td><span style="font-family:monospace;font-size:12px;color:#6B7280">${MN[r.month-1]} ${r.year}</span></td>
+      <td><span class="station-text">${r.employee?.station?.name_ar||'—'}</span></td>
+      <td>${scoreBarHtml(r.total_score)}</td>
+      <td>${scoreBadge(r.total_score)}</td>
+    </tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="footer"><div class="footer-brand">NW<span>●</span>BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
+</div></body></html>`
 }
