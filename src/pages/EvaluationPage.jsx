@@ -143,14 +143,20 @@ function EvalForm({ criteria, scores, onChange, notes, onNotes, disabled }) {
 // ── شريط النتيجة ───────────────────────────────────────────────
 function ScoreBar({ score }) {
   const color = score >= 98 ? '#7C3AED' : score >= 85 ? '#059669' : score >= 70 ? '#2563EB' : score >= 50 ? '#D97706' : '#DC2626'
+  const outOf10 = (score / 10).toFixed(1)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <div style={{ flex: 1, height: 8, background: 'var(--surface-2)', borderRadius: 4, overflow: 'hidden' }}>
         <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.3s' }} />
       </div>
-      <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1rem', color, minWidth: 52 }}>
-        {score}%
-      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 68 }}>
+        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1rem', color, lineHeight: 1 }}>
+          {outOf10}<span style={{ fontSize: '0.7rem', opacity: 0.6 }}>/10</span>
+        </span>
+        <span style={{ fontFamily: MONO, fontSize: '0.72rem', color, opacity: 0.7, marginTop: 1 }}>
+          {score}%
+        </span>
+      </div>
       {score >= STAR_THRESHOLD && <StarBadge size={18} />}
     </div>
   )
@@ -1142,7 +1148,14 @@ function scoreBadge(s) {
 function scoreBarHtml(s) {
   if (s == null) return '<span style="color:#d1d5db">—</span>'
   const color = s >= 98 ? '#7C3AED' : s >= 85 ? '#059669' : s >= 70 ? '#3B82F6' : s >= 50 ? '#F59E0B' : '#EF4444'
-  return `<div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:${s}%;background:${color}"></div></div><span class="score-num" style="color:${color}">${s}%</span></div>`
+  const outOf10 = (s / 10).toFixed(1)
+  return `<div class="bar-wrap">
+    <div class="bar"><div class="bar-fill" style="width:${s}%;background:${color}"></div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;min-width:54px;line-height:1.2">
+      <span style="font-weight:800;font-size:13px;color:${color}">${outOf10}<span style="font-size:10px;opacity:0.55">/10</span></span>
+      <span style="font-size:10px;color:${color};opacity:0.65">${s}%</span>
+    </div>
+  </div>`
 }
 
 // ── HTML تقرير الموظفين ───────────────────────────────────────
