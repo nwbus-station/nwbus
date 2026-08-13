@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 
 const BASE = 'https://nwbus.sa/survey.html?city='
 
@@ -188,6 +188,7 @@ export default function SurveyPage() {
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
   const params      = useParams()
+  const navigate    = useNavigate()
 
   // دعم /survey/:city مباشرة (رابط عام للراكب)
   const paramCity   = params?.city
@@ -214,7 +215,8 @@ export default function SurveyPage() {
           padding: '28px 28px 24px',
         }}>
           <div style={{ maxWidth: 860, margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{
                 width: 42, height: 42, borderRadius: 11,
                 background: `${cityInfo?.color || '#5B5BD6'}15`,
@@ -233,6 +235,24 @@ export default function SurveyPage() {
                 </p>
               </div>
             </div>
+            {profile && (
+              <button
+                onClick={() => navigate('/')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: 8, padding: '7px 14px',
+                  color: 'var(--text-2)', fontSize: '0.78rem', fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 5l-7 7 7 7"/>
+                </svg>
+                رجوع
+              </button>
+            )}
+          </div>
           </div>
         </div>
 

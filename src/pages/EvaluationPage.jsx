@@ -464,55 +464,57 @@ export default function EvaluationPage() {
   ]
 
   return (
+    <>
+    <style>{`
+      @keyframes spin { to { transform: rotate(360deg) } }
+      @media (max-width: 640px) {
+        .eval-header { padding: 12px 16px !important; }
+        .eval-header-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+        .eval-print-btns { display: grid !important; grid-template-columns: 1fr 1fr !important; }
+        .eval-print-btns button { justify-content: center !important; font-size: 0.72rem !important; padding: 8px 10px !important; }
+        .eval-month-row { flex-wrap: wrap !important; }
+        .eval-content { padding: 12px 14px !important; }
+        .eval-emp-row { flex-wrap: wrap !important; gap: 10px !important; padding: 12px 14px !important; }
+        .eval-emp-row .score-col { width: 100% !important; min-width: unset !important; order: 3; }
+        .eval-emp-row .btn-col { margin-right: auto !important; order: 4; }
+        .eval-filter-row { flex-direction: column !important; align-items: stretch !important; }
+        .eval-stats-row { flex-direction: row !important; }
+        .tab-btn { padding: 8px 12px !important; font-size: 0.75rem !important; }
+      }
+    `}</style>
     <div dir="rtl" style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }}>
 
       {/* ── رأس الصفحة ── */}
-      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '16px 28px' }}>
+      <div className="eval-header" style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '14px 24px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+
+          {/* صف الشهر + الأزرار */}
+          <div className="eval-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
             <div>
-              <h1 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-1)' }}>نظام التقييم</h1>
-              <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', fontFamily: MONO }}>
-                تقييم الموظفين والمحطات — دوري شهري
-              </p>
+              <h1 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>نظام التقييم الوظيفي</h1>
+              <p style={{ margin: '2px 0 0', fontSize: '0.67rem', color: 'var(--text-3)' }}>تقييم الموظفين والمحطات — دوري شهري</p>
             </div>
-            {/* اختيار الشهر والسنة */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div className="eval-month-row" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <select value={selMonth} onChange={e => setSelMonth(+e.target.value)}
-                style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', cursor: 'pointer' }}>
+                style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', cursor: 'pointer', minWidth: 90 }}>
                 {MONTHS_AR.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
               </select>
               <select value={selYear} onChange={e => setSelYear(+e.target.value)}
-                style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', cursor: 'pointer' }}>
+                style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', cursor: 'pointer' }}>
                 {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
               {isAdmin && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setPrintModal('employees')} style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '7px 16px', background: '#1C2B4A', color: '#fff',
-                    border: 'none', borderRadius: 6, cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600,
-                  }}>
-                    <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={14} />
-                    طباعة تقييم الموظفين
+                <div className="eval-print-btns" style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => setPrintModal('employees')} style={{ display:'flex',alignItems:'center',gap:5,padding:'7px 14px',background:'#1C2B4A',color:'#fff',border:'none',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:'0.77rem',fontWeight:600 }}>
+                    <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={13} />
+                    طباعة الموظفين
                   </button>
-                  <button onClick={() => setPrintModal('stations')} style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '7px 16px', background: 'var(--card)', color: 'var(--text-1)',
-                    border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600,
-                  }}>
-                    <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={14} />
-                    طباعة تقييم المحطات
+                  <button onClick={() => setPrintModal('stations')} style={{ display:'flex',alignItems:'center',gap:5,padding:'7px 14px',background:'var(--card)',color:'var(--text-1)',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:'0.77rem',fontWeight:600 }}>
+                    <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={13} />
+                    طباعة المحطات
                   </button>
-                  <button onClick={() => setPrintModal('range')} style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '7px 16px', background: 'var(--card)', color: 'var(--text-1)',
-                    border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600,
-                  }}>
-                    <Svg d="M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z" size={14} />
+                  <button onClick={() => setPrintModal('range')} style={{ display:'flex',alignItems:'center',gap:5,padding:'7px 14px',background:'var(--card)',color:'var(--text-1)',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:'0.77rem',fontWeight:600 }}>
+                    <Svg d="M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z" size={13} />
                     تقرير فترة
                   </button>
                 </div>
@@ -521,13 +523,13 @@ export default function EvaluationPage() {
           </div>
 
           {/* تبويبات */}
-          <div style={{ display: 'flex', gap: 0, marginTop: 16, borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
             {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
-                padding: '8px 18px', background: 'none', border: 'none',
-                borderBottom: tab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
-                color: tab === t.id ? 'var(--accent)' : 'var(--text-3)',
-                fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: tab === t.id ? 700 : 500,
+              <button className="tab-btn" key={t.id} onClick={() => setTab(t.id)} style={{
+                padding: '8px 20px', background: 'none', border: 'none', whiteSpace: 'nowrap',
+                borderBottom: tab === t.id ? '2px solid #1C2B4A' : '2px solid transparent',
+                color: tab === t.id ? '#1C2B4A' : 'var(--text-3)',
+                fontFamily: 'inherit', fontSize: '0.82rem', fontWeight: tab === t.id ? 700 : 500,
                 cursor: 'pointer', marginBottom: -1,
               }}>{t.ar}</button>
             ))}
@@ -536,7 +538,7 @@ export default function EvaluationPage() {
       </div>
 
       {/* ── المحتوى ── */}
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 28px' }}>
+      <div className="eval-content" style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 24px' }}>
 
         {/* ══ تقييم الموظفين ══ */}
         {tab === 'employees' && canEvalEmp && (
@@ -590,55 +592,35 @@ export default function EvaluationPage() {
                 const ev = empEvals.find(x => x.employee_id === emp.id)
                 const hasStar = ev?.total_score >= STAR_THRESHOLD
                 return (
-                  <div key={emp.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 16, padding: '13px 18px',
+                  <div key={emp.id} className="eval-emp-row" style={{
+                    display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px',
                     borderBottom: i < filteredEmployees.length - 1 ? '1px solid var(--border)' : 'none',
                   }}>
-                    {/* رقم الصف */}
                     <span style={{ fontFamily: MONO, fontSize: '0.68rem', color: 'var(--text-3)', minWidth: 20, textAlign: 'center', flexShrink: 0 }}>{i + 1}</span>
-
-                    {/* مؤشر الحالة */}
                     <span style={{ flexShrink: 0, width: 7, height: 7, borderRadius: '50%', background: ev ? '#059669' : 'var(--border)' }} />
-
-                    {/* اسم الموظف */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>
-                          {emp.full_name_ar || '—'}
-                        </span>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{emp.full_name_ar || '—'}</span>
                         {hasStar && <StarBadge size={13} />}
                       </div>
                       <div style={{ marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                        {emp.job_number && (
-                          <span style={{ fontFamily: MONO, fontSize: '0.67rem', color: 'var(--text-3)', background: 'var(--surface)', border: '1px solid var(--border)', padding: '1px 6px', borderRadius: 4 }}>
-                            {emp.job_number}
-                          </span>
-                        )}
+                        {emp.job_number && <span style={{ fontFamily: MONO, fontSize: '0.67rem', color: 'var(--text-3)', background: 'var(--surface)', border: '1px solid var(--border)', padding: '1px 6px', borderRadius: 4 }}>{emp.job_number}</span>}
                         {emp.station?.name_ar && <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{emp.station.name_ar}</span>}
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>· {ROLE_LABELS[emp.role]}</span>
                       </div>
                     </div>
-
-                    {/* النتيجة */}
-                    <div style={{ minWidth: 170 }}>
-                      {ev ? <ScoreBar score={ev.total_score} /> : (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>لم يُقيَّم بعد</span>
-                      )}
+                    <div className="score-col" style={{ minWidth: 160 }}>
+                      {ev ? <ScoreBar score={ev.total_score} /> : <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>لم يُقيَّم بعد</span>}
                     </div>
-
-                    {/* زر التقييم */}
-                    <button
-                      onClick={() => setEmpModal({ employee: emp, existing: ev || null })}
-                      style={{
+                    <div className="btn-col">
+                      <button onClick={() => setEmpModal({ employee: emp, existing: ev || null })} style={{
                         padding: '6px 18px', borderRadius: 6, flexShrink: 0,
                         background: ev ? 'var(--card)' : '#1C2B4A',
                         border: ev ? '1px solid var(--border)' : 'none',
                         color: ev ? 'var(--text-2)' : '#fff',
-                        fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600,
-                        cursor: 'pointer',
-                      }}>
-                      {ev ? 'تعديل' : 'تقييم'}
-                    </button>
+                        fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+                      }}>{ev ? 'تعديل' : 'تقييم'}</button>
+                    </div>
                   </div>
                 )
               })}
@@ -821,6 +803,7 @@ export default function EvaluationPage() {
         />
       )}
     </div>
+    </>
   )
 }
 
@@ -946,44 +929,60 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
 
   const inp = { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }
 
+  const MODAL_TITLES = { employees: 'طباعة تقييم الموظفين', stations: 'طباعة تقييم المحطات', range: 'تقرير فترة زمنية' }
+  const MODAL_ICONS  = { employees: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75', stations: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z', range: 'M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z' }
+
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, width: '100%', maxWidth: 540, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-1)' }}>
-            {type === 'employees' ? 'طباعة تقرير الموظفين' : type === 'stations' ? 'طباعة تقرير المحطات' : 'تقرير فترة زمنية'}
-          </p>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)' }}>
-            <Svg d="M18 6L6 18M6 6l12 12" size={18} />
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,20,40,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(3px)' }}>
+      <div style={{ background: 'var(--card)', borderRadius: 14, width: '100%', maxWidth: 600, boxShadow: '0 32px 80px rgba(0,0,0,0.3)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* رأس النافذة */}
+        <div style={{ background: '#1C2B4A', padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={MODAL_ICONS[type]} /></svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: '0.95rem', color: '#fff' }}>{MODAL_TITLES[type]}</p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.67rem', color: 'rgba(255,255,255,0.45)' }}>
+              {MONTHS_AR[selMonth-1]} {selYear}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Svg d="M18 6L6 18M6 6l12 12" size={16} />
           </button>
         </div>
 
-        <div style={{ overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* تحديد المحطات */}
           {(type === 'employees' || type === 'stations') && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>اختر المحطات</p>
-                <button onClick={toggleAll} style={{ fontSize: '0.68rem', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <p style={{ margin: 0, fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>المحطات المضمّنة في التقرير</p>
+                <button onClick={toggleAll} style={{ fontSize: '0.68rem', color: '#1C2B4A', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}>
                   {selStations.size === stations.length ? 'إلغاء الكل' : 'تحديد الكل'}
                 </button>
               </div>
               <input
                 value={stnSearch} onChange={e => setStnSearch(e.target.value)}
-                placeholder="بحث باسم المحطة..."
-                style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', outline: 'none' }}
+                placeholder="🔍  بحث باسم المحطة..."
+                style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: '8px 13px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', outline: 'none' }}
               />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 200, overflowY: 'auto', borderRadius: 8, border: '1.5px solid var(--border)', padding: '6px 0' }}>
                 {stations.filter(s => !stnSearch || s.name_ar.includes(stnSearch) || (s.name_en || '').toLowerCase().includes(stnSearch.toLowerCase())).map(s => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '7px 14px', borderRadius: 0, transition: 'background 0.1s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <input type="checkbox" checked={selStations.has(s.id)} onChange={() => toggleStation(s.id)}
-                      style={{ width: 15, height: 15, accentColor: 'var(--accent)', cursor: 'pointer' }} />
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-1)', fontWeight: 500 }}>{s.name_ar}</span>
+                      style={{ width: 15, height: 15, accentColor: '#1C2B4A', cursor: 'pointer' }} />
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-1)', fontWeight: 500 }}>{s.name_ar}</span>
                   </label>
                 ))}
               </div>
-              <p style={{ margin: '8px 0 0', fontSize: '0.65rem', color: 'var(--text-3)', fontFamily: MONO }}>{selStations.size} محطة محددة</p>
+              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: selStations.size > 0 ? '#059669' : 'var(--border)' }} />
+                <p style={{ margin: 0, fontSize: '0.67rem', color: 'var(--text-3)', fontFamily: MONO }}>{selStations.size} من {stations.length} محطة محددة</p>
+              </div>
             </div>
           )}
 
@@ -1116,23 +1115,32 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
                   </div>
                 </div>
               </div>
-              <button onClick={loadRange} disabled={loading} style={{ padding: '9px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-1)' }}>
-                {loading ? 'جارٍ التحميل…' : 'تحميل البيانات'}
+              <button onClick={loadRange} disabled={loading} style={{ padding: '10px', background: 'var(--surface)', border: '1.5px solid var(--border)', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {loading ? (
+                  <><span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: '#1C2B4A', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />جارٍ التحميل…</>
+                ) : (
+                  <><svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>تحميل البيانات</>
+                )}
               </button>
               {rangeData && (
-                <p style={{ margin: 0, fontSize: '0.72rem', color: '#059669', fontFamily: MONO }}>✓ تم تحميل {rangeData.length} تقييم</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8 }}>
+                  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: '#059669', fontFamily: MONO, fontWeight: 600 }}>تم تحميل {rangeData.length} تقييم بنجاح</p>
+                </div>
               )}
             </div>
           )}
         </div>
 
-        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '9px 20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)' }}>إلغاء</button>
+        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.67rem', color: 'var(--text-3)', marginLeft: 'auto' }}>NORTH WEST BUS</span>
+          <button onClick={onClose} style={{ padding: '9px 20px', background: 'transparent', border: '1.5px solid var(--border)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)' }}>إلغاء</button>
           <button
             disabled={type === 'range' && !rangeData}
             onClick={type === 'employees' ? printEmployees : type === 'stations' ? printStations : printRange}
-            style={{ padding: '9px 24px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700, opacity: type === 'range' && !rangeData ? 0.5 : 1 }}>
-            طباعة
+            style={{ padding: '9px 28px', background: '#1C2B4A', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700, opacity: type === 'range' && !rangeData ? 0.45 : 1, display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 2px 10px rgba(28,43,74,0.3)' }}>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            طباعة التقرير
           </button>
         </div>
       </div>
