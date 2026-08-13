@@ -958,7 +958,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
       }
     `}</style>
 
-    <div className="nw-modal-wrap" style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.35)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, backdropFilter:'blur(6px)' }}>
+    <div className="nw-modal-wrap" onKeyDown={e => e.stopPropagation()} style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.35)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, backdropFilter:'blur(6px)' }}>
       <div className="nw-modal-box" style={{ background:'var(--card)', borderRadius:20, width:'100%', maxWidth:660, boxShadow:'0 32px 80px rgba(0,0,0,0.2)', maxHeight:'90vh', display:'flex', flexDirection:'column', overflow:'hidden', animation:'nwIn 0.22s cubic-bezier(.22,.68,0,1.2)' }}>
 
         {/* ── رأس ── */}
