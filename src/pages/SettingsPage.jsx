@@ -14,10 +14,9 @@ const THEMES = [
 
 export default function SettingsPage() {
   const { i18n } = useTranslation()
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const { settings, saveSetting } = useAppSettings()
   const isAr = i18n.language === 'ar'
-  const isAdmin = profile?.role === 'general_admin'
 
   const [saved, setSaved] = useState(false)
 

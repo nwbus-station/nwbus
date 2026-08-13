@@ -185,6 +185,7 @@ const SURVEY_MOBILE_CSS = `
 export default function SurveyPage() {
   const authCtx     = (() => { try { return useAuth() } catch { return {} } })()
   const profile     = authCtx?.profile
+  const isAdmin     = authCtx?.isAdmin ?? false
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
   const params      = useParams()
@@ -194,7 +195,6 @@ export default function SurveyPage() {
   const paramCity   = params?.city
   const [activeCity, setActiveCity] = useState(paramCity || null)
 
-  const isAdmin      = profile?.role === 'general_admin'
   const detectedCity = paramCity || detectSurveyCity(profile?.station)
   const cityInfo     = SURVEY_STATIONS.find(s => s.city === detectedCity)
 

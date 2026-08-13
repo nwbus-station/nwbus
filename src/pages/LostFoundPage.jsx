@@ -961,8 +961,8 @@ function MyItemsTab({ profile }) {
 
 export default function LostFoundPage() {
   const { i18n } = useTranslation()
-  const { profile } = useAuth()
-  const isAdmin      = profile?.role === 'general_admin' || profile?.role === 'station_admin'
+  const { profile, isAdmin } = useAuth()
+  const _isAdmin = isAdmin || profile?.role === 'station_admin'
   const isEmployee   = profile?.role === 'station_employee'
   const isAr = i18n.language === 'ar'
   const [tab, setTab] = useState(isEmployee ? 'register' : 'report')

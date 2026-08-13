@@ -173,7 +173,7 @@ function SurveyWidget({ city, isAdmin, isAr, onLaunch, onNavigate }) {
 }
 
 export default function DashboardPage() {
-  const { profile } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, allowedStationIds } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const navigate = useNavigate()
@@ -187,7 +187,6 @@ export default function DashboardPage() {
   const roleLabel   = ROLE_LABELS[profile?.role]?.[isAr ? 'ar' : 'en'] ?? profile?.role
   const stationName = profile?.station ? (isAr ? profile.station.name_ar : profile.station.name_en) : null
   const userName    = profile?.full_name_ar ?? ''
-  const isAdmin     = profile?.role === 'general_admin' || profile?.role === 'station_admin'
   const [surveyCity, setSurveyCity] = useState(null)
   useEffect(() => { setSurveyCity(detectSurveyCity(profile?.station)) }, [profile?.station])
   const mods        = profile?.allowed_modules
@@ -217,6 +216,7 @@ export default function DashboardPage() {
       if (cached) setPendingLeaves(cached)
       let q = supabase.from('leaves').select('id, employee_name, station_id').eq('status', 'pending').order('created_at', { ascending: false })
       if (profile.role === 'station_admin' && profile.station_id) q = q.eq('station_id', profile.station_id)
+      else if (profile.role === 'area_supervisor' && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
       const { data, error } = await q
       if (!error && data) { setCached(key, data); setPendingLeaves(data) }
     }

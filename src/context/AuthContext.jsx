@@ -162,6 +162,8 @@ export function AuthProvider({ children }) {
   const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true
   const isEmployee        = profile?.role === 'station_employee'
   const isAreaSupervisor  = profile?.role === 'area_supervisor'
+  // isAdmin: صلاحيات المدير الكاملة في الواجهة — general_admin بدون قيود، area_supervisor مقيّد بمحطاته
+  const isAdmin            = isGeneralAdmin || isAreaSupervisor
   const canManageUsers    = isGeneralAdmin
   const canViewAllStations = isGeneralAdmin
 
@@ -179,6 +181,7 @@ export function AuthProvider({ children }) {
       isAccountant,
       isEmployee,
       isAreaSupervisor,
+      isAdmin,
       allowedStationIds,
       canManageUsers,
       canViewAllStations,

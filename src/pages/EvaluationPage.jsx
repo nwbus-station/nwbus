@@ -357,10 +357,9 @@ function StationEvalModal({ station, month, year, existing, onClose, onSave, eva
 // الصفحة الرئيسية
 // ══════════════════════════════════════════════════════════════
 export default function EvaluationPage() {
-  const { profile } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, allowedStationIds } = useAuth()
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
-  const isAdmin    = profile?.role === 'general_admin'
   const canEvalEmp = ['general_admin','station_admin','shift_supervisor','area_supervisor'].includes(profile?.role)
   const canEvalStn = ['general_admin','station_admin','area_supervisor'].includes(profile?.role)
 
@@ -397,30 +396,33 @@ export default function EvaluationPage() {
         q = q.eq('role', 'station_employee')
         const stationId = profile?.station_id || profile?.station?.id
         if (stationId) q = q.eq('station_id', stationId)
+      } else if (!isGeneralAdmin && allowedStationIds?.length) {
+        // area_supervisor — فقط موظفو محطاته
+        q = q.in('station_id', allowedStationIds)
       }
       promises.push(q.then(r => setEmployees(r.data || [])))
     }
 
     // المحطات
     if (canEvalStn) {
-      promises.push(
-        supabase.from('stations').select('id, name_ar, name_en').then(r => setStations((r.data || []).sort((a,b) => a.name_ar.localeCompare(b.name_ar, 'ar'))))
-      )
+      let q = supabase.from('stations').select('id, name_ar, name_en')
+      if (!isGeneralAdmin && allowedStationIds?.length) q = q.in('id', allowedStationIds)
+      promises.push(q.then(r => setStations((r.data || []).sort((a,b) => a.name_ar.localeCompare(b.name_ar, 'ar')))))
     }
 
     // تقييمات الموظفين
     {
       let q = supabase.from('employee_evaluations').select('*').eq('eval_month', selMonth).eq('eval_year', selYear)
       if (!isAdmin) q = q.eq('evaluator_id', profile?.id)
+      else if (!isGeneralAdmin && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
       promises.push(q.then(r => setEmpEvals(r.data || [])))
     }
 
     // تقييمات المحطات
     if (canEvalStn) {
-      promises.push(
-        supabase.from('station_evaluations').select('*').eq('eval_month', selMonth).eq('eval_year', selYear)
-          .then(r => setStnEvals(r.data || []))
-      )
+      let q = supabase.from('station_evaluations').select('*').eq('eval_month', selMonth).eq('eval_year', selYear)
+      if (!isGeneralAdmin && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
+      promises.push(q.then(r => setStnEvals(r.data || [])))
     }
 
     // تقييمي الشخصي
@@ -435,7 +437,7 @@ export default function EvaluationPage() {
 
     await Promise.all(promises)
     setLoading(false)
-  }, [selMonth, selYear, profile?.id, isAdmin, canEvalEmp, canEvalStn])
+  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, allowedStationIds, canEvalEmp, canEvalStn])
 
   useEffect(() => { load() }, [load])
 
