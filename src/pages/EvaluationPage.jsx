@@ -822,6 +822,11 @@ export default function EvaluationPage() {
 function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, selYear, onClose }) {
   const now = new Date()
   useEscClose(onClose)
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
   const [selStations,  setSelStations]  = useState(new Set(stations.map(s => s.id)))
   const [selEmpSet,    setSelEmpSet]    = useState(new Set())  // empty = all
   const [rangeStart,   setRangeStart]   = useState({ month: selMonth, year: selYear })
