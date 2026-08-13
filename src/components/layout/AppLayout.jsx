@@ -373,8 +373,14 @@ export default function AppLayout() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 12, borderInlineStart: '1px solid var(--border)' }}>
           <div style={{ textAlign: isAr ? 'right' : 'left', lineHeight: 1.2 }} className="hidden sm:block">
             <p style={{ margin: 0, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-1)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {profile?.full_name_ar}
-              {hasStar && <span style={{ color: '#F59E0B', fontSize: '0.85rem', marginRight: 4 }}>★</span>}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                {profile?.full_name_ar}
+                {hasStar && (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="#F59E0B" style={{ filter: 'drop-shadow(0 1px 3px rgba(245,158,11,0.6))', flexShrink: 0 }}>
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                )}
+              </span>
             </p>
           </div>
           <button onClick={handleLogout} title={isAr ? 'تسجيل الخروج' : 'Sign Out'}

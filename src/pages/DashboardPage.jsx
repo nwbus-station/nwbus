@@ -187,6 +187,15 @@ export default function DashboardPage() {
   const roleLabel   = ROLE_LABELS[profile?.role]?.[isAr ? 'ar' : 'en'] ?? profile?.role
   const stationName = profile?.station ? (isAr ? profile.station.name_ar : profile.station.name_en) : null
   const userName    = profile?.full_name_ar ?? ''
+
+  const [hasStar, setHasStar] = useState(false)
+  useEffect(() => {
+    if (!profile?.id) return
+    const n = new Date()
+    supabase.from('employee_evaluations').select('total_score')
+      .eq('employee_id', profile.id).eq('eval_month', n.getMonth() + 1).eq('eval_year', n.getFullYear())
+      .maybeSingle().then(({ data }) => setHasStar((data?.total_score ?? 0) >= 98))
+  }, [profile?.id])
   const [surveyCity, setSurveyCity] = useState(null)
   useEffect(() => { setSurveyCity(detectSurveyCity(profile?.station)) }, [profile?.station])
   const mods        = profile?.allowed_modules
@@ -294,9 +303,24 @@ export default function DashboardPage() {
 
           {/* الترحيب */}
           <div>
-            <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-1)' }}>
-              {greet()}{userName ? `، ${userName}` : ''}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-1)' }}>
+                {greet()}{userName ? `، ${userName}` : ''}
+              </p>
+              {hasStar && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+                  borderRadius: 20, padding: '3px 10px',
+                  boxShadow: '0 2px 8px rgba(245,158,11,0.4)',
+                }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#fff">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#fff', letterSpacing: '0.04em' }}>موظف متميز</span>
+                </div>
+              )}
+            </div>
             <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
               {dateStr}
             </p>
