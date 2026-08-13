@@ -363,8 +363,9 @@ export default function EvaluationPage() {
   const [filterStation, setFilterStation] = useState('all')
   const [loading,       setLoading]       = useState(true)
 
-  const [empModal,  setEmpModal]  = useState(null)  // { employee, existing }
-  const [stnModal,  setStnModal]  = useState(null)  // { station, existing }
+  const [empModal,    setEmpModal]    = useState(null)
+  const [stnModal,    setStnModal]    = useState(null)
+  const [printModal,  setPrintModal]  = useState(null) // 'employees' | 'stations' | 'range'
 
   // ── تحميل البيانات ─────────────────────────────────────────
   const load = useCallback(async () => {
@@ -373,7 +374,7 @@ export default function EvaluationPage() {
 
     // الموظفون
     if (canEvalEmp || isAdmin) {
-      let q = supabase.from('users').select('id, full_name_ar, role, station_id, station:station_id(name_ar, name_en)')
+      let q = supabase.from('users').select('id, full_name_ar, username, job_number, role, station_id, station:station_id(name_ar, name_en)')
         .neq('role', 'general_admin')
       if (!isAdmin) {
         q = q.eq('role', 'station_employee')
@@ -386,7 +387,7 @@ export default function EvaluationPage() {
     // المحطات
     if (canEvalStn) {
       promises.push(
-        supabase.from('stations').select('id, name_ar, name_en').then(r => setStations(r.data || []))
+        supabase.from('stations').select('id, name_ar, name_en').then(r => setStations((r.data || []).sort((a,b) => a.name_ar.localeCompare(b.name_ar, 'ar'))))
       )
     }
 
@@ -475,15 +476,35 @@ export default function EvaluationPage() {
                 {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
               {isAdmin && (
-                <button onClick={printReport} style={{
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  padding: '7px 16px', background: 'var(--accent)', color: '#fff',
-                  border: 'none', borderRadius: 6, cursor: 'pointer',
-                  fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700,
-                }}>
-                  <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={14} />
-                  طباعة تقرير
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setPrintModal('employees')} style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '7px 16px', background: 'var(--accent)', color: '#fff',
+                    border: 'none', borderRadius: 6, cursor: 'pointer',
+                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700,
+                  }}>
+                    <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={14} />
+                    طباعة موظفين
+                  </button>
+                  <button onClick={() => setPrintModal('stations')} style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '7px 16px', background: 'var(--surface)', color: 'var(--text-1)',
+                    border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer',
+                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700,
+                  }}>
+                    <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={14} />
+                    طباعة محطات
+                  </button>
+                  <button onClick={() => setPrintModal('range')} style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '7px 16px', background: 'var(--surface)', color: 'var(--text-1)',
+                    border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer',
+                    fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700,
+                  }}>
+                    <Svg d="M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z" size={14} />
+                    تقرير فترة
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -576,8 +597,11 @@ export default function EvaluationPage() {
                         </p>
                         {hasStar && <StarBadge size={14} />}
                       </div>
-                      <p style={{ margin: '2px 0 0', fontSize: '0.66rem', color: 'var(--text-3)' }}>
-                        {ROLE_LABELS[emp.role]} · {emp.stations?.name_ar}
+                      <p style={{ margin: '2px 0 0', fontSize: '0.66rem', color: 'var(--text-3)', fontFamily: MONO }}>
+                        {emp.job_number && <span style={{ color: 'var(--accent)', marginLeft: 6 }}>{emp.job_number}</span>}
+                        {emp.username && <span style={{ marginLeft: 6 }}>· {emp.username}</span>}
+                        {emp.station?.name_ar && <span style={{ marginLeft: 6 }}>· {emp.station.name_ar}</span>}
+                        <span style={{ marginLeft: 6, color: 'var(--text-3)' }}>· {ROLE_LABELS[emp.role]}</span>
                       </p>
                     </div>
 
@@ -758,13 +782,197 @@ export default function EvaluationPage() {
           onSave={() => { setStnModal(null); load() }}
         />
       )}
+      {printModal && (
+        <PrintModal
+          type={printModal}
+          employees={employees}
+          stations={stations}
+          empEvals={empEvals}
+          stnEvals={stnEvals}
+          selMonth={selMonth}
+          selYear={selYear}
+          onClose={() => setPrintModal(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── مودال الطباعة المتقدمة ────────────────────────────────────
+function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, selYear, onClose }) {
+  const now = new Date()
+  const [selStations, setSelStations] = useState(new Set(stations.map(s => s.id)))
+  const [selEmployee, setSelEmployee] = useState('all')
+  const [rangeStart, setRangeStart] = useState({ month: selMonth, year: selYear })
+  const [rangeEnd,   setRangeEnd]   = useState({ month: selMonth, year: selYear })
+  const [rangeData,  setRangeData]  = useState(null)
+  const [loading,    setLoading]    = useState(false)
+
+  function toggleStation(id) {
+    setSelStations(prev => {
+      const n = new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  }
+
+  function toggleAll() {
+    if (selStations.size === stations.length) setSelStations(new Set())
+    else setSelStations(new Set(stations.map(s => s.id)))
+  }
+
+  // توليد قائمة أشهر بين فترتين
+  function monthsBetween(s, e) {
+    const months = []
+    let y = s.year, m = s.month
+    while (y < e.year || (y === e.year && m <= e.month)) {
+      months.push({ month: m, year: y })
+      m++; if (m > 12) { m = 1; y++ }
+    }
+    return months
+  }
+
+  async function loadRange() {
+    setLoading(true)
+    const months = monthsBetween(rangeStart, rangeEnd)
+    const empId = selEmployee === 'all' ? null : selEmployee
+    const results = await Promise.all(months.map(async ({ month, year }) => {
+      let q = supabase.from('employee_evaluations').select('*, employee:employee_id(full_name_ar, username, job_number, role, station:station_id(name_ar))')
+        .eq('eval_month', month).eq('eval_year', year)
+      if (empId) q = q.eq('employee_id', empId)
+      const { data } = await q
+      return (data || []).map(r => ({ ...r, month, year }))
+    }))
+    setRangeData(results.flat())
+    setLoading(false)
+  }
+
+  function printEmployees() {
+    const filtered = employees.filter(e => selStations.has(e.station_id))
+    const rows = filtered.map(e => {
+      const ev = empEvals.find(x => x.employee_id === e.id)
+      return { name: e.full_name_ar, job_number: e.job_number, username: e.username, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
+    })
+    const html = buildReportHtml(rows, selMonth, selYear, [...selStations], stations)
+    const w = window.open('', '_blank'); w.document.write(html); w.document.close(); w.print()
+  }
+
+  function printStations() {
+    const filtered = stations.filter(s => selStations.has(s.id))
+    const rows = filtered.map(s => {
+      const ev = stnEvals.find(x => x.station_id === s.id)
+      return { name: s.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
+    })
+    const html = buildStationReportHtml(rows, selMonth, selYear)
+    const w = window.open('', '_blank'); w.document.write(html); w.document.close(); w.print()
+  }
+
+  function printRange() {
+    if (!rangeData) return
+    const html = buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmployee, employees)
+    const w = window.open('', '_blank'); w.document.write(html); w.document.close(); w.print()
+  }
+
+  const inp = { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, width: '100%', maxWidth: 540, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-1)' }}>
+            {type === 'employees' ? 'طباعة تقرير الموظفين' : type === 'stations' ? 'طباعة تقرير المحطات' : 'تقرير فترة زمنية'}
+          </p>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)' }}>
+            <Svg d="M18 6L6 18M6 6l12 12" size={18} />
+          </button>
+        </div>
+
+        <div style={{ overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* تحديد المحطات */}
+          {(type === 'employees' || type === 'stations') && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>اختر المحطات</p>
+                <button onClick={toggleAll} style={{ fontSize: '0.68rem', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
+                  {selStations.size === stations.length ? 'إلغاء الكل' : 'تحديد الكل'}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
+                {stations.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '4px 0' }}>
+                    <input type="checkbox" checked={selStations.has(s.id)} onChange={() => toggleStation(s.id)}
+                      style={{ width: 15, height: 15, accentColor: 'var(--accent)', cursor: 'pointer' }} />
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-1)', fontWeight: 500 }}>{s.name_ar}</span>
+                  </label>
+                ))}
+              </div>
+              <p style={{ margin: '8px 0 0', fontSize: '0.65rem', color: 'var(--text-3)', fontFamily: MONO }}>{selStations.size} محطة محددة</p>
+            </div>
+          )}
+
+          {/* تقرير فترة */}
+          {type === 'range' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>الموظف</p>
+                <select value={selEmployee} onChange={e => setSelEmployee(e.target.value)} style={{ ...inp, width: '100%' }}>
+                  <option value="all">كل الموظفين</option>
+                  {employees.map(e => <option key={e.id} value={e.id}>{e.full_name_ar} {e.job_number ? `(${e.job_number})` : ''}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>من</p>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select value={rangeStart.month} onChange={e => setRangeStart(p => ({ ...p, month: +e.target.value }))} style={inp}>
+                      {MONTHS_AR.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
+                    </select>
+                    <select value={rangeStart.year} onChange={e => setRangeStart(p => ({ ...p, year: +e.target.value }))} style={inp}>
+                      {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>إلى</p>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select value={rangeEnd.month} onChange={e => setRangeEnd(p => ({ ...p, month: +e.target.value }))} style={inp}>
+                      {MONTHS_AR.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
+                    </select>
+                    <select value={rangeEnd.year} onChange={e => setRangeEnd(p => ({ ...p, year: +e.target.value }))} style={inp}>
+                      {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <button onClick={loadRange} disabled={loading} style={{ padding: '9px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.8rem', color: 'var(--text-1)' }}>
+                {loading ? 'جارٍ التحميل…' : 'تحميل البيانات'}
+              </button>
+              {rangeData && (
+                <p style={{ margin: 0, fontSize: '0.72rem', color: '#059669', fontFamily: MONO }}>✓ تم تحميل {rangeData.length} تقييم</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '9px 20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)' }}>إلغاء</button>
+          <button
+            disabled={type === 'range' && !rangeData}
+            onClick={type === 'employees' ? printEmployees : type === 'stations' ? printStations : printRange}
+            style={{ padding: '9px 24px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700, opacity: type === 'range' && !rangeData ? 0.5 : 1 }}>
+            طباعة
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
 
 // ── HTML تقرير الطباعة ────────────────────────────────────────
-function buildReportHtml(rows, month, year, filterStation, stations) {
-  const stnName = filterStation === 'all' ? 'جميع المحطات' : stations.find(s => s.id === filterStation)?.name_ar || ''
+function buildReportHtml(rows, month, year, selStationIds, stations) {
+  const stnName = (!selStationIds || selStationIds.length === stations.length) ? 'جميع المحطات'
+    : selStationIds.map(id => stations.find(s => s.id === id)?.name_ar).filter(Boolean).join('، ')
   const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
   const monthName = MONTHS_AR[month - 1]
   const scoreColor = s => s >= 98 ? '#7C3AED' : s >= 85 ? '#059669' : s >= 70 ? '#2563EB' : s >= 50 ? '#D97706' : '#DC2626'
@@ -825,14 +1033,16 @@ function buildReportHtml(rows, month, year, filterStation, stations) {
   </div>
   <table>
     <thead>
-      <tr><th>#</th><th>الموظف</th><th>المحطة</th><th>النتيجة</th><th>التقييم</th></tr>
+      <tr><th>#</th><th>الموظف</th><th>الرقم الوظيفي</th><th>المحطة</th><th>الوظيفة</th><th>النتيجة</th><th>التقييم</th></tr>
     </thead>
     <tbody>
       ${rows.map((r, i) => `
       <tr>
         <td style="color:#999;font-family:monospace">${i+1}</td>
-        <td><strong>${r.name || '—'}</strong>${r.has_star ? ' <span class="star">★</span>' : ''}</td>
+        <td><strong>${r.name || '—'}</strong>${r.has_star ? ' <span class="star">★</span>' : ''}<br><span style="font-size:11px;color:#888;font-family:monospace">${r.username || ''}</span></td>
+        <td style="font-family:monospace;color:#5B5BD6">${r.job_number || '—'}</td>
         <td style="color:#666">${r.station || '—'}</td>
+        <td style="color:#888;font-size:12px">${r.role || '—'}</td>
         <td>${r.score != null ? `
           <div class="bar-wrap">
             <div class="bar"><div class="bar-fill" style="width:${r.score}%;background:${scoreColor(r.score)}"></div></div>
@@ -851,4 +1061,33 @@ function buildReportHtml(rows, month, year, filterStation, stations) {
 </div>
 </body>
 </html>`
+}
+
+// ── HTML تقرير المحطات ────────────────────────────────────────
+function buildStationReportHtml(rows, month, year) {
+  const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+  const monthName = MONTHS_AR[month - 1]
+  const scoreColor = s => s >= 98 ? '#7C3AED' : s >= 85 ? '#059669' : s >= 70 ? '#2563EB' : s >= 50 ? '#D97706' : '#DC2626'
+  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير المحطات — ${monthName} ${year}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;color:#111;background:#fff}.page{max-width:900px;margin:0 auto;padding:40px 36px}.header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #5B5BD6}.logo{font-size:22px;font-weight:900;color:#111}.header-info h1{font-size:16px;font-weight:800}.header-info p{font-size:12px;color:#666;margin-top:4px}table{width:100%;border-collapse:collapse}th{background:#5B5BD6;color:#fff;padding:10px 14px;font-size:12px;font-weight:700;text-align:right}td{padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb}tr:nth-child(even) td{background:#f9fafb}.bar-wrap{display:flex;align-items:center;gap:8px}.bar{height:6px;border-radius:3px;flex:1;background:#e5e7eb}.bar-fill{height:100%;border-radius:3px}.score-val{font-family:monospace;font-weight:800;font-size:13px;min-width:44px}.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:11px;color:#999}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="page">
+<div class="header"><div class="logo">NW<span style="color:#5B5BD6">●</span></div><div class="header-info"><h1>تقرير تقييم المحطات</h1><p>${monthName} ${year}</p></div></div>
+<table><thead><tr><th>#</th><th>المحطة</th><th>النتيجة</th><th>التقييم</th></tr></thead><tbody>
+${rows.map((r,i) => `<tr><td style="color:#999;font-family:monospace">${i+1}</td><td><strong>${r.name||'—'}</strong>${r.has_star?' <span style="color:#F59E0B">★</span>':''}</td><td>${r.score!=null?`<div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:${r.score}%;background:${scoreColor(r.score)}"></div></div><span class="score-val" style="color:${scoreColor(r.score)}">${r.score}%</span></div>`:'<span style="color:#ccc">—</span>'}</td><td style="font-weight:700;color:${r.score==null?'#ccc':scoreColor(r.score)}">${r.score==null?'لم يُقيَّم':r.score>=98?'متميزة':r.score>=85?'ممتازة':r.score>=70?'جيدة جداً':r.score>=50?'جيدة':'تحتاج تحسين'}</td></tr>`).join('')}
+</tbody></table>
+<div class="footer"><span>نظام NWBUS — www.nwstation.com</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div></div></body></html>`
+}
+
+// ── HTML تقرير الفترة ─────────────────────────────────────────
+function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmployee, employees) {
+  const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+  const empName = selEmployee === 'all' ? 'جميع الموظفين' : employees.find(e => e.id === selEmployee)?.full_name_ar || ''
+  const scoreColor = s => s >= 98 ? '#7C3AED' : s >= 85 ? '#059669' : s >= 70 ? '#2563EB' : s >= 50 ? '#D97706' : '#DC2626'
+  const sorted = [...data].sort((a,b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+  return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير الفترة</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;color:#111;background:#fff}.page{max-width:900px;margin:0 auto;padding:40px 36px}.header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid #5B5BD6}.logo{font-size:22px;font-weight:900}.header-info h1{font-size:16px;font-weight:800}.header-info p{font-size:12px;color:#666;margin-top:4px}table{width:100%;border-collapse:collapse}th{background:#5B5BD6;color:#fff;padding:10px 14px;font-size:12px;font-weight:700;text-align:right}td{padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb}tr:nth-child(even) td{background:#f9fafb}.bar-wrap{display:flex;align-items:center;gap:8px}.bar{height:6px;border-radius:3px;flex:1;background:#e5e7eb}.bar-fill{height:100%;border-radius:3px}.score-val{font-family:monospace;font-weight:800;font-size:13px;min-width:44px}.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:11px;color:#999}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body><div class="page">
+<div class="header"><div class="logo">NW<span style="color:#5B5BD6">●</span></div><div class="header-info"><h1>تقرير فترة التقييم</h1><p>${MONTHS_AR[rangeStart.month-1]} ${rangeStart.year} — ${MONTHS_AR[rangeEnd.month-1]} ${rangeEnd.year} · ${empName}</p></div></div>
+<table><thead><tr><th>#</th><th>الموظف</th><th>الرقم الوظيفي</th><th>الشهر</th><th>المحطة</th><th>النتيجة</th><th>التقييم</th></tr></thead><tbody>
+${sorted.map((r,i) => `<tr><td style="color:#999;font-family:monospace">${i+1}</td><td><strong>${r.employee?.full_name_ar||'—'}</strong></td><td style="font-family:monospace;color:#5B5BD6">${r.employee?.job_number||'—'}</td><td style="font-family:monospace">${MONTHS_AR[r.month-1]} ${r.year}</td><td style="color:#666">${r.employee?.station?.name_ar||'—'}</td><td><div class="bar-wrap"><div class="bar"><div class="bar-fill" style="width:${r.total_score}%;background:${scoreColor(r.total_score)}"></div></div><span class="score-val" style="color:${scoreColor(r.total_score)}">${r.total_score}%</span></div></td><td style="font-weight:700;color:${scoreColor(r.total_score)}">${r.total_score>=98?'متميز':r.total_score>=85?'ممتاز':r.total_score>=70?'جيد جداً':r.total_score>=50?'جيد':'يحتاج تحسين'}</td></tr>`).join('')}
+</tbody></table>
+<div class="footer"><span>نظام NWBUS — www.nwstation.com</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div></div></body></html>`
 }
