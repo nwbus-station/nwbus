@@ -190,14 +190,25 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
       eval_month: month, eval_year: year,
       scores, notes, total_score: totalScore,
     }
-    let error
+    let error, data
     if (existing) {
       ;({ error } = await supabase.from('employee_evaluations').update(payload).eq('id', existing.id))
     } else {
-      ;({ error } = await supabase.from('employee_evaluations').insert(payload))
+      ;({ error, data } = await supabase.from('employee_evaluations').insert(payload).select().maybeSingle())
     }
     setSaving(false)
     if (error) return setErr(error.message)
+    // إشعار للموظف
+    const isStar = totalScore >= 98
+    await supabase.from('notifications').insert({
+      user_id: employee.id,
+      type: isStar ? 'success' : 'info',
+      title: isStar ? `تقييمك ${totalScore}/10 ⭐ — ممتاز!` : `صدر تقييمك لشهر ${MONTHS_AR[month - 1]}`,
+      body: isStar
+        ? `حصلت على النجمة المميزة بنتيجة ${totalScore}/10`
+        : `نتيجتك: ${totalScore}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
+      is_read: false,
+    })
     onSave()
   }
 
@@ -425,11 +436,11 @@ export default function EvaluationPage() {
       promises.push(q.then(r => setStnEvals(r.data || [])))
     }
 
-    // تقييمي الشخصي
-    if (!isAdmin) {
+    // تقييمي الشخصي — لجميع المستخدمين
+    if (profile?.id) {
       promises.push(
         supabase.from('employee_evaluations').select('*, evaluator:evaluator_id(full_name_ar, role)')
-          .eq('employee_id', profile?.id).eq('eval_month', selMonth).eq('eval_year', selYear)
+          .eq('employee_id', profile.id).eq('eval_month', selMonth).eq('eval_year', selYear)
           .maybeSingle()
           .then(r => setMyEval(r.data))
       )
