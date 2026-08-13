@@ -1077,9 +1077,9 @@ function reportCss() {
   .logo-mark{font-size:13px;font-weight:800;letter-spacing:0.12em;color:rgba(255,255,255,0.45);text-transform:uppercase;margin-bottom:10px}
   .cover-title{font-size:26px;font-weight:800;color:#fff;line-height:1.2;margin-bottom:6px}
   .cover-sub{font-size:13px;color:rgba(255,255,255,0.55);font-weight:400}
-  .cover-left{position:relative;z-index:1;text-align:left;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-  .nw-logo{font-size:38px;font-weight:900;color:#fff;letter-spacing:-2px;line-height:1}
-  .nw-logo span{color:#5B5BD6}
+  .cover-left{position:relative;z-index:1;text-align:left;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+  .nw-logo{font-size:13px;font-weight:900;color:#fff;letter-spacing:0.18em;line-height:1.2;text-transform:uppercase;opacity:0.9}
+  .nw-logo-line{width:40px;height:2px;background:#5B5BD6;border-radius:1px;margin:4px 0}
   .cover-date{font-size:11px;color:rgba(255,255,255,0.4);font-family:monospace;letter-spacing:0.06em}
 
   /* ── إحصاءات ── */
@@ -1177,7 +1177,8 @@ function buildReportHtml(rows, month, year, selStationIds, stations) {
       <div class="cover-sub">${MN[month-1]} ${year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NW<span>●</span></div>
+      <div class="nw-logo">NORTH WEST BUS</div>
+      <div class="nw-logo-line"></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -1230,7 +1231,7 @@ function buildReportHtml(rows, month, year, selStationIds, stations) {
   </div>
 
   <div class="footer">
-    <div class="footer-brand">NW<span>●</span>BUS &nbsp;—&nbsp; www.nwstation.com</div>
+    <div class="footer-brand">NORTH WEST BUS &nbsp;—&nbsp; www.nwstation.com</div>
     <div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div>
   </div>
 </div></body></html>`
@@ -1253,7 +1254,8 @@ function buildStationReportHtml(rows, month, year) {
       <div class="cover-sub">${MN[month-1]} ${year}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NW<span>●</span></div>
+      <div class="nw-logo">NORTH WEST BUS</div>
+      <div class="nw-logo-line"></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -1273,7 +1275,7 @@ function buildStationReportHtml(rows, month, year) {
     </tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><div class="footer-brand">NW<span>●</span>BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
+  <div class="footer"><div class="footer-brand">NORTH WEST BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
 </div></body></html>`
 }
 
@@ -1294,7 +1296,8 @@ function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmployee, employees
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${empName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NW<span>●</span></div>
+      <div class="nw-logo">NORTH WEST BUS</div>
+      <div class="nw-logo-line"></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -1317,6 +1320,6 @@ function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmployee, employees
     </tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><div class="footer-brand">NW<span>●</span>BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
+  <div class="footer"><div class="footer-brand">NORTH WEST BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
 </div></body></html>`
 }
