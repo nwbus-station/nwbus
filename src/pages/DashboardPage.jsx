@@ -197,11 +197,11 @@ export default function DashboardPage() {
     async function fetchStar() {
       // موظف
       const { data: empData } = await supabase.from('employee_evaluations').select('total_score')
-        .eq('employee_id', profile.id).eq('eval_month', m).eq('eval_year', y).maybeSingle()
+        .eq('employee_id', profile.id).eq('eval_month', m).eq('eval_year', y).order('created_at', { ascending: false }).limit(1).maybeSingle()
       if (empData) { setHasStar((empData.total_score ?? 0) >= 98); return }
       // مشرف
       const { data: supData } = await supabase.from('supervisor_evaluations').select('total_score')
-        .eq('supervisor_id', profile.id).eq('eval_month', m).eq('eval_year', y).maybeSingle()
+        .eq('supervisor_id', profile.id).eq('eval_month', m).eq('eval_year', y).order('created_at', { ascending: false }).limit(1).maybeSingle()
       setHasStar((supData?.total_score ?? 0) >= 98)
     }
     fetchStar()

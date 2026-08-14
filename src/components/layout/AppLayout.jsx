@@ -292,8 +292,8 @@ export default function AppLayout() {
     const m = now.getMonth() + 1, y = now.getFullYear()
     async function fetchStar() {
       const [{ data: emp }, { data: sup }] = await Promise.all([
-        supabase.from('employee_evaluations').select('total_score').eq('employee_id', profile.id).eq('eval_month', m).eq('eval_year', y).maybeSingle(),
-        supabase.from('supervisor_evaluations').select('total_score').eq('supervisor_id', profile.id).eq('eval_month', m).eq('eval_year', y).maybeSingle(),
+        supabase.from('employee_evaluations').select('total_score').eq('employee_id', profile.id).eq('eval_month', m).eq('eval_year', y).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('supervisor_evaluations').select('total_score').eq('supervisor_id', profile.id).eq('eval_month', m).eq('eval_year', y).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ])
       const score = emp?.total_score ?? sup?.total_score ?? 0
       const star = score >= 98
