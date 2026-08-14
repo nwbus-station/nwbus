@@ -770,6 +770,7 @@ export default function EvaluationPage() {
                 <div className="ev-print-row" style={{ display: 'flex', gap: 6 }}>
                   {[
                     { labelAr: 'طباعة الموظفين', labelEn: 'Print Employees', type: 'employees', primary: true },
+                    { labelAr: 'طباعة المشرفين', labelEn: 'Print Supervisors', type: 'supervisors', primary: false },
                     { labelAr: 'طباعة المحطات', labelEn: 'Print Stations', type: 'stations', primary: false },
                     { labelAr: 'تقرير فترة', labelEn: 'Period Report', type: 'range', primary: false },
                   ].map(b => (
@@ -1123,8 +1124,10 @@ export default function EvaluationPage() {
         <PrintModal
           type={printModal}
           employees={employees}
+          supervisors={supervisors}
           stations={stations}
           empEvals={empEvals}
+          supEvals={supEvals}
           stnEvals={stnEvals}
           selMonth={selMonth}
           selYear={selYear}
@@ -1138,7 +1141,7 @@ export default function EvaluationPage() {
 }
 
 // ── مودال الطباعة المتقدمة ────────────────────────────────────
-function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, selYear, isAdmin, onClose }) {
+function PrintModal({ type, employees, supervisors = [], stations, empEvals, supEvals = [], stnEvals, selMonth, selYear, isAdmin, onClose }) {
   const now = new Date()
   useEscClose(onClose)
   useEffect(() => {
@@ -1287,6 +1290,15 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
     printHtml(buildReportHtml(rows, selMonth, selYear, [...selStations], stations))
   }
 
+  function printSupervisors() {
+    const rows = supervisors.map(s => {
+      const ev = supEvals.find(x => x.supervisor_id === s.id)
+      const roleLabel = s.role === 'area_supervisor' ? 'مشرف المنطقة' : 'مشرف المحطة'
+      return { name: s.full_name_ar, job_number: s.job_number, username: s.username, station: s.station?.name_ar, role: roleLabel, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
+    })
+    printHtml(buildReportHtml(rows, selMonth, selYear, [], stations))
+  }
+
   function printStations() {
     const filtered = stations.filter(s => selStations.has(s.id))
     const rows = filtered
@@ -1311,7 +1323,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
 
   const inp = { padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }
 
-  const MODAL_TITLES = { employees: 'طباعة تقييم الموظفين', stations: 'طباعة تقييم المحطات', range: 'تقرير فترة زمنية' }
+  const MODAL_TITLES = { employees: 'طباعة تقييم الموظفين', supervisors: 'طباعة تقييم المشرفين', stations: 'طباعة تقييم المحطات', range: 'تقرير فترة زمنية' }
   const F = { fontFamily: 'inherit' }
   const INP = { ...F, width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontSize: '0.85rem', outline: 'none' }
 
@@ -1525,7 +1537,7 @@ function PrintModal({ type, employees, stations, empEvals, stnEvals, selMonth, s
           </button>
           <button
             disabled={type === 'range' && !rangeData}
-            onClick={type === 'employees' ? printEmployees : type === 'stations' ? printStations : printRange}
+            onClick={type === 'employees' ? printEmployees : type === 'supervisors' ? printSupervisors : type === 'stations' ? printStations : printRange}
             style={{ fontFamily:'inherit', flex:2, padding:'12px', borderRadius:12, border:'none', background:'#4A6FA5', color:'#fff', fontSize:'0.88rem', fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, opacity: type==='range' && !rangeData ? 0.4 : 1 }}>
             <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             طباعة التقرير
