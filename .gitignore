@@ -10,3 +10,5 @@ dist/
 # ملفات النظام
 .DS_Store
 *.log
+.vercel
+.env*

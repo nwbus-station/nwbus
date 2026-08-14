@@ -77,12 +77,13 @@ function NotificationBell({ profile }) {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [profile?.id])
-
-  // polling كل 30 ثانية
   useEffect(() => {
-    const t = setInterval(load, 30000)
-    return () => clearInterval(t)
+    if (!profile?.id) return
+    load()
+    const ch = supabase.channel('notifs-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` }, load)
+      .subscribe()
+    return () => supabase.removeChannel(ch)
   }, [profile?.id])
 
   useEffect(() => {
