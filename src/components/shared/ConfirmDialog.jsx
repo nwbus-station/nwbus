@@ -1,9 +1,5 @@
 import { useEffect } from 'react'
 
-/**
- * نافذة تأكيد داخل التطبيق بدلاً من window.confirm
- * الاستخدام: <ConfirmDialog message="..." onConfirm={fn} onCancel={fn} />
- */
 export default function ConfirmDialog({ message, confirmLabel = 'حسناً', cancelLabel = 'إلغاء', onConfirm, onCancel, danger = true }) {
   useEffect(() => {
     const handler = e => { if (e.key === 'Escape') onCancel() }
@@ -12,20 +8,38 @@ export default function ConfirmDialog({ message, confirmLabel = 'حسناً', ca
   }, [onCancel])
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', width: '100%', maxWidth: 380, padding: '28px 24px', textAlign: 'center', direction: 'rtl' }}>
-        <div style={{ fontSize: '2rem', marginBottom: 12 }}>⚠ </div>
-        <p style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b', marginBottom: 24, lineHeight: 1.6 }}>{message}</p>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-          <button
-            onClick={onConfirm}
-            style={{ padding: '9px 28px', borderRadius: 9, border: 'none', background: danger ? '#dc2626' : '#1C2B36', color: '#fff', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit' }}>
-            {confirmLabel}
-          </button>
-          <button
-            onClick={onCancel}
-            style={{ padding: '9px 28px', borderRadius: 9, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onCancel() }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(2px)' }}>
+      <div style={{ background: 'var(--card, #fff)', borderRadius: 12, boxShadow: '0 4px 32px rgba(0,0,0,0.14)', width: '100%', maxWidth: 360, direction: 'rtl', overflow: 'hidden' }}>
+
+        {/* رأس */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border, #e5e7eb)' }}>
+          <p style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-1, #0f172a)', margin: 0, lineHeight: 1.6 }}>
+            {message}
+          </p>
+        </div>
+
+        {/* أزرار */}
+        <div style={{ padding: '14px 24px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{
+            padding: '8px 20px', borderRadius: 8,
+            border: '1px solid var(--border, #e2e8f0)',
+            background: 'var(--surface, #f8fafc)',
+            color: 'var(--text-2, #475569)',
+            fontWeight: 600, fontSize: '0.85rem',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>
             {cancelLabel}
+          </button>
+          <button onClick={onConfirm} style={{
+            padding: '8px 20px', borderRadius: 8, border: 'none',
+            background: danger ? '#dc2626' : '#1C2B4A',
+            color: '#fff',
+            fontWeight: 700, fontSize: '0.85rem',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            {confirmLabel}
           </button>
         </div>
       </div>

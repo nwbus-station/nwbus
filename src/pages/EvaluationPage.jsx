@@ -8,32 +8,45 @@ const STAR_THRESHOLD = 98
 
 // ── معايير تقييم الموظفين ─────────────────────────────────────
 const EMP_CRITERIA = [
-  { key: 'attendance',    ar: 'الالتزام بالدوام والحضور',       weight: 10 },
-  { key: 'work_quality',  ar: 'جودة العمل والدقة',              weight: 15 },
-  { key: 'customer',      ar: 'التعامل مع الركاب والعملاء',      weight: 15 },
-  { key: 'discipline',    ar: 'الانضباط الوظيفي والمظهر',       weight: 10 },
-  { key: 'productivity',  ar: 'الإنتاجية وإنجاز المهام',        weight: 15 },
-  { key: 'teamwork',      ar: 'التعاون مع الفريق',              weight: 10 },
-  { key: 'compliance',    ar: 'الالتزام بالإجراءات والسياسات',  weight: 10 },
-  { key: 'initiative',    ar: 'المبادرة وحل المشكلات',          weight: 10 },
-  { key: 'development',   ar: 'التطوير الذاتي والتعلم',         weight: 5  },
-  { key: 'integrity',     ar: 'الأمانة والنزاهة',               weight: 5  },
+  { key: 'attendance',    ar: 'الالتزام بالدوام والحضور',       en: 'Attendance & Commitment',          weight: 10 },
+  { key: 'work_quality',  ar: 'جودة العمل والدقة',              en: 'Work Quality & Accuracy',          weight: 15 },
+  { key: 'customer',      ar: 'التعامل مع الركاب والعملاء',      en: 'Passenger & Customer Service',     weight: 15 },
+  { key: 'discipline',    ar: 'الانضباط الوظيفي والمظهر',       en: 'Discipline & Appearance',          weight: 10 },
+  { key: 'productivity',  ar: 'الإنتاجية وإنجاز المهام',        en: 'Productivity & Task Completion',   weight: 15 },
+  { key: 'teamwork',      ar: 'التعاون مع الفريق',              en: 'Teamwork & Collaboration',         weight: 10 },
+  { key: 'compliance',    ar: 'الالتزام بالإجراءات والسياسات',  en: 'Procedures & Policy Compliance',   weight: 10 },
+  { key: 'initiative',    ar: 'المبادرة وحل المشكلات',          en: 'Initiative & Problem Solving',     weight: 10 },
+  { key: 'development',   ar: 'التطوير الذاتي والتعلم',         en: 'Self-Development & Learning',      weight: 5  },
+  { key: 'integrity',     ar: 'الأمانة والنزاهة',               en: 'Honesty & Integrity',              weight: 5  },
+]
+
+// ── معايير تقييم المشرفين ─────────────────────────────────────
+const SUP_CRITERIA = [
+  { key: 'leadership',    ar: 'القيادة وإدارة الفريق',              en: 'Leadership & Team Management',          weight: 20 },
+  { key: 'planning',      ar: 'التخطيط وتنظيم العمل',              en: 'Planning & Work Organization',          weight: 15 },
+  { key: 'communication', ar: 'التواصل وحل المشكلات',              en: 'Communication & Problem Solving',        weight: 15 },
+  { key: 'attendance',    ar: 'الالتزام بالدوام والحضور',           en: 'Attendance & Commitment',               weight: 10 },
+  { key: 'targets',       ar: 'تحقيق الأهداف والمؤشرات',           en: 'Targets & KPI Achievement',             weight: 15 },
+  { key: 'compliance',    ar: 'الالتزام بالتعليمات والسياسات',     en: 'Instructions & Policy Compliance',      weight: 10 },
+  { key: 'development',   ar: 'تطوير الكوادر وتحفيزهم',            en: 'Staff Development & Motivation',        weight: 10 },
+  { key: 'integrity',     ar: 'الأمانة والنزاهة والمظهر',          en: 'Honesty, Integrity & Appearance',       weight: 5  },
 ]
 
 // ── معايير تقييم المحطات ──────────────────────────────────────
 const STN_CRITERIA = [
-  { key: 'quality',       ar: 'الجودة والمحافظة على الممتلكات',       weight: 20 },
-  { key: 'cleanliness',   ar: 'نظافة المحطة ودورات المياه',           weight: 20 },
-  { key: 'security',      ar: 'الحراسات الأمنية',                     weight: 15 },
-  { key: 'safety',        ar: 'أدوات السلامة والإسعافات الأولية',     weight: 15 },
-  { key: 'disability',    ar: 'خدمات ذوي الاحتياجات الخاصة',          weight: 10 },
-  { key: 'compliance',    ar: 'الالتزام بالتعليمات',                  weight: 10 },
-  { key: 'emp_appear',    ar: 'المظهر الخارجي للموظف',                weight: 5  },
-  { key: 'stn_appear',    ar: 'المظهر الخارجي للمحطة',                weight: 5  },
+  { key: 'quality',       ar: 'الجودة والمحافظة على الممتلكات',       en: 'Quality & Property Maintenance',    weight: 20 },
+  { key: 'cleanliness',   ar: 'نظافة المحطة ودورات المياه',           en: 'Station & Restroom Cleanliness',    weight: 20 },
+  { key: 'security',      ar: 'الحراسات الأمنية',                     en: 'Security Guards',                   weight: 15 },
+  { key: 'safety',        ar: 'أدوات السلامة والإسعافات الأولية',     en: 'Safety & First Aid Equipment',      weight: 15 },
+  { key: 'disability',    ar: 'خدمات ذوي الاحتياجات الخاصة',          en: 'Special Needs Services',            weight: 10 },
+  { key: 'compliance',    ar: 'الالتزام بالتعليمات',                  en: 'Instructions Compliance',           weight: 10 },
+  { key: 'emp_appear',    ar: 'المظهر الخارجي للموظف',                en: 'Employee Appearance',               weight: 5  },
+  { key: 'stn_appear',    ar: 'المظهر الخارجي للمحطة',                en: 'Station Appearance',                weight: 5  },
 ]
 
-const SCORE_LABELS = ['', 'ضعيف', 'مقبول', 'جيد', 'جيد جداً', 'ممتاز']
-const SCORE_COLORS = ['', '#DC2626', '#D97706', '#2563EB', '#059669', '#7C3AED']
+const SCORE_LABELS    = ['', 'ضعيف', 'مقبول', 'جيد', 'جيد جداً', 'ممتاز']
+const SCORE_LABELS_EN = ['', 'Poor',  'Acceptable', 'Good', 'Very Good', 'Excellent']
+const SCORE_COLORS    = ['', '#DC2626', '#D97706', '#2563EB', '#059669', '#7C3AED']
 
 const ROLE_LABELS = {
   general_admin:    'المدير التنفيذي التجاري',
@@ -43,7 +56,85 @@ const ROLE_LABELS = {
   shift_supervisor: 'مشرف وردية',
 }
 
+const JOB_TITLES = {
+  area_supervisor:    { ar: 'مشرف منطقة',  en: 'Area Supervisor'   },
+  station_supervisor: { ar: 'مشرف محطة',   en: 'Station Supervisor' },
+  shift_supervisor:   { ar: 'مشرف وردية',  en: 'Shift Supervisor'  },
+  customer_service:   { ar: 'خدمة عملاء',  en: 'Customer Service'  },
+  dispatcher:         { ar: 'مرحّل',        en: 'Dispatcher'        },
+}
+function getJobTitle(emp, isAr) {
+  if (emp.job_title && JOB_TITLES[emp.job_title]) return JOB_TITLES[emp.job_title][isAr ? 'ar' : 'en']
+  if (emp.job_title) return emp.job_title
+  return isAr ? (ROLE_LABELS[emp.role] || emp.role) : (ROLE_LABELS_EN[emp.role] || emp.role)
+}
+
+const ROLE_LABELS_EN = {
+  general_admin:    'Executive Admin',
+  station_admin:    'Station Supervisor',
+  accountant:       'Accountant',
+  station_employee: 'Station Employee',
+  shift_supervisor: 'Shift Supervisor',
+  area_supervisor:  'Area Supervisor',
+}
+
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+function StationPicker({ stations, value, onChange, isAr }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const ref = useRef(null)
+  const selected = stations.find(s => s.id === value)
+  const filtered = stations.filter(s =>
+    !q || (s.name_ar || '').toLowerCase().includes(q.toLowerCase()) || (s.name_en || '').toLowerCase().includes(q.toLowerCase())
+  )
+  useEffect(() => {
+    if (!open) setQ('')
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+  return (
+    <div ref={ref} style={{ position: 'relative', flex: '0 0 auto' }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--card)', color:'var(--text-1)', fontSize:'0.82rem', fontFamily:'inherit', cursor:'pointer', minWidth:160, justifyContent:'space-between' }}>
+        <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          {selected ? (isAr ? selected.name_ar : (selected.name_en || selected.name_ar)) : (isAr ? 'كل المحطات' : 'All Stations')}
+        </span>
+        <span style={{ fontSize:'0.65rem', color:'var(--text-3)', flexShrink:0 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:200, background:'var(--card)', border:'1px solid var(--border)', borderRadius:10, boxShadow:'0 6px 24px rgba(0,0,0,0.12)', minWidth:220, maxWidth:300, overflow:'hidden' }}>
+          <div style={{ padding:'8px 10px', borderBottom:'1px solid var(--border)' }}>
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)}
+              placeholder={isAr ? 'ابحث عن محطة...' : 'Search station...'}
+              style={{ width:'100%', padding:'6px 10px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text-1)', fontSize:'0.8rem', fontFamily:'inherit', outline:'none' }} />
+          </div>
+          <div style={{ maxHeight:240, overflowY:'auto' }}>
+            <div onClick={() => { onChange('all'); setOpen(false) }}
+              style={{ padding:'9px 14px', fontSize:'0.82rem', cursor:'pointer', fontWeight: value==='all' ? 700 : 400, background: value==='all' ? 'var(--surface)' : 'transparent', color:'var(--text-1)' }}
+              onMouseEnter={e => e.currentTarget.style.background='var(--surface)'}
+              onMouseLeave={e => e.currentTarget.style.background = value==='all' ? 'var(--surface)' : 'transparent'}>
+              {isAr ? 'كل المحطات' : 'All Stations'}
+            </div>
+            {filtered.length === 0 && (
+              <div style={{ padding:'12px 14px', fontSize:'0.8rem', color:'var(--text-3)', textAlign:'center' }}>{isAr ? 'لا توجد نتائج' : 'No results'}</div>
+            )}
+            {filtered.map(s => (
+              <div key={s.id} onClick={() => { onChange(s.id); setOpen(false) }}
+                style={{ padding:'9px 14px', fontSize:'0.82rem', cursor:'pointer', fontWeight: value===s.id ? 700 : 400, background: value===s.id ? 'var(--surface)' : 'transparent', color:'var(--text-1)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}
+                onMouseEnter={e => e.currentTarget.style.background='var(--surface)'}
+                onMouseLeave={e => e.currentTarget.style.background = value===s.id ? 'var(--surface)' : 'transparent'}>
+                {isAr ? s.name_ar : (s.name_en || s.name_ar)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function calcScore(scores, criteria) {
   let total = 0, totalWeight = 0
@@ -73,7 +164,7 @@ function StarBadge({ size = 14 }) {
 }
 
 // ── مكوّن نموذج التقييم ────────────────────────────────────────
-function EvalForm({ criteria, scores, onChange, notes, onNotes, disabled }) {
+function EvalForm({ criteria, scores, onChange, notes, onNotes, disabled, isAr }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       {criteria.map((c, i) => {
@@ -85,9 +176,9 @@ function EvalForm({ criteria, scores, onChange, notes, onNotes, disabled }) {
             display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
           }}>
             <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{c.ar}</p>
+              <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{isAr ? c.ar : c.en}</p>
               <p style={{ margin: '2px 0 0', fontSize: '0.62rem', color: 'var(--text-3)', fontFamily: MONO }}>
-                وزن: {c.weight}%
+                {isAr ? 'وزن:' : 'Weight:'} {c.weight}%
               </p>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -112,20 +203,20 @@ function EvalForm({ criteria, scores, onChange, notes, onNotes, disabled }) {
                 fontSize: '0.68rem', fontWeight: 700,
                 color: SCORE_COLORS[s], minWidth: 60,
                 fontFamily: MONO,
-              }}>{SCORE_LABELS[s]}</span>
+              }}>{isAr ? SCORE_LABELS[s] : SCORE_LABELS_EN[s]}</span>
             )}
           </div>
         )
       })}
       <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)' }}>
         <p style={{ margin: '0 0 8px', fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          ملاحظات
+          {isAr ? 'ملاحظات' : 'Notes'}
         </p>
         <textarea
           value={notes}
           onChange={e => onNotes(e.target.value)}
           disabled={disabled}
-          placeholder="أضف ملاحظاتك هنا..."
+          placeholder={isAr ? 'أضف ملاحظاتك هنا...' : 'Add your notes here...'}
           rows={3}
           style={{
             width: '100%', boxSizing: 'border-box',
@@ -143,7 +234,7 @@ function EvalForm({ criteria, scores, onChange, notes, onNotes, disabled }) {
 
 // ── شريط النتيجة ───────────────────────────────────────────────
 function ScoreBar({ score }) {
-  const color = score >= 98 ? '#6D28D9' : score >= 85 ? '#059669' : score >= 70 ? '#2563EB' : score >= 50 ? '#D97706' : '#DC2626'
+  const color = score >= 85 ? '#1C2B4A' : score >= 50 ? '#555' : '#999'
   const outOf10 = (score / 10).toFixed(1)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -170,7 +261,7 @@ function useEscClose(onClose) {
   }, [onClose])
 }
 
-function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, isAdmin, evaluatorId }) {
+function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, isAdmin, evaluatorId, isAr }) {
   const [scores, setScores] = useState(existing?.scores || {})
   const [notes, setNotes]   = useState(existing?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -181,7 +272,7 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
   const allFilled  = EMP_CRITERIA.every(c => scores[c.key] > 0)
 
   async function handleSave() {
-    if (!allFilled) return setErr('يرجى تقييم جميع البنود قبل الحفظ')
+    if (!allFilled) return setErr(isAr ? 'يرجى تقييم جميع البنود قبل الحفظ' : 'Please evaluate all items before saving')
     setSaving(true); setErr(null)
     const payload = {
       evaluator_id: evaluatorId,
@@ -210,6 +301,12 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
       is_read: false,
     })
     if (nErr) console.error('notification insert error:', nErr.message)
+    // تحديث كاش النجمة للموظف فوراً
+    try {
+      const starKey = `nwbus_star_${employee.id}`
+      const now = new Date()
+      localStorage.setItem(starKey, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
+    } catch {}
     onSave()
   }
 
@@ -223,10 +320,10 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>
-              تقييم: {employee.full_name_ar || employee.full_name}
+              {isAr ? 'تقييم:' : 'Evaluate:'} {employee.full_name_ar || employee.full_name}
             </p>
             <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', fontFamily: MONO }}>
-              {MONTHS_AR[month - 1]} {year} · {ROLE_LABELS[employee.role]}
+              {isAr ? MONTHS_AR[month - 1] : MONTHS_EN[month - 1]} {year} · {getJobTitle(employee, isAr)}
             </p>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', padding: 4 }}>
@@ -249,6 +346,7 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
           notes={notes}
           onNotes={setNotes}
           disabled={readonly}
+          isAr={isAr}
         />
 
         {/* تذييل */}
@@ -257,7 +355,7 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
             {err && <p style={{ margin: 0, fontSize: '0.72rem', color: '#DC2626' }}>{err}</p>}
             <div style={{ display: 'flex', gap: 10, marginInlineStart: 'auto' }}>
               <button onClick={onClose} style={{ padding: '9px 20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)' }}>
-                إلغاء
+                {isAr ? 'إلغاء' : 'Cancel'}
               </button>
               <button onClick={handleSave} disabled={saving || !allFilled} style={{
                 padding: '9px 24px',
@@ -268,7 +366,7 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
                 color: allFilled ? '#fff' : 'var(--text-3)',
                 transition: 'all 0.12s',
               }}>
-                {saving ? 'جارٍ الحفظ…' : existing ? 'تحديث التقييم' : 'حفظ التقييم'}
+                {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving...') : existing ? (isAr ? 'تحديث التقييم' : 'Update Evaluation') : (isAr ? 'حفظ التقييم' : 'Save Evaluation')}
               </button>
             </div>
           </div>
@@ -278,8 +376,119 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
   )
 }
 
+// ── مودال تقييم المشرفين ─────────────────────────────────────
+function SupervisorEvalModal({ supervisor, month, year, existing, onClose, onSave, evaluatorId, isAr }) {
+  const [scores, setScores] = useState(existing?.scores || {})
+  const [notes, setNotes]   = useState(existing?.notes || '')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr]       = useState(null)
+  useEscClose(onClose)
+
+  const totalScore = calcScore(scores, SUP_CRITERIA)
+  const allFilled  = SUP_CRITERIA.every(c => scores[c.key] > 0)
+
+  async function handleSave() {
+    if (!allFilled) return setErr(isAr ? 'يرجى تقييم جميع البنود قبل الحفظ' : 'Please evaluate all items before saving')
+    setSaving(true); setErr(null)
+    const payload = {
+      evaluator_id: evaluatorId,
+      supervisor_id: supervisor.id,
+      supervisor_role: supervisor.role,
+      station_id: supervisor.station_id || null,
+      eval_month: month, eval_year: year,
+      scores, notes, total_score: totalScore,
+    }
+    let error
+    if (existing) {
+      ;({ error } = await supabase.from('supervisor_evaluations').update(payload).eq('id', existing.id))
+    } else {
+      ;({ error } = await supabase.from('supervisor_evaluations').insert(payload))
+    }
+    setSaving(false)
+    if (error) return setErr(error.message)
+    // إشعار للمشرف
+    const isStar = totalScore >= 98
+    await supabase.from('notifications').insert({
+      user_id: supervisor.id,
+      type: isStar ? 'success' : 'info',
+      title: isStar ? `تقييمك ${totalScore}/10 ⭐ — ممتاز!` : `صدر تقييمك لشهر ${MONTHS_AR[month - 1]}`,
+      body: isStar
+        ? `حصلت على النجمة المميزة بنتيجة ${totalScore}/10`
+        : `نتيجتك: ${totalScore}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
+      is_read: false,
+    })
+    try {
+      const starKey = `nwbus_star_${supervisor.id}`
+      const now = new Date()
+      localStorage.setItem(starKey, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
+    } catch {}
+    onSave()
+  }
+
+  const supRoleLabel = isAr
+    ? (supervisor.role === 'area_supervisor' ? 'مشرف المنطقة' : 'مشرف المحطة')
+    : (supervisor.role === 'area_supervisor' ? 'Area Supervisor' : 'Station Supervisor')
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
+      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, width: '100%', maxWidth: 700, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>
+              {isAr ? 'تقييم:' : 'Evaluate:'} {supervisor.full_name_ar || supervisor.full_name}
+            </p>
+            <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', fontFamily: MONO }}>
+              {isAr ? MONTHS_AR[month - 1] : MONTHS_EN[month - 1]} {year} · {supRoleLabel}
+              {supervisor.station?.name_ar ? ` · ${supervisor.station.name_ar}` : ''}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', padding: 4 }}>
+            <Svg d="M18 6L6 18M6 6l12 12" size={18} />
+          </button>
+        </div>
+
+        {Object.keys(scores).length > 0 && (
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+            <ScoreBar score={totalScore} />
+          </div>
+        )}
+
+        <EvalForm
+          criteria={SUP_CRITERIA}
+          scores={scores}
+          onChange={(k, v) => setScores(p => ({ ...p, [k]: v }))}
+          notes={notes}
+          onNotes={setNotes}
+          disabled={false}
+          isAr={isAr}
+        />
+
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          {err && <p style={{ margin: 0, fontSize: '0.72rem', color: '#DC2626' }}>{err}</p>}
+          <div style={{ display: 'flex', gap: 10, marginInlineStart: 'auto' }}>
+            <button onClick={onClose} style={{ padding: '9px 20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)' }}>
+              {isAr ? 'إلغاء' : 'Cancel'}
+            </button>
+            <button onClick={handleSave} disabled={saving || !allFilled} style={{
+              padding: '9px 24px',
+              background: allFilled ? '#7C3AED' : 'var(--surface-2)',
+              border: 'none', borderRadius: 7,
+              cursor: allFilled ? 'pointer' : 'not-allowed',
+              fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700,
+              color: allFilled ? '#fff' : 'var(--text-3)',
+            }}>
+              {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving...') : existing ? (isAr ? 'تحديث التقييم' : 'Update Evaluation') : (isAr ? 'حفظ التقييم' : 'Save Evaluation')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── صفحة تقييم المحطة ────────────────────────────────────────
-function StationEvalModal({ station, month, year, existing, onClose, onSave, evaluatorId }) {
+function StationEvalModal({ station, month, year, existing, onClose, onSave, evaluatorId, isAr }) {
   const [scores, setScores] = useState(existing?.scores || {})
   const [notes, setNotes]   = useState(existing?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -290,7 +499,7 @@ function StationEvalModal({ station, month, year, existing, onClose, onSave, eva
   const allFilled  = STN_CRITERIA.every(c => scores[c.key] > 0)
 
   async function handleSave() {
-    if (!allFilled) return setErr('يرجى تقييم جميع البنود')
+    if (!allFilled) return setErr(isAr ? 'يرجى تقييم جميع البنود' : 'Please evaluate all items')
     setSaving(true); setErr(null)
     const payload = {
       evaluator_id: evaluatorId,
@@ -316,10 +525,10 @@ function StationEvalModal({ station, month, year, existing, onClose, onSave, eva
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>
-              تقييم محطة: {station.name_ar}
+              {isAr ? 'تقييم محطة:' : 'Station Evaluation:'} {station.name_ar}
             </p>
             <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', fontFamily: MONO }}>
-              {MONTHS_AR[month - 1]} {year}
+              {isAr ? MONTHS_AR[month - 1] : MONTHS_EN[month - 1]} {year}
             </p>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', padding: 4 }}>
@@ -340,13 +549,14 @@ function StationEvalModal({ station, month, year, existing, onClose, onSave, eva
           notes={notes}
           onNotes={setNotes}
           disabled={false}
+          isAr={isAr}
         />
 
         <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           {err && <p style={{ margin: 0, fontSize: '0.72rem', color: '#DC2626' }}>{err}</p>}
           <div style={{ display: 'flex', gap: 10, marginInlineStart: 'auto' }}>
             <button onClick={onClose} style={{ padding: '9px 20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)' }}>
-              إلغاء
+              {isAr ? 'إلغاء' : 'Cancel'}
             </button>
             <button onClick={handleSave} disabled={saving || !allFilled} style={{
               padding: '9px 24px',
@@ -356,7 +566,7 @@ function StationEvalModal({ station, month, year, existing, onClose, onSave, eva
               fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700,
               color: allFilled ? '#fff' : 'var(--text-3)',
             }}>
-              {saving ? 'جارٍ الحفظ…' : existing ? 'تحديث' : 'حفظ التقييم'}
+              {saving ? (isAr ? 'جارٍ الحفظ…' : 'Saving...') : existing ? (isAr ? 'تحديث' : 'Update') : (isAr ? 'حفظ التقييم' : 'Save Evaluation')}
             </button>
           </div>
         </div>
@@ -374,6 +584,7 @@ export default function EvaluationPage() {
   const isAr       = i18n.language === 'ar'
   const canEvalEmp = ['general_admin','station_admin','shift_supervisor','area_supervisor'].includes(profile?.role)
   const canEvalStn = ['general_admin','station_admin','area_supervisor'].includes(profile?.role)
+  const canEvalSup = isGeneralAdmin
 
   const now = new Date()
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1)
@@ -391,8 +602,12 @@ export default function EvaluationPage() {
   const [stnSearchQuery,  setStnSearchQuery]  = useState('')
   const [loading,       setLoading]       = useState(true)
 
+  const [supervisors,  setSupervisors]  = useState([])
+  const [supEvals,     setSupEvals]     = useState([])
+
   const [empModal,    setEmpModal]    = useState(null)
   const [stnModal,    setStnModal]    = useState(null)
+  const [supModal,    setSupModal]    = useState(null)
   const [printModal,  setPrintModal]  = useState(null) // 'employees' | 'stations' | 'range'
 
   // ── تحميل البيانات ─────────────────────────────────────────
@@ -402,8 +617,8 @@ export default function EvaluationPage() {
 
     // الموظفون
     if (canEvalEmp || isAdmin) {
-      let q = supabase.from('users').select('id, full_name_ar, username, job_number, role, station_id, station:station_id(name_ar, name_en)')
-        .neq('role', 'general_admin')
+      let q = supabase.from('users').select('id, full_name_ar, username, job_number, role, job_title, station_id, station:station_id(name_ar, name_en)')
+        .not('role', 'in', '("general_admin","station_admin","area_supervisor")')
       if (!isAdmin) {
         q = q.eq('role', 'station_employee')
         const stationId = profile?.station_id || profile?.station?.id
@@ -413,6 +628,25 @@ export default function EvaluationPage() {
         q = q.in('station_id', allowedStationIds)
       }
       promises.push(q.then(r => setEmployees(r.data || [])))
+    }
+
+    // المشرفون (للأدمن العام فقط)
+    if (canEvalSup) {
+      promises.push(
+        supabase.from('users')
+          .select('id, full_name_ar, username, job_number, role, station_id, station:station_id(name_ar)')
+          .in('role', ['station_admin', 'area_supervisor'])
+          .then(r => setSupervisors((r.data || []).sort((a, b) => {
+            // مشرفو المنطقة أولاً ثم مشرفو المحطة
+            if (a.role !== b.role) return a.role === 'area_supervisor' ? -1 : 1
+            return (a.full_name_ar || '').localeCompare(b.full_name_ar || '', 'ar')
+          })))
+      )
+      promises.push(
+        supabase.from('supervisor_evaluations').select('*')
+          .eq('eval_month', selMonth).eq('eval_year', selYear)
+          .then(r => setSupEvals(r.data || []))
+      )
     }
 
     // المحطات
@@ -449,7 +683,7 @@ export default function EvaluationPage() {
 
     await Promise.all(promises)
     setLoading(false)
-  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, allowedStationIds, canEvalEmp, canEvalStn])
+  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup])
 
   useEffect(() => { load() }, [load])
 
@@ -479,172 +713,253 @@ export default function EvaluationPage() {
     w.print()
   }
 
-  const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: 'var(--shadow-sm)' }
+  const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }
 
   // ── الجدول ────────────────────────────────────────────────
   const TABS = [
-    ...(canEvalEmp ? [{ id: 'employees', ar: 'تقييم الموظفين' }] : []),
-    ...(canEvalStn ? [{ id: 'stations',  ar: 'تقييم المحطات'  }] : []),
-    { id: 'my_eval', ar: 'تقييمي' },
+    ...(canEvalEmp ? [{ id: 'employees',   ar: 'تقييم الموظفين',  en: 'Employee Evaluation'   }] : []),
+    ...(canEvalSup ? [{ id: 'supervisors', ar: 'تقييم المشرفين',  en: 'Supervisor Evaluation' }] : []),
+    ...(canEvalStn ? [{ id: 'stations',    ar: 'تقييم المحطات',   en: 'Station Evaluation'    }] : []),
+    { id: 'my_eval', ar: 'تقييمي', en: 'My Evaluation' },
   ]
 
   return (
     <>
     <style>{`
       @keyframes spin { to { transform: rotate(360deg) } }
-      @media (max-width: 640px) {
-        .eval-header { padding: 12px 16px !important; }
-        .eval-header-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
-        .eval-print-btns { display: grid !important; grid-template-columns: 1fr 1fr !important; }
-        .eval-print-btns button { justify-content: center !important; font-size: 0.72rem !important; padding: 8px 10px !important; }
-        .eval-month-row { flex-wrap: wrap !important; }
-        .eval-content { padding: 12px 14px !important; }
-        .eval-emp-row { flex-wrap: wrap !important; gap: 10px !important; padding: 12px 14px !important; }
-        .eval-emp-row .score-col { width: 100% !important; min-width: unset !important; order: 3; }
-        .eval-emp-row .btn-col { margin-right: auto !important; order: 4; }
-        .eval-filter-row { flex-direction: column !important; align-items: stretch !important; }
-        .eval-stats-row { flex-direction: row !important; }
-        .tab-btn { padding: 8px 12px !important; font-size: 0.75rem !important; }
+      .ev-row { display:flex; flex-direction:row; align-items:center; gap:14px; padding:14px 20px; transition:background 0.1s; direction:ltr; }
+      .ev-row:hover { background: var(--surface); }
+      .ev-avatar { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.85rem; flex-shrink:0; }
+      .ev-btn { padding:7px 18px; border-radius:8px; font-family:inherit; font-size:0.78rem; font-weight:700; cursor:pointer; border:none; white-space:nowrap; transition:all 0.12s; }
+      .tab-pill { padding:7px 16px; border-radius:20px; font-family:inherit; font-size:0.8rem; font-weight:600; cursor:pointer; border:none; white-space:nowrap; transition:all 0.15s; }
+      .ev-select { padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text-1); font-family:inherit; font-size:0.82rem; cursor:pointer; outline:none; }
+      .ev-input { padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text-1); font-family:inherit; font-size:0.82rem; outline:none; width:100%; box-sizing:border-box; }
+      .ev-input:focus { border-color:var(--accent); }
+      @media (max-width:640px) {
+        .ev-header-inner { flex-direction:column !important; gap:12px !important; }
+        .ev-print-row { display:grid !important; grid-template-columns:1fr 1fr !important; gap:6px !important; }
+        .ev-print-row button { justify-content:center !important; }
+        .ev-content { padding:12px 14px !important; }
+        .ev-row { padding:12px 14px !important; gap:10px !important; }
+        .ev-row .score-col { width:100% !important; min-width:unset !important; order:3 !important; }
+        .ev-row .btn-col { order:4 !important; }
+        .ev-row .ev-avatar { width:32px !important; height:32px !important; font-size:0.75rem !important; }
+        .ev-filter-row { flex-direction:column !important; gap:8px !important; }
+        .tab-pill { padding:6px 12px !important; font-size:0.75rem !important; }
+        .ev-month-row { flex-wrap:wrap !important; }
       }
     `}</style>
     <div dir="rtl" style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }}>
 
       {/* ── رأس الصفحة ── */}
-      <div className="eval-header" style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '14px 24px' }}>
+      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '16px 24px 0' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
-          {/* صف الشهر + الأزرار */}
-          <div className="eval-header-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+          {/* صف العنوان + الأدوات */}
+          <div className="ev-header-inner" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, marginBottom: 14 }}>
             <div>
-              <h1 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>نظام التقييم الوظيفي</h1>
-              <p style={{ margin: '2px 0 0', fontSize: '0.67rem', color: 'var(--text-3)' }}>تقييم الموظفين والمحطات — دوري شهري</p>
+              <h1 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-1)', letterSpacing: '-0.01em' }}>{isAr ? 'نظام التقييم الوظيفي' : 'Employee Evaluation System'}</h1>
+              <p style={{ margin: '3px 0 0', fontSize: '0.7rem', color: 'var(--text-3)' }}>
+                {isAr ? MONTHS_AR[selMonth-1] : MONTHS_EN[selMonth-1]} {selYear} — {isAr ? 'تقييم دوري شهري' : 'Monthly Periodic Evaluation'}
+              </p>
             </div>
-            <div className="eval-month-row" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <select value={selMonth} onChange={e => setSelMonth(+e.target.value)}
-                style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', cursor: 'pointer', minWidth: 90 }}>
-                {MONTHS_AR.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
-              </select>
-              <select value={selYear} onChange={e => setSelYear(+e.target.value)}
-                style={{ padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', cursor: 'pointer' }}>
-                {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+              {/* اختيار الشهر والسنة */}
+              <div className="ev-month-row" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select value={selMonth} onChange={e => setSelMonth(+e.target.value)} className="ev-select" style={{ minWidth: 96 }}>
+                  {MONTHS_AR.map((m, i) => <option key={i} value={i+1}>{isAr ? m : MONTHS_EN[i]}</option>)}
+                </select>
+                <select value={selYear} onChange={e => setSelYear(+e.target.value)} className="ev-select">
+                  {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              {/* أزرار الطباعة */}
               {isAdmin && (
-                <div className="eval-print-btns" style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => setPrintModal('employees')} style={{ display:'flex',alignItems:'center',gap:5,padding:'7px 14px',background:'#1C2B4A',color:'#fff',border:'none',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:'0.77rem',fontWeight:600 }}>
-                    <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={13} />
-                    طباعة الموظفين
-                  </button>
-                  <button onClick={() => setPrintModal('stations')} style={{ display:'flex',alignItems:'center',gap:5,padding:'7px 14px',background:'var(--card)',color:'var(--text-1)',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:'0.77rem',fontWeight:600 }}>
-                    <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={13} />
-                    طباعة المحطات
-                  </button>
-                  <button onClick={() => setPrintModal('range')} style={{ display:'flex',alignItems:'center',gap:5,padding:'7px 14px',background:'var(--card)',color:'var(--text-1)',border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:'0.77rem',fontWeight:600 }}>
-                    <Svg d="M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z" size={13} />
-                    تقرير فترة
-                  </button>
+                <div className="ev-print-row" style={{ display: 'flex', gap: 6 }}>
+                  {[
+                    { labelAr: 'طباعة الموظفين', labelEn: 'Print Employees', type: 'employees', primary: true },
+                    { labelAr: 'طباعة المحطات', labelEn: 'Print Stations', type: 'stations', primary: false },
+                    { labelAr: 'تقرير فترة', labelEn: 'Period Report', type: 'range', primary: false },
+                  ].map(b => (
+                    <button key={b.type} onClick={() => setPrintModal(b.type)} style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      padding: '7px 14px',
+                      background: b.primary ? '#1C2B4A' : 'var(--surface)',
+                      color: b.primary ? '#fff' : 'var(--text-2)',
+                      border: b.primary ? 'none' : '1px solid var(--border)',
+                      borderRadius: 8, cursor: 'pointer',
+                      fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600,
+                    }}>
+                      <Svg d={b.type === 'range'
+                        ? "M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z"
+                        : "M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"} size={13} />
+                      {isAr ? b.labelAr : b.labelEn}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
           </div>
 
-          {/* تبويبات */}
-          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
+          {/* تبويبات pill */}
+          <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 14 }}>
             {TABS.map(t => (
-              <button className="tab-btn" key={t.id} onClick={() => setTab(t.id)} style={{
-                padding: '8px 20px', background: 'none', border: 'none', whiteSpace: 'nowrap',
-                borderBottom: tab === t.id ? '2px solid #1C2B4A' : '2px solid transparent',
-                color: tab === t.id ? '#1C2B4A' : 'var(--text-3)',
-                fontFamily: 'inherit', fontSize: '0.82rem', fontWeight: tab === t.id ? 700 : 500,
-                cursor: 'pointer', marginBottom: -1,
-              }}>{t.ar}</button>
+              <button className="tab-pill" key={t.id} onClick={() => setTab(t.id)} style={{
+                background: tab === t.id ? '#1C2B4A' : 'transparent',
+                color: tab === t.id ? '#fff' : 'var(--text-3)',
+                boxShadow: tab === t.id ? '0 2px 8px rgba(28,43,74,0.25)' : 'none',
+              }}>{isAr ? t.ar : t.en}</button>
             ))}
           </div>
         </div>
       </div>
 
       {/* ── المحتوى ── */}
-      <div className="eval-content" style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 24px' }}>
+      <div className="ev-content" style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 24px' }}>
 
         {/* ══ تقييم الموظفين ══ */}
         {tab === 'employees' && canEvalEmp && (
-          <div>
-            {/* فلتر + إحصاء */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input
-                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="بحث: اسم، رقم وظيفي، محطة..."
-                  style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', minWidth: 220, outline: 'none' }}
-                />
-                {isAdmin && (
-                  <select value={filterStation} onChange={e => setFilterStation(e.target.value)}
-                    style={{ padding: '7px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem' }}>
-                    <option value="all">كل المحطات</option>
-                    {stations.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
-                  </select>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, background: 'var(--card)', border: '1px solid var(--border)', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)' }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#059669', flexShrink: 0 }} />
-                  تم تقييمهم: <strong style={{ fontFamily: MONO }}>{empEvals.length}</strong>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* شريط الفلتر */}
+            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', display: 'flex', flexDirection: 'row', gap: 10, alignItems: 'center', flexWrap: 'wrap', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', direction: 'ltr' }}>
+              <input className="ev-input" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder={isAr ? 'بحث: اسم، رقم وظيفي، محطة...' : 'Search: name, job no., station...'}
+                style={{ maxWidth: 260, flex: '1 1 180px', direction: isAr ? 'rtl' : 'ltr' }} />
+              {isAdmin && (
+                <StationPicker stations={stations} value={filterStation} onChange={setFilterStation} isAr={isAr} />
+              )}
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexShrink: 0 }}>
+                <span style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:8, background:'var(--surface)', border:'1px solid var(--border)', fontSize:'0.73rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>
+                  ✓ {filteredEmployees.filter(e => empEvals.find(ev => ev.employee_id === e.id)).length}
                 </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 6, background: 'var(--card)', border: '1px solid var(--border)', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)' }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--border)', flexShrink: 0 }} />
-                  لم يُقيَّموا: <strong style={{ fontFamily: MONO }}>{notEvaluated.length}</strong>
+                <span style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:8, background:'var(--surface)', border:'1px solid var(--border)', fontSize:'0.73rem', fontWeight:600, color:'var(--text-3)', fontFamily:MONO }}>
+                  ○ {notEvaluated.length}
                 </span>
               </div>
             </div>
 
             {/* جدول الموظفين */}
             <div style={{ ...card, overflow: 'hidden' }}>
-              <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 3, height: 14, background: 'var(--accent)', borderRadius: 2 }} />
-                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.09em', fontFamily: MONO, textTransform: 'uppercase' }}>
-                  قائمة الموظفين — {MONTHS_AR[selMonth-1]} {selYear}
-                </span>
-              </div>
-
               {loading ? (
-                <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {[1,2,3].map(i => <div key={i} style={{ height: 52, background: 'var(--surface)', borderRadius: 6 }} />)}
+                <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[1,2,3,4].map(i => <div key={i} style={{ height: 60, background: 'var(--surface)', borderRadius: 8 }} />)}
                 </div>
               ) : filteredEmployees.length === 0 ? (
-                <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.82rem' }}>
-                  لا يوجد موظفون
-                </div>
+                <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>{isAr ? 'لا يوجد موظفون' : 'No employees'}</div>
               ) : filteredEmployees.map((emp, i) => {
                 const ev = empEvals.find(x => x.employee_id === emp.id)
                 const hasStar = ev?.total_score >= STAR_THRESHOLD
+                const initials = (emp.full_name_ar || '?').trim()[0]
                 return (
-                  <div key={emp.id} className="eval-emp-row" style={{
-                    display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px',
+                  <div key={emp.id} style={{
+                    display: 'flex', flexDirection: 'row', alignItems: 'center',
+                    gap: 0, padding: '0 20px',
                     borderBottom: i < filteredEmployees.length - 1 ? '1px solid var(--border)' : 'none',
-                  }}>
-                    <span style={{ fontFamily: MONO, fontSize: '0.68rem', color: 'var(--text-3)', minWidth: 20, textAlign: 'center', flexShrink: 0 }}>{i + 1}</span>
-                    <span style={{ flexShrink: 0, width: 7, height: 7, borderRadius: '50%', background: ev ? '#059669' : 'var(--border)' }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    minHeight: 64, transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    {/* الاسم والمعلومات — يسار */}
+                    <div style={{ flex: 1, minWidth: 0, direction: 'rtl', padding: '12px 0' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{emp.full_name_ar || '—'}</span>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-1)' }}>{emp.full_name_ar || '—'}</span>
                         {hasStar && <StarBadge size={13} />}
                       </div>
-                      <div style={{ marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                        {emp.job_number && <span style={{ fontFamily: MONO, fontSize: '0.67rem', color: 'var(--text-3)', background: 'var(--surface)', border: '1px solid var(--border)', padding: '1px 6px', borderRadius: 4 }}>{emp.job_number}</span>}
-                        {emp.station?.name_ar && <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{emp.station.name_ar}</span>}
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>· {ROLE_LABELS[emp.role]}</span>
+                      <div style={{ marginTop: 5, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-3)', fontWeight: 500 }}>{getJobTitle(emp, isAr)}</span>
+                        {emp.job_number && <>
+                          <span style={{ color: 'var(--border)' }}>·</span>
+                          <span style={{ fontFamily: MONO, fontSize: '0.7rem', color: 'var(--text-3)' }}>{emp.job_number}</span>
+                        </>}
+                        {emp.station?.name_ar && <>
+                          <span style={{ color: 'var(--border)' }}>·</span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>{emp.station.name_ar}</span>
+                        </>}
                       </div>
                     </div>
-                    <div className="score-col" style={{ minWidth: 160 }}>
-                      {ev ? <ScoreBar score={ev.total_score} /> : <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>لم يُقيَّم بعد</span>}
+                    {/* الدرجة — وسط */}
+                    <div style={{ width: 160, flexShrink: 0, textAlign: 'center' }}>
+                      {ev ? <ScoreBar score={ev.total_score} isAr={isAr} /> : (
+                        <span style={{ fontSize: '0.71rem', color: 'var(--text-3)', fontStyle: 'italic' }}>{isAr ? 'لم يُقيَّم بعد' : 'Not yet evaluated'}</span>
+                      )}
                     </div>
-                    <div className="btn-col">
-                      <button onClick={() => setEmpModal({ employee: emp, existing: ev || null })} style={{
-                        padding: '6px 18px', borderRadius: 6, flexShrink: 0,
-                        background: ev ? 'var(--card)' : '#1C2B4A',
-                        border: ev ? '1px solid var(--border)' : 'none',
+                    {/* زر — يمين */}
+                    <div style={{ paddingRight: 0, paddingLeft: 0, marginLeft: 16 }}>
+                      <button className="ev-btn" onClick={() => setEmpModal({ employee: emp, existing: ev || null })} style={{
+                        background: ev ? 'var(--surface)' : '#1C2B4A',
                         color: ev ? 'var(--text-2)' : '#fff',
-                        fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
-                      }}>{ev ? 'تعديل' : 'تقييم'}</button>
+                        border: ev ? '1px solid var(--border)' : 'none',
+                        minWidth: 72,
+                      }}>{ev ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'تقييم' : 'Evaluate')}</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══ تقييم المشرفين ══ */}
+        {tab === 'supervisors' && canEvalSup && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
+                <span style={{ width:7, height:7, borderRadius:'50%', background:'#1C2B4A', flexShrink:0 }} />
+                <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>{supEvals.length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {supervisors.length}</span>
+              </div>
+            </div>
+            <div style={{ ...card, overflow: 'hidden' }}>
+              {loading ? (
+                <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[1,2,3].map(i => <div key={i} style={{ height: 60, background: 'var(--surface)', borderRadius: 8 }} />)}
+                </div>
+              ) : supervisors.length === 0 ? (
+                <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>{isAr ? 'لا يوجد مشرفون' : 'No supervisors'}</div>
+              ) : supervisors.map((sup, i) => {
+                const ev = supEvals.find(x => x.supervisor_id === sup.id)
+                const hasStar = ev?.total_score >= STAR_THRESHOLD
+                const roleLabel = sup.role === 'area_supervisor' ? (isAr ? 'مشرف المنطقة' : 'Area Supervisor') : (isAr ? 'مشرف المحطة' : 'Station Supervisor')
+                const initials = (sup.full_name_ar || '?').trim()[0]
+                const isAreaSup = sup.role === 'area_supervisor'
+                return (
+                  <div key={sup.id} style={{
+                    display: 'flex', flexDirection: 'row', alignItems: 'center',
+                    gap: 0, padding: '0 20px',
+                    borderBottom: i < supervisors.length - 1 ? '1px solid var(--border)' : 'none',
+                    minHeight: 64, transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <div style={{ flex: 1, minWidth: 0, direction: 'rtl', padding: '12px 0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-1)' }}>{sup.full_name_ar || '—'}</span>
+                        {hasStar && <StarBadge size={13} />}
+                      </div>
+                      <div style={{ marginTop: 5, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-3)', fontWeight: 500 }}>{roleLabel}</span>
+                        {sup.job_number && <>
+                          <span style={{ color: 'var(--border)' }}>·</span>
+                          <span style={{ fontFamily: MONO, fontSize: '0.7rem', color: 'var(--text-3)' }}>{sup.job_number}</span>
+                        </>}
+                        {sup.station?.name_ar && <>
+                          <span style={{ color: 'var(--border)' }}>·</span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>{sup.station.name_ar}</span>
+                        </>}
+                      </div>
+                    </div>
+                    <div style={{ width: 160, flexShrink: 0, textAlign: 'center' }}>
+                      {ev ? <ScoreBar score={ev.total_score} isAr={isAr} /> : (
+                        <span style={{ fontSize: '0.71rem', color: 'var(--text-3)', fontStyle: 'italic' }}>{isAr ? 'لم يُقيَّم بعد' : 'Not yet evaluated'}</span>
+                      )}
+                    </div>
+                    <div style={{ marginLeft: 16 }}>
+                      <button className="ev-btn" onClick={() => setSupModal({ supervisor: sup, existing: ev || null })} style={{
+                        background: ev ? 'var(--surface)' : '#1C2B4A',
+                        color: ev ? 'var(--text-2)' : '#fff',
+                        border: ev ? '1px solid var(--border)' : 'none',
+                        minWidth: 72,
+                      }}>{ev ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'تقييم' : 'Evaluate')}</button>
                     </div>
                   </div>
                 )
@@ -655,66 +970,51 @@ export default function EvaluationPage() {
 
         {/* ══ تقييم المحطات ══ */}
         {tab === 'stations' && canEvalStn && (
-          <div>
-            {/* بحث المحطات */}
-            <div style={{ marginBottom: 14 }}>
-              <input
-                value={stnSearchQuery} onChange={e => setStnSearchQuery(e.target.value)}
-                placeholder="بحث باسم المحطة..."
-                style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.78rem', minWidth: 240, outline: 'none' }}
-              />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="ev-filter-row" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input className="ev-input" value={stnSearchQuery} onChange={e => setStnSearchQuery(e.target.value)}
+                placeholder="بحث باسم المحطة..." style={{ maxWidth: 280 }} />
+              <div style={{ marginInlineStart: 'auto', display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
+                <span style={{ width:7, height:7, borderRadius:'50%', background:'#1C2B4A', flexShrink:0 }} />
+                <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>{stnEvals.length} من {stations.length}</span>
+              </div>
             </div>
-
-          <div style={{ ...card, overflow: 'hidden' }}>
-            <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 3, height: 14, background: 'var(--border)', borderRadius: 2 }} />
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.09em', fontFamily: MONO, textTransform: 'uppercase' }}>
-                تقييم المحطات — {MONTHS_AR[selMonth-1]} {selYear}
-              </span>
-            </div>
-
+            <div style={{ ...card, overflow: 'hidden' }}>
             {loading ? (
-              <div style={{ padding: 20 }}><div style={{ height: 60, background: 'var(--surface)', borderRadius: 6 }} /></div>
+              <div style={{ padding: 20 }}><div style={{ height: 60, background: 'var(--surface)', borderRadius: 8 }} /></div>
             ) : (() => {
               const filtered = stations.filter(s =>
-                !stnSearchQuery ||
-                s.name_ar.includes(stnSearchQuery) ||
+                !stnSearchQuery || s.name_ar.includes(stnSearchQuery) ||
                 (s.name_en || '').toLowerCase().includes(stnSearchQuery.toLowerCase())
               )
               return filtered.length === 0 ? (
-                <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.82rem' }}>لا توجد نتائج</div>
+                <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>{isAr ? 'لا توجد نتائج' : 'No results'}</div>
               ) : filtered.map((stn, i) => {
-              const ev = stnEvals.find(x => x.station_id === stn.id)
-              return (
-                <div key={stn.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 16, padding: '13px 18px',
-                  borderBottom: i < stations.length - 1 ? '1px solid var(--border)' : 'none',
-                }}>
-                  <span style={{ fontFamily: MONO, fontSize: '0.68rem', color: 'var(--text-3)', minWidth: 20, textAlign: 'center', flexShrink: 0 }}>{i + 1}</span>
-                  <span style={{ flexShrink: 0, width: 7, height: 7, borderRadius: '50%', background: ev ? '#059669' : 'var(--border)' }} />
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{stn.name_ar}</span>
-                    <div style={{ marginTop: 2, fontSize: '0.7rem', color: 'var(--text-3)' }}>{stn.name_en}</div>
-                  </div>
-                  <div style={{ minWidth: 170 }}>
-                    {ev ? <ScoreBar score={ev.total_score} /> : <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>لم تُقيَّم بعد</span>}
-                  </div>
-                  <button
-                    onClick={() => setStnModal({ station: stn, existing: ev || null })}
-                    style={{
-                      padding: '6px 18px', borderRadius: 6, flexShrink: 0,
-                      background: ev ? 'var(--card)' : '#1C2B4A',
-                      border: ev ? '1px solid var(--border)' : 'none',
+                const ev = stnEvals.find(x => x.station_id === stn.id)
+                return (
+                  <div key={stn.id} className="ev-row" style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                    <div className="ev-avatar" style={{ background: ev ? '#1C2B4A12' : 'var(--surface)', color: ev ? '#1C2B4A' : 'var(--text-3)', border: `1.5px solid ${ev ? '#1C2B4A30' : 'var(--border)'}`, fontSize: '0.7rem' }}>
+                      <Svg d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" size={16} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-1)' }}>{stn.name_ar}</span>
+                      {stn.name_en && <div style={{ marginTop: 3, fontSize: '0.72rem', color: 'var(--text-3)' }}>{stn.name_en}</div>}
+                    </div>
+                    <div className="score-col" style={{ minWidth: 150 }}>
+                      {ev ? <ScoreBar score={ev.total_score} /> : (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-3)', fontStyle: 'italic' }}>{isAr ? 'لم تُقيَّم بعد' : 'Not yet evaluated'}</span>
+                      )}
+                    </div>
+                    <button className="ev-btn" onClick={() => setStnModal({ station: stn, existing: ev || null })} style={{
+                      background: ev ? 'var(--surface)' : '#1C2B4A',
                       color: ev ? 'var(--text-2)' : '#fff',
-                      fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600,
-                      cursor: 'pointer',
-                    }}>
-                    {ev ? 'تعديل' : 'تقييم'}
-                  </button>
-                </div>
-              )
-            })})()}
-          </div>
+                      border: ev ? '1px solid var(--border)' : 'none',
+                    }}>{ev ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'تقييم' : 'Evaluate')}</button>
+                  </div>
+                )
+              })
+            })()}
+            </div>
           </div>
         )}
 
@@ -722,14 +1022,14 @@ export default function EvaluationPage() {
         {tab === 'my_eval' && (
           <div>
             {loading ? (
-              <div style={{ ...card, padding: 30, textAlign: 'center', color: 'var(--text-3)' }}>جاري التحميل…</div>
+              <div style={{ ...card, padding: 30, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'جاري التحميل…' : 'Loading...'}</div>
             ) : !myEval ? (
               <div style={{ ...card, padding: '48px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)' }}>
                   <Svg d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" size={22} />
                 </div>
-                <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-2)' }}>لم يتم تقييمك هذا الشهر بعد</p>
-                <p style={{ margin: '4px 0 0', fontSize: '0.7rem', color: 'var(--text-3)' }}>{MONTHS_AR[selMonth-1]} {selYear}</p>
+                <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'لم يتم تقييمك هذا الشهر بعد' : 'You have not been evaluated this month yet'}</p>
+                <p style={{ margin: '4px 0 0', fontSize: '0.7rem', color: 'var(--text-3)' }}>{isAr ? MONTHS_AR[selMonth-1] : MONTHS_EN[selMonth-1]} {selYear}</p>
               </div>
             ) : (
               <div style={{ ...card, overflow: 'hidden' }}>
@@ -738,16 +1038,16 @@ export default function EvaluationPage() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                     <div>
                       <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-1)' }}>
-                        نتيجة تقييم {MONTHS_AR[selMonth-1]} {selYear}
+                        {isAr ? 'نتيجة تقييم' : 'Evaluation Result'} {isAr ? MONTHS_AR[selMonth-1] : MONTHS_EN[selMonth-1]} {selYear}
                       </p>
                       <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
-                        المُقيِّم: {myEval.evaluator?.full_name_ar} · {ROLE_LABELS[myEval.evaluator?.role]}
+                        {isAr ? 'المُقيِّم:' : 'Evaluator:'} {myEval.evaluator?.full_name_ar} · {isAr ? ROLE_LABELS[myEval.evaluator?.role] : (ROLE_LABELS_EN[myEval.evaluator?.role] || myEval.evaluator?.role)}
                       </p>
                     </div>
                     {myEval.total_score >= STAR_THRESHOLD && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#F59E0B15', border: '1px solid #F59E0B30', borderRadius: 8 }}>
                         <StarBadge size={16} />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#F59E0B' }}>موظف متميز</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#F59E0B' }}>{isAr ? 'موظف متميز' : 'Outstanding Employee'}</span>
                       </div>
                     )}
                   </div>
@@ -762,7 +1062,7 @@ export default function EvaluationPage() {
                       display: 'flex', alignItems: 'center', gap: 14, padding: '12px 24px',
                       borderBottom: i < EMP_CRITERIA.length - 1 ? '1px solid var(--border)' : 'none',
                     }}>
-                      <p style={{ flex: 1, margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-1)' }}>{c.ar}</p>
+                      <p style={{ flex: 1, margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-1)' }}>{isAr ? c.ar : c.en}</p>
                       <div style={{ display: 'flex', gap: 5 }}>
                         {[1,2,3,4,5].map(v => (
                           <div key={v} style={{
@@ -775,7 +1075,7 @@ export default function EvaluationPage() {
                         ))}
                       </div>
                       <span style={{ minWidth: 64, fontSize: '0.68rem', fontWeight: 700, color: s > 0 ? SCORE_COLORS[s] : 'var(--text-3)', fontFamily: MONO }}>
-                        {s > 0 ? SCORE_LABELS[s] : '—'}
+                        {s > 0 ? (isAr ? SCORE_LABELS[s] : SCORE_LABELS_EN[s]) : '—'}
                       </span>
                     </div>
                   )
@@ -783,7 +1083,7 @@ export default function EvaluationPage() {
 
                 {myEval.notes && (
                   <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
-                    <p style={{ margin: '0 0 6px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>ملاحظات المقيِّم</p>
+                    <p style={{ margin: '0 0 6px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{isAr ? 'ملاحظات المقيِّم' : 'Evaluator Notes'}</p>
                     <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-2)', lineHeight: 1.6 }}>{myEval.notes}</p>
                   </div>
                 )}
@@ -803,6 +1103,18 @@ export default function EvaluationPage() {
           evaluatorId={profile?.id}
           onClose={() => setEmpModal(null)}
           onSave={() => { setEmpModal(null); load() }}
+          isAr={isAr}
+        />
+      )}
+      {supModal && (
+        <SupervisorEvalModal
+          supervisor={supModal.supervisor}
+          month={selMonth} year={selYear}
+          existing={supModal.existing}
+          evaluatorId={profile?.id}
+          onClose={() => setSupModal(null)}
+          onSave={() => { setSupModal(null); load() }}
+          isAr={isAr}
         />
       )}
       {stnModal && (
@@ -813,6 +1125,7 @@ export default function EvaluationPage() {
           evaluatorId={profile?.id}
           onClose={() => setStnModal(null)}
           onSave={() => { setStnModal(null); load() }}
+          isAr={isAr}
         />
       )}
       {printModal && (

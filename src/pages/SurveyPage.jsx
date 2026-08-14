@@ -59,7 +59,7 @@ function ArrowIcon({ size = 16 }) {
 }
 
 // ── Overlay التقييم ──────────────────────────────────────────
-export function SurveyOverlay({ city, onClose }) {
+export function SurveyOverlay({ city, onClose, isAr = true }) {
   const station = SURVEY_STATIONS.find(s => s.city === city)
   const url = `${BASE}${city}`
 
@@ -93,10 +93,10 @@ export function SurveyOverlay({ city, onClose }) {
           </div>
           <div>
             <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>
-              تقييم تجربة الراكب
+              {isAr ? 'تقييم تجربة الراكب' : 'Passenger Experience Survey'}
             </p>
             <p style={{ margin: 0, fontSize: '0.62rem', color: 'rgba(255,255,255,0.4)' }}>
-              {station?.ar}
+              {isAr ? station?.ar : station?.en}
             </p>
           </div>
         </div>
@@ -114,7 +114,7 @@ export function SurveyOverlay({ city, onClose }) {
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.10)'; e.currentTarget.style.color = '#fff' }}
           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.55)' }}>
           <CloseIcon size={13} />
-          إغلاق
+          {isAr ? 'إغلاق' : 'Close'}
         </button>
       </div>
 
@@ -204,7 +204,7 @@ export default function SurveyPage() {
   return (
     <>
       <style>{SURVEY_MOBILE_CSS}</style>
-      {activeCity && <SurveyOverlay city={activeCity} onClose={handleClose} />}
+      {activeCity && <SurveyOverlay city={activeCity} onClose={handleClose} isAr={isAr} />}
 
       <div style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
 
@@ -228,10 +228,10 @@ export default function SurveyPage() {
               </div>
               <div>
                 <h1 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-1)' }}>
-                  تقييم تجربة الراكب
+                  {isAr ? 'تقييم تجربة الراكب' : 'Passenger Experience Survey'}
                 </h1>
                 <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-3)' }}>
-                  استبيان رضا الركاب
+                  {isAr ? 'استبيان رضا الركاب' : 'Passenger Satisfaction Survey'}
                 </p>
               </div>
             </div>
@@ -249,7 +249,7 @@ export default function SurveyPage() {
                 <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 12H5M12 5l-7 7 7 7"/>
                 </svg>
-                رجوع
+                {isAr ? 'رجوع' : 'Back'}
               </button>
             )}
           </div>
@@ -288,14 +288,14 @@ export default function SurveyPage() {
                     {profile?.station?.name_ar || profile?.station?.name_en}
                   </h2>
                   <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-2)', lineHeight: 1.6, maxWidth: 380 }}>
-                    اعرض الشاشة للراكب واطلب منه تقييم تجربته مع خدمة النقل
+                    {isAr ? 'اعرض الشاشة للراكب واطلب منه تقييم تجربته مع خدمة النقل' : 'Show this screen to the passenger and ask them to rate their transport experience'}
                   </p>
                 </div>
 
-                <LaunchButton color={cityInfo?.color || '#5B5BD6'} onClick={() => handleOpen(detectedCity)} />
+                <LaunchButton color={cityInfo?.color || '#5B5BD6'} onClick={() => handleOpen(detectedCity)} isAr={isAr} />
 
                 <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-3)' }}>
-                  يفتح الاستبيان بملء الشاشة — اضغط "إغلاق" للعودة
+                  {isAr ? 'يفتح الاستبيان بملء الشاشة — اضغط "إغلاق" للعودة' : 'Opens the survey in full screen — press "Close" to return'}
                 </p>
               </div>
             </div>
@@ -310,7 +310,7 @@ export default function SurveyPage() {
             }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)', flexShrink: 0 }} />
               <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-2)' }}>
-                لم يتم تحديد مدينة الاستبيان لمحطتك — اختر من القائمة أدناه أو تواصل مع المشرف
+                {isAr ? 'لم يتم تحديد مدينة الاستبيان لمحطتك — اختر من القائمة أدناه أو تواصل مع المشرف' : 'No survey city assigned to your station — choose from the list below or contact your supervisor'}
               </p>
             </div>
           )}
@@ -319,7 +319,7 @@ export default function SurveyPage() {
           {(isAdmin || !detectedCity) && (
             <div>
               <p style={{ margin: '0 0 14px', fontSize: '0.63rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'IBM Plex Mono', monospace" }}>
-                {isAdmin ? 'اختر المدينة' : 'المدن المتاحة'}
+                {isAdmin ? (isAr ? 'اختر المدينة' : 'Select City') : (isAr ? 'المدن المتاحة' : 'Available Cities')}
               </p>
               <div className="survey-city-grid" style={{
                 display: 'grid',
@@ -339,7 +339,7 @@ export default function SurveyPage() {
 }
 
 // ── زر الإطلاق بتأثير نبضة ──────────────────────────────────
-function LaunchButton({ color, onClick }) {
+function LaunchButton({ color, onClick, isAr = true }) {
   const [hover, setHover] = useState(false)
   const [press, setPress] = useState(false)
   return (
@@ -371,7 +371,7 @@ function LaunchButton({ color, onClick }) {
         }}
       >
         <StarIcon size={18} />
-        ابدأ التقييم الآن
+        {isAr ? 'ابدأ التقييم الآن' : 'Start Survey Now'}
       </button>
     </>
   )

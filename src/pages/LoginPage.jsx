@@ -7,7 +7,7 @@ const MONO = "'IBM Plex Mono', monospace"
 
 export default function LoginPage() {
   const { i18n } = useTranslation()
-  const { signIn, profile } = useAuth()
+  const { signIn, profile, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const isAr = i18n.language === 'ar'
 
@@ -17,12 +17,11 @@ export default function LoginPage() {
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(false)
 
-  // تطبيق الثيم المحفوظ
-  useEffect(() => {
-    const saved = localStorage.getItem('nwbus_theme') ?? 'light'
-    document.documentElement.setAttribute('data-theme', saved)
-  }, [])
+  // تطبيق الثيم المحفوظ قبل أول render لتجنب الوميض
+  const saved = localStorage.getItem('nwbus_theme') ?? 'light'
+  document.documentElement.setAttribute('data-theme', saved)
 
+  if (authLoading) return null
   if (profile) { navigate('/'); return null }
 
   async function handleSubmit(e) {

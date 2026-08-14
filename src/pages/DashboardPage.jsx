@@ -49,6 +49,7 @@ const ICONS = {
   bus:     ['M8 6v6','M15 6v6','M2 12h19.6','M18 18h2l1-3H3l1 3h2','M7 18a2 2 0 100 4 2 2 0 000-4z','M17 18a2 2 0 100 4 2 2 0 000-4z','M2 6h20v12H2z'],
   report:  ['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z','M14 2v6h6','M16 13H8','M16 17H8','M10 9H8'],
   monitor: ['M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3'],
+  bag:     ['M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z','M3 6h18','M16 10a4 4 0 01-8 0'],
   bell:    ['M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9','M13.73 21a2 2 0 01-3.46 0'],
   leave:   ['M8 2v4','M16 2v4','M3 10h18','M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z'],
   arrow:   'M5 12h14M12 5l7 7-7 7',
@@ -276,7 +277,7 @@ export default function DashboardPage() {
   const quickLinks = [
     ...(!mods || mods.includes('transportation') ? [{ to: '/transportation', ar: 'الترحيل',    en: 'Transportation', icon: 'bus',     desc_ar: 'تتبع الرحلات والمغادرات', desc_en: 'Trips & departures' }] : []),
     ...(isAdmin || profile?.role === 'accountant' ? [{ to: '/reports',       ar: 'التقارير',    en: 'Reports',        icon: 'report',  desc_ar: 'تقارير تشغيلية شاملة',    desc_en: 'Operational reports' }] : []),
-    ...(!mods || mods.includes('live_board')       ? [{ to: '/board',         ar: 'شاشة العرض', en: 'Live Board',     icon: 'monitor', desc_ar: 'عرض مباشر للرحلات',       desc_en: 'Live trip display'   }] : []),
+    ...(!mods || mods.includes('lost_found')       ? [{ to: '/lost-found',    ar: 'الموجودات',  en: 'Lost & Found',  icon: 'bag',     desc_ar: 'تسجيل وتسليم الموجودات', desc_en: 'Register & hand over items' }] : []),
   ]
 
   /* ── المعلومات ── */

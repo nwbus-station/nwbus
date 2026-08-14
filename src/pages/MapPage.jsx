@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -38,7 +38,24 @@ function FitBounds({ stations }) {
 
 function ZoomController({ onReady }) {
   const map = useMap()
-  useEffect(() => { onReady(map) }, [map])
+  useEffect(() => {
+    onReady(map)
+    setTimeout(() => map.invalidateSize(), 50)
+    // Prevent browser pinch-zoom; let Leaflet handle multi-touch zoom
+    const container = map.getContainer()
+    const preventBrowserZoom = e => {
+      if (e.touches && e.touches.length > 1) e.preventDefault()
+    }
+    const preventGesture = e => e.preventDefault()
+    container.addEventListener('touchmove', preventBrowserZoom, { passive: false })
+    container.addEventListener('gesturestart', preventGesture, { passive: false })
+    container.addEventListener('gesturechange', preventGesture, { passive: false })
+    return () => {
+      container.removeEventListener('touchmove', preventBrowserZoom)
+      container.removeEventListener('gesturestart', preventGesture)
+      container.removeEventListener('gesturechange', preventGesture)
+    }
+  }, [map])
   return null
 }
 
@@ -57,6 +74,23 @@ export default function MapPage() {
   const markerRefs = useRef({})
 
   const [fetchError, setFetchError] = useState(null)
+  const mapWrapRef = useRef(null)
+
+  // Prevent browser-level pinch-zoom while on this page (document-level for iOS Safari)
+  useEffect(() => {
+    const preventMulti = e => { if (e.touches && e.touches.length > 1) e.preventDefault() }
+    const preventGesture = e => e.preventDefault()
+    document.addEventListener('touchstart', preventMulti, { passive: false })
+    document.addEventListener('touchmove', preventMulti, { passive: false })
+    document.addEventListener('gesturestart', preventGesture, { passive: false })
+    document.addEventListener('gesturechange', preventGesture, { passive: false })
+    return () => {
+      document.removeEventListener('touchstart', preventMulti)
+      document.removeEventListener('touchmove', preventMulti)
+      document.removeEventListener('gesturestart', preventGesture)
+      document.removeEventListener('gesturechange', preventGesture)
+    }
+  }, [])
 
   useEffect(() => {
     supabase.from('stations')
@@ -109,6 +143,7 @@ export default function MapPage() {
   }
 
   const [copiedId, setCopiedId] = useState(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const mapRef = useRef(null)
   const [routeDistance, setRouteDistance] = useState(null)
   const [routeLoading, setRouteLoading] = useState(false)
@@ -133,11 +168,48 @@ export default function MapPage() {
       .finally(() => setRouteLoading(false))
   }, [routeFrom?.id, routeTo?.id])
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 58px)', background: '#f0f0f0', position: 'relative' }} dir={isAr ? 'rtl' : 'ltr'}>
+    <div className="map-outer" style={{ display: 'flex', height: 'calc(100vh - 98px)', background: '#f0f0f0', position: 'relative' }} dir={isAr ? 'rtl' : 'ltr'}>
+
+      {/* ── Mobile toggle button ── */}
+      <style>{`
+        @media (max-width: 767px) {
+          .map-outer { height: calc(100vh - 54px - 60px - env(safe-area-inset-bottom)) !important; }
+          .map-sidebar { position: fixed !important; bottom: calc(60px + env(safe-area-inset-bottom)); left: 0; right: 0; top: auto !important; width: 100% !important; height: 60vh; border-radius: 16px 16px 0 0; transform: translateY(calc(100% + 60px)); transition: transform 0.3s ease; z-index: 550 !important; border-inline-end: none !important; box-shadow: 0 -4px 24px rgba(0,0,0,0.14) !important; }
+          .map-sidebar.open { transform: translateY(0); }
+          .map-fab { display: flex !important; bottom: calc(60px + env(safe-area-inset-bottom) + 16px) !important; z-index: 560 !important; }
+          .map-overlay { bottom: calc(60px + env(safe-area-inset-bottom)) !important; }
+        }
+        @media (min-width: 768px) {
+          .map-fab { display: none !important; }
+          .map-overlay { display: none !important; }
+          .map-handle { display: none !important; }
+        }
+        .leaflet-container { touch-action: none !important; }
+      `}</style>
+
+      {/* Mobile overlay — only shown when drawer is open */}
+      <div className="map-overlay" onClick={() => setDrawerOpen(false)}
+        style={{ display: drawerOpen ? 'block' : 'none', position: 'fixed', top: 58, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.3)', zIndex: 490 }} />
+
+      {/* Mobile FAB */}
+      <button className="map-fab" onClick={() => setDrawerOpen(o => !o)}
+        style={{ display: 'none', position: 'fixed', bottom: drawerOpen ? 'calc(65vh + 12px)' : 20, right: 16, zIndex: 510, width: 48, height: 48, borderRadius: '50%', background: '#1C2B36', border: 'none', color: '#fff', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.25)', cursor: 'pointer', transition: 'bottom 0.3s ease' }}>
+        {drawerOpen
+          ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        }
+      </button>
 
       {/* ── Sidebar ── */}
-      <div style={{ width: 290, background: '#fff', borderInlineEnd: '1px solid #e5e5e5', display: 'flex', flexDirection: 'column', zIndex: 10, boxShadow: '2px 0 12px rgba(0,0,0,0.06)', flexShrink: 0 }}>
+      <div className={`map-sidebar${drawerOpen ? ' open' : ''}`} style={{ width: 290, background: '#fff', borderInlineEnd: '1px solid #e5e5e5', display: 'flex', flexDirection: 'column', zIndex: 10, boxShadow: '2px 0 12px rgba(0,0,0,0.06)', flexShrink: 0 }}>
+
+        {/* Mobile drag handle — hidden on desktop via CSS */}
+        <div className="map-handle" style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 2px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 99, background: '#ddd' }} />
+        </div>
 
         {/* Header */}
         <div style={{ padding: '16px 16px 10px', borderBottom: '1px solid #f0f0f0' }}>
@@ -286,7 +358,7 @@ export default function MapPage() {
       </div>
 
       {/* ── Map ── */}
-      <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+      <div style={{ flex: 1, position: 'relative', height: '100%', minWidth: 0 }}>
         {fetchError && (
           <div style={{ padding: 20, background: '#fee', color: '#900', fontFamily: 'monospace', fontSize: '0.8rem', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 999 }}>
             خطأ: {fetchError}
@@ -297,7 +369,8 @@ export default function MapPage() {
             <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{isAr ? 'لا توجد محطات بإحداثيات' : 'No stations with coordinates'}</div>
           </div>
         ) : (
-          <MapContainer center={saudiCenter} zoom={6} style={{ width: '100%', height: 'calc(100vh - 58px)' }} zoomControl={false}>
+          <div ref={mapWrapRef} className="map-container-wrap" style={{ width: '100%', height: '100%' }}>
+          <MapContainer center={saudiCenter} zoom={6} style={{ width: '100%', height: '100%' }} zoomControl={false}>
             <ZoomController onReady={m => { mapRef.current = m }} />
             <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
             {stations.length > 0 && <FitBounds stations={stations} />}
@@ -344,6 +417,7 @@ export default function MapPage() {
               </Marker>
             ))}
           </MapContainer>
+          </div>
         )}
 
         {/* Zoom controls */}
