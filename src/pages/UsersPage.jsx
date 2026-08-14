@@ -191,6 +191,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
     job_title:       user?.job_title        ?? '',
     hire_date:       user?.hire_date        ?? '',
     is_accountant:   user?.is_accountant   ?? false,
+    is_agent:        user?.is_agent        ?? false,
     language:        user?.language        ?? 'ar',
     is_active:       user?.is_active       ?? true,
     allowed_modules: user?.allowed_modules ?? null,
@@ -311,7 +312,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
             national_id: form.national_id.trim() || null,
             job_title: form.job_title || null,
             hire_date: form.hire_date || null,
-            ...(isGeneralAdmin ? { is_accountant: !!form.is_accountant } : {}),
+            ...(isGeneralAdmin ? { is_accountant: !!form.is_accountant, is_agent: !!form.is_agent } : {}),
           }).eq('id', inserted.id)
           if (nErr && !nErr.message?.includes('column') && !nErr.message?.includes('does not exist')) throw nErr
         }
@@ -337,6 +338,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           p_job_title:       form.job_title || null,
           p_hire_date:       form.hire_date || null,
           p_is_accountant:   isGeneralAdmin ? !!form.is_accountant : false,
+          p_is_agent:        !!form.is_agent,
         })
         if (updErr) throw updErr
         if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor') await syncStations(user.id)
@@ -569,6 +571,13 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                   <input type="checkbox" className="rounded accent-nwbus-primary"
                     checked={form.is_accountant} onChange={e => set('is_accountant', e.target.checked)} />
                   {isAr ? 'صلاحيات محاسب أيضاً (بنفس الوقت)' : 'Also grant accountant access'}
+                </label>
+              )}
+              {isGeneralAdmin && (
+                <label className="flex items-center gap-2 mt-2 text-xs text-gray-600 cursor-pointer">
+                  <input type="checkbox" className="rounded accent-nwbus-primary"
+                    checked={form.is_agent} onChange={e => set('is_agent', e.target.checked)} />
+                  {isAr ? 'حساب وكيل (لا يظهر في التقييم والإجازات)' : 'Agent account (hidden from evaluations & leaves)'}
                 </label>
               )}
             </div>
