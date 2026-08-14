@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { getCached, setCached } from '../lib/pageCache'
+import { getCached, setCached, clearCached } from '../lib/pageCache'
 import { USER_ROLES, MODULES } from '../utils/constants'
 import { toLatinDigits } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
@@ -258,7 +258,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
 
         // عرض بطاقة بيانات الدخول
         setCredential({ username: form.username.toLowerCase(), password: form.password, nameAr: form.full_name_ar })
-        onSaved()
+        await onSaved()
 
       } else {
         const { error: updErr } = await supabase.rpc('admin_update_user', {
@@ -281,7 +281,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
         if (updErr) throw updErr
         if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor') await syncStations(user.id)
 
-        onSaved()
+        await onSaved()
         onClose()
       }
     } catch (err) {
@@ -420,7 +420,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'اسم المستخدم' : 'Username'}</p>
-                <p className="font-mono text-sm text-nwbus-primary font-bold">{user.username}@nwbus.sa</p>
+                <p className="font-mono text-sm text-nwbus-primary font-bold">{user.username}</p>
               </div>
               {/* تغيير كلمة المرور */}
               <form onSubmit={handlePasswordReset} className="border-t pt-3 space-y-2">
@@ -435,8 +435,11 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                     placeholder={isAr ? 'كلمة مرور جديدة...' : 'New password...'}
                   />
                   <button type="button" onClick={() => setShowNewPwd(v => !v)}
-                    className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400">
-                    {showNewPwd ? '' : ''}
+                    className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400 hover:text-gray-600">
+                    {showNewPwd
+                      ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                      : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    }
                   </button>
                 </div>
                 {pwdMsg && <p className={`text-xs ${pwdMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{pwdMsg}</p>}
@@ -696,8 +699,9 @@ export default function UsersPage() {
   const [cardUser, setCardUser] = useState(null)
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm, onCancel? }
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (bust = false) => {
     const cacheKey = `users_all_${profile?.station_id ?? 'admin'}`
+    if (bust) clearCached(cacheKey)
     const cached = getCached(cacheKey)
     if (cached) { setUsers(cached.users); setStations(cached.stations); setLoading(false) } else { setLoading(true) }
     let usersQuery = supabase
@@ -979,7 +983,7 @@ export default function UsersPage() {
           stations={stations}
           supervisors={supervisors}
           onClose={() => setModal(null)}
-          onSaved={fetchAll}
+          onSaved={() => fetchAll(true)}
         />
       )}
 
