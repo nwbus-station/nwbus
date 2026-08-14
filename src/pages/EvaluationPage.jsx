@@ -820,19 +820,13 @@ export default function EvaluationPage() {
               {isAdmin && (
                 <StationPicker stations={stations} value={filterStation} onChange={setFilterStation} isAr={isAr} />
               )}
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 14px', borderRadius:20, background:'#ECFDF5', border:'1px solid #A7F3D0' }}>
-                  <span style={{ width:6, height:6, borderRadius:'50%', background:'#10B981', flexShrink:0 }} />
-                  <span style={{ fontSize:'0.72rem', fontWeight:700, color:'#065F46', fontFamily:MONO }}>
-                    {filteredEmployees.filter(e => empEvals.find(ev => ev.employee_id === e.id)).length}
-                  </span>
-                  <span style={{ fontSize:'0.7rem', fontWeight:600, color:'#065F46' }}>{isAr ? 'مُقيَّم' : 'Evaluated'}</span>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 14px', borderRadius:20, background:'var(--surface)', border:'1px solid var(--border)' }}>
-                  <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--text-3)', flexShrink:0 }} />
-                  <span style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)', fontFamily:MONO }}>{notEvaluated.length}</span>
-                  <span style={{ fontSize:'0.7rem', fontWeight:600, color:'var(--text-3)' }}>{isAr ? 'لم يُقيَّم' : 'Pending'}</span>
-                </div>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexShrink: 0 }}>
+                <span style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:8, background:'var(--surface)', border:'1px solid var(--border)', fontSize:'0.73rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>
+                  ✓ {filteredEmployees.filter(e => empEvals.find(ev => ev.employee_id === e.id)).length}
+                </span>
+                <span style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:8, background:'var(--surface)', border:'1px solid var(--border)', fontSize:'0.73rem', fontWeight:600, color:'var(--text-3)', fontFamily:MONO }}>
+                  ○ {notEvaluated.length}
+                </span>
               </div>
             </div>
 
