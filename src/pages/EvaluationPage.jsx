@@ -1223,6 +1223,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
   }
 
   const [selStations,  setSelStations]  = useState(new Set(stations.map(s => s.id)))
+  const [selSupSet,    setSelSupSet]    = useState(new Set())  // empty = all supervisors
   const [selEmpSet,    setSelEmpSet]    = useState(new Set())  // empty = all
   const [rangeStart,   setRangeStart]   = useState({ month: selMonth, year: selYear })
   const [rangeEnd,     setRangeEnd]     = useState({ month: selMonth, year: selYear })
@@ -1325,7 +1326,9 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
   }
 
   function printSupervisors() {
-    const rows = supervisors.map(s => {
+    const filtered = selSupSet.size === 0 ? supervisors : supervisors.filter(s => selSupSet.has(s.id))
+    if (filtered.length === 0) { setModalErr('لم يتم تحديد أي مشرف'); return }
+    const rows = filtered.map(s => {
       const ev = supEvals.find(x => x.supervisor_id === s.id)
       const roleLabel = s.role === 'area_supervisor' ? 'مشرف المنطقة' : 'مشرف المحطة'
       return { name: s.full_name_ar, job_number: s.job_number, username: s.username, station: s.station?.name_ar, role: roleLabel, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
@@ -1400,18 +1403,52 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
 
           {/* فترة المشرفين */}
           {type === 'supervisors' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>الفترة الزمنية</p>
-              <div style={{ display:'flex', gap:10 }}>
-                <select value={selMonth} onChange={e => setSelMonth(+e.target.value)} style={{ ...INP, flex:1 }}>
-                  {MONTHS_AR.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
-                </select>
-                <select value={selYear} onChange={e => setSelYear(+e.target.value)} style={{ ...INP, flex:1 }}>
-                  {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
+            <>
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>الفترة الزمنية</p>
+                <div style={{ display:'flex', gap:10 }}>
+                  <select value={selMonth} onChange={e => setSelMonth(+e.target.value)} style={{ ...INP, flex:1 }}>
+                    {MONTHS_AR.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+                  </select>
+                  <select value={selYear} onChange={e => setSelYear(+e.target.value)} style={{ ...INP, flex:1 }}>
+                    {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
               </div>
-              <p style={{ margin:0, fontSize:'0.7rem', color:'var(--text-3)' }}>{supervisors.length} مشرف · {supEvals.filter(e => supervisors.find(s => s.id === e.supervisor_id)).length} مُقيَّم</p>
-            </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>اختر المشرفين</p>
+                  <button onClick={() => setSelSupSet(prev => prev.size === supervisors.length ? new Set() : new Set(supervisors.map(s => s.id)))}
+                    style={{ fontFamily:'inherit', fontSize:'0.72rem', color:'#4A6FA5', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0 }}>
+                    {selSupSet.size === supervisors.length ? 'إلغاء الكل' : 'تحديد الكل'}
+                  </button>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', maxHeight:200, overflowY:'auto', borderRadius:12, border:'1px solid var(--border)' }}>
+                  {supervisors.map((s, i) => {
+                    const ev = supEvals.find(x => x.supervisor_id === s.id)
+                    const checked = selSupSet.size === 0 ? false : selSupSet.has(s.id)
+                    return (
+                      <label key={s.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'10px 16px', background:'transparent', borderBottom: i < supervisors.length-1 ? '1px solid var(--border)' : 'none' }}>
+                        <input type="checkbox" checked={checked} onChange={() => setSelSupSet(prev => {
+                          const next = new Set(prev.size === 0 ? supervisors.map(x => x.id) : prev)
+                          next.has(s.id) ? next.delete(s.id) : next.add(s.id)
+                          return next
+                        })} style={{ width:16, height:16, accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <span style={{ fontSize:'0.85rem', color:'var(--text-1)', fontWeight:500 }}>{s.full_name_ar}</span>
+                          {s.station?.name_ar && <span style={{ fontSize:'0.72rem', color:'var(--text-3)', marginRight:6 }}>· {s.station.name_ar}</span>}
+                        </div>
+                        {ev ? <span style={{ fontSize:'0.72rem', fontWeight:700, color:'#4A6FA5' }}>{ev.total_score?.toFixed(1)}</span>
+                             : <span style={{ fontSize:'0.7rem', color:'var(--text-3)' }}>غير مقيّم</span>}
+                      </label>
+                    )
+                  })}
+                </div>
+                <p style={{ margin:0, fontSize:'0.7rem', color:'var(--text-3)' }}>
+                  {selSupSet.size === 0 ? `الكل (${supervisors.length})` : `${selSupSet.size} مشرف محدد`} · {supEvals.filter(e => supervisors.find(s => s.id === e.supervisor_id)).length} مُقيَّم
+                </p>
+              </div>
+            </>
           )}
 
           {/* تحديد المحطات */}
