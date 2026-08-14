@@ -645,8 +645,8 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
             </div>
           )}
 
-          {/* Supervisor — for employee/accountant */}
-          {['station_employee', 'accountant'].includes(form.role) && supervisors.length > 0 && (
+          {/* Supervisor — for all non-supervisor roles */}
+          {!['station_admin', 'area_supervisor', 'general_admin'].includes(form.role) && supervisors.length > 0 && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {isAr ? 'المشرف المباشر' : 'Direct Supervisor'}
@@ -833,7 +833,7 @@ export default function UsersPage() {
     fetchAll()
   }
 
-  const supervisors = users.filter(u => ['general_admin', 'station_admin', 'shift_supervisor'].includes(u.role))
+  const supervisors = users.filter(u => ['station_admin', 'area_supervisor'].includes(u.role))
 
   const filtered = users.filter(u => {
     const q = search.toLowerCase()
