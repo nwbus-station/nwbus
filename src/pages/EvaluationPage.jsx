@@ -289,9 +289,10 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
     }
     setSaving(false)
     if (error) return setErr(error.message)
-    // إشعار للموظف
+    // إشعار للموظف — احذف القديم وأدرج جديد
     const isStar = totalScore >= 98
-    const { error: nErr } = await supabase.from('notifications').insert({
+    await supabase.from('notifications').delete().eq('user_id', employee.id).in('type', ['success', 'info']).like('title', '%تقييمك%')
+    await supabase.from('notifications').insert({
       user_id: employee.id,
       type: isStar ? 'success' : 'info',
       title: isStar ? `تقييمك ${totalScore}/10 ⭐ — ممتاز!` : `صدر تقييمك لشهر ${MONTHS_AR[month - 1]}`,
@@ -300,12 +301,10 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
         : `نتيجتك: ${totalScore}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
       is_read: false,
     })
-    if (nErr) console.error('notification insert error:', nErr.message)
-    // تحديث كاش النجمة للموظف فوراً
+    // تحديث كاش النجمة فوراً
     try {
-      const starKey = `nwbus_star_${employee.id}`
       const now = new Date()
-      localStorage.setItem(starKey, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
+      localStorage.setItem(`nwbus_star_${employee.id}`, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
     } catch {}
     onSave()
   }
@@ -406,8 +405,9 @@ function SupervisorEvalModal({ supervisor, month, year, existing, onClose, onSav
     }
     setSaving(false)
     if (error) return setErr(error.message)
-    // إشعار للمشرف
+    // إشعار للمشرف — احذف القديم وأدرج جديد
     const isStar = totalScore >= 98
+    await supabase.from('notifications').delete().eq('user_id', supervisor.id).in('type', ['success', 'info']).like('title', '%تقييمك%')
     await supabase.from('notifications').insert({
       user_id: supervisor.id,
       type: isStar ? 'success' : 'info',
@@ -418,9 +418,8 @@ function SupervisorEvalModal({ supervisor, month, year, existing, onClose, onSav
       is_read: false,
     })
     try {
-      const starKey = `nwbus_star_${supervisor.id}`
       const now = new Date()
-      localStorage.setItem(starKey, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
+      localStorage.setItem(`nwbus_star_${supervisor.id}`, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
     } catch {}
     onSave()
   }

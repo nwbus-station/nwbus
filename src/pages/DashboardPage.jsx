@@ -193,9 +193,23 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!profile?.id) return
     const n = new Date()
-    supabase.from('employee_evaluations').select('total_score')
-      .eq('employee_id', profile.id).eq('eval_month', n.getMonth() + 1).eq('eval_year', n.getFullYear())
-      .maybeSingle().then(({ data }) => setHasStar((data?.total_score ?? 0) >= 98))
+    const m = n.getMonth() + 1, y = n.getFullYear()
+    async function fetchStar() {
+      // موظف
+      const { data: empData } = await supabase.from('employee_evaluations').select('total_score')
+        .eq('employee_id', profile.id).eq('eval_month', m).eq('eval_year', y).maybeSingle()
+      if (empData) { setHasStar((empData.total_score ?? 0) >= 98); return }
+      // مشرف
+      const { data: supData } = await supabase.from('supervisor_evaluations').select('total_score')
+        .eq('supervisor_id', profile.id).eq('eval_month', m).eq('eval_year', y).maybeSingle()
+      setHasStar((supData?.total_score ?? 0) >= 98)
+    }
+    fetchStar()
+    const ch = supabase.channel('dash-star')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_evaluations', filter: `employee_id=eq.${profile.id}` }, fetchStar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supervisor_evaluations', filter: `supervisor_id=eq.${profile.id}` }, fetchStar)
+      .subscribe()
+    return () => supabase.removeChannel(ch)
   }, [profile?.id])
   const [surveyCity, setSurveyCity] = useState(null)
   useEffect(() => { setSurveyCity(detectSurveyCity(profile?.station)) }, [profile?.station])
