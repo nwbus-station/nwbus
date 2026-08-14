@@ -1141,8 +1141,10 @@ export default function EvaluationPage() {
 }
 
 // ── مودال الطباعة المتقدمة ────────────────────────────────────
-function PrintModal({ type, employees, supervisors = [], stations, empEvals, supEvals = [], stnEvals, selMonth, selYear, isAdmin, onClose }) {
+function PrintModal({ type, employees, supervisors = [], stations, empEvals, supEvals = [], stnEvals, selMonth: initMonth, selYear: initYear, isAdmin, onClose }) {
   const now = new Date()
+  const [selMonth, setSelMonth] = useState(initMonth)
+  const [selYear,  setSelYear]  = useState(initYear)
   useEscClose(onClose)
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -1363,6 +1365,22 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
         <div style={{ height:1, background:'var(--border)', margin:'0 28px' }} />
 
         <div className="nw-modal-body" style={{ overflowY:'auto', padding:'22px 28px', display:'flex', flexDirection:'column', gap:20 }}>
+
+          {/* فترة المشرفين */}
+          {type === 'supervisors' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>الفترة الزمنية</p>
+              <div style={{ display:'flex', gap:10 }}>
+                <select value={selMonth} onChange={e => setSelMonth(+e.target.value)} style={{ ...INP, flex:1 }}>
+                  {MONTHS_AR.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+                </select>
+                <select value={selYear} onChange={e => setSelYear(+e.target.value)} style={{ ...INP, flex:1 }}>
+                  {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <p style={{ margin:0, fontSize:'0.7rem', color:'var(--text-3)' }}>{supervisors.length} مشرف · {supEvals.filter(e => supervisors.find(s => s.id === e.supervisor_id)).length} مُقيَّم</p>
+            </div>
+          )}
 
           {/* تحديد المحطات */}
           {(type === 'employees' || type === 'stations') && (
