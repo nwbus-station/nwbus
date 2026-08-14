@@ -645,8 +645,8 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
             </div>
           )}
 
-          {/* Supervisor — for all non-supervisor roles */}
-          {!['station_admin', 'area_supervisor', 'general_admin'].includes(form.role) && supervisors.length > 0 && (
+          {/* Supervisor — for all roles except general_admin */}
+          {form.role !== 'general_admin' && supervisors.length > 0 && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
                 {isAr ? 'المشرف المباشر' : 'Direct Supervisor'}
@@ -685,7 +685,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                 {isAr ? 'الكل' : 'All'}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1 max-h-52 overflow-y-auto pr-1">
               {MODULES.map(m => (
                 <label key={m.value} className="flex items-center gap-2 text-sm cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
                   <input type="checkbox" className="rounded accent-nwbus-primary"
