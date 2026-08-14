@@ -823,12 +823,12 @@ export default function EvaluationPage() {
                 </span>
               </div>
               <div style={{ marginRight: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                {isAdmin && (
-                  <StationPicker stations={stations} value={filterStation} onChange={setFilterStation} isAr={isAr} />
-                )}
                 <input className="ev-input" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                   placeholder={isAr ? 'بحث: اسم، رقم وظيفي، محطة...' : 'Search: name, job no., station...'}
                   style={{ maxWidth: 260, flex: '1 1 180px', direction: isAr ? 'rtl' : 'ltr' }} />
+                {isAdmin && (
+                  <StationPicker stations={stations} value={filterStation} onChange={setFilterStation} isAr={isAr} />
+                )}
               </div>
             </div>
 
