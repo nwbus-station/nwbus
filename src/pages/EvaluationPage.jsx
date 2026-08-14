@@ -157,8 +157,8 @@ function Svg({ d, size = 16 }) {
 
 function StarBadge({ size = 14 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="#F59E0B">
-      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>
     </svg>
   )
 }
@@ -1082,7 +1082,7 @@ export default function EvaluationPage() {
                     {myEval.total_score >= STAR_THRESHOLD && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#F59E0B15', border: '1px solid #F59E0B30', borderRadius: 8 }}>
                         <StarBadge size={16} />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#F59E0B' }}>{isAr ? 'موظف متميز' : 'Outstanding Employee'}</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#F59E0B' }}>{isAr ? 'متميز' : 'Outstanding'}</span>
                       </div>
                     )}
                   </div>
@@ -1775,7 +1775,7 @@ function buildReportHtml(rows, month, year, selStationIds, stations) {
     </div>
     <div class="stat gold">
       <div class="stat-val" style="color:#B45309">${stars}</div>
-      <div class="stat-lbl">موظف متميز ★</div>
+      <div class="stat-lbl">متميز 🏅</div>
     </div>
   </div>
 

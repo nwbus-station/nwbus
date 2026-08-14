@@ -397,8 +397,8 @@ export default function AppLayout() {
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 {profile?.full_name_ar}
                 {hasStar && (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="#F59E0B" style={{ filter: 'drop-shadow(0 1px 3px rgba(245,158,11,0.6))', flexShrink: 0 }}>
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 1px 3px rgba(245,158,11,0.5))', flexShrink: 0 }}>
+                    <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/><path d="M9 8h.01M12 8h.01M15 8h.01"/>
                   </svg>
                 )}
               </span>
