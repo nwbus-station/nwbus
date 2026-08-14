@@ -1006,13 +1006,13 @@ export default function EvaluationPage() {
         {/* ══ تقييم المحطات ══ */}
         {tab === 'stations' && canEvalStn && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="ev-filter-row" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input className="ev-input" value={stnSearchQuery} onChange={e => setStnSearchQuery(e.target.value)}
-                placeholder="بحث باسم المحطة..." style={{ maxWidth: 280 }} />
-              <div style={{ marginInlineStart: 'auto', display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
+            <div className="ev-filter-row" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', direction: 'rtl' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
                 <span style={{ width:7, height:7, borderRadius:'50%', background:'#1C2B4A', flexShrink:0 }} />
-                <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>{stnEvals.length} من {stations.length}</span>
+                <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>{stnEvals.length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {stations.length}</span>
               </div>
+              <input className="ev-input" value={stnSearchQuery} onChange={e => setStnSearchQuery(e.target.value)}
+                placeholder="بحث باسم المحطة..." style={{ flex:1, maxWidth: 280, marginInlineStart:'auto' }} />
             </div>
             <div style={{ ...card, overflow: 'hidden' }}>
             {loading ? (
@@ -1027,13 +1027,13 @@ export default function EvaluationPage() {
               ) : filtered.map((stn, i) => {
                 const ev = stnEvals.find(x => x.station_id === stn.id)
                 return (
-                  <div key={stn.id} className="ev-row" style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <div key={stn.id} className="ev-row" style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none', direction: 'rtl' }}>
                     <div className="ev-avatar" style={{ background: ev ? '#1C2B4A12' : 'var(--surface)', color: ev ? '#1C2B4A' : 'var(--text-3)', border: `1.5px solid ${ev ? '#1C2B4A30' : 'var(--border)'}`, fontSize: '0.7rem' }}>
                       <Svg d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" size={16} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-1)' }}>{stn.name_ar}</span>
-                      {stn.name_en && <div style={{ marginTop: 3, fontSize: '0.72rem', color: 'var(--text-3)' }}>{stn.name_en}</div>}
+                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-1)' }}>{stn.name_ar || stn.name_en}</span>
+                      {stn.name_en && stn.name_ar && <div style={{ marginTop: 3, fontSize: '0.72rem', color: 'var(--text-3)' }}>{stn.name_en}</div>}
                     </div>
                     <div className="score-col" style={{ minWidth: 150 }}>
                       {ev ? <ScoreBar score={ev.total_score} /> : (
