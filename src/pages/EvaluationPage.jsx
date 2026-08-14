@@ -813,23 +813,21 @@ export default function EvaluationPage() {
         {tab === 'employees' && canEvalEmp && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* شريط الفلتر */}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
+                <span style={{ width:7, height:7, borderRadius:'50%', background:'#1C2B4A', flexShrink:0 }} />
+                <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>
+                  {filteredEmployees.filter(e => empEvals.find(ev => ev.employee_id === e.id)).length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {filteredEmployees.length}
+                </span>
+              </div>
+            </div>
             <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 16px', display: 'flex', flexDirection: 'row', gap: 10, alignItems: 'center', flexWrap: 'wrap', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', direction: 'rtl' }}>
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                <span style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:8, background:'var(--surface)', border:'1px solid var(--border)', fontSize:'0.73rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>
-                  ✓ {filteredEmployees.filter(e => empEvals.find(ev => ev.employee_id === e.id)).length}
-                </span>
-                <span style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:8, background:'var(--surface)', border:'1px solid var(--border)', fontSize:'0.73rem', fontWeight:600, color:'var(--text-3)', fontFamily:MONO }}>
-                  ○ {notEvaluated.length}
-                </span>
-              </div>
-              <div style={{ marginRight: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input className="ev-input" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  placeholder={isAr ? 'بحث: اسم، رقم وظيفي، محطة...' : 'Search: name, job no., station...'}
-                  style={{ maxWidth: 260, flex: '1 1 180px', direction: isAr ? 'rtl' : 'ltr' }} />
-                {isAdmin && (
-                  <StationPicker stations={stations} value={filterStation} onChange={setFilterStation} isAr={isAr} />
-                )}
-              </div>
+              <input className="ev-input" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder={isAr ? 'بحث: اسم، رقم وظيفي، محطة...' : 'Search: name, job no., station...'}
+                style={{ flex: '1 1 180px', direction: isAr ? 'rtl' : 'ltr' }} />
+              {isAdmin && (
+                <StationPicker stations={stations} value={filterStation} onChange={setFilterStation} isAr={isAr} />
+              )}
             </div>
 
             {/* جدول الموظفين */}
