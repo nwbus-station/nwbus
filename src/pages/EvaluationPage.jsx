@@ -289,17 +289,13 @@ function EmployeeEvalModal({ employee, month, year, existing, onClose, onSave, i
     }
     setSaving(false)
     if (error) return setErr(error.message)
-    // إشعار للموظف — احذف القديم وأدرج جديد
+    // إشعار للموظف — استبدل القديم عبر دالة SECURITY DEFINER
     const isStar = totalScore >= 98
-    await supabase.from('notifications').delete().eq('user_id', employee.id).in('type', ['success', 'info']).like('title', '%تقييمك%')
-    await supabase.from('notifications').insert({
-      user_id: employee.id,
-      type: isStar ? 'success' : 'info',
-      title: isStar ? `تقييمك ${totalScore}/10 ⭐ — ممتاز!` : `صدر تقييمك لشهر ${MONTHS_AR[month - 1]}`,
-      body: isStar
-        ? `حصلت على النجمة المميزة بنتيجة ${totalScore}/10`
-        : `نتيجتك: ${totalScore}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
-      is_read: false,
+    await supabase.rpc('replace_eval_notification', {
+      p_user_id: employee.id,
+      p_type: isStar ? 'success' : 'info',
+      p_title: isStar ? `تقييمك ${totalScore}/10 ⭐ — ممتاز!` : `صدر تقييمك لشهر ${MONTHS_AR[month - 1]}`,
+      p_body: isStar ? `حصلت على النجمة المميزة بنتيجة ${totalScore}/10` : `نتيجتك: ${totalScore}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
     })
     // تحديث كاش النجمة فوراً
     try {
@@ -405,17 +401,13 @@ function SupervisorEvalModal({ supervisor, month, year, existing, onClose, onSav
     }
     setSaving(false)
     if (error) return setErr(error.message)
-    // إشعار للمشرف — احذف القديم وأدرج جديد
+    // إشعار للمشرف — استبدل القديم عبر دالة SECURITY DEFINER
     const isStar = totalScore >= 98
-    await supabase.from('notifications').delete().eq('user_id', supervisor.id).in('type', ['success', 'info']).like('title', '%تقييمك%')
-    await supabase.from('notifications').insert({
-      user_id: supervisor.id,
-      type: isStar ? 'success' : 'info',
-      title: isStar ? `تقييمك ${totalScore}/10 ⭐ — ممتاز!` : `صدر تقييمك لشهر ${MONTHS_AR[month - 1]}`,
-      body: isStar
-        ? `حصلت على النجمة المميزة بنتيجة ${totalScore}/10`
-        : `نتيجتك: ${totalScore}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
-      is_read: false,
+    await supabase.rpc('replace_eval_notification', {
+      p_user_id: supervisor.id,
+      p_type: isStar ? 'success' : 'info',
+      p_title: isStar ? `تقييمك ${totalScore}/10 ⭐ — ممتاز!` : `صدر تقييمك لشهر ${MONTHS_AR[month - 1]}`,
+      p_body: isStar ? `حصلت على النجمة المميزة بنتيجة ${totalScore}/10` : `نتيجتك: ${totalScore}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
     })
     try {
       const now = new Date()

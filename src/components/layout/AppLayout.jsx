@@ -289,16 +289,22 @@ export default function AppLayout() {
     if (!profile?.id || !STAR_KEY) return
     const now = new Date()
     const m = now.getMonth() + 1, y = now.getFullYear()
-    supabase.from('employee_evaluations')
-      .select('total_score')
-      .eq('employee_id', profile.id)
-      .eq('eval_month', m).eq('eval_year', y)
-      .maybeSingle()
-      .then(({ data }) => {
-        const star = (data?.total_score ?? 0) >= 98
-        setHasStar(star)
-        localStorage.setItem(STAR_KEY, JSON.stringify({ month: m, year: y, star }))
-      })
+    async function fetchStar() {
+      const [{ data: emp }, { data: sup }] = await Promise.all([
+        supabase.from('employee_evaluations').select('total_score').eq('employee_id', profile.id).eq('eval_month', m).eq('eval_year', y).maybeSingle(),
+        supabase.from('supervisor_evaluations').select('total_score').eq('supervisor_id', profile.id).eq('eval_month', m).eq('eval_year', y).maybeSingle(),
+      ])
+      const score = emp?.total_score ?? sup?.total_score ?? 0
+      const star = score >= 98
+      setHasStar(star)
+      localStorage.setItem(STAR_KEY, JSON.stringify({ month: m, year: y, star }))
+    }
+    fetchStar()
+    const ch = supabase.channel('layout-star')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_evaluations', filter: `employee_id=eq.${profile.id}` }, fetchStar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supervisor_evaluations', filter: `supervisor_id=eq.${profile.id}` }, fetchStar)
+      .subscribe()
+    return () => supabase.removeChannel(ch)
   }, [profile?.id])
   const visibleGroups = NAV_GROUPS.map(g => ({
     ...g,
