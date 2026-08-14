@@ -195,14 +195,13 @@ export default function DashboardPage() {
     const n = new Date()
     const m = n.getMonth() + 1, y = n.getFullYear()
     async function fetchStar() {
-      // موظف
-      const { data: empData } = await supabase.from('employee_evaluations').select('total_score')
-        .eq('employee_id', profile.id).eq('eval_month', m).eq('eval_year', y).order('created_at', { ascending: false }).limit(1).maybeSingle()
-      if (empData) { setHasStar((empData.total_score ?? 0) >= 98); return }
-      // مشرف
-      const { data: supData } = await supabase.from('supervisor_evaluations').select('total_score')
-        .eq('supervisor_id', profile.id).eq('eval_month', m).eq('eval_year', y).order('created_at', { ascending: false }).limit(1).maybeSingle()
-      setHasStar((supData?.total_score ?? 0) >= 98)
+      const [{ data: empData }, { data: supData }] = await Promise.all([
+        supabase.from('employee_evaluations').select('total_score').eq('employee_id', profile.id).eq('eval_month', m).eq('eval_year', y).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('supervisor_evaluations').select('total_score').eq('supervisor_id', profile.id).eq('eval_month', m).eq('eval_year', y).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ])
+      const score = Math.max(empData?.total_score ?? 0, supData?.total_score ?? 0)
+      setHasStar(score >= 98)
+      if (profile?.id) localStorage.setItem(`nwbus_star_${profile.id}`, JSON.stringify({ month: m, year: y, star: score >= 98 }))
     }
     fetchStar()
     const ch = supabase.channel('dash-star')
