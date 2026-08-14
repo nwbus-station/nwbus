@@ -56,75 +56,74 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
     <style>
       *{box-sizing:border-box;margin:0;padding:0}
       @page{size:A4;margin:0}
-      body{font-family:Arial,sans-serif;direction:rtl;background:#f0f2f5;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px}
-      .card{width:100%;max-width:520px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.18)}
-      .header{background:linear-gradient(135deg,#0F2444 0%,#1C3A5E 100%);padding:28px 32px;position:relative;overflow:hidden}
-      .header::before{content:'';position:absolute;top:-40px;left:-40px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,0.04)}
-      .header::after{content:'';position:absolute;bottom:-30px;right:-20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.04)}
-      .brand{font-size:10px;letter-spacing:3px;color:rgba(255,255,255,0.5);margin-bottom:6px;font-weight:600}
-      .header-title{font-size:22px;font-weight:700;color:#fff;line-height:1.2}
-      .header-sub{font-size:12px;color:rgba(255,255,255,0.55);margin-top:4px}
-      .divider{height:3px;background:linear-gradient(90deg,#D4AF37,#F5D06B,#D4AF37)}
-      .body{padding:28px 32px}
-      .name-row{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid #f0f0f0}
-      .avatar{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#0F2444,#1C3A5E);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-      .avatar-letter{color:#D4AF37;font-size:22px;font-weight:700}
-      .name-text .label{font-size:10px;color:#999;font-weight:600;letter-spacing:1px;margin-bottom:3px}
-      .name-text .value{font-size:18px;font-weight:700;color:#0F2444}
-      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
-      .info-item{background:#f8f9fb;border-radius:10px;padding:12px 14px;border:1px solid #eef0f3}
-      .info-item .label{font-size:10px;color:#9ca3af;font-weight:600;letter-spacing:0.5px;margin-bottom:4px}
-      .info-item .value{font-size:13px;font-weight:700;color:#1f2937}
-      .cred-section{background:#0F2444;border-radius:12px;padding:20px 22px;margin-bottom:20px}
-      .cred-title{font-size:10px;color:rgba(255,255,255,0.5);letter-spacing:2px;font-weight:600;margin-bottom:14px}
-      .cred-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08)}
-      .cred-row:last-child{border-bottom:none;padding-bottom:0}
-      .cred-label{font-size:11px;color:rgba(255,255,255,0.5)}
-      .cred-value{font-family:monospace;font-size:15px;font-weight:700;color:#fff;letter-spacing:1px;direction:ltr}
-      .cred-value.gold{color:#D4AF37;font-size:18px;letter-spacing:3px}
-      .warning{display:flex;align-items:center;gap:10px;background:#FFF8E7;border:1px solid #F5D06B;border-radius:8px;padding:10px 14px}
-      .warning-icon{font-size:18px;flex-shrink:0}
-      .warning-text{font-size:11px;color:#92660A;line-height:1.5}
-      .footer{padding:16px 32px;background:#f8f9fb;border-top:1px solid #eef0f3;text-align:center;font-size:10px;color:#bbb;letter-spacing:1px}
+      body{font-family:Arial,sans-serif;direction:rtl;background:#EBEBEB;display:flex;align-items:center;justify-content:center;min-height:100vh;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+      .card{width:480px;background:#fff;border-radius:0;overflow:hidden;border:1px solid #D1D1D1}
+      .header{background:#2C2C2C;padding:30px 32px 24px}
+      .brand{font-size:9px;letter-spacing:4px;color:#888;margin-bottom:10px;font-weight:600;text-transform:uppercase}
+      .header-title{font-size:20px;font-weight:700;color:#fff;letter-spacing:0.5px}
+      .header-sub{font-size:11px;color:#666;margin-top:5px;letter-spacing:1px}
+      .stripe{height:2px;background:#888}
+      .body{padding:28px 32px;background:#fff}
+      .employee-section{margin-bottom:26px;padding-bottom:22px;border-bottom:1px solid #EBEBEB}
+      .section-label{font-size:9px;letter-spacing:3px;color:#999;font-weight:600;text-transform:uppercase;margin-bottom:10px}
+      .employee-name{font-size:20px;font-weight:700;color:#1A1A1A;margin-bottom:14px}
+      .info-row{display:flex;gap:0;border:1px solid #E8E8E8}
+      .info-cell{flex:1;padding:11px 14px;border-left:1px solid #E8E8E8}
+      .info-cell:last-child{border-left:none}
+      .info-cell .lbl{font-size:9px;color:#AAA;letter-spacing:1px;font-weight:600;margin-bottom:4px}
+      .info-cell .val{font-size:12px;font-weight:700;color:#2C2C2C}
+      .info-row2{display:flex;gap:0;border:1px solid #E8E8E8;border-top:none}
+      .cred-section{background:#F5F5F5;border:1px solid #E0E0E0;padding:20px 22px;margin-top:20px}
+      .cred-header{font-size:9px;letter-spacing:3px;color:#999;font-weight:600;margin-bottom:16px}
+      .cred-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #E8E8E8}
+      .cred-item:last-child{border-bottom:none;padding-bottom:0}
+      .cred-lbl{font-size:10px;color:#888;letter-spacing:1px}
+      .cred-val{font-family:monospace;font-size:15px;font-weight:700;color:#1A1A1A;direction:ltr;letter-spacing:2px}
+      .notice{margin-top:18px;padding:12px 14px;border-right:3px solid #BDBDBD;background:#FAFAFA}
+      .notice-text{font-size:10px;color:#888;line-height:1.6}
+      .footer{padding:14px 32px;border-top:1px solid #EBEBEB;display:flex;justify-content:space-between;align-items:center}
+      .footer-brand{font-size:9px;letter-spacing:2px;color:#BDBDBD;font-weight:600}
+      .footer-date{font-size:9px;color:#BDBDBD}
     </style></head><body>
     <div class="card">
       <div class="header">
         <div class="brand">NORTH WEST BUS · نظام المحطات</div>
         <div class="header-title">بطاقة بيانات الدخول</div>
-        <div class="header-sub">Credential Card — للاستخدام الشخصي فقط</div>
+        <div class="header-sub">Credential Card</div>
       </div>
-      <div class="divider"></div>
+      <div class="stripe"></div>
       <div class="body">
-        <div class="name-row">
-          <div class="avatar"><span class="avatar-letter">${(nameAr || '').charAt(0)}</span></div>
-          <div class="name-text">
-            <div class="label">الموظف</div>
-            <div class="value">${nameAr}</div>
+        <div class="employee-section">
+          <div class="section-label">الموظف</div>
+          <div class="employee-name">${nameAr}</div>
+          <div class="info-row">
+            ${jobNumber ? `<div class="info-cell"><div class="lbl">الرقم الوظيفي</div><div class="val">${jobNumber}</div></div>` : ''}
+            ${phone ? `<div class="info-cell"><div class="lbl">رقم الجوال</div><div class="val" dir="ltr">${phone}</div></div>` : ''}
           </div>
-        </div>
-        <div class="info-grid">
-          ${jobNumber ? `<div class="info-item"><div class="label">الرقم الوظيفي</div><div class="value">${jobNumber}</div></div>` : ''}
-          ${phone ? `<div class="info-item"><div class="label">رقم الجوال</div><div class="value" dir="ltr">${phone}</div></div>` : ''}
-          ${stationName ? `<div class="info-item"><div class="label">المحطة</div><div class="value">${stationName}</div></div>` : ''}
-          ${hireDate ? `<div class="info-item"><div class="label">تاريخ المباشرة</div><div class="value">${hireDate}</div></div>` : ''}
+          <div class="info-row2">
+            ${stationName ? `<div class="info-cell"><div class="lbl">المحطة</div><div class="val">${stationName}</div></div>` : ''}
+            ${hireDate ? `<div class="info-cell"><div class="lbl">تاريخ المباشرة</div><div class="val">${hireDate}</div></div>` : ''}
+          </div>
         </div>
         <div class="cred-section">
-          <div class="cred-title">— بيانات الدخول</div>
-          <div class="cred-row">
-            <span class="cred-label">اسم المستخدم</span>
-            <span class="cred-value">${username}</span>
+          <div class="cred-header">بيانات الدخول</div>
+          <div class="cred-item">
+            <span class="cred-lbl">اسم المستخدم</span>
+            <span class="cred-val">${username}</span>
           </div>
-          <div class="cred-row">
-            <span class="cred-label">كلمة المرور</span>
-            <span class="cred-value gold">${password}</span>
+          <div class="cred-item">
+            <span class="cred-lbl">كلمة المرور</span>
+            <span class="cred-val">${password}</span>
           </div>
         </div>
-        <div class="warning">
-          <span class="warning-icon">⚠</span>
-          <span class="warning-text">هذه البطاقة سرية — احتفظ بها في مكان آمن ولا تشاركها مع أي شخص آخر</span>
+        <div class="notice">
+          <div class="notice-text">هذه البطاقة سرية — احتفظ بها في مكان آمن ولا تشاركها مع أي شخص آخر</div>
         </div>
       </div>
-      <div class="footer">NWB STATIONS SYSTEM · ${new Date().toLocaleDateString('ar-SA')}</div>
+      <div class="footer">
+        <span class="footer-brand">NWB STATIONS SYSTEM</span>
+        <span class="footer-date">${new Date().toLocaleDateString('ar-SA')}</span>
+      </div>
     </div>
     <script>window.onload=()=>{window.print()}</script>
     </body></html>`)
