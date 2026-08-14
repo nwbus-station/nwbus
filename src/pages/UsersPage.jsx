@@ -48,30 +48,92 @@ const ROLE_COLORS = {
 }
 
 /* ─── Credential Card ──────────────────────────────────── */
-function CredentialCard({ username, password, nameAr, onClose }) {
+function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate, stationName, onClose }) {
   useEscapeKey(onClose)
-  const cardRef = useRef(null)
   function handlePrint() {
-    const w = window.open('', '_blank', 'width=400,height=300')
-    w.document.write(`<html dir="rtl"><head><title>بطاقة دخول</title>
-    <style>body{font-family:Arial,sans-serif;padding:24px;direction:rtl}
-    h3{color:#0F2444;margin-bottom:16px}
-    .row{display:flex;justify-content:space-between;padding:8px 12px;background:#f3f4f6;border-radius:8px;margin-bottom:8px}
-    .label{font-size:12px;color:#6b7280}.value{font-weight:700;font-family:monospace;font-size:14px}
-    .footer{margin-top:16px;font-size:11px;color:#9ca3af;text-align:center}</style></head>
-    <body><h3>بيانات الدخول</h3>
-    <div class="row"><span class="label">الاسم</span><span class="value">${nameAr}</span></div>
-    <div class="row"><span class="label">اسم المستخدم</span><span class="value">${username}@nwbus.sa</span></div>
-    <div class="row"><span class="label">كلمة المرور</span><span class="value">${password}</span></div>
-    <div class="footer">احتفظ بهذه البطاقة — لا تشاركها مع أحد</div>
+    const w = window.open('', '_blank', 'width=794,height=1123')
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>بطاقة دخول - ${nameAr}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      @page{size:A4;margin:0}
+      body{font-family:Arial,sans-serif;direction:rtl;background:#f0f2f5;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px}
+      .card{width:100%;max-width:520px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.18)}
+      .header{background:linear-gradient(135deg,#0F2444 0%,#1C3A5E 100%);padding:28px 32px;position:relative;overflow:hidden}
+      .header::before{content:'';position:absolute;top:-40px;left:-40px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,0.04)}
+      .header::after{content:'';position:absolute;bottom:-30px;right:-20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.04)}
+      .brand{font-size:10px;letter-spacing:3px;color:rgba(255,255,255,0.5);margin-bottom:6px;font-weight:600}
+      .header-title{font-size:22px;font-weight:700;color:#fff;line-height:1.2}
+      .header-sub{font-size:12px;color:rgba(255,255,255,0.55);margin-top:4px}
+      .divider{height:3px;background:linear-gradient(90deg,#D4AF37,#F5D06B,#D4AF37)}
+      .body{padding:28px 32px}
+      .name-row{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid #f0f0f0}
+      .avatar{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#0F2444,#1C3A5E);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+      .avatar-letter{color:#D4AF37;font-size:22px;font-weight:700}
+      .name-text .label{font-size:10px;color:#999;font-weight:600;letter-spacing:1px;margin-bottom:3px}
+      .name-text .value{font-size:18px;font-weight:700;color:#0F2444}
+      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+      .info-item{background:#f8f9fb;border-radius:10px;padding:12px 14px;border:1px solid #eef0f3}
+      .info-item .label{font-size:10px;color:#9ca3af;font-weight:600;letter-spacing:0.5px;margin-bottom:4px}
+      .info-item .value{font-size:13px;font-weight:700;color:#1f2937}
+      .cred-section{background:#0F2444;border-radius:12px;padding:20px 22px;margin-bottom:20px}
+      .cred-title{font-size:10px;color:rgba(255,255,255,0.5);letter-spacing:2px;font-weight:600;margin-bottom:14px}
+      .cred-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.08)}
+      .cred-row:last-child{border-bottom:none;padding-bottom:0}
+      .cred-label{font-size:11px;color:rgba(255,255,255,0.5)}
+      .cred-value{font-family:monospace;font-size:15px;font-weight:700;color:#fff;letter-spacing:1px;direction:ltr}
+      .cred-value.gold{color:#D4AF37;font-size:18px;letter-spacing:3px}
+      .warning{display:flex;align-items:center;gap:10px;background:#FFF8E7;border:1px solid #F5D06B;border-radius:8px;padding:10px 14px}
+      .warning-icon{font-size:18px;flex-shrink:0}
+      .warning-text{font-size:11px;color:#92660A;line-height:1.5}
+      .footer{padding:16px 32px;background:#f8f9fb;border-top:1px solid #eef0f3;text-align:center;font-size:10px;color:#bbb;letter-spacing:1px}
+    </style></head><body>
+    <div class="card">
+      <div class="header">
+        <div class="brand">NORTH WEST BUS · نظام المحطات</div>
+        <div class="header-title">بطاقة بيانات الدخول</div>
+        <div class="header-sub">Credential Card — للاستخدام الشخصي فقط</div>
+      </div>
+      <div class="divider"></div>
+      <div class="body">
+        <div class="name-row">
+          <div class="avatar"><span class="avatar-letter">${(nameAr || '').charAt(0)}</span></div>
+          <div class="name-text">
+            <div class="label">الموظف</div>
+            <div class="value">${nameAr}</div>
+          </div>
+        </div>
+        <div class="info-grid">
+          ${jobNumber ? `<div class="info-item"><div class="label">الرقم الوظيفي</div><div class="value">${jobNumber}</div></div>` : ''}
+          ${phone ? `<div class="info-item"><div class="label">رقم الجوال</div><div class="value" dir="ltr">${phone}</div></div>` : ''}
+          ${stationName ? `<div class="info-item"><div class="label">المحطة</div><div class="value">${stationName}</div></div>` : ''}
+          ${hireDate ? `<div class="info-item"><div class="label">تاريخ المباشرة</div><div class="value">${hireDate}</div></div>` : ''}
+        </div>
+        <div class="cred-section">
+          <div class="cred-title">— بيانات الدخول</div>
+          <div class="cred-row">
+            <span class="cred-label">اسم المستخدم</span>
+            <span class="cred-value">${username}</span>
+          </div>
+          <div class="cred-row">
+            <span class="cred-label">كلمة المرور</span>
+            <span class="cred-value gold">${password}</span>
+          </div>
+        </div>
+        <div class="warning">
+          <span class="warning-icon">⚠</span>
+          <span class="warning-text">هذه البطاقة سرية — احتفظ بها في مكان آمن ولا تشاركها مع أي شخص آخر</span>
+        </div>
+      </div>
+      <div class="footer">NWB STATIONS SYSTEM · ${new Date().toLocaleDateString('ar-SA')}</div>
+    </div>
+    <script>window.onload=()=>{window.print()}</script>
     </body></html>`)
     w.document.close()
-    w.print()
   }
   return (
     <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" dir="rtl">
-      <div ref={cardRef} className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-        <div className="px-6 py-4 text-white text-center" style={{ background: '#1C2B36' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="px-6 py-4 text-white text-center" style={{ background: '#0F2444' }}>
           <h2 className="font-bold text-base">بطاقة بيانات الدخول</h2>
           <p className="text-white/60 text-xs mt-0.5">احتفظ بها في مكان آمن</p>
         </div>
@@ -256,7 +318,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
         }
 
         // عرض بطاقة بيانات الدخول
-        setCredential({ username: form.username.toLowerCase(), password: form.password, nameAr: form.full_name_ar })
+        setCredential({ username: form.username.toLowerCase(), password: form.password, nameAr: form.full_name_ar, jobNumber: form.job_number, phone: form.phone, hireDate: form.hire_date, stationName: stations.find(s => s.id === form.station_id)?.name_ar ?? '' })
         await onSaved()
 
       } else {
@@ -311,7 +373,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
       // حفظ كلمة المرور الجديدة للأدمن
       await supabase.from('users').update({ login_password: newPwd }).eq('id', user.id)
       setPwdMsg(isAr ? '✓ تم تغيير كلمة المرور' : '✓ Password updated')
-      setCredential({ username: user.username, password: newPwd, nameAr: user.full_name_ar })
+      setCredential({ username: user.username, password: newPwd, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: user.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })
       setNewPwd('')
     } catch (err) {
       setPwdMsg('⚠ ' + err.message)
@@ -411,7 +473,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                 </p>
                 {user.login_password && (
                   <button type="button"
-                    onClick={() => setCredential({ username: user.username, password: user.login_password, nameAr: user.full_name_ar })}
+                    onClick={() => setCredential({ username: user.username, password: user.login_password, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: user.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })}
                     className="text-xs text-nwbus-primary underline">
                     {isAr ? 'عرض البطاقة' : 'Show Card'}
                   </button>
@@ -673,6 +735,10 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
         username={credential.username}
         password={credential.password}
         nameAr={credential.nameAr}
+        jobNumber={credential.jobNumber}
+        phone={credential.phone}
+        hireDate={credential.hireDate}
+        stationName={credential.stationName}
         onClose={() => { setCredential(null); if (!user) onClose() }}
       />
     )}
