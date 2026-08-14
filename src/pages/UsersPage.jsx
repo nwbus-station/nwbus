@@ -83,7 +83,6 @@ function CredentialCard({ username, password, nameAr, onClose }) {
           <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
             <p className="text-xs text-blue-400 mb-0.5">اسم المستخدم</p>
             <p className="font-mono font-bold text-blue-800 text-lg tracking-wide">{username}</p>
-            <p className="text-xs text-blue-400 font-mono">{username}@nwbus.sa</p>
           </div>
           <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
             <p className="text-xs text-amber-500 mb-0.5">كلمة المرور</p>
