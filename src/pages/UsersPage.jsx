@@ -86,7 +86,7 @@ function CredentialCard({ username, password, nameAr, onClose }) {
           </div>
           <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
             <p className="text-xs text-amber-500 mb-0.5">كلمة المرور</p>
-            <p className="font-mono font-bold text-amber-800 text-lg tracking-widest">{password}</p>
+            <p className="font-mono font-bold text-amber-800 text-lg tracking-widest" dir="ltr">{password}</p>
           </div>
           <div className="flex gap-2 pt-1">
             <button onClick={handlePrint}
