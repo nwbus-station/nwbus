@@ -569,6 +569,61 @@ function StationEvalModal({ station, month, year, existing, onClose, onSave, eva
 // ══════════════════════════════════════════════════════════════
 // الصفحة الرئيسية
 // ══════════════════════════════════════════════════════════════
+function PrintDropdown({ isAr, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  const items = [
+    { type: 'employees',   ar: 'طباعة الموظفين',  icon: "M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" },
+    { type: 'supervisors', ar: 'طباعة المشرفين',  icon: "M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" },
+    { type: 'stations',    ar: 'طباعة المحطات',   icon: "M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" },
+    { type: 'range',       ar: 'تقرير فترة زمنية', icon: "M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z" },
+  ]
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(p => !p)} style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '7px 14px', background: '#1C2B4A', color: '#fff',
+        border: 'none', borderRadius: 8, cursor: 'pointer',
+        fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600,
+      }}>
+        <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={13} />
+        {isAr ? 'طباعة' : 'Print'}
+        <Svg d="M6 9l6 6 6-6" size={11} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', left: 0,
+          background: 'var(--card)', border: '1px solid var(--border)',
+          borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+          minWidth: 190, zIndex: 999, overflow: 'hidden',
+        }}>
+          {items.map((item, i) => (
+            <button key={item.type} onClick={() => { onSelect(item.type); setOpen(false) }} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 16px', background: 'none',
+              border: 'none', borderBottom: i < items.length - 1 ? '1px solid var(--border)' : 'none',
+              cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem',
+              fontWeight: 600, color: 'var(--text-1)', textAlign: 'right',
+              direction: 'rtl', transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+              <Svg d={item.icon} size={13} />
+              {item.ar}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function EvaluationPage() {
   const { profile, isAdmin, isGeneralAdmin, allowedStationIds } = useAuth()
   const { i18n }   = useTranslation()
@@ -765,31 +820,9 @@ export default function EvaluationPage() {
                   {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
-              {/* أزرار الطباعة */}
+              {/* زر الطباعة */}
               {isAdmin && (
-                <div className="ev-print-row" style={{ display: 'flex', gap: 6 }}>
-                  {[
-                    { labelAr: 'طباعة الموظفين', labelEn: 'Print Employees', type: 'employees', primary: true },
-                    { labelAr: 'طباعة المشرفين', labelEn: 'Print Supervisors', type: 'supervisors', primary: false },
-                    { labelAr: 'طباعة المحطات', labelEn: 'Print Stations', type: 'stations', primary: false },
-                    { labelAr: 'تقرير فترة', labelEn: 'Period Report', type: 'range', primary: false },
-                  ].map(b => (
-                    <button key={b.type} onClick={() => setPrintModal(b.type)} style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '7px 14px',
-                      background: b.primary ? '#1C2B4A' : 'var(--surface)',
-                      color: b.primary ? '#fff' : 'var(--text-2)',
-                      border: b.primary ? 'none' : '1px solid var(--border)',
-                      borderRadius: 8, cursor: 'pointer',
-                      fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600,
-                    }}>
-                      <Svg d={b.type === 'range'
-                        ? "M8 2v4M16 2v4M3 10h18M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z"
-                        : "M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"} size={13} />
-                      {isAr ? b.labelAr : b.labelEn}
-                    </button>
-                  ))}
-                </div>
+                <PrintDropdown isAr={isAr} onSelect={setPrintModal} />
               )}
             </div>
           </div>
