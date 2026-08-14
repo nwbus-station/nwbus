@@ -658,7 +658,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           {form.role !== 'general_admin' && supervisors.length > 0 && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                {isAr ? 'المشرف المباشر' : 'Direct Supervisor'}
+                {isAr ? 'المسؤول المباشر' : 'Direct Supervisor'}
               </label>
               <select className={inputCls} value={form.supervisor_id} onChange={e => set('supervisor_id', e.target.value)}>
                 <option value="">{isAr ? '— بدون مشرف —' : '— No Supervisor —'}</option>
