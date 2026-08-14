@@ -733,6 +733,17 @@ export default function EvaluationPage() {
 
   useEffect(() => { load() }, [load])
 
+  // Realtime: إعادة تحميل البيانات عند أي تغيير في جداول التقييم
+  useEffect(() => {
+    if (!profile?.id) return
+    const ch = supabase.channel('eval-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_evaluations' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supervisor_evaluations' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'station_evaluations' }, load)
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [profile?.id, load])
+
   // ── فلترة ─────────────────────────────────────────────────
   const filteredEmployees = employees
     .filter(e => filterStation === 'all' || e.station_id === filterStation)
