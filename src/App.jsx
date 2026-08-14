@@ -1,7 +1,22 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useEffect, lazy, Suspense } from 'react'
+import { useEffect, lazy, Suspense, Component } from 'react'
 import { useAuth } from './context/AuthContext'
+
+class MapErrorBoundary extends Component {
+  state = { error: null }
+  static getDerivedStateFromError(e) { return { error: e } }
+  componentDidCatch(e, info) { console.error('[MapPage Error]', e, info) }
+  render() {
+    if (this.state.error) return (
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', flexDirection:'column', gap:12, color:'var(--text-2)' }}>
+        <p style={{ fontWeight:600 }}>تعذّر تحميل الخريطة</p>
+        <button onClick={() => this.setState({ error: null })} style={{ padding:'8px 20px', borderRadius:8, border:'none', background:'#1C2B4A', color:'#fff', cursor:'pointer' }}>إعادة المحاولة</button>
+      </div>
+    )
+    return this.props.children
+  }
+}
 
 // Pages
 import LoginPage        from './pages/LoginPage'
@@ -99,9 +114,11 @@ export default function App() {
         } />
         <Route path="map" element={
           <RequireAuth allowedRoles={['general_admin','station_admin']}>
-            <Suspense fallback={<LoadingSpinner />}>
-              <MapPage />
-            </Suspense>
+            <MapErrorBoundary>
+              <Suspense fallback={<LoadingSpinner />}>
+                <MapPage />
+              </Suspense>
+            </MapErrorBoundary>
           </RequireAuth>
         } />
         <Route path="users"    element={
