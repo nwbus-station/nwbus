@@ -400,7 +400,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
                     }}>
                       {expectedMissed < 0
                         ? (isAr ? `⚠ الركاب يتجاوز الكشف بـ ${Math.abs(expectedMissed)}` : `⚠ Pax exceeds manifest by ${Math.abs(expectedMissed)}`)
-                        : (isAr ? `→ متخلفون متوقعون: ${expectedMissed}` : `→ Expected missed: ${expectedMissed}`)}
+                        : (isAr ? `→ المتخلفون: ${expectedMissed}` : `→ Expected missed: ${expectedMissed}`)}
                     </span>
                   )}
                 </div>
