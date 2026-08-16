@@ -33,6 +33,7 @@ import SettingsPage     from './pages/SettingsPage'
 import LeavePage        from './pages/LeavePage'
 import SurveyPage       from './pages/SurveyPage'
 import EvaluationPage   from './pages/EvaluationPage'
+import BoardingPage     from './pages/BoardingPage'
 
 // Layout
 import AppLayout        from './components/layout/AppLayout'
@@ -131,6 +132,7 @@ export default function App() {
             <StationsPage />
           </RequireAuth>
         } />
+        <Route path="boarding"   element={<BoardingPage />} />
         <Route path="leaves"     element={<LeavePage />} />
         <Route path="evaluation" element={<EvaluationPage />} />
         <Route path="settings" element={<SettingsPage />} />
