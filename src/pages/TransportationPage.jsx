@@ -98,6 +98,15 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   const [manifestMatch, setManifestMatch] = useState(record?.manifest_match ?? null) // true | false | null
   const [manifestTotal, setManifestTotal] = useState(record?.manifest_total ?? '')
 
+  // الفرق المحسوب: من أصل − الركاب = المتخلفين المتوقعين
+  const expectedMissed = (() => {
+    if (manifestMatch !== false) return null
+    const total = Number(manifestTotal)
+    const pax   = Number(form.passenger_count)
+    if (!manifestTotal || isNaN(total) || isNaN(pax) || form.passenger_count === '') return null
+    return total - pax
+  })()
+
   // الوقت المجدول والفعلي حسب النوع (وصول/مغادرة)
   const schedDep = schedTime || (isArrival ? trip.scheduled_arrival : trip.scheduled_departure)?.slice(0, 5) || ''
   const actualKey = isArrival ? 'actual_arrival' : 'actual_departure'
@@ -132,6 +141,28 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     if (form.passenger_count === '' || form.passenger_count === null || form.passenger_count === undefined) {
       setError(isAr ? 'يرجى إدخال عدد الركاب (يمكن أن يكون 0)' : 'Passenger count is required (can be 0)')
       return
+    }
+
+    // التحقق من تطابق عدد التذاكر مع الفرق المحسوب
+    if (manifestMatch === false && expectedMissed !== null) {
+      if (expectedMissed < 0) {
+        setError(isAr
+          ? `عدد الركاب (${Number(form.passenger_count)}) أكبر من الكشف (${manifestTotal}) — تحقق من الأرقام`
+          : `Passenger count exceeds manifest total — check the numbers`)
+        return
+      }
+      if (missedTickets.length < expectedMissed) {
+        setError(isAr
+          ? `تذاكر المتخلفين غير مكتملة — المطلوب ${expectedMissed} وتم إدخال ${missedTickets.length}`
+          : `Missed tickets incomplete — expected ${expectedMissed}, entered ${missedTickets.length}`)
+        return
+      }
+      if (missedTickets.length > expectedMissed) {
+        setError(isAr
+          ? `تذاكر المتخلفين أكثر من المتوقع — المتوقع ${expectedMissed} وتم إدخال ${missedTickets.length}`
+          : `More missed tickets than expected — expected ${expectedMissed}, entered ${missedTickets.length}`)
+        return
+      }
     }
 
     setSaving(true)
@@ -272,7 +303,27 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
           {/* تذاكر المتخلفين */}
           {!isArrival && <div>
             <label style={S.label}>
-              {isAr ? 'تذاكر المتخلفين عن الرحلة' : 'Missed Passenger Tickets'} · {isAr ? 'العدد:' : 'Count:'} {missedTickets.length}
+              {isAr ? 'تذاكر المتخلفين عن الرحلة' : 'Missed Passenger Tickets'}
+              {' · '}
+              {isAr ? 'العدد:' : 'Count:'} {missedTickets.length}
+              {expectedMissed !== null && (
+                <span style={{
+                  marginRight: 8,
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  color: expectedMissed < 0
+                    ? 'var(--danger)'
+                    : missedTickets.length === expectedMissed
+                      ? 'var(--success)'
+                      : 'var(--danger)',
+                }}>
+                  {expectedMissed < 0
+                    ? (isAr ? ' ⚠ عدد الركاب يتجاوز الكشف' : ' ⚠ Exceeds manifest')
+                    : missedTickets.length === expectedMissed
+                      ? (isAr ? ` / ${expectedMissed} ✓` : ` / ${expectedMissed} ✓`)
+                      : (isAr ? ` / ${expectedMissed} مطلوب` : ` / ${expectedMissed} required`)}
+                </span>
+              )}
             </label>
             <div style={{ display:'flex', gap:8 }}>
               <div style={{ flex:1, border:'1px solid var(--border)', borderRadius:8, overflow:'hidden', minHeight:90 }}>
@@ -333,14 +384,42 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
               </button>
             </div>
             {manifestMatch === false && (
-              <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:'0.75rem', color:'var(--text-3)' }}>{isAr ? 'من أصل' : 'Out of'}</span>
-                <input type="text" inputMode="numeric"
-                  value={manifestTotal}
-                  onChange={e => setManifestTotal(toLatinDigits(e.target.value).replace(/\D/g, ''))}
-                  placeholder="0"
-                  style={{ ...S.input, width:80, borderColor:'var(--danger)', fontFamily:'monospace', textAlign:'center' }}
-                />
+              <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:6 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontSize:'0.75rem', color:'var(--text-3)' }}>{isAr ? 'من أصل' : 'Out of'}</span>
+                  <input type="text" inputMode="numeric"
+                    value={manifestTotal}
+                    onChange={e => setManifestTotal(toLatinDigits(e.target.value).replace(/\D/g, ''))}
+                    placeholder="0"
+                    style={{ ...S.input, width:80, borderColor:'var(--danger)', fontFamily:'monospace', textAlign:'center' }}
+                  />
+                  {expectedMissed !== null && (
+                    <span style={{
+                      fontSize:'0.75rem', fontWeight:700,
+                      color: expectedMissed < 0 ? 'var(--danger)' : 'var(--text-1)',
+                    }}>
+                      {expectedMissed < 0
+                        ? (isAr ? `⚠ الركاب يتجاوز الكشف بـ ${Math.abs(expectedMissed)}` : `⚠ Pax exceeds manifest by ${Math.abs(expectedMissed)}`)
+                        : (isAr ? `→ متخلفون متوقعون: ${expectedMissed}` : `→ Expected missed: ${expectedMissed}`)}
+                    </span>
+                  )}
+                </div>
+                {expectedMissed !== null && expectedMissed >= 0 && (
+                  <div style={{
+                    padding:'6px 10px', borderRadius:6, fontSize:'0.72rem',
+                    background: missedTickets.length === expectedMissed
+                      ? 'rgba(var(--success-rgb,34,197,94),0.12)'
+                      : 'rgba(var(--danger-rgb,239,68,68),0.12)',
+                    color: missedTickets.length === expectedMissed ? 'var(--success)' : 'var(--danger)',
+                    fontWeight: 600,
+                  }}>
+                    {missedTickets.length === expectedMissed
+                      ? (isAr ? `✓ تم إدخال ${expectedMissed} تذكرة — مطابق` : `✓ ${expectedMissed} tickets entered — match`)
+                      : missedTickets.length < expectedMissed
+                        ? (isAr ? `⚠ ناقص ${expectedMissed - missedTickets.length} تذكرة (مدخل: ${missedTickets.length} / مطلوب: ${expectedMissed})` : `⚠ Missing ${expectedMissed - missedTickets.length} ticket(s) (entered: ${missedTickets.length} / required: ${expectedMissed})`)
+                        : (isAr ? `⚠ زيادة ${missedTickets.length - expectedMissed} تذكرة (مدخل: ${missedTickets.length} / مطلوب: ${expectedMissed})` : `⚠ ${missedTickets.length - expectedMissed} extra ticket(s) (entered: ${missedTickets.length} / required: ${expectedMissed})`)}
+                  </div>
+                )}
               </div>
             )}
           </div>
