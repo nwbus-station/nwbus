@@ -48,9 +48,8 @@ function pickTicketFromText(text) {
 }
 
 /*
-  فحص لون الخلفية:
-  - يسمح فقط بالخلفيات البيضاء/المحايدة (الورق، الشاشات البيضاء)
-  - يتجاهل الخلفيات الخضراء/الفيروزية (مثل شاشات Honeywell الملونة)
+  فحص لون الخلفية — يتجاهل الألوان الزاهية جداً (فيروزي/أخضر غامق Honeywell)
+  يسمح بالأبيض والكريمي والمحايد حتى لو فيه مسحة لونية خفيفة من الإضاءة
 */
 function isColoredBackground(video) {
   try {
@@ -59,27 +58,30 @@ function isColoredBackground(video) {
     const c = document.createElement('canvas')
     c.width = 60; c.height = 36
     const ctx = c.getContext('2d')
-    // عينة من المنطقة المركزية
     ctx.drawImage(video, vw * 0.2, vh * 0.25, vw * 0.6, vh * 0.5, 0, 0, 60, 36)
     const d = ctx.getImageData(0, 0, 60, 36).data
     let r = 0, g = 0, b = 0
     const n = d.length / 4
     for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2] }
     r /= n; g /= n; b /= n
-    // خضراء: G أعلى من R بـ 15+
-    // فيروزية/زرقاء: B أعلى من R بـ 40+
-    return (g > r + 15) || (b > r + 40)
+    // فقط الألوان الزاهية جداً — عتبة عالية تتجنب حجب الأبيض تحت الإضاءة المختلفة
+    // فيروزي/أخضر غامق: G أعلى من R بـ 50+
+    // أزرق زاهٍ/فيروزي: B أعلى من R بـ 80+
+    return (g > r + 50) || (b > r + 80)
   } catch { return false }
 }
 
-/* بناء كانفاس أصغر (1x بدون تكبير) — أسرع في OCR */
+/* كانفاس 1.5x — أسرع من 2x مع الحفاظ على جودة كافية للـ OCR */
 function buildOCRCanvas(video) {
   const vw = video.videoWidth, vh = video.videoHeight
+  const scale = 1.5
   const c = document.createElement('canvas')
-  c.width = vw; c.height = Math.floor(vh * 0.55)
+  c.width = Math.round(vw * scale)
+  c.height = Math.round(vh * 0.6 * scale)
   const ctx = c.getContext('2d')
-  ctx.imageSmoothingEnabled = false
-  ctx.drawImage(video, 0, Math.floor(vh * 0.2), vw, Math.floor(vh * 0.55), 0, 0, c.width, c.height)
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(video, 0, Math.floor(vh * 0.2), vw, Math.floor(vh * 0.6), 0, 0, c.width, c.height)
   const id = ctx.getImageData(0, 0, c.width, c.height), d = id.data
   for (let i = 0; i < d.length; i += 4) {
     const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
@@ -147,7 +149,7 @@ export default function QRScannerModal({
   async function initAndStart() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
       })
       streamRef.current = stream
       videoRef.current.srcObject = stream
