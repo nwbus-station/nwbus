@@ -114,6 +114,15 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     return total - pax
   })()
 
+  // إغلاق الماسح تلقائياً من الـ parent عند اكتمال العدد (backup للإغلاق الداخلي)
+  useEffect(() => {
+    if (!showTicketScanner) return
+    if (expectedMissed !== null && expectedMissed >= 0 && missedTickets.length >= expectedMissed) {
+      const t = setTimeout(() => setShowTicketScanner(false), 1900)
+      return () => clearTimeout(t)
+    }
+  }, [showTicketScanner, missedTickets.length, expectedMissed])
+
   // الوقت المجدول والفعلي حسب النوع (وصول/مغادرة)
   const schedDep = schedTime || (isArrival ? trip.scheduled_arrival : trip.scheduled_departure)?.slice(0, 5) || ''
   const actualKey = isArrival ? 'actual_arrival' : 'actual_departure'
