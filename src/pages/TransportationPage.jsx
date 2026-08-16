@@ -13,6 +13,7 @@ import ScheduleUploadModal from '../components/transportation/ScheduleUploadModa
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import StationTripsModal from '../components/transportation/StationTripsModal'
 import ExtraTripModal from '../components/transportation/ExtraTripModal'
+import QRScannerModal from '../components/shared/QRScannerModal'
 import NewTripModal from '../components/transportation/NewTripModal'
 import { applyDueSchedules } from '../utils/importSchedule'
 
@@ -83,15 +84,21 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   const [missedTickets, setMissedTickets] = useState(record?.missed_tickets ?? [])
   const [ticketInput, setTicketInput]     = useState('')
   const [ticketStation, setTicketStation] = useState(trip?.from_station?.name_ar || trip?.from_station?.name_en || '')
+  const [showTicketScanner, setShowTicketScanner] = useState(false)
 
-  function addTicket() {
-    const t = ticketInput.trim()
+  function addTicket(numOverride) {
+    const t = (numOverride ?? ticketInput).trim()
     if (!t) return
+    if (missedTickets.some(m => m.ticket === t)) return // تجنب التكرار
     setMissedTickets(prev => [...prev, { ticket: t, station: ticketStation }])
-    setTicketInput('')
+    if (!numOverride) setTicketInput('')
   }
   function removeTicket(i) {
     setMissedTickets(prev => prev.filter((_, idx) => idx !== i))
+  }
+  function handleTicketScan(ticketNum) {
+    setShowTicketScanner(false)
+    addTicket(ticketNum)
   }
 
   // مطابقة الكشف
@@ -359,10 +366,38 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
                   onFocus={e => e.target.style.borderColor='var(--accent)'}
                   onBlur={e => e.target.style.borderColor='var(--border)'}
                 />
-                <p style={{ margin:0, fontSize:'0.65rem', color:'var(--text-3)' }}>{isAr ? 'اكتب رقم التذكرة' : 'Type ticket number'}</p>
+                {/* زر مسح QR */}
+                <button type="button" onClick={() => setShowTicketScanner(true)}
+                  style={{
+                    display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                    padding:'8px 10px', borderRadius:8, fontSize:'0.75rem', fontWeight:600,
+                    cursor:'pointer', border:'2px dashed var(--border)',
+                    background:'var(--surface)', color:'var(--text-2)',
+                    transition:'all 0.14s',
+                  }}
+                  onMouseOver={e => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)' }}
+                  onMouseOut={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-2)' }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    <path d="M14 14h2v2h-2zM18 14h3M14 18v3M18 18h3v3h-3z"/>
+                  </svg>
+                  {isAr ? 'مسح QR' : 'Scan QR'}
+                </button>
+                <p style={{ margin:0, fontSize:'0.65rem', color:'var(--text-3)' }}>{isAr ? 'اكتب أو امسح رقم التذكرة' : 'Type or scan ticket number'}</p>
               </div>
             </div>
           </div>}
+
+          {/* ماسح QR للتذاكر */}
+          {showTicketScanner && (
+            <QRScannerModal
+              isAr={isAr}
+              onScan={handleTicketScan}
+              onClose={() => setShowTicketScanner(false)}
+            />
+          )}
 
           {/* مطابقة الكشف */}
           <div>
