@@ -15,7 +15,6 @@ import StationTripsModal from '../components/transportation/StationTripsModal'
 import ExtraTripModal from '../components/transportation/ExtraTripModal'
 import NewTripModal from '../components/transportation/NewTripModal'
 import { applyDueSchedules } from '../utils/importSchedule'
-import QRScannerModal, { parseTicketQR } from '../components/shared/QRScannerModal'
 
 /* ─── helpers ────────────────────────────────────────────── */
 import { todayStr } from '../utils/dates'
@@ -84,23 +83,15 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   const [missedTickets, setMissedTickets] = useState(record?.missed_tickets ?? [])
   const [ticketInput, setTicketInput]     = useState('')
   const [ticketStation, setTicketStation] = useState(trip?.from_station?.name_ar || trip?.from_station?.name_en || '')
-  const [showTicketScanner, setShowTicketScanner] = useState(false)
 
-  function addTicket(numOverride) {
-    const t = (numOverride ?? ticketInput).trim()
+  function addTicket() {
+    const t = ticketInput.trim()
     if (!t) return
-    // تجنب التكرار
-    if (missedTickets.some(m => m.ticket === t)) return
     setMissedTickets(prev => [...prev, { ticket: t, station: ticketStation }])
-    if (!numOverride) setTicketInput('')
+    setTicketInput('')
   }
   function removeTicket(i) {
     setMissedTickets(prev => prev.filter((_, idx) => idx !== i))
-  }
-  function handleTicketScan(parsed) {
-    setShowTicketScanner(false)
-    const num = parsed.ticket_number?.trim()
-    if (num) addTicket(num)
   }
 
   // مطابقة الكشف
@@ -308,34 +299,17 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
                     .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i)
                     .map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-                {/* زر مسح QR */}
-                <button type="button" onClick={() => setShowTicketScanner(true)}
-                  style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'8px 10px', borderRadius:6, border:'1px dashed var(--border)', background:'var(--surface)', color:'var(--text-2)', cursor:'pointer', fontSize:'0.75rem', fontWeight:600, transition:'all 0.12s' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor='#5B5BD6'; e.currentTarget.style.color='#5B5BD6' }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-2)' }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-                    <path d="M14 14h.01M17 14h3M14 17h.01M17 17h.01M20 17h.01M20 20h.01M17 20h3"/>
-                  </svg>
-                  {isAr ? 'مسح QR' : 'Scan QR'}
-                </button>
                 <input
                   value={ticketInput}
                   onChange={e => setTicketInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTicket())}
-                  placeholder={isAr ? 'أو اكتب يدوياً + Enter' : 'Or type + Enter'}
+                  placeholder={isAr ? 'رقم التذكرة ثم Enter' : 'Ticket # then Enter'}
                   style={{ ...S.input, padding:'7px 10px', fontSize:'0.75rem', fontFamily:'monospace' }}
                   onFocus={e => e.target.style.borderColor='var(--accent)'}
                   onBlur={e => e.target.style.borderColor='var(--border)'}
                 />
+                <p style={{ margin:0, fontSize:'0.65rem', color:'var(--text-3)' }}>{isAr ? 'اكتب رقم التذكرة' : 'Type ticket number'}</p>
               </div>
-              {showTicketScanner && (
-                <QRScannerModal
-                  title={isAr ? 'مسح تذكرة متخلف' : 'Scan Missed Ticket'}
-                  onScan={handleTicketScan}
-                  onClose={() => setShowTicketScanner(false)}
-                />
-              )}
             </div>
           </div>}
 
