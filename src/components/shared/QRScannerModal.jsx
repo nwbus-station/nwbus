@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import jsQR from 'jsqr'
 
 export function extractTicketNumber(raw) {
@@ -6,59 +6,101 @@ export function extractTicketNumber(raw) {
   const s = raw.trim()
   try {
     const obj = JSON.parse(s)
-    const v = obj.ticket_number ?? obj.ticketNumber ?? obj.ticket ?? obj.id ?? obj.number
+    const v = obj.ticket_number ?? obj.ticketNumber ?? obj.ticket ?? obj.id
     if (v) return String(v).trim()
   } catch (_) {}
-  const m7 = s.match(/\b\d{7}\b/)
-  if (m7) return m7[0]
-  if (/^[A-Za-z0-9\-_]+$/.test(s) && s.length <= 30) return s
+  const m7 = s.match(/(?<!\d)(\d{7})(?!\d)/)
+  return m7 ? m7[1] : null
+}
+
+/* -------- نمذج الصورة للـ OCR -------- */
+function buildOCRCanvas(video) {
+  const vw = video.videoWidth, vh = video.videoHeight
+  // قص المنطقة الوسطى (حيث رقم التذكرة غالباً)
+  const x = 0, y = Math.floor(vh * 0.25), w = vw, h = Math.floor(vh * 0.55)
+  const scale = 2
+  const c = document.createElement('canvas')
+  c.width = w * scale; c.height = h * scale
+  const ctx = c.getContext('2d')
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(video, x, y, w, h, 0, 0, c.width, c.height)
+  // تباين عالٍ: رمادي + threshold
+  const id = ctx.getImageData(0, 0, c.width, c.height), d = id.data
+  for (let i = 0; i < d.length; i += 4) {
+    const g = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2]
+    const v = g > 128 ? 255 : 0
+    d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255
+  }
+  ctx.putImageData(id, 0, 0)
+  return c
+}
+
+/* -------- استخراج الرقم من نص OCR -------- */
+function pickTicketFromText(text) {
+  // البحث عن "رقم التذكرة: XXXXXXX" أو "Ticket...: XXXXXXX"
+  // الأولوية: نمط النقطتين + 7 أرقام لا يسبقها أو يليها رقم
+  const patterns = [
+    /(?:رقم.*?التذكرة|ticket\s*(?:number|no|#)?)\s*[:\-]\s*(\d{7})(?!\d)/i,
+    /:\s*(\d{7})(?!\d)/,
+    /(?<!\d)(\d{7})(?!\d)/,
+  ]
+  for (const p of patterns) {
+    const m = text.match(p)
+    if (m) return m[1]
+  }
   return null
 }
 
-/*
-  Props:
-    onScan(ticket)   — يُستدعى لكل تذكرة تُضاف
-    onClose()        — يُستدعى عند الإغلاق
-    expectedCount    — العدد المطلوب من المتخلفين (اختياري)
-    initialCount     — عدد التذاكر المدخلة مسبقاً
-    isAr
-*/
+/* ============================================================
+   المودال الرئيسي
+   Props: onScan, onClose, expectedCount, initialCount, isAr
+   ============================================================ */
 export default function QRScannerModal({
   onScan, onClose,
   expectedCount = null,
   initialCount  = 0,
   isAr = true,
 }) {
-  const videoRef  = useRef(null)
-  const canvasRef = useRef(null)
-  const rafRef    = useRef(null)
-  const streamRef = useRef(null)
-  const inputRef  = useRef(null)
-  const closeTimer = useRef(null)
+  const videoRef    = useRef(null)
+  const canvasRef   = useRef(null)
+  const qrRafRef    = useRef(null)
+  const streamRef   = useRef(null)
+  const busyRef     = useRef(false)   // OCR قيد التشغيل
+  const activeRef   = useRef(true)    // المودال مفتوح
+  const scanTimer   = useRef(null)
+  const closeTimer  = useRef(null)
 
   const [camReady, setCamReady]     = useState(false)
   const [camErr, setCamErr]         = useState('')
-  const [number, setNumber]         = useState('')
-  const [scanCount, setScanCount]   = useState(0)   // عدد ما تمت إضافته في هذه الجلسة
-  const [lastAdded, setLastAdded]   = useState(null) // آخر رقم أُضيف
-  const [autoClosing, setAutoClosing] = useState(false)
+  const [status, setStatus]         = useState('searching') // searching|found|confirmed|done
+  const [found, setFound]           = useState(null)        // الرقم المكتشف
+  const [scanCount, setScanCount]   = useState(0)
+  const [isProcessing, setIsProcessing] = useState(false)
 
-  const totalDone  = initialCount + scanCount
-  const remaining  = expectedCount !== null ? Math.max(0, expectedCount - totalDone) : null
+  const totalDone = initialCount + scanCount
+  const remaining = expectedCount !== null ? Math.max(0, expectedCount - totalDone) : null
 
+  /* -------- تشغيل الكاميرا -------- */
   useEffect(() => {
+    activeRef.current = true
     startCamera()
     return () => {
-      cancelAnimationFrame(rafRef.current)
-      clearTimeout(closeTimer.current)
-      streamRef.current?.getTracks().forEach(t => t.stop())
+      activeRef.current = false
+      cleanup()
     }
   }, [])
 
-  // فوكس على الإنبوت بعد تجهز الكاميرا
-  useEffect(() => {
-    if (camReady) setTimeout(() => inputRef.current?.focus(), 300)
-  }, [camReady])
+  function cleanup() {
+    cancelAnimationFrame(qrRafRef.current)
+    clearTimeout(scanTimer.current)
+    clearTimeout(closeTimer.current)
+    streamRef.current?.getTracks().forEach(t => t.stop())
+  }
+
+  function stopAndClose() {
+    cleanup()
+    onClose()
+  }
 
   async function startCamera() {
     try {
@@ -69,24 +111,19 @@ export default function QRScannerModal({
       videoRef.current.srcObject = stream
       await videoRef.current.play()
       setCamReady(true)
-      scanQR()
+      loopQR()
+      scheduleOCR(500)
     } catch {
-      setCamErr(isAr ? 'تعذّر فتح الكاميرا' : 'Camera unavailable')
+      setCamErr(isAr ? 'تعذّر فتح الكاميرا — تحقق من الصلاحيات' : 'Camera access denied')
     }
   }
 
-  function stopAndClose() {
-    cancelAnimationFrame(rafRef.current)
-    clearTimeout(closeTimer.current)
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    onClose()
-  }
-
-  // مسح QR في الخلفية
-  function scanQR() {
+  /* -------- QR في الخلفية -------- */
+  function loopQR() {
+    if (!activeRef.current) return
     const video = videoRef.current, canvas = canvasRef.current
     if (!video || !canvas || video.readyState < 2) {
-      rafRef.current = requestAnimationFrame(scanQR); return
+      qrRafRef.current = requestAnimationFrame(loopQR); return
     }
     canvas.width = video.videoWidth; canvas.height = video.videoHeight
     canvas.getContext('2d').drawImage(video, 0, 0)
@@ -94,179 +131,245 @@ export default function QRScannerModal({
     const code = jsQR(id.data, id.width, id.height, { inversionAttempts: 'dontInvert' })
     if (code?.data) {
       const t = extractTicketNumber(code.data)
-      if (t) { handleAdd(t); return }
+      if (t) { showFound(t); return }
     }
-    rafRef.current = requestAnimationFrame(scanQR)
+    qrRafRef.current = requestAnimationFrame(loopQR)
   }
 
-  function handleAdd(ticket) {
-    onScan(ticket)
+  /* -------- جدولة OCR -------- */
+  function scheduleOCR(delay = 2500) {
+    if (!activeRef.current) return
+    clearTimeout(scanTimer.current)
+    scanTimer.current = setTimeout(runOCR, delay)
+  }
+
+  /* -------- تشغيل OCR -------- */
+  const runOCR = useCallback(async () => {
+    if (!activeRef.current || busyRef.current) return
+    const video = videoRef.current
+    if (!video || video.readyState < 2) { scheduleOCR(1000); return }
+
+    busyRef.current = true
+    setIsProcessing(true)
+
+    try {
+      const proc = buildOCRCanvas(video)
+      const { createWorker } = await import('tesseract.js')
+      const worker = await createWorker('eng', 1, { logger: () => {} })
+      // النقطتين + الأرقام + أحرف شائعة في label التذكرة
+      await worker.setParameters({
+        tessedit_char_whitelist: '0123456789:TicektNumbr rqmالتذكرةرقم',
+        tessedit_pageseg_mode: '6',
+      })
+      const { data: { text } } = await worker.recognize(proc.toDataURL('image/png'))
+      await worker.terminate()
+
+      if (!activeRef.current) return
+      const ticket = pickTicketFromText(text)
+      if (ticket) {
+        showFound(ticket)
+      } else {
+        scheduleOCR(2500)
+      }
+    } catch {
+      scheduleOCR(3000)
+    } finally {
+      busyRef.current = false
+      if (activeRef.current) setIsProcessing(false)
+    }
+  }, [])
+
+  /* -------- عرض الرقم للتأكيد -------- */
+  function showFound(ticket) {
+    cancelAnimationFrame(qrRafRef.current)
+    clearTimeout(scanTimer.current)
+    setFound(ticket)
+    setStatus('found')
+  }
+
+  function confirmFound() {
+    if (!found) return
+    onScan(found)
     const newCount = scanCount + 1
     setScanCount(newCount)
-    setLastAdded(ticket)
-    setNumber('')
-
     const newTotal = initialCount + newCount
-    const isComplete = expectedCount !== null && newTotal >= expectedCount
+    const done = expectedCount !== null && newTotal >= expectedCount
 
-    if (isComplete) {
-      // اكتمل العدد — أغلق بعد ثانيتين
-      setAutoClosing(true)
+    if (done) {
+      setStatus('done')
       closeTimer.current = setTimeout(stopAndClose, 2000)
     } else {
-      // واصل — امسح الرسالة بعد ثانية وواصل
-      clearTimeout(closeTimer.current)
-      closeTimer.current = setTimeout(() => {
-        setLastAdded(null)
-        inputRef.current?.focus()
-        scanQR()
-      }, 1200)
+      setFound(null)
+      setStatus('searching')
+      loopQR()
+      scheduleOCR(500)
     }
   }
 
-  function confirm() {
-    const t = number.trim()
-    if (t.length !== 7 || !/^\d{7}$/.test(t)) return
-    cancelAnimationFrame(rafRef.current) // أوقف QR مؤقتاً
-    handleAdd(t)
+  function retry() {
+    setFound(null)
+    setStatus('searching')
+    loopQR()
+    scheduleOCR(500)
   }
 
   /* -------- UI -------- */
+  const isSearching = status === 'searching'
+  const isFound     = status === 'found'
+  const isDone      = status === 'done'
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1100,
       background: '#000',
       display: 'flex', flexDirection: 'column',
     }}>
-      {/* الكاميرا */}
+      {/* الكاميرا تأخذ كل الشاشة */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} playsInline muted />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-        {/* رأس: شريط الحالة + زر إغلاق */}
+        {/* شريط العنوان */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0,
-          background: 'linear-gradient(rgba(0,0,0,0.65), transparent)',
+          background: 'linear-gradient(rgba(0,0,0,0.7), transparent)',
           padding: '14px 16px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          {/* عداد */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: '#facc15', fontWeight: 700, fontSize: '1rem' }}>
-              {isAr ? 'تذاكر المتخلفين' : 'Missed Tickets'}
+            {isProcessing && !isFound && (
+              <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#facc15', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+            )}
+            <span style={{ color: '#facc15', fontWeight: 700, fontSize: '0.95rem' }}>
+              {isAr
+                ? (isProcessing && !isFound ? 'يبحث عن رقم التذكرة...' : 'وجّه الكاميرا على التذكرة')
+                : (isProcessing && !isFound ? 'Scanning for ticket number...' : 'Point camera at ticket')}
             </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {expectedCount !== null && (
               <span style={{
                 background: totalDone >= expectedCount ? '#22c55e' : 'rgba(255,255,255,0.15)',
-                color: '#fff', fontSize: '0.8rem', fontWeight: 700,
+                color: '#fff', fontSize: '0.78rem', fontWeight: 700,
                 padding: '3px 10px', borderRadius: 20,
               }}>
                 {totalDone} / {expectedCount}
               </span>
             )}
+            <button onClick={stopAndClose} style={{
+              background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 50,
+              color: '#fff', padding: '6px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
+            }}>
+              {isAr ? '✕ إغلاق' : '✕ Close'}
+            </button>
           </div>
-
-          {/* زر الإغلاق */}
-          <button onClick={stopAndClose} style={{
-            background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 50,
-            color: '#fff', padding: '6px 16px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
-          }}>
-            {isAr ? '✕ إغلاق' : '✕ Close'}
-          </button>
         </div>
 
-        {/* إشعار النجاح / اكتمال العدد */}
-        {(lastAdded || autoClosing) && (
+        {/* إطار البحث */}
+        {isSearching && camReady && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            <div style={{
+              width: '90%', height: '30%',
+              border: `2px ${isProcessing ? 'solid #facc15' : 'dashed rgba(250,204,21,0.5)'}`,
+              borderRadius: 12,
+              boxShadow: '0 0 0 2000px rgba(0,0,0,0.4)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+              transition: 'border 0.3s',
+            }}>
+              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.75rem', margin: 0, textAlign: 'center', padding: '0 16px' }}>
+                {isAr ? 'ضع سطر "رقم التذكرة" داخل الإطار' : 'Align "Ticket Number" line inside frame'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* نتيجة مكتشفة — تأكيد */}
+        {isFound && found && (
           <div style={{
             position: 'absolute', inset: 0,
-            background: autoClosing ? 'rgba(34,197,94,0.2)' : 'rgba(0,0,0,0.45)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 10,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
           }}>
             <div style={{
-              background: autoClosing ? '#22c55e' : 'rgba(34,197,94,0.9)',
-              borderRadius: 16, padding: '18px 32px', textAlign: 'center',
+              background: 'rgba(255,255,255,0.07)', border: '2px solid #facc15',
+              borderRadius: 20, padding: '28px 36px', textAlign: 'center',
             }}>
-              <p style={{ color: '#fff', margin: 0, fontWeight: 700, fontSize: '1rem' }}>
-                {isAr ? '✓ تمت الإضافة' : '✓ Added'}
+              <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.78rem', margin: '0 0 8px' }}>
+                {isAr ? 'رقم التذكرة المُكتشف' : 'Detected ticket number'}
               </p>
-              <p style={{ color: 'rgba(255,255,255,0.85)', margin: '4px 0 0', fontFamily: 'monospace', fontSize: '1.5rem', letterSpacing: 4 }}>
-                {lastAdded}
+              <p style={{ color: '#facc15', fontSize: '2.6rem', fontWeight: 800, fontFamily: 'monospace', letterSpacing: 6, margin: 0 }}>
+                {found}
               </p>
-              {autoClosing && (
-                <p style={{ color: 'rgba(255,255,255,0.8)', margin: '10px 0 0', fontSize: '0.85rem' }}>
-                  {isAr ? `✓ اكتمل العدد (${expectedCount}) — جاري الإغلاق...` : `✓ All ${expectedCount} added — closing...`}
-                </p>
-              )}
             </div>
-            {!autoClosing && remaining !== null && remaining > 0 && (
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', margin: 0 }}>
-                {isAr ? `متبقٍ ${remaining} تذكرة` : `${remaining} more needed`}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={confirmFound} style={{
+                padding: '13px 36px', borderRadius: 12, border: 'none',
+                background: '#22c55e', color: '#fff', fontWeight: 800, fontSize: '1rem', cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(34,197,94,0.4)',
+              }}>
+                {isAr ? '✓ تأكيد' : '✓ Confirm'}
+              </button>
+              <button onClick={retry} style={{
+                padding: '13px 28px', borderRadius: 12, border: 'none',
+                background: 'rgba(255,255,255,0.1)', color: '#fff', fontWeight: 600, fontSize: '1rem', cursor: 'pointer',
+              }}>
+                {isAr ? 'إعادة' : 'Retry'}
+              </button>
+            </div>
+            {remaining !== null && remaining > 0 && (
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.78rem', margin: 0 }}>
+                {isAr ? `متبقٍ ${remaining} تذكرة بعد هذه` : `${remaining} more after this`}
               </p>
             )}
           </div>
         )}
 
-        {/* خطأ كاميرا */}
-        {camErr && (
+        {/* اكتمل العدد */}
+        {isDone && (
           <div style={{
-            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.85)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            position: 'absolute', inset: 0,
+            background: 'rgba(34,197,94,0.15)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
           }}>
+            <div style={{
+              background: '#22c55e', borderRadius: 20, padding: '24px 40px', textAlign: 'center',
+            }}>
+              <p style={{ color: '#fff', fontWeight: 800, fontSize: '1.2rem', margin: 0 }}>
+                {isAr ? `✓ اكتمل العدد (${expectedCount})` : `✓ All ${expectedCount} tickets added`}
+              </p>
+              <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.85rem', margin: '6px 0 0' }}>
+                {isAr ? 'جاري الإغلاق...' : 'Closing...'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* خطأ */}
+        {camErr && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.88)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ fontSize: '3rem' }}>📷</span>
             <p style={{ color: '#fff', marginTop: 12, textAlign: 'center', padding: '0 32px' }}>{camErr}</p>
           </div>
         )}
 
-        {/* تعليمات */}
-        {camReady && !lastAdded && !autoClosing && (
+        {/* تعليمات في الأسفل */}
+        {isSearching && camReady && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
-            background: 'linear-gradient(transparent, rgba(0,0,0,0.65))',
-            padding: '28px 16px 10px', textAlign: 'center',
+            background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+            padding: '28px 16px 16px', textAlign: 'center',
           }}>
-            <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.78rem', margin: 0 }}>
-              {isAr ? 'وجّه الكاميرا على رقم التذكرة أو اكتبه أدناه' : 'Point at ticket number or type below'}
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.72rem', margin: 0 }}>
+              {isAr
+                ? 'يبحث تلقائياً عن نص "رقم التذكرة: XXXXXXX"'
+                : 'Auto-scanning for "Ticket Number: XXXXXXX"'}
             </p>
           </div>
         )}
       </div>
 
-      {/* شريط الإدخال السفلي */}
-      {!autoClosing && (
-        <div style={{ background: '#111', padding: '14px 16px', display: 'flex', gap: 10, flexShrink: 0 }}>
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="numeric"
-            maxLength={7}
-            value={number}
-            onChange={e => setNumber(e.target.value.replace(/\D/g, '').slice(0, 7))}
-            onKeyDown={e => e.key === 'Enter' && confirm()}
-            placeholder={isAr ? '7 أرقام' : '7 digits'}
-            style={{
-              flex: 1, padding: '13px 16px', borderRadius: 12,
-              border: `2px solid ${number.length === 7 ? '#22c55e' : 'rgba(255,255,255,0.15)'}`,
-              background: 'rgba(255,255,255,0.06)', color: '#fff',
-              fontSize: '1.6rem', fontFamily: 'monospace', textAlign: 'center', letterSpacing: 5,
-              outline: 'none', transition: 'border-color 0.15s',
-            }}
-          />
-          <button
-            onClick={confirm}
-            disabled={number.length !== 7}
-            style={{
-              padding: '0 24px', borderRadius: 12, border: 'none',
-              background: number.length === 7 ? '#22c55e' : '#2a2a2a',
-              color: number.length === 7 ? '#fff' : '#555',
-              fontWeight: 800, fontSize: '1.3rem',
-              cursor: number.length === 7 ? 'pointer' : 'not-allowed',
-              transition: 'all 0.15s', flexShrink: 0,
-            }}>
-            ✓
-          </button>
-        </div>
-      )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }
