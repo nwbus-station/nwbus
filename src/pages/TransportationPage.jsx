@@ -97,7 +97,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     setMissedTickets(prev => prev.filter((_, idx) => idx !== i))
   }
   function handleTicketScan(ticketNum) {
-    setShowTicketScanner(false)
+    // الماسح يبقى مفتوح — فقط يُضاف الرقم
     addTicket(ticketNum)
   }
 
@@ -390,12 +390,14 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
             </div>
           </div>}
 
-          {/* ماسح QR للتذاكر */}
+          {/* ماسح التذاكر */}
           {showTicketScanner && (
             <QRScannerModal
               isAr={isAr}
               onScan={handleTicketScan}
               onClose={() => setShowTicketScanner(false)}
+              expectedCount={expectedMissed !== null && expectedMissed >= 0 ? expectedMissed : null}
+              initialCount={missedTickets.length}
             />
           )}
 
