@@ -398,6 +398,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
               onClose={() => setShowTicketScanner(false)}
               expectedCount={expectedMissed !== null && expectedMissed >= 0 ? expectedMissed : null}
               initialCount={missedTickets.length}
+              existingTickets={missedTickets.map(m => m.ticket)}
             />
           )}
 

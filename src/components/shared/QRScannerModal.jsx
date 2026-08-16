@@ -71,29 +71,35 @@ function buildOCRCanvas(video) {
    ════════════════════════════════════════ */
 export default function QRScannerModal({
   onScan, onClose,
-  expectedCount = null,
-  initialCount  = 0,
+  expectedCount   = null,
+  initialCount    = 0,
+  existingTickets = [],   // أرقام التذاكر المضافة مسبقاً
   isAr = true,
 }) {
-  const videoRef     = useRef(null)
-  const canvasRef    = useRef(null)
-  const qrRafRef     = useRef(null)
-  const streamRef    = useRef(null)
-  const workerRef    = useRef(null)
-  const busyRef      = useRef(false)
-  const activeRef    = useRef(true)
-  const scanTimer    = useRef(null)
-  const closeTimer   = useRef(null)
-  const scanCountRef = useRef(0)
-  const onCloseRef   = useRef(onClose)
+  const videoRef         = useRef(null)
+  const canvasRef        = useRef(null)
+  const qrRafRef         = useRef(null)
+  const streamRef        = useRef(null)
+  const workerRef        = useRef(null)
+  const busyRef          = useRef(false)
+  const activeRef        = useRef(true)
+  const scanTimer        = useRef(null)
+  const closeTimer       = useRef(null)
+  const scanCountRef     = useRef(0)
+  const onCloseRef       = useRef(onClose)
+  // ثوابت عند الفتح — لا تتغير مع re-renders
+  const initialCountRef  = useRef(initialCount)
+  const expectedCountRef = useRef(expectedCount)
+  const addedSet         = useRef(new Set(existingTickets)) // كل الأرقام المضافة
 
   const [camReady, setCamReady]         = useState(false)
   const [camErr, setCamErr]             = useState('')
-  const [status, setStatus]             = useState('init')   // init|searching|found|done
+  const [status, setStatus]             = useState('init')
   const [found, setFound]               = useState(null)
   const [scanCount, setScanCount]       = useState(0)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [scanLine, setScanLine]         = useState(0)       // 0-100 for animation
+  const [scanLine, setScanLine]         = useState(0)
+  const [dupWarn, setDupWarn]           = useState(null)   // رقم مكرر
 
   useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
@@ -108,8 +114,8 @@ export default function QRScannerModal({
     return () => clearInterval(id)
   }, [status])
 
-  const totalDone = initialCount + scanCount
-  const remaining = expectedCount !== null ? Math.max(0, expectedCount - totalDone) : null
+  const totalDone = initialCountRef.current + scanCount
+  const remaining = expectedCountRef.current !== null ? Math.max(0, expectedCountRef.current - totalDone) : null
 
   useEffect(() => {
     activeRef.current = true
@@ -203,6 +209,13 @@ export default function QRScannerModal({
   }
 
   function presentFound(ticket) {
+    // تجاهل المكرر
+    if (addedSet.current.has(ticket)) {
+      setDupWarn(ticket)
+      setTimeout(() => setDupWarn(null), 2200)
+      scheduleOCR(2500)
+      return
+    }
     cancelAnimationFrame(qrRafRef.current)
     clearTimeout(scanTimer.current)
     playBeep('found')
@@ -213,10 +226,12 @@ export default function QRScannerModal({
   function confirmFound() {
     if (!found) return
     onScan(found)
+    addedSet.current.add(found)           // سجّل الرقم حتى لا يُقبل مرتين
     scanCountRef.current += 1
     setScanCount(scanCountRef.current)
-    const newTotal = initialCount + scanCountRef.current
-    const done = expectedCount !== null && newTotal >= expectedCount
+    // استخدم refs الثابتة — غير متأثرة بإعادة الرسم
+    const newTotal = initialCountRef.current + scanCountRef.current
+    const done = expectedCountRef.current !== null && newTotal >= expectedCountRef.current
     if (done) {
       playBeep('done')
       setStatus('done')
@@ -234,9 +249,10 @@ export default function QRScannerModal({
     loopQR(); scheduleOCR(400)
   }
 
-  const isSearching = status === 'searching'
-  const isFound     = status === 'found'
-  const isDone      = status === 'done'
+  const isSearching  = status === 'searching'
+  const isFound      = status === 'found'
+  const isDone       = status === 'done'
+  const displayTotal = initialCountRef.current + scanCount
 
   /* ─── الألوان ─── */
   const GOLD  = '#F5C542'
@@ -275,14 +291,14 @@ export default function QRScannerModal({
           </div>
 
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            {expectedCount !== null && (
+            {expectedCountRef.current !== null && (
               <div style={{
-                background: totalDone >= expectedCount ? GREEN : 'rgba(255,255,255,0.12)',
+                background: displayTotal >= expectedCountRef.current ? GREEN : 'rgba(255,255,255,0.12)',
                 color:'#fff', fontSize:'0.75rem', fontWeight:800,
                 padding:'4px 12px', borderRadius:20, letterSpacing:0.5,
                 transition:'background .3s',
               }}>
-                {totalDone} / {expectedCount}
+                {displayTotal} / {expectedCountRef.current}
               </div>
             )}
             <button onClick={hardClose} style={{
@@ -402,15 +418,32 @@ export default function QRScannerModal({
               <p style={{ color:'#fff', fontWeight:800, fontSize:'1.15rem', margin:0 }}>
                 {isAr ? 'اكتملت التذاكر' : 'All tickets added'}
               </p>
-              {expectedCount && (
+              {expectedCountRef.current && (
                 <p style={{ color:'rgba(255,255,255,0.75)', fontSize:'0.85rem', margin:'6px 0 0' }}>
-                  {expectedCount} {isAr ? 'تذكرة' : 'tickets'}
+                  {expectedCountRef.current} {isAr ? 'تذكرة' : 'tickets'}
                 </p>
               )}
               <p style={{ color:'rgba(255,255,255,0.55)', fontSize:'0.78rem', margin:'10px 0 0' }}>
                 {isAr ? 'جاري الإغلاق...' : 'Closing...'}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* ── تحذير مكرر ── */}
+        {dupWarn && (
+          <div style={{
+            position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
+            background:'rgba(239,68,68,0.95)', borderRadius:16, padding:'16px 28px', textAlign:'center',
+            boxShadow:'0 4px 24px rgba(0,0,0,0.5)', zIndex:10,
+            animation:'fadeIn .15s ease',
+          }}>
+            <p style={{ color:'#fff', fontWeight:700, fontSize:'0.9rem', margin:0 }}>
+              {isAr ? 'هذه التذكرة مضافة مسبقاً' : 'Already added'}
+            </p>
+            <p style={{ color:'rgba(255,255,255,0.8)', fontFamily:'monospace', fontSize:'1.4rem', fontWeight:800, margin:'6px 0 0', letterSpacing:4 }}>
+              {dupWarn}
+            </p>
           </div>
         )}
 
