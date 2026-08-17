@@ -109,7 +109,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
         form, missedTickets, manifestMatch, manifestTotal,
       }))
     } catch {}
-  }, [form, missedTickets])
+  }, [form, missedTickets, manifestMatch, manifestTotal])
 
   function clearDraft() { sessionStorage.removeItem(DRAFT_KEY) }
   function closeAndClear() { clearDraft(); onClose() }
