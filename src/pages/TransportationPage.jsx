@@ -100,6 +100,12 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   const [ticketStation, setTicketStation] = useState(trip?.from_station?.name_ar || trip?.from_station?.name_en || '')
   const [showTicketScanner, setShowTicketScanner] = useState(false)
 
+  // مطابقة الكشف — يجب أن تكون قبل useEffect الذي يستخدمها
+  const [manifestMatch, setManifestMatch] = useState(
+    draft?.manifestMatch !== undefined ? draft.manifestMatch : (record?.manifest_match ?? null)
+  )
+  const [manifestTotal, setManifestTotal] = useState(draft?.manifestTotal ?? record?.manifest_total ?? '')
+
   // حفظ المسودة عند كل تغيير
   useEffect(() => {
     try {
@@ -126,15 +132,8 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     setMissedTickets(prev => prev.filter((_, idx) => idx !== i))
   }
   function handleTicketScan(ticketNum) {
-    // الماسح يبقى مفتوح — فقط يُضاف الرقم
     addTicket(ticketNum)
   }
-
-  // مطابقة الكشف
-  const [manifestMatch, setManifestMatch] = useState(
-    draft?.manifestMatch !== undefined ? draft.manifestMatch : (record?.manifest_match ?? null)
-  )
-  const [manifestTotal, setManifestTotal] = useState(draft?.manifestTotal ?? record?.manifest_total ?? '')
 
   // الفرق المحسوب: من أصل − الركاب = المتخلفين المتوقعين
   const expectedMissed = (() => {
