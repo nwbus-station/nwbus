@@ -510,11 +510,18 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
         type: 'info', refType: 'leave',
       })
     } else if (isEmployeeRole) {
-      const { data: supervisors } = await supabase.from('users')
-        .select('id').in('role', ['station_admin', 'shift_supervisor'])
-        .eq('station_id', profile.station_id).eq('is_active', true)
       const typeLabel = LEAVE_TYPES.find(t => t.id === form.leave_type)?.ar ?? form.leave_type
-      await notifyMany((supervisors ?? []).map(s => s.id), {
+      // إشعار المسؤول المباشر المحدد في بيانات الموظف — إن لم يُحدَّد يُرسَل لكل مشرفي المحطة
+      let recipientIds = []
+      if (profile.supervisor_id) {
+        recipientIds = [profile.supervisor_id]
+      } else {
+        const { data: supervisors } = await supabase.from('users')
+          .select('id').in('role', ['station_admin', 'shift_supervisor'])
+          .eq('station_id', profile.station_id).eq('is_active', true)
+        recipientIds = (supervisors ?? []).map(s => s.id)
+      }
+      await notifyMany(recipientIds, {
         title: `طلب إجازة جديد — ${profile.full_name_ar}`,
         body: `${typeLabel} · ${days} أيام · ${form.start_date} ← ${form.end_date}`,
         type: 'info', refType: 'leave',
