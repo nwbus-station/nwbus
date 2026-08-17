@@ -66,13 +66,16 @@ function isColoredBackground(video) {
 function buildOCRCanvas(video) {
   const vw = video.videoWidth, vh = video.videoHeight
   const scale = 1.5
+  // اقتصاص ضيق يطابق الإطار المرئي فقط (35%–65% عمودياً، 8%–92% أفقياً)
+  const sx = Math.floor(vw * 0.08), sy = Math.floor(vh * 0.35)
+  const sw = Math.floor(vw * 0.84), sh = Math.floor(vh * 0.30)
   const c = document.createElement('canvas')
-  c.width = Math.round(vw * scale)
-  c.height = Math.round(vh * 0.6 * scale)
+  c.width = Math.round(sw * scale)
+  c.height = Math.round(sh * scale)
   const ctx = c.getContext('2d')
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(video, 0, Math.floor(vh * 0.2), vw, Math.floor(vh * 0.6), 0, 0, c.width, c.height)
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height)
   const id = ctx.getImageData(0, 0, c.width, c.height), d = id.data
   for (let i = 0; i < d.length; i += 4) {
     const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
@@ -397,8 +400,8 @@ export default function QRScannerModal({
 
             {/* الإطار الرئيسي */}
             <div style={{
-              position:'relative', width:'88%', maxWidth:360,
-              height:'30%', minHeight:120, maxHeight:180,
+              position:'relative', width:'84%', maxWidth:340,
+              height:'28%', minHeight:90, maxHeight:140,
             }}>
               {/* الحدود الكاملة خفيفة */}
               <div style={{
