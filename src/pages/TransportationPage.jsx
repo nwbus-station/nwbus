@@ -180,8 +180,8 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
       return
     }
 
-    // التحقق من تطابق عدد التذاكر مع الفرق المحسوب
-    if (manifestMatch === false && expectedMissed !== null) {
+    // التحقق من تطابق عدد التذاكر مع الفرق المحسوب (المغادرة فقط)
+    if (!isArrival && manifestMatch === false && expectedMissed !== null) {
       if (expectedMissed < 0) {
         setError(isAr
           ? `عدد الركاب (${Number(form.passenger_count)}) أكبر من الكشف (${manifestTotal}) — تحقق من الأرقام`
@@ -221,8 +221,8 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
       toilet_works:       form.toilet_works,
       operational_status: form.operational_status,
       is_extra_trip:      !!trip.is_extra,
-      missed_count:       missedTickets.length,
-      missed_tickets:     missedTickets,
+      missed_count:       isArrival ? 0 : missedTickets.length,
+      missed_tickets:     isArrival ? [] : missedTickets,
       notes:              form.notes || null,
       created_by:         profile.id,
       created_by_name:    profile.full_name_ar,
@@ -468,11 +468,13 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
                     }}>
                       {expectedMissed < 0
                         ? (isAr ? `⚠ الركاب يتجاوز الكشف بـ ${Math.abs(expectedMissed)}` : `⚠ Pax exceeds manifest by ${Math.abs(expectedMissed)}`)
-                        : (isAr ? `→ المتخلفون: ${expectedMissed}` : `→ Expected missed: ${expectedMissed}`)}
+                        : !isArrival
+                          ? (isAr ? `→ المتخلفون: ${expectedMissed}` : `→ Expected missed: ${expectedMissed}`)
+                          : null}
                     </span>
                   )}
                 </div>
-                {expectedMissed !== null && expectedMissed >= 0 && (
+                {!isArrival && expectedMissed !== null && expectedMissed >= 0 && (
                   <div style={{
                     padding:'6px 10px', borderRadius:6, fontSize:'0.72rem',
                     background: missedTickets.length === expectedMissed
