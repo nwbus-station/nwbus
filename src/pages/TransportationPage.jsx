@@ -55,14 +55,28 @@ const BUS_TYPE = {
 const busTypeLookup = t => BUS_TYPE[String(t || '').toUpperCase()] ?? null
 
 /* ─── Trip Entry Modal ──────────────────────────────────── */
+const DRAFT_KEY = 'tm_draft'
+
 function TripModal({ trip, record, stationId, stationName, stations = [], isArrival, schedTime, recordDate, onClose, onSaved }) {
-  useEscapeKey(onClose)
   const { profile, isGeneralAdmin, isStationAdmin } = useAuth()
   const canPickStation = isGeneralAdmin || isStationAdmin
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
-  const [form, setForm] = useState({
+  // استعادة مسودة محفوظة لو كانت تطابق هذه الرحلة
+  const draft = (() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) return null
+      const d = JSON.parse(raw)
+      if (d.tripKey !== trip._key) return null
+      if (d.recordDate !== (recordDate || todayStr())) return null
+      if (d.stationId !== stationId) return null
+      return d
+    } catch { return null }
+  })()
+
+  const [form, setForm] = useState(draft?.form ?? {
     bus_number:         record?.bus_number ?? '',
     actual_departure:   record?.actual_departure
       ? new Date(record.actual_departure).toISOString().slice(11, 16) : '',
@@ -81,10 +95,25 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   // تذاكر المتخلفين
-  const [missedTickets, setMissedTickets] = useState(record?.missed_tickets ?? [])
+  const [missedTickets, setMissedTickets] = useState(draft?.missedTickets ?? record?.missed_tickets ?? [])
   const [ticketInput, setTicketInput]     = useState('')
   const [ticketStation, setTicketStation] = useState(trip?.from_station?.name_ar || trip?.from_station?.name_en || '')
   const [showTicketScanner, setShowTicketScanner] = useState(false)
+
+  // حفظ المسودة عند كل تغيير
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+        tripKey: trip._key, isArrival, stationId,
+        recordDate: recordDate || todayStr(),
+        form, missedTickets, manifestMatch, manifestTotal,
+      }))
+    } catch {}
+  }, [form, missedTickets])
+
+  function clearDraft() { sessionStorage.removeItem(DRAFT_KEY) }
+  function closeAndClear() { clearDraft(); onClose() }
+  useEscapeKey(closeAndClear)
 
   function addTicket(numOverride) {
     const t = (numOverride ?? ticketInput).trim()
@@ -102,8 +131,10 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   }
 
   // مطابقة الكشف
-  const [manifestMatch, setManifestMatch] = useState(record?.manifest_match ?? null) // true | false | null
-  const [manifestTotal, setManifestTotal] = useState(record?.manifest_total ?? '')
+  const [manifestMatch, setManifestMatch] = useState(
+    draft?.manifestMatch !== undefined ? draft.manifestMatch : (record?.manifest_match ?? null)
+  )
+  const [manifestTotal, setManifestTotal] = useState(draft?.manifestTotal ?? record?.manifest_total ?? '')
 
   // الفرق المحسوب: من أصل − الركاب = المتخلفين المتوقعين
   const expectedMissed = (() => {
@@ -237,7 +268,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     }
 
     if (res.error) setError(res.error.message)
-    else { onSaved(); onClose() }
+    else { clearDraft(); onSaved(); onClose() }
     setSaving(false)
   }
 
@@ -533,7 +564,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
               style={{ flex:1, color:'#fff', padding:'11px 0', borderRadius:8, fontSize:'0.875rem', fontWeight:700, border:'none', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, transition:'all 0.14s', background: isArrival ? 'var(--brand-700)' : 'var(--brand-900)' }}>
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
             </button>
-            <button type="button" onClick={onClose}
+            <button type="button" onClick={closeAndClear}
               style={{ padding:'11px 18px', borderRadius:8, fontSize:'0.875rem', border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text-2)', cursor:'pointer', transition:'all 0.14s' }}>
               {isAr ? 'إلغاء' : 'Cancel'}
             </button>
@@ -849,6 +880,25 @@ export default function TransportationPage() {
     }, 30000)
     return () => clearInterval(id)
   }, [])
+
+  // استعادة المودال تلقائياً بعد إعادة التحميل (iOS tab discard)
+  const draftRestoredRef = useRef(false)
+  useEffect(() => {
+    if (draftRestoredRef.current || loading || !trips.length) return
+    draftRestoredRef.current = true
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) return
+      const draft = JSON.parse(raw)
+      if (draft.stationId !== stationId || draft.recordDate !== date) return
+      const matchedTrip = trips.find(t => t._key === draft.tripKey)
+      if (!matchedTrip) return
+      const matchedRecord = records.find(r =>
+        r.trip_schedule_id === matchedTrip.id && r.is_arrival === draft.isArrival
+      ) ?? null
+      setModal({ trip: matchedTrip, record: matchedRecord, isArrival: draft.isArrival, schedTime: matchedTrip.schedTime })
+    } catch {}
+  }, [loading, trips])
 
   // إخفاء (تعليق) اتجاه واحد من الرحلة (مغادرة أو وصول) — للأدمن
   async function suspendStationTrip(tripId, role) {
