@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
 
-/* ─── صوت التأكيد ─── */
+/* ─── صوت ─── */
 function playBeep(type = 'found') {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const osc  = ctx.createOscillator()
-    const gain = ctx.createGain()
+    const osc = ctx.createOscillator(), gain = ctx.createGain()
     osc.connect(gain); gain.connect(ctx.destination)
     if (type === 'found') {
       osc.frequency.value = 1046
@@ -47,10 +46,6 @@ function pickTicketFromText(text) {
   return null
 }
 
-/*
-  فحص لون الخلفية — يتجاهل الألوان الزاهية جداً (فيروزي/أخضر غامق Honeywell)
-  يسمح بالأبيض والكريمي والمحايد حتى لو فيه مسحة لونية خفيفة من الإضاءة
-*/
 function isColoredBackground(video) {
   try {
     const vw = video.videoWidth, vh = video.videoHeight
@@ -64,14 +59,10 @@ function isColoredBackground(video) {
     const n = d.length / 4
     for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2] }
     r /= n; g /= n; b /= n
-    // فقط الألوان الزاهية جداً — عتبة عالية تتجنب حجب الأبيض تحت الإضاءة المختلفة
-    // فيروزي/أخضر غامق: G أعلى من R بـ 50+
-    // أزرق زاهٍ/فيروزي: B أعلى من R بـ 80+
     return (g > r + 50) || (b > r + 80)
   } catch { return false }
 }
 
-/* كانفاس 1.5x — أسرع من 2x مع الحفاظ على جودة كافية للـ OCR */
 function buildOCRCanvas(video) {
   const vw = video.videoWidth, vh = video.videoHeight
   const scale = 1.5
@@ -91,6 +82,34 @@ function buildOCRCanvas(video) {
   ctx.putImageData(id, 0, 0)
   return c
 }
+
+/* ─── أيقونات SVG ─── */
+const IconScan = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+    <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+    <line x1="3" y1="12" x2="21" y2="12" strokeWidth="2"/>
+  </svg>
+)
+
+const IconCheck = ({ size = 32, color = '#22c55e' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+)
+
+const IconX = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+)
+
+const IconWarn = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+)
 
 /* ════════════════════════════════════════
    المودال الرئيسي
@@ -129,16 +148,18 @@ export default function QRScannerModal({
 
   useEffect(() => {
     if (status !== 'searching') return
-    let dir = 1, val = 0
+    let dir = 1, val = 10
     const id = setInterval(() => {
-      val += dir * 2; if (val >= 100 || val <= 0) dir *= -1
+      val += dir * 1.8
+      if (val >= 90 || val <= 10) dir *= -1
       setScanLine(val)
     }, 16)
     return () => clearInterval(id)
   }, [status])
 
   const totalDone = initialCountRef.current + scanCount
-  const remaining = expectedCountRef.current !== null ? Math.max(0, expectedCountRef.current - totalDone) : null
+  const remaining = expectedCountRef.current !== null
+    ? Math.max(0, expectedCountRef.current - totalDone) : null
 
   useEffect(() => {
     activeRef.current = true
@@ -165,10 +186,7 @@ export default function QRScannerModal({
       setIsProcessing(true)
       const { createWorker } = await import('tesseract.js')
       const w = await createWorker('eng', 1, { logger: () => {} })
-      await w.setParameters({
-        tessedit_char_whitelist: '0123456789:',
-        tessedit_pageseg_mode: '6',
-      })
+      await w.setParameters({ tessedit_char_whitelist: '0123456789:', tessedit_pageseg_mode: '6' })
       if (!activeRef.current) { await w.terminate(); return }
       workerRef.current = w
       setIsProcessing(false)
@@ -179,7 +197,6 @@ export default function QRScannerModal({
     }
   }
 
-  /* إيقاف كل شيء — كاميرا + worker + timers */
   function stopAll() {
     cancelAnimationFrame(qrRafRef.current)
     clearTimeout(scanTimer.current)
@@ -218,17 +235,11 @@ export default function QRScannerModal({
     }
     const video = videoRef.current
     if (!video || video.readyState < 2) { scheduleOCR(800); return }
-
-    // تجاهل الخلفيات الملونة (خضراء / فيروزية)
-    if (isColoredBackground(video)) {
-      scheduleOCR(800); return
-    }
-
+    if (isColoredBackground(video)) { scheduleOCR(800); return }
     busyRef.current = true
     setIsProcessing(true)
     try {
       const proc = buildOCRCanvas(video)
-      // JPEG أسرع من PNG في التحويل
       const { data: { text } } = await workerRef.current.recognize(proc.toDataURL('image/jpeg', 0.88))
       if (!activeRef.current) return
       const ticket = pickTicketFromText(text)
@@ -244,7 +255,7 @@ export default function QRScannerModal({
   function presentFound(ticket) {
     if (addedSet.current.has(ticket)) {
       setDupWarn(ticket)
-      setTimeout(() => setDupWarn(null), 2200)
+      setTimeout(() => setDupWarn(null), 2500)
       scheduleOCR(2000)
       return
     }
@@ -266,14 +277,11 @@ export default function QRScannerModal({
     if (done) {
       playBeep('done')
       setStatus('done')
-      stopAll()  // أوقف الكاميرا فوراً
-      // window.setTimeout لا يمكن إلغاؤه عن طريق stopAll — يضمن الإغلاق
+      stopAll()
       window.setTimeout(() => onCloseRef.current(), 1800)
     } else {
-      setFound(null)
-      setStatus('searching')
-      loopQR()
-      scheduleOCR(300)
+      setFound(null); setStatus('searching')
+      loopQR(); scheduleOCR(300)
     }
   }
 
@@ -282,208 +290,370 @@ export default function QRScannerModal({
     loopQR(); scheduleOCR(300)
   }
 
-  const isSearching  = status === 'searching'
-  const isFound      = status === 'found'
-  const isDone       = status === 'done'
+  const isSearching = status === 'searching'
+  const isFound     = status === 'found'
+  const isDone      = status === 'done'
   const displayTotal = initialCountRef.current + scanCount
 
   const GOLD  = '#F5C542'
   const GREEN = '#22c55e'
   const BG    = '#0F1A22'
-  const CARD  = 'rgba(255,255,255,0.06)'
 
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:1100, background:BG, display:'flex', flexDirection:'column', fontFamily:'system-ui,sans-serif' }}>
+    <div style={{
+      position:'fixed', inset:0, zIndex:1100, background:BG,
+      display:'flex', flexDirection:'column', fontFamily:'system-ui,sans-serif',
+    }}>
 
-      {/* ══════ الكاميرا ══════ */}
+      {/* ══ الكاميرا ══ */}
       <div style={{ flex:1, position:'relative', overflow:'hidden' }}>
-        <video ref={videoRef} style={{ width:'100%', height:'100%', objectFit:'cover', opacity: isFound||isDone ? 0.35 : 1, transition:'opacity .3s' }} playsInline muted />
+        <video
+          ref={videoRef}
+          style={{
+            width:'100%', height:'100%', objectFit:'cover',
+            opacity: isFound || isDone ? 0.2 : 1,
+            transition:'opacity .4s ease',
+          }}
+          playsInline muted
+        />
         <canvas ref={canvasRef} style={{ display:'none' }} />
 
         {/* ── شريط العنوان ── */}
         <div style={{
           position:'absolute', top:0, left:0, right:0,
-          background:'linear-gradient(rgba(15,26,34,0.85),transparent)',
-          padding:'env(safe-area-inset-top,14px) 16px 20px',
+          background:'linear-gradient(180deg, rgba(15,26,34,0.92) 0%, transparent 100%)',
+          padding:'env(safe-area-inset-top,16px) 18px 28px',
           display:'flex', alignItems:'center', justifyContent:'space-between',
         }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            {isProcessing && !isFound && !isDone && (
-              <div style={{ width:13, height:13, border:'2px solid rgba(245,197,66,0.3)', borderTopColor:GOLD, borderRadius:'50%', animation:'spin .6s linear infinite', flexShrink:0 }}/>
-            )}
-            <span style={{ color:GOLD, fontWeight:700, fontSize:'0.9rem', letterSpacing:0.3 }}>
-              {!camReady
-                ? (isAr ? 'تشغيل الكاميرا...' : 'Starting camera...')
-                : isProcessing && !workerRef.current
-                  ? (isAr ? 'تهيئة الماسح...' : 'Initializing...')
-                  : isProcessing
-                    ? (isAr ? 'يقرأ...' : 'Reading...')
-                    : isAr ? 'يبحث عن رقم التذكرة' : 'Scanning for ticket number'}
-            </span>
+          {/* اسم الماسح + حالة */}
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{
+              color: GOLD, opacity: isProcessing && !isFound && !isDone ? 1 : 0.7,
+              transition: 'opacity .3s',
+            }}>
+              <IconScan />
+            </div>
+            <div>
+              <div style={{ color:GOLD, fontWeight:700, fontSize:'0.88rem', letterSpacing:0.4 }}>
+                {isAr ? 'ماسح التذاكر' : 'Ticket Scanner'}
+              </div>
+              {isProcessing && !isFound && !isDone && (
+                <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
+                  <div style={{
+                    width:5, height:5, borderRadius:'50%', background:GOLD,
+                    animation:'pulse 1.2s ease-in-out infinite',
+                  }}/>
+                  <span style={{ color:'rgba(245,197,66,0.7)', fontSize:'0.68rem' }}>
+                    {!workerRef.current
+                      ? (isAr ? 'جاري التهيئة...' : 'Initializing...')
+                      : (isAr ? 'يقرأ...' : 'Reading...')}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {/* العداد + إغلاق */}
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             {expectedCountRef.current !== null && (
               <div style={{
-                background: displayTotal >= expectedCountRef.current ? GREEN : 'rgba(255,255,255,0.12)',
-                color:'#fff', fontSize:'0.75rem', fontWeight:800,
-                padding:'4px 12px', borderRadius:20, letterSpacing:0.5,
-                transition:'background .3s',
+                background: displayTotal >= expectedCountRef.current
+                  ? 'rgba(34,197,94,0.2)' : 'rgba(245,197,66,0.12)',
+                border: `1px solid ${displayTotal >= expectedCountRef.current ? GREEN : 'rgba(245,197,66,0.3)'}`,
+                color: displayTotal >= expectedCountRef.current ? GREEN : GOLD,
+                fontSize:'0.78rem', fontWeight:800,
+                padding:'5px 14px', borderRadius:20, letterSpacing:0.8,
+                fontFamily:'monospace',
+                transition:'all .3s',
               }}>
                 {displayTotal} / {expectedCountRef.current}
               </div>
             )}
             <button onClick={hardClose} style={{
-              background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.15)',
-              borderRadius:50, color:'rgba(255,255,255,0.85)',
-              padding:'6px 16px', cursor:'pointer', fontWeight:600, fontSize:'0.82rem',
+              width:34, height:34,
+              background:'rgba(255,255,255,0.08)',
+              border:'1px solid rgba(255,255,255,0.12)',
+              borderRadius:'50%', color:'rgba(255,255,255,0.7)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              cursor:'pointer',
             }}>
-              {isAr ? 'إغلاق' : 'Close'}
+              <IconX />
             </button>
           </div>
         </div>
 
-        {/* ── إطار المسح مع خط متحرك ── */}
+        {/* ── إطار المسح ── */}
         {isSearching && camReady && (
-          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
-            <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 75% 55% at 50% 50%, transparent, rgba(0,0,0,0.55))' }}/>
-            <div style={{ position:'relative', width:'88%', height:'26%', minHeight:90, maxHeight:140 }}>
-              {[['top','left'],['top','right'],['bottom','left'],['bottom','right']].map(([v,h]) => (
-                <div key={v+h} style={{
-                  position:'absolute', [v]:-1, [h]:-1, width:28, height:28,
-                  borderTop:    v==='top'    ? `3px solid ${GOLD}` : 'none',
-                  borderBottom: v==='bottom' ? `3px solid ${GOLD}` : 'none',
-                  borderLeft:   h==='left'   ? `3px solid ${GOLD}` : 'none',
-                  borderRight:  h==='right'  ? `3px solid ${GOLD}` : 'none',
-                  borderRadius: `${v==='top'&&h==='left'?4:0}px ${v==='top'&&h==='right'?4:0}px ${v==='bottom'&&h==='right'?4:0}px ${v==='bottom'&&h==='left'?4:0}px`,
+          <div style={{
+            position:'absolute', inset:0,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            pointerEvents:'none',
+          }}>
+            {/* تعتيم الزوايا */}
+            <div style={{
+              position:'absolute', inset:0,
+              background:'radial-gradient(ellipse 72% 52% at 50% 52%, transparent 0%, rgba(0,0,0,0.6) 100%)',
+            }}/>
+
+            {/* الإطار الرئيسي */}
+            <div style={{
+              position:'relative', width:'85%', maxWidth:340,
+              height:'22%', minHeight:88, maxHeight:130,
+            }}>
+              {/* الحدود الكاملة خفيفة */}
+              <div style={{
+                position:'absolute', inset:0,
+                border:`1px solid rgba(245,197,66,0.2)`,
+                borderRadius:16,
+              }}/>
+
+              {/* الزوايا الذهبية المميزة */}
+              {[
+                { top:-2, left:-2, bTop:true, bLeft:true },
+                { top:-2, right:-2, bTop:true, bRight:true },
+                { bottom:-2, left:-2, bBottom:true, bLeft:true },
+                { bottom:-2, right:-2, bBottom:true, bRight:true },
+              ].map((s, i) => (
+                <div key={i} style={{
+                  position:'absolute',
+                  top: s.top, right: s.right, bottom: s.bottom, left: s.left,
+                  width:24, height:24,
+                  borderTop:    s.bTop    ? `3px solid ${GOLD}` : 'none',
+                  borderBottom: s.bBottom ? `3px solid ${GOLD}` : 'none',
+                  borderLeft:   s.bLeft   ? `3px solid ${GOLD}` : 'none',
+                  borderRight:  s.bRight  ? `3px solid ${GOLD}` : 'none',
+                  borderRadius: i===0?'5px 0 0 0': i===1?'0 5px 0 0': i===2?'0 0 0 5px':'0 0 5px 0',
+                  boxShadow: `0 0 10px rgba(245,197,66,0.4)`,
                 }}/>
               ))}
+
+              {/* خط المسح المتحرك */}
               <div style={{
-                position:'absolute', left:4, right:4, top:`${scanLine}%`, height:2,
-                background:`linear-gradient(90deg,transparent,${GOLD},transparent)`,
-                boxShadow:`0 0 8px ${GOLD}`, borderRadius:2, transition:'top 0.016s linear',
+                position:'absolute', left:8, right:8,
+                top:`${scanLine}%`,
+                height:2,
+                background:`linear-gradient(90deg, transparent, rgba(245,197,66,0.6), ${GOLD}, rgba(245,197,66,0.6), transparent)`,
+                boxShadow:`0 0 12px rgba(245,197,66,0.7), 0 0 4px ${GOLD}`,
+                borderRadius:2,
               }}/>
-              <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <span style={{ color:'rgba(255,255,255,0.55)', fontSize:'0.68rem', textAlign:'center', padding:'0 16px', lineHeight:1.5 }}>
-                  {isAr ? 'ضع سطر "رقم التذكرة" هنا — خلفية بيضاء فقط' : 'Place "Ticket Number" line here — white background only'}
-                </span>
-              </div>
             </div>
           </div>
         )}
 
-        {/* ── نتيجة مكتشفة ── */}
+        {/* ── بطاقة التذكرة المكتشفة ── */}
         {isFound && found && (
           <div style={{
-            position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-            gap:20, padding:24, background:'rgba(15,26,34,0.88)', animation:'fadeIn .2s ease',
+            position:'absolute', inset:0,
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            gap:20, padding:28,
+            animation:'fadeUp .25s ease',
           }}>
+            {/* الكارد */}
             <div style={{
-              background:CARD, border:`2px solid ${GOLD}`, borderRadius:20, padding:'28px 40px', textAlign:'center',
-              boxShadow:`0 0 32px rgba(245,197,66,0.25)`, width:'100%', maxWidth:340,
+              width:'100%', maxWidth:320,
+              background:'rgba(15,26,34,0.95)',
+              border:`1.5px solid rgba(245,197,66,0.4)`,
+              borderRadius:24,
+              padding:'24px 28px',
+              boxShadow:`0 24px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(245,197,66,0.1)`,
+              backdropFilter:'blur(20px)',
             }}>
-              <div style={{ color:'rgba(255,255,255,0.45)', fontSize:'0.72rem', marginBottom:10, letterSpacing:1.5, textTransform:'uppercase' }}>
+              <div style={{
+                color:'rgba(245,197,66,0.5)', fontSize:'0.65rem',
+                letterSpacing:2.5, textTransform:'uppercase', marginBottom:12,
+                textAlign:'center',
+              }}>
                 {isAr ? 'رقم التذكرة' : 'Ticket Number'}
               </div>
-              <div style={{ color:GOLD, fontSize:'2.8rem', fontWeight:800, fontFamily:'monospace', letterSpacing:7 }}>
+              <div style={{
+                color:GOLD, fontSize:'2.6rem', fontWeight:800,
+                fontFamily:'monospace', letterSpacing:8,
+                textAlign:'center', lineHeight:1,
+              }}>
                 {found}
               </div>
             </div>
-            <div style={{ display:'flex', gap:12, width:'100%', maxWidth:340 }}>
+
+            {/* الأزرار */}
+            <div style={{ display:'flex', gap:12, width:'100%', maxWidth:320 }}>
               <button onClick={confirmFound} style={{
-                flex:1, padding:'15px 0', borderRadius:14, border:'none',
-                background:GREEN, color:'#fff', fontWeight:800, fontSize:'1.05rem',
-                cursor:'pointer', boxShadow:`0 4px 20px rgba(34,197,94,0.35)`, letterSpacing:0.5,
+                flex:1, padding:'16px 0', borderRadius:16, border:'none',
+                background:`linear-gradient(135deg, #22c55e, #16a34a)`,
+                color:'#fff', fontWeight:800, fontSize:'1rem',
+                cursor:'pointer',
+                boxShadow:`0 8px 24px rgba(34,197,94,0.35)`,
+                letterSpacing:0.5,
               }}>
                 {isAr ? '✓ تأكيد' : 'Confirm'}
               </button>
               <button onClick={retry} style={{
-                padding:'15px 22px', borderRadius:14, border:`1px solid rgba(255,255,255,0.15)`,
-                background:'rgba(255,255,255,0.07)', color:'rgba(255,255,255,0.7)',
-                fontWeight:600, fontSize:'0.95rem', cursor:'pointer',
+                padding:'16px 20px', borderRadius:16,
+                border:'1px solid rgba(255,255,255,0.1)',
+                background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.6)',
+                fontWeight:600, fontSize:'0.9rem', cursor:'pointer',
               }}>
                 {isAr ? 'إعادة' : 'Retry'}
               </button>
             </div>
+
             {remaining !== null && remaining > 1 && (
-              <span style={{ color:'rgba(255,255,255,0.35)', fontSize:'0.72rem' }}>
+              <span style={{ color:'rgba(255,255,255,0.3)', fontSize:'0.7rem' }}>
                 {isAr ? `متبقٍ ${remaining - 1} تذكرة` : `${remaining - 1} more`}
               </span>
             )}
           </div>
         )}
 
-        {/* ── اكتمال العدد ── */}
+        {/* ── شاشة اكتمال العدد ── */}
         {isDone && (
           <div style={{
-            position:'absolute', inset:0, background:'rgba(15,26,34,0.9)',
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16,
+            position:'absolute', inset:0,
+            background:'rgba(15,26,34,0.97)',
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            gap:28, padding:32,
+            animation:'fadeIn .3s ease',
           }}>
-            <div style={{
-              background:GREEN, borderRadius:24, padding:'28px 48px', textAlign:'center',
-              boxShadow:`0 8px 32px rgba(34,197,94,0.4)`, maxWidth:300,
-            }}>
-              <div style={{ fontSize:'2.5rem', marginBottom:8 }}>✓</div>
-              <p style={{ color:'#fff', fontWeight:800, fontSize:'1.15rem', margin:0 }}>
-                {isAr ? 'اكتملت التذاكر' : 'All tickets added'}
+            {/* الدائرة المتحركة */}
+            <div style={{ position:'relative', width:110, height:110, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {/* حلقة متحركة خارجية */}
+              <div style={{
+                position:'absolute', inset:0, borderRadius:'50%',
+                border:`2px solid rgba(34,197,94,0.3)`,
+                animation:'ringExpand 1.5s ease-out infinite',
+              }}/>
+              {/* حلقة ثابتة */}
+              <div style={{
+                position:'absolute', inset:8, borderRadius:'50%',
+                border:`2px solid rgba(34,197,94,0.5)`,
+              }}/>
+              {/* دائرة مركزية */}
+              <div style={{
+                width:76, height:76, borderRadius:'50%',
+                background:'rgba(34,197,94,0.12)',
+                border:`2px solid ${GREEN}`,
+                display:'flex', alignItems:'center', justifyContent:'center',
+                boxShadow:`0 0 24px rgba(34,197,94,0.3)`,
+              }}>
+                <IconCheck size={34} color={GREEN} />
+              </div>
+            </div>
+
+            {/* النص */}
+            <div style={{ textAlign:'center' }}>
+              <p style={{ color:'#fff', fontWeight:800, fontSize:'1.25rem', margin:0, letterSpacing:0.3 }}>
+                {isAr ? 'اكتملت التذاكر' : 'All Tickets Added'}
               </p>
-              {expectedCountRef.current && (
-                <p style={{ color:'rgba(255,255,255,0.75)', fontSize:'0.85rem', margin:'6px 0 0' }}>
-                  {expectedCountRef.current} {isAr ? 'تذكرة' : 'tickets'}
+              {expectedCountRef.current !== null && (
+                <p style={{
+                  color:GOLD, fontSize:'0.9rem', fontWeight:700,
+                  margin:'10px 0 0', fontFamily:'monospace', letterSpacing:3,
+                }}>
+                  {expectedCountRef.current} / {expectedCountRef.current}
                 </p>
               )}
             </div>
+
+            {/* زر إغلاق يدوي */}
             <button onClick={hardClose} style={{
-              padding:'12px 32px', borderRadius:14, border:`1px solid rgba(255,255,255,0.2)`,
-              background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.8)',
-              fontWeight:600, fontSize:'0.9rem', cursor:'pointer', marginTop:8,
+              padding:'13px 44px', borderRadius:50,
+              border:`1.5px solid rgba(255,255,255,0.15)`,
+              background:'rgba(255,255,255,0.06)',
+              color:'rgba(255,255,255,0.75)',
+              fontWeight:600, fontSize:'0.88rem',
+              cursor:'pointer', letterSpacing:0.5,
             }}>
               {isAr ? 'إغلاق' : 'Close'}
             </button>
           </div>
         )}
 
-        {/* ── تحذير مكرر ── */}
+        {/* ── تحذير تذكرة مكررة — شريط ينزل من الأعلى ── */}
         {dupWarn && (
           <div style={{
-            position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
-            background:'rgba(239,68,68,0.95)', borderRadius:16, padding:'16px 28px', textAlign:'center',
-            boxShadow:'0 4px 24px rgba(0,0,0,0.5)', zIndex:10, animation:'fadeIn .15s ease',
+            position:'absolute', top:0, left:0, right:0,
+            zIndex:20, animation:'slideDown .2s ease',
           }}>
-            <p style={{ color:'#fff', fontWeight:700, fontSize:'0.9rem', margin:0 }}>
-              {isAr ? 'هذه التذكرة مضافة مسبقاً' : 'Already added'}
-            </p>
-            <p style={{ color:'rgba(255,255,255,0.8)', fontFamily:'monospace', fontSize:'1.4rem', fontWeight:800, margin:'6px 0 0', letterSpacing:4 }}>
-              {dupWarn}
-            </p>
+            <div style={{
+              background:'rgba(185,28,28,0.97)',
+              backdropFilter:'blur(16px)',
+              padding:'14px 18px',
+              display:'flex', alignItems:'center', gap:12,
+              borderBottom:'1px solid rgba(255,255,255,0.08)',
+            }}>
+              {/* أيقونة */}
+              <div style={{
+                width:38, height:38, borderRadius:10,
+                background:'rgba(255,255,255,0.12)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                color:'rgba(255,200,200,0.9)', flexShrink:0,
+              }}>
+                <IconWarn />
+              </div>
+              {/* النص */}
+              <div style={{ flex:1 }}>
+                <p style={{ color:'rgba(255,200,200,0.85)', fontSize:'0.72rem', margin:0, letterSpacing:0.3 }}>
+                  {isAr ? 'هذه التذكرة مضافة مسبقاً' : 'Already added'}
+                </p>
+                <p style={{
+                  color:'#fff', fontFamily:'monospace',
+                  fontSize:'1.3rem', fontWeight:800,
+                  margin:'3px 0 0', letterSpacing:5,
+                }}>
+                  {dupWarn}
+                </p>
+              </div>
+            </div>
+            {/* شريط التقدم */}
+            <div style={{ height:3, background:'rgba(255,255,255,0.12)', overflow:'hidden' }}>
+              <div style={{
+                height:'100%', background:'rgba(255,255,255,0.5)',
+                animation:'shrinkBar 2.5s linear forwards',
+              }}/>
+            </div>
           </div>
         )}
 
         {/* ── خطأ كاميرا ── */}
         {camErr && (
-          <div style={{ position:'absolute', inset:0, background:BG, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12 }}>
-            <p style={{ color:'rgba(255,255,255,0.7)', textAlign:'center', padding:'0 32px', lineHeight:1.6 }}>{camErr}</p>
+          <div style={{
+            position:'absolute', inset:0, background:BG,
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12,
+          }}>
+            <IconScan />
+            <p style={{ color:'rgba(255,255,255,0.6)', textAlign:'center', padding:'0 32px', lineHeight:1.7, fontSize:'0.9rem' }}>
+              {camErr}
+            </p>
           </div>
         )}
       </div>
 
-      {/* ══════ شريط سفلي ══════ */}
+      {/* ══ شريط سفلي ══ */}
       {isSearching && (
         <div style={{
-          background:'rgba(15,26,34,0.97)', borderTop:'1px solid rgba(255,255,255,0.07)',
-          padding:'14px 20px env(safe-area-inset-bottom,14px)', textAlign:'center', flexShrink:0,
+          background:'rgba(15,26,34,0.98)',
+          borderTop:'1px solid rgba(255,255,255,0.05)',
+          padding:'12px 20px env(safe-area-inset-bottom,12px)',
+          textAlign:'center', flexShrink:0,
         }}>
-          <p style={{ color:'rgba(255,255,255,0.35)', fontSize:'0.7rem', margin:0, lineHeight:1.6 }}>
+          <p style={{ color:'rgba(255,255,255,0.25)', fontSize:'0.68rem', margin:0, letterSpacing:0.3 }}>
             {isAr
-              ? 'يعمل على الخلفية البيضاء فقط — ضع التذكرة أمام الكاميرا'
-              : 'Works on white background only — hold ticket in front of camera'}
+              ? 'يبحث تلقائياً عن رقم التذكرة'
+              : 'Auto-scanning for ticket number'}
           </p>
         </div>
       )}
 
       <style>{`
-        @keyframes spin { to { transform:rotate(360deg) } }
-        @keyframes fadeIn { from { opacity:0; transform:scale(.97) } to { opacity:1; transform:scale(1) } }
+        @keyframes spin     { to { transform:rotate(360deg) } }
+        @keyframes fadeIn   { from { opacity:0 } to { opacity:1 } }
+        @keyframes fadeUp   { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes slideDown{ from { transform:translateY(-100%) } to { transform:translateY(0) } }
+        @keyframes shrinkBar{ from { width:100% } to { width:0% } }
+        @keyframes pulse    { 0%,100% { opacity:0.4; transform:scale(0.85) } 50% { opacity:1; transform:scale(1) } }
+        @keyframes ringExpand{
+          0%   { transform:scale(1);   opacity:0.5 }
+          100% { transform:scale(1.5); opacity:0   }
+        }
       `}</style>
     </div>
   )
