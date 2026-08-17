@@ -397,8 +397,8 @@ export default function QRScannerModal({
 
             {/* الإطار الرئيسي */}
             <div style={{
-              position:'relative', width:'85%', maxWidth:340,
-              height:'22%', minHeight:88, maxHeight:130,
+              position:'relative', width:'88%', maxWidth:360,
+              height:'30%', minHeight:120, maxHeight:180,
             }}>
               {/* الحدود الكاملة خفيفة */}
               <div style={{
@@ -631,15 +631,24 @@ export default function QRScannerModal({
       {isSearching && (
         <div style={{
           background:'rgba(15,26,34,0.98)',
-          borderTop:'1px solid rgba(255,255,255,0.05)',
-          padding:'12px 20px env(safe-area-inset-bottom,12px)',
-          textAlign:'center', flexShrink:0,
+          borderTop:'1px solid rgba(255,255,255,0.08)',
+          padding:'10px 20px env(safe-area-inset-bottom,12px)',
+          display:'flex', alignItems:'center', justifyContent:'space-between',
+          flexShrink:0, gap:12,
         }}>
-          <p style={{ color:'rgba(255,255,255,0.25)', fontSize:'0.68rem', margin:0, letterSpacing:0.3 }}>
-            {isAr
-              ? 'يبحث تلقائياً عن رقم التذكرة'
-              : 'Auto-scanning for ticket number'}
+          <p style={{ color:'rgba(255,255,255,0.3)', fontSize:'0.68rem', margin:0, letterSpacing:0.3, flex:1 }}>
+            {isAr ? 'يبحث تلقائياً عن رقم التذكرة' : 'Auto-scanning for ticket number'}
           </p>
+          <button onClick={hardClose} style={{
+            padding:'8px 18px', borderRadius:50,
+            border:'1px solid rgba(255,255,255,0.18)',
+            background:'rgba(255,255,255,0.07)',
+            color:'rgba(255,255,255,0.7)',
+            fontWeight:600, fontSize:'0.8rem',
+            cursor:'pointer', flexShrink:0,
+          }}>
+            {isAr ? 'إغلاق' : 'Close'}
+          </button>
         </div>
       )}
 
