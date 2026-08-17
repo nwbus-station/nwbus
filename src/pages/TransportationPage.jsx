@@ -283,8 +283,8 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} dir={isAr ? 'rtl' : 'ltr'}>
-      <div style={{ background:'var(--card)', borderRadius:16, boxShadow:'var(--shadow-xl)', width:'100%', maxWidth:520, maxHeight:'90vh', overflowY:'auto', border:'1px solid var(--border)' }}>
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:1000, overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'16px 16px 80px' }} dir={isAr ? 'rtl' : 'ltr'}>
+      <div style={{ background:'var(--card)', borderRadius:16, boxShadow:'var(--shadow-xl)', width:'100%', maxWidth:520, border:'1px solid var(--border)', flexShrink:0 }}>
 
         {/* Header */}
         <div style={{ padding:'18px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', background: isArrival ? 'var(--brand-700)' : 'var(--brand-900)', borderRadius:'16px 16px 0 0' }}>
