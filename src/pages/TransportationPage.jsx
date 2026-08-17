@@ -835,14 +835,16 @@ export default function TransportationPage() {
     return () => { supabase.removeChannel(ch) }
   }, [viewMode, fetchSchedule])
 
-  // عند بداية يوم جديد: تحديث تلقائي للصفحة بالكامل
+  // عند بداية يوم جديد: تحديث ناعم للبيانات بدون إعادة تحميل الصفحة
+  // (window.location.reload كان يغلق المودال المفتوح عند منتصف الليل أو العودة من الخلفية)
   const todayRef = useRef(todayStr())
   useEffect(() => {
     const id = setInterval(() => {
       const now = todayStr()
       if (now !== todayRef.current) {
+        todayRef.current = now
         sessionStorage.removeItem('tp_date')
-        window.location.reload()
+        setDate(now)   // تحديث التاريخ — يُشغّل إعادة جلب البيانات تلقائياً
       }
     }, 30000)
     return () => clearInterval(id)
