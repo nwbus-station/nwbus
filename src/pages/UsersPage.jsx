@@ -490,7 +490,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                 <p className="font-mono text-sm text-nwbus-primary font-bold">{user.username}</p>
               </div>
               {/* تغيير كلمة المرور */}
-              <form onSubmit={handlePasswordReset} className="border-t pt-3 space-y-2">
+              <div className="border-t pt-3 space-y-2">
                 <p className="text-xs font-medium text-gray-600">{isAr ? 'تغيير كلمة المرور' : 'Reset Password'}</p>
                 <div className="relative">
                   <input
@@ -510,11 +510,11 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                   </button>
                 </div>
                 {pwdMsg && <p className={`text-xs ${pwdMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{pwdMsg}</p>}
-                <button type="submit" disabled={pwdSaving || !newPwd}
+                <button type="button" onClick={handlePasswordReset} disabled={pwdSaving || !newPwd}
                   className="w-full bg-amber-500 text-white py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-amber-600 transition-colors">
                   {pwdSaving ? '...' : (isAr ? 'تغيير كلمة المرور' : 'Update Password')}
                 </button>
-              </form>
+              </div>
             </div>
           )}
 
