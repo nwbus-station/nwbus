@@ -11,12 +11,22 @@ import { useEscapeKey } from '../hooks/useEscapeKey'
 import DatePicker from '../components/shared/DatePicker'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 
-function makeAdminClient() {
-  const svcKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
-  if (!svcKey) return null
-  return createClient(import.meta.env.VITE_SUPABASE_URL, svcKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+async function resetPasswordViaEdge(authId, newPassword) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  if (!token) throw new Error('No active session')
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-password`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ auth_id: authId, new_password: newPassword }),
   })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error || 'Failed to reset password')
 }
 
 function buildUsername(jobNum) {
@@ -367,12 +377,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
     setPwdSaving(true)
     setPwdMsg('')
     try {
-      const adminClient = makeAdminClient()
-      if (!adminClient) throw new Error(isAr ? 'مفتاح الخدمة غير مضبوط (VITE_SUPABASE_SERVICE_KEY)' : 'Service key not configured')
-      const { error: authErr } = await adminClient.auth.admin.updateUserById(user.auth_id, { password: newPwd })
-      if (authErr) throw authErr
-      // حفظ كلمة المرور الجديدة للأدمن
-      await supabase.from('users').update({ login_password: newPwd }).eq('id', user.id)
+      await resetPasswordViaEdge(user.auth_id, newPwd)
       setPwdMsg(isAr ? '✓ تم تغيير كلمة المرور' : '✓ Password updated')
       setCredential({ username: user.username, password: newPwd, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: user.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })
       setNewPwd('')
