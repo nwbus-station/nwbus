@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
 import { USER_ROLES, MODULES } from '../utils/constants'
-import { toLatinDigits } from '../utils/digits'
+import { toLatinDigits, escapeHtml } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import DatePicker from '../components/shared/DatePicker'
@@ -95,25 +95,25 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
       <div class="body">
         <div class="employee-section">
           <div class="section-label">الموظف</div>
-          <div class="employee-name">${nameAr}</div>
+          <div class="employee-name">${escapeHtml(nameAr)}</div>
           <div class="info-row">
-            ${jobNumber ? `<div class="info-cell"><div class="lbl">الرقم الوظيفي</div><div class="val">${jobNumber}</div></div>` : ''}
-            ${phone ? `<div class="info-cell"><div class="lbl">رقم الجوال</div><div class="val" dir="ltr">${phone}</div></div>` : ''}
+            ${jobNumber ? `<div class="info-cell"><div class="lbl">الرقم الوظيفي</div><div class="val">${escapeHtml(jobNumber)}</div></div>` : ''}
+            ${phone ? `<div class="info-cell"><div class="lbl">رقم الجوال</div><div class="val" dir="ltr">${escapeHtml(phone)}</div></div>` : ''}
           </div>
           <div class="info-row2">
-            ${stationName ? `<div class="info-cell"><div class="lbl">المحطة</div><div class="val">${stationName}</div></div>` : ''}
-            ${hireDate ? `<div class="info-cell"><div class="lbl">تاريخ المباشرة</div><div class="val">${hireDate}</div></div>` : ''}
+            ${stationName ? `<div class="info-cell"><div class="lbl">المحطة</div><div class="val">${escapeHtml(stationName)}</div></div>` : ''}
+            ${hireDate ? `<div class="info-cell"><div class="lbl">تاريخ المباشرة</div><div class="val">${escapeHtml(hireDate)}</div></div>` : ''}
           </div>
         </div>
         <div class="cred-section">
           <div class="cred-header">بيانات الدخول</div>
           <div class="cred-item">
             <span class="cred-lbl">اسم المستخدم</span>
-            <span class="cred-val">${username}</span>
+            <span class="cred-val">${escapeHtml(username)}</span>
           </div>
           <div class="cred-item">
             <span class="cred-lbl">كلمة المرور</span>
-            <span class="cred-val">${password}</span>
+            <span class="cred-val">${escapeHtml(password)}</span>
           </div>
         </div>
         <div class="notice">

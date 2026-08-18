@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached } from '../lib/pageCache'
 import { NWB_LOGO_SVG } from '../utils/logo'
+import { escapeHtml } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
 import SearchSelect from '../components/shared/SearchSelect'
 import StatStrip from '../components/shared/StatStrip'
@@ -565,10 +566,10 @@ export default function ReportsPage() {
           <tbody>${list.map((m, i) => `<tr style="background:${m.unentered ? '#fffbeb' : i % 2 ? '#f8fafc' : '#fff'}">
             <td style="padding:4px 6px;text-align:center;border-bottom:0.5px solid #f1f5f9;color:#cbd5e1;font-size:8px">${i + 1}</td>
             <td style="padding:4px 6px;border-bottom:0.5px solid #f1f5f9;font-size:8px">${m.date}</td>
-            <td style="padding:4px 6px;border-bottom:0.5px solid #f1f5f9;font-family:monospace;font-weight:700;color:${m.unentered ? '#92400e' : headColor};font-size:9px">${m.trip}</td>
-            <td style="padding:4px 6px;border-bottom:0.5px solid #f1f5f9;font-family:monospace;font-weight:600;color:#475569;font-size:9px">${m.bus}</td>
-            <td style="padding:4px 6px;border-bottom:0.5px solid #f1f5f9;font-size:8px">${m.from}</td>
-            <td style="padding:4px 6px;border-bottom:0.5px solid #f1f5f9;font-size:8px">${m.to}</td>
+            <td style="padding:4px 6px;border-bottom:0.5px solid #f1f5f9;font-family:monospace;font-weight:700;color:${m.unentered ? '#92400e' : headColor};font-size:9px">${escapeHtml(m.trip)}</td>
+            <td style="padding:4px 6px;border-bottom:0.5px solid #f1f5f9;font-family:monospace;font-weight:600;color:#475569;font-size:9px">${escapeHtml(m.bus)}</td>
+            <td style="padding:4px 6px;border-bottom:0.5px solid #f1f5f9;font-size:8px">${escapeHtml(m.from)}</td>
+            <td style="padding:4px 6px;border-bottom:0.5px solid #f1f5f9;font-size:8px">${escapeHtml(m.to)}</td>
             <td style="padding:4px 6px;text-align:center;font-family:monospace;border-bottom:0.5px solid #f1f5f9;font-size:9px">${m.sched}</td>
             <td style="padding:4px 6px;text-align:center;font-family:monospace;border-bottom:0.5px solid #f1f5f9;font-size:9px;color:${delayColor(m.delay)}">${m.actual}</td>
             <td style="padding:4px 6px;text-align:center;border-bottom:0.5px solid #f1f5f9;color:${delayColor(m.delay)};font-weight:700;font-size:8px">${fmtDelay(m.delay)}</td>
@@ -715,10 +716,10 @@ export default function ReportsPage() {
           </tr></thead>
           <tbody>${list.map((m,i)=>`<tr style="background:${m.unentered?'#fffbeb':i%2?'#f8fafc':'#fff'}">
             <td style="padding:3px 5px;text-align:center;color:#cbd5e1;font-size:7px">${i+1}</td>
-            <td style="padding:3px 5px;font-family:monospace;font-weight:700;color:${m.unentered?'#92400e':headColor};font-size:8px">${m.trip}</td>
-            <td style="padding:3px 5px;font-family:monospace;font-weight:600;color:#475569">${m.bus}</td>
-            <td style="padding:3px 5px;font-size:7px">${m.from}</td>
-            <td style="padding:3px 5px;font-size:7px">${m.to}</td>
+            <td style="padding:3px 5px;font-family:monospace;font-weight:700;color:${m.unentered?'#92400e':headColor};font-size:8px">${escapeHtml(m.trip)}</td>
+            <td style="padding:3px 5px;font-family:monospace;font-weight:600;color:#475569">${escapeHtml(m.bus)}</td>
+            <td style="padding:3px 5px;font-size:7px">${escapeHtml(m.from)}</td>
+            <td style="padding:3px 5px;font-size:7px">${escapeHtml(m.to)}</td>
             <td style="padding:3px 5px;text-align:center;font-family:monospace">${m.sched}</td>
             <td style="padding:3px 5px;text-align:center;font-family:monospace;color:${delayColor(m.delay)}">${m.actual}</td>
             <td style="padding:3px 5px;text-align:center;color:${delayColor(m.delay)};font-weight:700">${fmtDelay(m.delay)}</td>
@@ -769,7 +770,7 @@ export default function ReportsPage() {
         <div style="page-break-after:${idx < targetStations.length-1 ? 'always' : 'avoid'}">
           <div style="background:#1C2B36;color:#fff;padding:8px 16px;display:flex;justify-content:space-between;align-items:center">
             <div>
-              <div style="font-size:14px;font-weight:700">${stnName}</div>
+              <div style="font-size:14px;font-weight:700">${escapeHtml(stnName)}</div>
               <div style="font-size:8px;opacity:.7;margin-top:2px">${isAr?'تقرير الوصول والمغادرة':'Arrivals & Departures'} · ${dateFrom} → ${dateTo}</div>
             </div>
             <div style="font-size:10px;font-weight:800;letter-spacing:1px;opacity:.7">NORTH WEST BUS</div>
@@ -780,7 +781,7 @@ export default function ReportsPage() {
             ${moveTable(arrs, '#23695A', isAr?'رحلات الوصول':'Arrivals')}
           </div>
           <div style="margin-top:6px;padding:4px 10px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8">
-            <span>${profile?.full_name_ar??'—'} · ${new Date().toLocaleString('en-GB')}</span>
+            <span>${escapeHtml(profile?.full_name_ar)??'—'} · ${new Date().toLocaleString('en-GB')}</span>
             <span>${isAr?'التخلف:':'Missed:'} ${missed} &nbsp;|&nbsp; ${isAr?'ركاب المغادرة:':'Dep. Pax:'} ${depPax} &nbsp;|&nbsp; ${isAr?'ركاب الوصول:':'Arr. Pax:'} ${arrPax}</span>
           </div>
         </div>`
@@ -825,7 +826,7 @@ export default function ReportsPage() {
         ${printHeader}
         <div style="padding:0 4px">${sections}</div>
         <div style="margin-top:8px;padding:6px 12px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:9px;color:#94a3b8">${profile?.full_name_ar ?? '—'} · ${new Date().toLocaleString('en-GB')}</span>
+          <span style="font-size:9px;color:#94a3b8">${escapeHtml(profile?.full_name_ar) ?? '—'} · ${new Date().toLocaleString('en-GB')}</span>
           <span style="background:#1C2B36;color:#fff;font-size:8px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.5px">NORTH WEST BUS</span>
         </div>
       </div>`

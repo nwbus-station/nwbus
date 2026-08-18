@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
+import { escapeHtml } from '../utils/digits'
 
 const MONO = "'IBM Plex Mono', monospace"
 const STAR_THRESHOLD = 98
@@ -1798,12 +1799,12 @@ function buildReportHtml(rows, month, year, selStationIds, stations) {
       ${rows.map((r, i) => `<tr>
         <td><span class="row-num">${i+1}</span></td>
         <td>
-          <div class="emp-name">${r.name || '—'}${r.has_star ? ' <span style="color:#F59E0B">★</span>' : ''}</div>
-          ${r.username ? `<div class="emp-sub">${r.username}</div>` : ''}
+          <div class="emp-name">${escapeHtml(r.name) || '—'}${r.has_star ? ' <span style="color:#F59E0B">★</span>' : ''}</div>
+          ${r.username ? `<div class="emp-sub">${escapeHtml(r.username)}</div>` : ''}
         </td>
-        <td>${r.job_number ? `<span class="job-tag">${r.job_number}</span>` : '<span style="color:#d1d5db">—</span>'}</td>
-        <td><span class="station-text">${r.station || '—'}</span></td>
-        <td><span class="role-text">${r.role || '—'}</span></td>
+        <td>${r.job_number ? `<span class="job-tag">${escapeHtml(r.job_number)}</span>` : '<span style="color:#d1d5db">—</span>'}</td>
+        <td><span class="station-text">${escapeHtml(r.station) || '—'}</span></td>
+        <td><span class="role-text">${escapeHtml(r.role) || '—'}</span></td>
         <td>${scoreBarHtml(r.score)}</td>
         <td>${scoreBadge(r.score)}</td>
       </tr>`).join('')}
@@ -1850,7 +1851,7 @@ function buildStationReportHtml(rows, month, year) {
     <table><thead><tr><th style="width:36px">#</th><th>المحطة</th><th>النتيجة</th><th>التقدير</th></tr></thead><tbody>
     ${rows.map((r,i) => `<tr>
       <td><span class="row-num">${i+1}</span></td>
-      <td><div class="emp-name">${r.name||'—'}${r.has_star?' <span style="color:#F59E0B">★</span>':''}</div></td>
+      <td><div class="emp-name">${escapeHtml(r.name)||'—'}${r.has_star?' <span style="color:#F59E0B">★</span>':''}</div></td>
       <td>${scoreBarHtml(r.score)}</td>
       <td>${scoreBadge(r.score)}</td>
     </tr>`).join('')}
@@ -1892,10 +1893,10 @@ function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmpSet, employees) 
     <table><thead><tr><th style="width:36px">#</th><th>الموظف</th><th>الرقم الوظيفي</th><th>الشهر</th><th>المحطة</th><th>النتيجة</th><th>التقدير</th></tr></thead><tbody>
     ${sorted.map((r,i) => `<tr>
       <td><span class="row-num">${i+1}</span></td>
-      <td><div class="emp-name">${r.employee?.full_name_ar||'—'}</div></td>
-      <td>${r.employee?.job_number?`<span class="job-tag">${r.employee.job_number}</span>`:'<span style="color:#d1d5db">—</span>'}</td>
+      <td><div class="emp-name">${escapeHtml(r.employee?.full_name_ar)||'—'}</div></td>
+      <td>${r.employee?.job_number?`<span class="job-tag">${escapeHtml(r.employee.job_number)}</span>`:'<span style="color:#d1d5db">—</span>'}</td>
       <td><span style="font-family:monospace;font-size:12px;color:#6B7280">${MN[r.month-1]} ${r.year}</span></td>
-      <td><span class="station-text">${r.employee?.station?.name_ar||'—'}</span></td>
+      <td><span class="station-text">${escapeHtml(r.employee?.station?.name_ar)||'—'}</span></td>
       <td>${scoreBarHtml(r.total_score)}</td>
       <td>${scoreBadge(r.total_score)}</td>
     </tr>`).join('')}
@@ -1937,7 +1938,7 @@ function buildStnRangeReportHtml(data, rangeStart, rangeEnd, selStnRange, statio
     <table><thead><tr><th style="width:36px">#</th><th>المحطة</th><th>الشهر</th><th>النتيجة</th><th>التقدير</th></tr></thead><tbody>
     ${sorted.map((r,i) => `<tr>
       <td><span class="row-num">${i+1}</span></td>
-      <td><div class="emp-name">${r.station?.name_ar||'—'}</div></td>
+      <td><div class="emp-name">${escapeHtml(r.station?.name_ar)||'—'}</div></td>
       <td><span style="font-family:monospace;font-size:12px;color:#6B7280">${MN[r.month-1]} ${r.year}</span></td>
       <td>${scoreBarHtml(r.total_score)}</td>
       <td>${scoreBadge(r.total_score)}</td>

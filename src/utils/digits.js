@@ -14,3 +14,14 @@ export function cleanNumber(str) {
   const s = toLatinDigits(str).replace(/[^\d.]/g, '')
   return s.replace(/^0+(?=\d)/, '')
 }
+
+/** تنظيف النص من HTML قبل حقنه في document.write أو innerHTML. */
+export function escapeHtml(str) {
+  if (str == null) return ''
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
