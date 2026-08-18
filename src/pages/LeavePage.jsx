@@ -179,6 +179,10 @@ function Badge({ status, isAr = true }) {
 /* ══════════════════════════════════════════
    طباعة الإجازة — نفس تصميم التقارير
 ══════════════════════════════════════════ */
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
 function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0) {
   const leave = decodeLeaveNotes(rawLeave)
   const typeLabel   = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
@@ -240,8 +244,8 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
     <!-- رأس الصفحة -->
     <div style="background:#1C2B36;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">
       <div style="width:160px;text-align:right;font-size:10px;opacity:.8">
-        <div>${stationName}</div>
-        <div>${printDate}</div>
+        <div>${esc(stationName)}</div>
+        <div>${esc(printDate)}</div>
       </div>
       <div style="text-align:center;flex:1">
         <div style="font-size:17px;font-weight:900;letter-spacing:2px">NORTH WEST BUS</div>
@@ -250,7 +254,7 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
       </div>
       <div style="width:160px;text-align:left">
         <div style="font-size:16px;font-weight:800">طلب إجازة</div>
-        <div style="font-size:9px;opacity:.7;margin-top:2px">المحطة: ${stationName}</div>
+        <div style="font-size:9px;opacity:.7;margin-top:2px">المحطة: ${esc(stationName)}</div>
       </div>
     </div>
 
@@ -258,9 +262,9 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
     <!-- صف معلومات -->
     <table class="bordered" style="margin-bottom:6px">
       <tr>
-        <td class="lbl">تاريخ الوثيقة</td><td class="val">${printDate}</td>
-        <td class="lbl">رقم الموظف</td><td class="val">${jobNum}</td>
-        <td class="lbl">المحطة</td><td class="val">${stationName}</td>
+        <td class="lbl">تاريخ الوثيقة</td><td class="val">${esc(printDate)}</td>
+        <td class="lbl">رقم الموظف</td><td class="val">${esc(jobNum)}</td>
+        <td class="lbl">المحطة</td><td class="val">${esc(stationName)}</td>
       </tr>
     </table>
 
@@ -278,11 +282,11 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
       </thead>
       <tbody>
         <tr>
-          <td style="text-align:center">${typeLabel}${compLabel ? '<br><span style="font-size:9px;color:#0f766e">' + compLabel + '</span>' : ''}</td>
-          <td style="text-align:center">${leave.start_date}${leave.time_from ? '<br><span style="font-size:9px">' + leave.time_from + '</span>' : ''}</td>
-          <td style="text-align:center">${leave.end_date}${leave.time_to ? '<br><span style="font-size:9px">' + leave.time_to + '</span>' : ''}</td>
-          <td style="text-align:center;font-weight:900;color:#1C2B36;font-size:${isCasual ? '11' : '13'}px">${durationStr}</td>
-          <td style="text-align:center">${leave.return_date ?? '—'}</td>
+          <td style="text-align:center">${esc(typeLabel)}${compLabel ? '<br><span style="font-size:9px;color:#0f766e">' + esc(compLabel) + '</span>' : ''}</td>
+          <td style="text-align:center">${esc(leave.start_date)}${leave.time_from ? '<br><span style="font-size:9px">' + esc(leave.time_from) + '</span>' : ''}</td>
+          <td style="text-align:center">${esc(leave.end_date)}${leave.time_to ? '<br><span style="font-size:9px">' + esc(leave.time_to) + '</span>' : ''}</td>
+          <td style="text-align:center;font-weight:900;color:#1C2B36;font-size:${isCasual ? '11' : '13'}px">${esc(durationStr)}</td>
+          <td style="text-align:center">${esc(leave.return_date ?? '—')}</td>
         </tr>
       </tbody>
     </table>
@@ -291,20 +295,20 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
     <div class="sec-hd">بيانات الموظف</div>
     <table class="bordered">
       <tr>
-        <td class="lbl">اسم الموظف</td><td class="val">${employeeName}</td>
-        <td class="lbl">المحطة / الإدارة</td><td class="val">${stationName}</td>
+        <td class="lbl">اسم الموظف</td><td class="val">${esc(employeeName)}</td>
+        <td class="lbl">المحطة / الإدارة</td><td class="val">${esc(stationName)}</td>
       </tr>
       <tr>
-        <td class="lbl">المسمى الوظيفي</td><td class="val">${jobTitle}</td>
-        <td class="lbl">رقم الموظف</td><td class="val">${jobNum}</td>
+        <td class="lbl">المسمى الوظيفي</td><td class="val">${esc(jobTitle)}</td>
+        <td class="lbl">رقم الموظف</td><td class="val">${esc(jobNum)}</td>
       </tr>
       <tr>
-        <td class="lbl">تاريخ المباشرة</td><td class="val">${hireDate}</td>
-        <td class="lbl">رقم الجوال</td><td class="val">${phone}</td>
+        <td class="lbl">تاريخ المباشرة</td><td class="val">${esc(hireDate)}</td>
+        <td class="lbl">رقم الجوال</td><td class="val">${esc(phone)}</td>
       </tr>
       <tr>
-        <td class="lbl">رقم الهوية</td><td class="val">${nationalId}</td>
-        <td class="lbl">ملاحظات</td><td class="val">${leave.notes ?? '—'}</td>
+        <td class="lbl">رقم الهوية</td><td class="val">${esc(nationalId)}</td>
+        <td class="lbl">ملاحظات</td><td class="val">${esc(leave.notes ?? '—')}</td>
       </tr>
     </table>
 
@@ -337,15 +341,15 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
       </tr>
       <tr>
         <td style="padding:14px 9px 6px;vertical-align:top">
-          <div style="font-size:10px">${employeeName}</div>
+          <div style="font-size:10px">${esc(employeeName)}</div>
           <div style="border-top:1px solid #cbd5e1;margin-top:22px;font-size:9px;color:#64748b">التوقيع</div>
         </td>
         <td style="padding:14px 9px 6px;vertical-align:top">
-          <div style="font-size:10px;font-weight:700;color:${supColor}">${supLabel}</div>
+          <div style="font-size:10px;font-weight:700;color:${supColor}">${esc(supLabel)}</div>
           <div style="border-top:1px solid #cbd5e1;margin-top:22px;font-size:9px;color:#64748b">التوقيع</div>
         </td>
         <td style="padding:14px 9px 6px;vertical-align:top">
-          <div style="font-size:10px;font-weight:700;color:${mgrColor}">${mgrLabel}</div>
+          <div style="font-size:10px;font-weight:700;color:${mgrColor}">${esc(mgrLabel)}</div>
           <div style="border-top:1px solid #cbd5e1;margin-top:22px;font-size:9px;color:#64748b">التوقيع</div>
         </td>
       </tr>
@@ -353,7 +357,7 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
 
     <!-- تذييل -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:6px;border-top:1px solid #cbd5e1;font-size:9px;color:#64748b">
-      <span>طُبع بواسطة : ${employeeName}</span>
+      <span>طُبع بواسطة : ${esc(employeeName)}</span>
       <span style="background:#1C2B36;color:#fff;padding:2px 12px;border-radius:20px;font-size:8px;font-weight:700">NORTH WEST BUS</span>
       <span>${printDate} — ${printTime}</span>
     </div>
