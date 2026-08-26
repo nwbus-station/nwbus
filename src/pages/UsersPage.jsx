@@ -792,9 +792,10 @@ export default function UsersPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
-  const [users,    setUsers]    = useState([])
-  const [stations, setStations] = useState([])
-  const [loading,  setLoading]  = useState(true)
+  const usersCacheKey = `users_all_${profile?.station_id ?? 'admin'}`
+  const [users,    setUsers]    = useState(() => getCached(usersCacheKey)?.users ?? [])
+  const [stations, setStations] = useState(() => getCached(usersCacheKey)?.stations ?? [])
+  const [loading,  setLoading]  = useState(() => !getCached(usersCacheKey))
   const [modal,    setModal]    = useState(null)
   const [search,       setSearch]       = useState('')
   const [roleFilter,   setRoleFilter]   = useState('')

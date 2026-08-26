@@ -315,8 +315,8 @@ export default function StationsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const { isGeneralAdmin } = useAuth()
-  const [stations, setStations] = useState([])
-  const [loading, setLoading]   = useState(true)
+  const [stations, setStations] = useState(() => getCached('stations_all') ?? [])
+  const [loading, setLoading]   = useState(() => !getCached('stations_all'))
   const [modal, setModal]       = useState(null)
   const [showMerge, setShowMerge] = useState(false)
   const [search, setSearch]     = useState('')

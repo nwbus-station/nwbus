@@ -589,12 +589,17 @@ export default function TransportationPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
-  const [date, setDate]       = useState(todayStr())
+  const initialDate = todayStr()
+  const initialStationId = profile?.station_id || null
+  const initialTransportCacheKey = `transport_${initialStationId}_${initialDate}`
+  const initialTransportCache = getCached(initialTransportCacheKey)
+
+  const [date, setDate]       = useState(initialDate)
   const handleDateChange = d => { setDate(d); sessionStorage.setItem('tp_date', d) }
-  const [trips, setTrips]     = useState([])
-  const [records, setRecords] = useState([])
+  const [trips, setTrips]     = useState(() => initialTransportCache?.trips ?? [])
+  const [records, setRecords] = useState(() => initialTransportCache?.records ?? [])
   const [shipmentMap, setShipmentMap] = useState({}) // trip_schedule_id → shipments[]
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !initialStationId ? false : !initialTransportCache)
   const [modal, setModal]     = useState(null)
   const [search, setSearch]   = useState('')
   const [filter, setFilter]   = useState('departure') // 'departure' | 'arrival' | 'all'

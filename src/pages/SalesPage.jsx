@@ -738,16 +738,19 @@ export default function SalesPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
-  const [records,     setRecords]     = useState([])
+  const today = todayStr()
+  const initialFilterStation = localStorage.getItem('sales_filter_station') ?? ''
+  const initialSalesCacheKey = `sales_${today}_${initialFilterStation}_${profile?.id}`
+
+  const [records,     setRecords]     = useState(() => getCached(initialSalesCacheKey) ?? [])
   const [stations,    setStations]    = useState([])
-  const [loading,     setLoading]     = useState(true)
+  const [loading,     setLoading]     = useState(() => !getCached(initialSalesCacheKey))
   const [modal,       setModal]       = useState(null)
   const [audit,       setAudit]       = useState(null)
   const [deleting,    setDeleting]    = useState(null)
   const [confirmDel,  setConfirmDel]  = useState(null)
-  const today = todayStr()
   const [filterDate,    setFilterDate]    = useState(today)
-  const [filterStation, setFilterStation] = useState(() => localStorage.getItem('sales_filter_station') ?? '')
+  const [filterStation, setFilterStation] = useState(initialFilterStation)
   const [pinnedStations, setPinnedStations] = useState(() => { try { return JSON.parse(localStorage.getItem('sales_pinned_stations') ?? '[]') } catch { return [] } })
   const [showPinModal, setShowPinModal] = useState(false)
 

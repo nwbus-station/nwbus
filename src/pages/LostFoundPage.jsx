@@ -685,10 +685,13 @@ const delBtn = (onClick, loading) => (
 )
 
 function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
+  const initialLogsCacheKey = `lostfound_logs_${stationFilter ?? 'all'}`
+  const initialLogsCache = getCached(initialLogsCacheKey)
+
   const [sub, setSub]         = useState('reports')
-  const [reports, setReports] = useState([])
-  const [items, setItems]     = useState([])
-  const [loading, setLoading] = useState(true)
+  const [reports, setReports] = useState(() => initialLogsCache?.reports ?? [])
+  const [items, setItems]     = useState(() => initialLogsCache?.items ?? [])
+  const [loading, setLoading] = useState(() => !initialLogsCache)
   const [search, setSearch]   = useState('')
   const [busy, setBusy]       = useState(null)
 
