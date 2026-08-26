@@ -41,6 +41,7 @@ export const MODULES = [
   { value: 'live_board',     ar: 'شاشة العرض',       en: 'Live Board' },
   { value: 'survey',         ar: 'تقييم الركاب',     en: 'Passenger Survey' },
   { value: 'evaluation',     ar: 'التقييم الوظيفي',  en: 'Staff Evaluation' },
+  { value: 'users',          ar: 'الموظفون',         en: 'Staff' },
 ]
 
 // Departure accuracy thresholds (minutes)
