@@ -176,8 +176,9 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
 }
 
 /* ─── User Modal ────────────────────────────────────────── */
+const NEW_USER_DRAFT_KEY = 'um_new_draft'
+
 function UserModal({ user, stations, supervisors, onClose, onSaved }) {
-  useEscapeKey(onClose)
   const { profile, isGeneralAdmin, isStationAdmin } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -187,7 +188,20 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
     ? USER_ROLES
     : USER_ROLES.filter(r => ['station_employee', 'accountant'].includes(r.value))
 
-  const [form, setForm] = useState({
+  // استعادة مسودة "موظف جديد" محفوظة (لو انقطع النت أو حدّث الصفحة قبل الحفظ)
+  const newUserDraft = (() => {
+    if (user) return null // مو لموظف جديد
+    try {
+      const raw = sessionStorage.getItem(NEW_USER_DRAFT_KEY)
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  })()
+
+  function clearNewUserDraft() { sessionStorage.removeItem(NEW_USER_DRAFT_KEY) }
+  function closeAndClearDraft() { if (!user) clearNewUserDraft(); onClose() }
+  useEscapeKey(closeAndClearDraft)
+
+  const [form, setForm] = useState(newUserDraft?.form ?? {
     job_number:      user?.job_number      ?? '',
     username:        user?.username        ?? '',
     password:        '',
@@ -238,8 +252,20 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
   }
 
   // محطات المشرف المتعددة (station_admin) — تُحفظ في user_stations
-  const [stationSet,    setStationSet]    = useState(new Set(user?.station_id ? [user.station_id] : []))
+  const [stationSet,    setStationSet]    = useState(new Set(
+    newUserDraft?.stationSet ?? (user?.station_id ? [user.station_id] : [])
+  ))
   const [stationSearch, setStationSearch] = useState('')
+
+  // حفظ مسودة "موظف جديد" عند كل تغيير — تحمي من فقدان البيانات بانقطاع النت أو تحديث الصفحة
+  useEffect(() => {
+    if (user) return
+    try {
+      sessionStorage.setItem(NEW_USER_DRAFT_KEY, JSON.stringify({
+        form, stationSet: [...stationSet],
+      }))
+    } catch {}
+  }, [user, form, stationSet])
   useEffect(() => {
     if (user?.id && (user.role === 'station_admin' || user.role === 'area_supervisor')) {
       supabase.from('user_stations').select('station_id').eq('user_id', user.id)
@@ -327,7 +353,8 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           if (nErr && !nErr.message?.includes('column') && !nErr.message?.includes('does not exist')) throw nErr
         }
 
-        // عرض بطاقة بيانات الدخول
+        // نجح الحفظ — امسح المسودة واعرض بطاقة بيانات الدخول
+        clearNewUserDraft()
         setCredential({ username: form.username.toLowerCase(), password: form.password, nameAr: form.full_name_ar, jobNumber: form.job_number, phone: form.phone, hireDate: form.hire_date, stationName: stations.find(s => s.id === form.station_id)?.name_ar ?? '' })
         await onSaved()
 
@@ -398,7 +425,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           <h2 className="font-bold text-white text-base">
             {user ? (isAr ? 'تعديل موظف' : 'Edit Staff') : (isAr ? 'موظف جديد' : 'New Staff')}
           </h2>
-          <button onClick={onClose} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
+          <button onClick={closeAndClearDraft} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
         </div>
 
         <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
@@ -734,7 +761,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
               className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-nwbus-dark transition-colors">
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
             </button>
-            <button type="button" onClick={onClose}
+            <button type="button" onClick={closeAndClearDraft}
               className="px-4 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
               {isAr ? 'إلغاء' : 'Cancel'}
             </button>
