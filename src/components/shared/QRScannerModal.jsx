@@ -46,6 +46,20 @@ function pickTicketFromText(text) {
   return null
 }
 
+/* بعض هواتف أندرويد (Galaxy/Honor وغيرها) تفتح الكاميرا بوضع تركيز ثابت
+   مخصص للفيديو (continuous-video) بدل التركيز على الأجسام القريبة
+   (continuous-picture) — هذا يخلي النص غير واضح للـOCR رغم أن الكاميرا تعمل. */
+async function applyFocusConstraints(stream) {
+  try {
+    const track = stream.getVideoTracks()[0]
+    if (!track?.getCapabilities) return
+    const caps = track.getCapabilities()
+    if (caps.focusMode?.includes('continuous')) {
+      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+    }
+  } catch {}
+}
+
 function isColoredBackground(video) {
   try {
     const vw = video.videoWidth, vh = video.videoHeight
@@ -146,8 +160,17 @@ export default function QRScannerModal({
   const [isProcessing, setIsProcessing] = useState(false)
   const [scanLine, setScanLine]         = useState(0)
   const [dupWarn, setDupWarn]           = useState(null)
+  const [stuckHint, setStuckHint]       = useState(false)
 
   useEffect(() => { onCloseRef.current = onClose }, [onClose])
+
+  // لو ظلّ يبحث بدون نتيجة لفترة طويلة (أجهزة لا تدعم القراءة التلقائية جيداً)
+  // نعرض تلميح بإدخال الرقم يدوياً بدل الانتظار بلا سبب واضح
+  useEffect(() => {
+    if (status !== 'searching') { setStuckHint(false); return }
+    const id = setTimeout(() => setStuckHint(true), 10000)
+    return () => clearTimeout(id)
+  }, [status])
 
   useEffect(() => {
     if (status !== 'searching') return
@@ -178,6 +201,7 @@ export default function QRScannerModal({
       streamRef.current = stream
       videoRef.current.srcObject = stream
       await videoRef.current.play()
+      await applyFocusConstraints(stream)
       setCamReady(true)
       setStatus('searching')
       loopQR()
@@ -639,8 +663,10 @@ export default function QRScannerModal({
           display:'flex', alignItems:'center', justifyContent:'space-between',
           flexShrink:0, gap:12,
         }}>
-          <p style={{ color:'rgba(255,255,255,0.3)', fontSize:'0.68rem', margin:0, letterSpacing:0.3, flex:1 }}>
-            {isAr ? 'يبحث تلقائياً عن رقم التذكرة' : 'Auto-scanning for ticket number'}
+          <p style={{ color: stuckHint ? GOLD : 'rgba(255,255,255,0.3)', fontSize:'0.68rem', margin:0, letterSpacing:0.3, flex:1, fontWeight: stuckHint ? 700 : 400 }}>
+            {stuckHint
+              ? (isAr ? 'ما ينقرأ على هذا الجهاز؟ أغلق وأدخل الرقم يدوياً' : "Not reading on this device? Close and type the number manually")
+              : (isAr ? 'يبحث تلقائياً عن رقم التذكرة' : 'Auto-scanning for ticket number')}
           </p>
           <button onClick={hardClose} style={{
             padding:'8px 18px', borderRadius:50,

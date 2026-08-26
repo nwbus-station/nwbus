@@ -387,15 +387,31 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
                     .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i)
                     .map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <input
-                  value={ticketInput}
-                  onChange={e => setTicketInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTicket())}
-                  placeholder={isAr ? 'رقم التذكرة ثم Enter' : 'Ticket # then Enter'}
-                  style={{ ...S.input, padding:'7px 10px', fontSize:'0.75rem', fontFamily:'monospace' }}
-                  onFocus={e => e.target.style.borderColor='var(--accent)'}
-                  onBlur={e => e.target.style.borderColor='var(--border)'}
-                />
+                <div style={{ display:'flex', gap:6 }}>
+                  <input
+                    value={ticketInput}
+                    onChange={e => setTicketInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTicket())}
+                    placeholder={isAr ? 'رقم التذكرة' : 'Ticket #'}
+                    style={{ ...S.input, flex:1, minWidth:0, padding:'7px 10px', fontSize:'0.75rem', fontFamily:'monospace' }}
+                    onFocus={e => e.target.style.borderColor='var(--accent)'}
+                    onBlur={e => e.target.style.borderColor='var(--border)'}
+                  />
+                  <button type="button" onClick={() => addTicket()} disabled={!ticketInput.trim()}
+                    title={isAr ? 'إضافة' : 'Add'}
+                    style={{
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      width:34, flexShrink:0, borderRadius:8, border:'1px solid var(--border)',
+                      background: ticketInput.trim() ? 'var(--accent)' : 'var(--surface)',
+                      color: ticketInput.trim() ? '#fff' : 'var(--text-3)',
+                      cursor: ticketInput.trim() ? 'pointer' : 'default',
+                      transition:'all 0.14s',
+                    }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>
+                    </svg>
+                  </button>
+                </div>
                 {/* زر مسح QR */}
                 <button type="button" onClick={() => setShowTicketScanner(true)}
                   style={{
