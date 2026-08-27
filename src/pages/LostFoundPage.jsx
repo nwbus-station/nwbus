@@ -932,16 +932,24 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                               <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{item.created_by_name || '—'}</p>
                               {item.creator?.phone && (
-                                revealedPhones.has(item.id) ? (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.74rem', fontFamily: 'monospace', color: 'var(--text-2)', direction: 'ltr' }}>
-                                    <DetailIcon name="phone" size={11} color="var(--text-3)" />{item.creator.phone}
-                                  </span>
-                                ) : (
+                                <>
                                   <button onClick={() => togglePhone(item.id)}
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-2)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                                    <DetailIcon name="phone" size={10} /> {isAr ? 'إظهار الرقم' : 'Show number'}
+                                    title={revealedPhones.has(item.id) ? (isAr ? 'إخفاء الرقم' : 'Hide number') : (isAr ? 'إظهار الرقم' : 'Show number')}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                      width: 24, height: 24, borderRadius: 99, cursor: 'pointer', flexShrink: 0,
+                                      border: '1px solid var(--border)',
+                                      background: revealedPhones.has(item.id) ? 'var(--text-1)' : 'var(--surface)',
+                                      color: revealedPhones.has(item.id) ? 'var(--card)' : 'var(--text-2)',
+                                    }}>
+                                    <DetailIcon name="phone" size={11} />
                                   </button>
-                                )
+                                  {revealedPhones.has(item.id) && (
+                                    <span style={{ fontSize: '0.74rem', fontFamily: 'monospace', color: 'var(--text-2)', direction: 'ltr' }}>
+                                      {item.creator.phone}
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>
