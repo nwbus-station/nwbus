@@ -14,23 +14,28 @@ import { isRestStation } from '../utils/stations'
 const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA', { minimumFractionDigits: 2 })
 const fmtN = n => Number(n ?? 0).toLocaleString('ar-SA')
 
-// ── سجل النشاط: أسماء عربية للحقول الشائعة، وحقول تُستبعد من العرض ──
+// ── سجل النشاط: قائمة الحقول ذات المعنى فقط (كل شي غيرها يُتجاهل — بلا تقنيّات/ضوضاء) ──
 const AUDIT_FIELD_LABELS = {
+  // المستخدمون
   full_name_ar: 'الاسم', full_name_en: 'الاسم (إنجليزي)', role: 'الصلاحية',
   station_id: 'المحطة', is_active: 'الحالة', phone: 'الجوال', national_id: 'رقم الهوية',
   job_title: 'المسمى الوظيفي', hire_date: 'تاريخ المباشرة', job_number: 'الرقم الوظيفي',
-  supervisor_id: 'المسؤول المباشر', language: 'اللغة', is_accountant: 'صلاحية محاسب',
+  supervisor_id: 'المسؤول المباشر', is_accountant: 'صلاحية محاسب',
   is_agent: 'حساب وكيل', allowed_modules: 'الأقسام المتاحة', username: 'اسم المستخدم',
+  // سجلات الرحلات
   bus_number: 'رقم الحافلة', actual_departure: 'وقت المغادرة الفعلي', actual_arrival: 'وقت الوصول الفعلي',
   passenger_count: 'عدد الركاب', operational_status: 'حالة الرحلة', notes: 'ملاحظات',
-  manifest_match: 'مطابقة الكشف', manifest_total: 'إجمالي الكشف', missed_tickets: 'تذاكر المتخلفين',
-  amount: 'المبلغ', sale_date: 'تاريخ البيع', status: 'الحالة', description: 'الوصف',
+  manifest_match: 'مطابقة الكشف', manifest_total: 'إجمالي الكشف', record_date: 'تاريخ الرحلة',
+  // المبيعات
+  amount: 'المبلغ', sale_date: 'تاريخ البيع',
+  // الموجودات
+  status: 'الحالة', description: 'الوصف',
   owner_name: 'اسم المالك', owner_contact: 'تواصل المالك', resolved_date: 'تاريخ التسليم',
 }
-const AUDIT_HIDDEN_FIELDS = new Set(['id', 'created_at', 'updated_at', 'login_password', 'auth_id', 'password'])
+const AUDIT_TRACKED_KEYS = Object.keys(AUDIT_FIELD_LABELS)
 
 function auditFieldLabel(key) {
-  return AUDIT_FIELD_LABELS[key] ?? key.replace(/_/g, ' ')
+  return AUDIT_FIELD_LABELS[key] ?? key
 }
 function auditFormatValue(key, v, stations) {
   if (v === null || v === undefined || v === '') return '—'
@@ -40,28 +45,24 @@ function auditFormatValue(key, v, stations) {
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }
-// يحسب الفروق بين before_data/after_data لعرضها بسجل النشاط
+// يحسب الفروق بين before_data/after_data — يقتصر على الحقول ذات المعنى (AUDIT_FIELD_LABELS)
+// فيتجاهل تلقائياً الأعمدة التقنية (created_by, ids...) وحركات النظام البحتة (last_login عند كل دخول)
 function computeAuditDiff(row) {
   const oldD = row.before_data || {}
   const newD = row.after_data || {}
   if (row.action === 'INSERT') {
-    return Object.entries(newD)
-      .filter(([k, v]) => !AUDIT_HIDDEN_FIELDS.has(k) && v !== null && v !== '')
-      .map(([k, v]) => ({ key: k, from: null, to: v }))
+    return AUDIT_TRACKED_KEYS
+      .filter(k => newD[k] !== undefined && newD[k] !== null && newD[k] !== '')
+      .map(k => ({ key: k, from: null, to: newD[k] }))
   }
   if (row.action === 'DELETE') {
-    return Object.entries(oldD)
-      .filter(([k, v]) => !AUDIT_HIDDEN_FIELDS.has(k) && v !== null && v !== '')
-      .map(([k, v]) => ({ key: k, from: v, to: null }))
+    return AUDIT_TRACKED_KEYS
+      .filter(k => oldD[k] !== undefined && oldD[k] !== null && oldD[k] !== '')
+      .map(k => ({ key: k, from: oldD[k], to: null }))
   }
-  const keys = new Set([...Object.keys(oldD), ...Object.keys(newD)])
-  const diffs = []
-  keys.forEach(k => {
-    if (AUDIT_HIDDEN_FIELDS.has(k)) return
-    const a = oldD[k], b = newD[k]
-    if (JSON.stringify(a) !== JSON.stringify(b)) diffs.push({ key: k, from: a, to: b })
-  })
-  return diffs
+  return AUDIT_TRACKED_KEYS
+    .filter(k => JSON.stringify(oldD[k] ?? null) !== JSON.stringify(newD[k] ?? null))
+    .map(k => ({ key: k, from: oldD[k], to: newD[k] }))
 }
 
 // إحصائيات الالتزام لمجموعة حركات (وصول أو مغادرة)
@@ -1424,6 +1425,8 @@ export default function ReportsPage() {
           users:          isAr ? 'المستخدمون'     : 'Users',
         }
         const totalPages = Math.ceil(auditTotal / PAGE_SIZE)
+        // نخفي حركات التحديث اللي ما فيها أي تغيير بحقل ذي معنى (مثل last_login عند كل تسجيل دخول)
+        const visibleAuditRows = auditRows.filter(row => row.action !== 'UPDATE' || computeAuditDiff(row).length > 0)
         return (
           <div style={{ marginTop: 32, background: 'var(--card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
 
@@ -1478,7 +1481,7 @@ export default function ReportsPage() {
 
             {/* الجدول */}
             <div style={{ overflowX: 'auto' }}>
-              {auditRows.length === 0 && !auditLoading ? (
+              {visibleAuditRows.length === 0 && !auditLoading ? (
                 <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>
                   {isAr ? 'لا توجد سجلات في هذه الفترة' : 'No records for this period'}
                 </div>
@@ -1498,7 +1501,8 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {auditRows.map((row, i) => {
+                    {visibleAuditRows.map((row, i) => {
+                      const ACTION_LABELS = { INSERT: isAr ? 'إضافة' : 'Insert', UPDATE: isAr ? 'تعديل' : 'Update', DELETE: isAr ? 'حذف' : 'Delete' }
                       const ac = row.action === 'INSERT' ? 'var(--success)' : row.action === 'DELETE' ? 'var(--danger)' : 'var(--warning)'
                       const ab = row.action === 'INSERT' ? 'var(--success-bg)' : row.action === 'DELETE' ? 'var(--danger-bg)' : 'var(--warning-bg)'
                       const dt = new Date(row.created_at)
@@ -1520,39 +1524,52 @@ export default function ReportsPage() {
                           <td style={{ padding: '8px 14px', color: 'var(--text-2)', fontSize: '0.78rem' }}>{TABLE_LABELS[row.table_name] ?? row.table_name}</td>
                           <td style={{ padding: '8px 14px' }}>
                             <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: 99, fontSize: '0.7rem', fontWeight: 700, background: ab, color: ac }}>
-                              {row.action}
+                              {ACTION_LABELS[row.action] ?? row.action}
                             </span>
                           </td>
-                          <td style={{ padding: '8px 14px', color: 'var(--text-3)', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                          <td style={{ padding: '8px 14px', color: isOpen ? 'var(--brand-900)' : 'var(--text-3)', fontSize: '0.72rem', fontWeight: isOpen ? 700 : 400, whiteSpace: 'nowrap' }}>
                             {isOpen ? (isAr ? '▲ إخفاء' : '▲ Hide') : (isAr ? '▼ تفاصيل' : '▼ Details')}
                           </td>
                         </tr>
                         {isOpen && (
                           <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-                            <td colSpan={5} style={{ padding: '4px 14px 14px' }}>
+                            <td colSpan={5} style={{ padding: '0 14px 16px' }}>
                               {diff.length === 0 ? (
-                                <div style={{ fontSize: '0.76rem', color: 'var(--text-3)', padding: '8px 4px' }}>
+                                <div style={{ fontSize: '0.76rem', color: 'var(--text-3)', padding: '10px 4px' }}>
                                   {isAr ? 'لا تفاصيل إضافية لهذا السجل' : 'No further details for this record'}
                                 </div>
                               ) : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                                  <thead>
-                                    <tr>
-                                      {[isAr ? 'الحقل' : 'Field', isAr ? 'قبل' : 'Before', isAr ? 'بعد' : 'After'].map(h => (
-                                        <th key={h} style={{ padding: '6px 12px', textAlign: 'start', fontWeight: 600, color: 'var(--text-3)', borderBottom: '1px solid var(--border)' }}>{h}</th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {diff.map(d => (
-                                      <tr key={d.key} style={{ borderBottom: '1px solid var(--border)' }}>
-                                        <td style={{ padding: '6px 12px', fontWeight: 600, color: 'var(--text-1)' }}>{auditFieldLabel(d.key)}</td>
-                                        <td style={{ padding: '6px 12px', color: 'var(--danger)' }}>{auditFormatValue(d.key, d.from, stations)}</td>
-                                        <td style={{ padding: '6px 12px', color: 'var(--success)' }}>{auditFormatValue(d.key, d.to, stations)}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                <div style={{
+                                  background: 'var(--card)', border: '1px solid var(--border)',
+                                  borderInlineStart: `3px solid ${ac}`, borderRadius: 10, overflow: 'hidden',
+                                }}>
+                                  {diff.map((d, di) => (
+                                    <div key={d.key} style={{
+                                      display: 'flex', alignItems: 'center', gap: 16, padding: '10px 16px',
+                                      borderBottom: di < diff.length - 1 ? '1px solid var(--border)' : 'none',
+                                      flexWrap: 'wrap',
+                                    }}>
+                                      <span style={{ minWidth: 130, fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)' }}>
+                                        {auditFieldLabel(d.key)}
+                                      </span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        {row.action !== 'INSERT' && (
+                                          <span style={{ fontSize: '0.76rem', padding: '3px 10px', borderRadius: 6, background: 'var(--danger-bg)', color: 'var(--danger)', fontWeight: 600 }}>
+                                            {auditFormatValue(d.key, d.from, stations)}
+                                          </span>
+                                        )}
+                                        {row.action === 'UPDATE' && (
+                                          <span style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>{isAr ? '←' : '→'}</span>
+                                        )}
+                                        {row.action !== 'DELETE' && (
+                                          <span style={{ fontSize: '0.76rem', padding: '3px 10px', borderRadius: 6, background: 'var(--success-bg)', color: 'var(--success)', fontWeight: 600 }}>
+                                            {auditFormatValue(d.key, d.to, stations)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
                             </td>
                           </tr>
