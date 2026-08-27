@@ -949,10 +949,12 @@ export default function UsersPage() {
             {isAr ? `${filtered.length} من ${users.length} موظف` : `${filtered.length} of ${users.length} staff`}
           </p>
         </div>
-        <button onClick={() => setModal('new')}
-          className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors whitespace-nowrap self-start sm:self-auto">
-          + {isAr ? 'جديد' : 'New'}
-        </button>
+        {isGeneralAdmin && (
+          <button onClick={() => setModal('new')}
+            className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors whitespace-nowrap self-start sm:self-auto">
+            + {isAr ? 'جديد' : 'New'}
+          </button>
+        )}
       </div>
 
       {/* Search + Filters */}
