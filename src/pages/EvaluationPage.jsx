@@ -682,8 +682,9 @@ export default function EvaluationPage() {
     if (canEvalSup) {
       promises.push(
         supabase.from('users')
-          .select('id, full_name_ar, username, job_number, role, station_id, station:station_id(name_ar)')
-          .in('role', ['station_admin', 'area_supervisor'])
+          .select('id, full_name_ar, username, job_number, role, job_title, station_id, station:station_id(name_ar)')
+          // مشرفو النظام (role) + أي حساب مسماه الوظيفي "مشرف" حتى لو صلاحيته أدمن عام
+          .or('role.in.(station_admin,area_supervisor),job_title.in.(area_supervisor,station_supervisor)')
           .eq('is_active', true)
           .then(r => setSupervisors((r.data || []).sort((a, b) => {
             // مشرفو المنطقة أولاً ثم مشرفو المحطة
