@@ -666,6 +666,7 @@ export default function EvaluationPage() {
     if (canEvalEmp || isAdmin) {
       let q = supabase.from('users').select('id, full_name_ar, username, job_number, role, job_title, station_id, station:station_id(name_ar, name_en)')
         .not('role', 'in', '("general_admin","station_admin","area_supervisor")')
+        .eq('is_active', true)
       if (!isAdmin) {
         q = q.eq('role', 'station_employee')
         const stationId = profile?.station_id || profile?.station?.id
@@ -683,6 +684,7 @@ export default function EvaluationPage() {
         supabase.from('users')
           .select('id, full_name_ar, username, job_number, role, station_id, station:station_id(name_ar)')
           .in('role', ['station_admin', 'area_supervisor'])
+          .eq('is_active', true)
           .then(r => setSupervisors((r.data || []).sort((a, b) => {
             // مشرفو المنطقة أولاً ثم مشرفو المحطة
             if (a.role !== b.role) return a.role === 'area_supervisor' ? -1 : 1
