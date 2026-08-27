@@ -1049,7 +1049,7 @@ export default function EvaluationPage() {
                           <ScoreBar score={ev.total_score} />
                           {ev.evaluator?.full_name_ar && (
                             <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
-                              {isAr ? 'قيّمه: ' : 'By: '}{ev.evaluator.full_name_ar}
+                              {isAr ? 'بواسطة ' : 'By '}{ev.evaluator.full_name_ar}
                             </p>
                           )}
                         </div>
