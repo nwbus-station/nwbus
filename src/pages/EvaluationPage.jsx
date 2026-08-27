@@ -756,6 +756,10 @@ export default function EvaluationPage() {
       (e.username     || '').includes(searchQuery) ||
       (e.station?.name_ar || '').includes(searchQuery)
     )
+    .sort((a, b) =>
+      (a.station?.name_ar || '').localeCompare(b.station?.name_ar || '', 'ar') ||
+      (a.full_name_ar || '').localeCompare(b.full_name_ar || '', 'ar')
+    )
 
   const notEvaluated = filteredEmployees.filter(e => !empEvals.find(ev => ev.employee_id === e.id))
 
