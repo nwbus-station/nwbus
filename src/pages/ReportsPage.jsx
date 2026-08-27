@@ -40,10 +40,10 @@ function auditFormatValue(key, v, stations) {
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }
-// يحسب الفروق بين old_data/new_data لعرضها بسجل النشاط
+// يحسب الفروق بين before_data/after_data لعرضها بسجل النشاط
 function computeAuditDiff(row) {
-  const oldD = row.old_data || {}
-  const newD = row.new_data || {}
+  const oldD = row.before_data || {}
+  const newD = row.after_data || {}
   if (row.action === 'INSERT') {
     return Object.entries(newD)
       .filter(([k, v]) => !AUDIT_HIDDEN_FIELDS.has(k) && v !== null && v !== '')
@@ -219,7 +219,7 @@ export default function ReportsPage() {
     const to   = from + PAGE_SIZE - 1
 
     const cols = 'id, actor_name, table_name, record_id, action, created_at, station_id'
-      + (withDiff ? ', old_data, new_data' : '')
+      + (withDiff ? ', before_data, after_data' : '')
 
     let q = supabase
       .from('audit_log')
@@ -244,7 +244,7 @@ export default function ReportsPage() {
     }
 
     const { data: rows, error, count } = await q
-    // old_data/new_data قد لا تكون موجودة بعد بقاعدة البيانات — نتراجع لعرض أساسي بدون تفاصيل
+    // before_data/after_data قد لا تكون موجودة بقاعدة البيانات — نتراجع لعرض أساسي بدون تفاصيل
     if (error && withDiff) { setAuditLoading(false); return fetchAudit(page, false) }
     if (!error) { setAuditRows(rows ?? []); setAuditTotal(count ?? 0); setAuditPage(page) }
     setAuditLoading(false)
