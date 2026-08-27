@@ -881,27 +881,57 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                     </div>
 
                     {isOpen && (
-                      <div style={{ padding: '4px 14px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px', fontSize: '0.76rem', color: 'var(--text-2)', margin: '10px 0' }}>
-                          {typeLabel && <span><b style={{ color: 'var(--text-1)' }}>{isAr ? 'النوع:' : 'Type:'}</b> {typeLabel}</span>}
-                          <span><b style={{ color: 'var(--text-1)' }}>{isAr ? 'المحطة:' : 'Station:'}</b> {item.found_location || '—'}</span>
-                          <span><b style={{ color: 'var(--text-1)' }}>{isAr ? 'المسجّل:' : 'Registered by:'}</b> {item.created_by_name || '—'}</span>
-                          {item.donated_at && <span><b style={{ color: 'var(--text-1)' }}>{isAr ? 'تاريخ التسليم للجمعية:' : 'Donated on:'}</b> {new Date(item.donated_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</span>}
+                      <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                        {/* بيانات العنصر */}
+                        <div style={{
+                          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12,
+                          background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px',
+                        }}>
+                          {typeLabel && (
+                            <div>
+                              <p style={{ margin: '0 0 2px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{isAr ? 'النوع' : 'Type'}</p>
+                              <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{typeLabel}</p>
+                            </div>
+                          )}
+                          <div>
+                            <p style={{ margin: '0 0 2px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{isAr ? 'المحطة' : 'Station'}</p>
+                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{item.found_location || '—'}</p>
+                          </div>
+                          <div>
+                            <p style={{ margin: '0 0 2px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{isAr ? 'المسجّل' : 'Registered by'}</p>
+                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{item.created_by_name || '—'}</p>
+                          </div>
+                          {item.donated_at && (
+                            <div>
+                              <p style={{ margin: '0 0 2px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{isAr ? 'تسليم الجمعية' : 'Donated on'}</p>
+                              <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{new Date(item.donated_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</p>
+                            </div>
+                          )}
                         </div>
 
-                        <p style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', margin: '0 0 6px' }}>
-                          {isAr ? 'الصور' : 'Photos'} {photos.length > 0 && `(${photos.length})`}
-                        </p>
-                        {photos.length === 0 ? (
-                          <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>{isAr ? 'لا توجد صور مرفقة' : 'No photos attached'}</p>
-                        ) : (
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {photos.map((url, pi) => (
-                              <img key={pi} src={url} alt="" onClick={() => setLightbox(url)}
-                                style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer' }} />
-                            ))}
-                          </div>
-                        )}
+                        {/* الصور */}
+                        <div>
+                          <p style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 8px' }}>
+                            {isAr ? 'الصور' : 'Photos'}{photos.length > 0 && ` · ${photos.length}`}
+                          </p>
+                          {photos.length === 0 ? (
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>{isAr ? 'لا توجد صور مرفقة' : 'No photos attached'}</p>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                              {photos.map((url, pi) => (
+                                <img key={pi} src={url} alt="" onClick={() => setLightbox(url)}
+                                  style={{
+                                    width: 96, height: 96, objectFit: 'cover', borderRadius: 10,
+                                    border: '1px solid var(--border)', boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                                    cursor: 'zoom-in', transition: 'transform 0.15s',
+                                  }}
+                                  onMouseOver={e => e.currentTarget.style.transform = 'scale(1.04)'}
+                                  onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
