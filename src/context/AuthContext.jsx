@@ -32,8 +32,8 @@ export function AuthProvider({ children }) {
       profileIdRef.current = data.id
       setProfile(data)
       setProfileError(null)
-      // مشرف منطقة — نجلب محطاته المخصصة من user_stations
-      if (data.role === 'area_supervisor') {
+      // مشرف منطقة / مشرف محطة — نجلب محطاته المخصصة من user_stations
+      if (data.role === 'area_supervisor' || data.role === 'station_admin') {
         const { data: us } = await supabase
           .from('user_stations')
           .select('station_id')

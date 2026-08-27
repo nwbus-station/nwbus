@@ -713,7 +713,7 @@ export default function EvaluationPage() {
 
     // تقييمات المحطات
     if (canEvalStn) {
-      let q = supabase.from('station_evaluations').select('*').eq('eval_month', selMonth).eq('eval_year', selYear)
+      let q = supabase.from('station_evaluations').select('*, evaluator:evaluator_id(full_name_ar, role)').eq('eval_month', selMonth).eq('eval_year', selYear)
       if (!isGeneralAdmin && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
       promises.push(q.then(r => setStnEvals(r.data || [])))
     }
@@ -1037,7 +1037,16 @@ export default function EvaluationPage() {
                       {stn.name_en && stn.name_ar && <div style={{ marginTop: 3, fontSize: '0.72rem', color: 'var(--text-3)' }}>{stn.name_en}</div>}
                     </div>
                     <div className="score-col" style={{ minWidth: 150 }}>
-                      {ev ? <ScoreBar score={ev.total_score} /> : (
+                      {ev ? (
+                        <div>
+                          <ScoreBar score={ev.total_score} />
+                          {ev.evaluator?.full_name_ar && (
+                            <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
+                              {isAr ? 'قيّمه: ' : 'By: '}{ev.evaluator.full_name_ar}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
                         <span style={{ fontSize: '0.72rem', color: 'var(--text-3)', fontStyle: 'italic' }}>{isAr ? 'لم تُقيَّم بعد' : 'Not yet evaluated'}</span>
                       )}
                     </div>
