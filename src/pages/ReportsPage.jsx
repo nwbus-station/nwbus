@@ -65,6 +65,33 @@ function computeAuditDiff(row) {
     .map(k => ({ key: k, from: oldD[k], to: newD[k] }))
 }
 
+// جملة عربية واحدة تلخّص الحدث — بدل الاعتماد على فتح التفاصيل لفهم وش صار
+function auditSummary(row, stations, tripLookup) {
+  const d = row.action === 'DELETE' ? (row.before_data || {}) : (row.after_data || {})
+  const stationName = d.station_id ? stations.find(s => s.id === d.station_id)?.name_ar : null
+
+  if (row.table_name === 'trip_records') {
+    const trip = tripLookup[d.trip_schedule_id]
+    const tripLabel = trip?.trip_number ?? 'رحلة'
+    const verb = row.action === 'INSERT' ? 'أدخل رحلة' : row.action === 'DELETE' ? 'حذف رحلة' : 'عدّل رحلة'
+    return `${verb} ${tripLabel}` + (stationName ? ` — ${stationName}` : '')
+  }
+  if (row.table_name === 'sales_records') {
+    const verb = row.action === 'INSERT' ? 'سجّل إيراد' : row.action === 'DELETE' ? 'حذف إيراد' : 'عدّل إيراد'
+    return verb + (stationName ? ` — ${stationName}` : '')
+  }
+  if (row.table_name === 'lost_found_items') {
+    const verb = row.action === 'INSERT' ? 'أضاف موجودات' : row.action === 'DELETE' ? 'حذف موجودات' : 'حدّث موجودات'
+    return verb + (d.description ? `: ${d.description}` : '')
+  }
+  if (row.table_name === 'users') {
+    const verb = row.action === 'INSERT' ? 'أضاف موظف' : row.action === 'DELETE' ? 'حذف حساب' : 'عدّل بيانات'
+    return verb + (d.full_name_ar ? `: ${d.full_name_ar}` : '')
+  }
+  return TABLE_LABELS_AR[row.table_name] ?? row.table_name
+}
+const TABLE_LABELS_AR = { trip_records: 'سجلات الرحلات', sales_records: 'سجلات المبيعات', lost_found_items: 'المفقودات', users: 'المستخدمون' }
+
 // إحصائيات الالتزام لمجموعة حركات (وصول أو مغادرة)
 function complianceStats(list) {
   const measured = list.filter(m => !m.unentered && m.delay !== null)
@@ -213,6 +240,15 @@ export default function ReportsPage() {
   const [auditPage,    setAuditPage]    = useState(0)
   const [auditTotal,   setAuditTotal]   = useState(0)
   const [auditExpanded, setAuditExpanded] = useState(null) // id للسجل المفتوح تفاصيله
+  const [tripLookup, setTripLookup] = useState({}) // trip_schedule_id → { trip_number, trip_name }
+  useEffect(() => {
+    if (!canSeeAudit) return
+    supabase.from('trip_schedule').select('id, trip_number, trip_name').then(({ data }) => {
+      const map = {}
+      ;(data ?? []).forEach(t => { map[t.id] = t })
+      setTripLookup(map)
+    })
+  }, [canSeeAudit])
 
   const fetchAudit = useCallback(async (page = 0, withDiff = true) => {
     setAuditLoading(true)
@@ -1492,8 +1528,7 @@ export default function ReportsPage() {
                       {[
                         isAr ? 'التاريخ والوقت' : 'Date & Time',
                         isAr ? 'المستخدم'       : 'User',
-                        isAr ? 'الجدول'         : 'Table',
-                        isAr ? 'العملية'        : 'Action',
+                        isAr ? 'الحدث'          : 'Event',
                         '',
                       ].map(h => (
                         <th key={h} style={{ padding: '8px 14px', textAlign: 'start', fontWeight: 600, color: 'var(--text-2)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{h}</th>
@@ -1502,12 +1537,11 @@ export default function ReportsPage() {
                   </thead>
                   <tbody>
                     {visibleAuditRows.map((row, i) => {
-                      const ACTION_LABELS = { INSERT: isAr ? 'إضافة' : 'Insert', UPDATE: isAr ? 'تعديل' : 'Update', DELETE: isAr ? 'حذف' : 'Delete' }
                       const ac = row.action === 'INSERT' ? 'var(--success)' : row.action === 'DELETE' ? 'var(--danger)' : 'var(--warning)'
-                      const ab = row.action === 'INSERT' ? 'var(--success-bg)' : row.action === 'DELETE' ? 'var(--danger-bg)' : 'var(--warning-bg)'
                       const dt = new Date(row.created_at)
                       const isOpen = auditExpanded === row.id
                       const diff = isOpen ? computeAuditDiff(row) : []
+                      const summary = auditSummary(row, stations, tripLookup)
                       return (
                         <Fragment key={row.id}>
                         <tr style={{ borderBottom: isOpen ? 'none' : '1px solid var(--border)', background: i % 2 ? 'var(--surface)' : 'var(--card)', cursor: 'pointer' }}
@@ -1520,11 +1554,11 @@ export default function ReportsPage() {
                               {dt.toLocaleTimeString(isAr ? 'ar-SA' : 'en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             </div>
                           </td>
-                          <td style={{ padding: '8px 14px', color: 'var(--text-1)', fontWeight: 600, fontSize: '0.82rem' }}>{row.actor_name ?? '—'}</td>
-                          <td style={{ padding: '8px 14px', color: 'var(--text-2)', fontSize: '0.78rem' }}>{TABLE_LABELS[row.table_name] ?? row.table_name}</td>
+                          <td style={{ padding: '8px 14px', color: 'var(--text-1)', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{row.actor_name ?? '—'}</td>
                           <td style={{ padding: '8px 14px' }}>
-                            <span style={{ display: 'inline-flex', padding: '2px 9px', borderRadius: 99, fontSize: '0.7rem', fontWeight: 700, background: ab, color: ac }}>
-                              {ACTION_LABELS[row.action] ?? row.action}
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text-1)' }}>
+                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: ac, flexShrink: 0 }} />
+                              {summary}
                             </span>
                           </td>
                           <td style={{ padding: '8px 14px', color: isOpen ? 'var(--brand-900)' : 'var(--text-3)', fontSize: '0.72rem', fontWeight: isOpen ? 700 : 400, whiteSpace: 'nowrap' }}>
@@ -1533,7 +1567,7 @@ export default function ReportsPage() {
                         </tr>
                         {isOpen && (
                           <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-                            <td colSpan={5} style={{ padding: '0 14px 16px' }}>
+                            <td colSpan={4} style={{ padding: '0 14px 16px' }}>
                               {diff.length === 0 ? (
                                 <div style={{ fontSize: '0.76rem', color: 'var(--text-3)', padding: '10px 4px' }}>
                                   {isAr ? 'لا تفاصيل إضافية لهذا السجل' : 'No further details for this record'}
