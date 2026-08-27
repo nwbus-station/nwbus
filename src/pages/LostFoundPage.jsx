@@ -694,6 +694,8 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
   const [loading, setLoading] = useState(() => !initialLogsCache)
   const [search, setSearch]   = useState('')
   const [busy, setBusy]       = useState(null)
+  const [expandedItem, setExpandedItem] = useState(null) // id لعنصر مفتوح تفاصيله
+  const [lightbox, setLightbox] = useState(null) // رابط صورة مفتوحة بالحجم الكامل
 
   const autoDeleteCutoff = new Date(Date.now() - 40 * 86400000).toISOString()
   const deliveredCutoff  = new Date(Date.now() - 30 * 86400000).toISOString()
@@ -826,15 +828,24 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                   : isDonated ? (isAr ? 'سُلّم للجمعية' : 'Donated')
                   : (isAr ? 'غير مستلم' : 'Unclaimed')
 
+                const isOpen = expandedItem === item.id
+                const typeLabel = ITEM_TYPES.find(t => t.value === item.item_type)?.ar
+                const photos = item.photos ?? []
                 return (
                   <div key={item.id} style={{ borderRadius: 10, border: '1px solid var(--border)', marginBottom: 8, overflow: 'hidden', background: 'var(--card)' }}>
-                    <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div onClick={() => setExpandedItem(isOpen ? null : item.id)}
+                      style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, cursor: 'pointer' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           {item.item_number && (
                             <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text-3)', background: 'var(--surface)', padding: '1px 7px', borderRadius: 6, border: '1px solid var(--border)', fontFamily: 'monospace' }}>#{item.item_number}</span>
                           )}
                           <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-1)' }}>{item.item_description}</span>
+                          {photos.length > 0 && (
+                            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '1px 8px', borderRadius: 99, border: '1px solid var(--border)', color: 'var(--text-2)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                              📷 {photos.length}
+                            </span>
+                          )}
                           <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '1px 8px', borderRadius: 99, border: '1px solid var(--border)', color: 'var(--text-2)', background: 'var(--card)' }}>
                             {statusLabel}
                           </span>
@@ -857,7 +868,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                           {isClaimed && item.owner_name && <span>{isAr ? 'العميل:' : 'Client:'} {item.owner_name}</span>}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                         {isAdmin && canDonate && (
                           <button onClick={() => donateItem(item.id)} disabled={busy === item.id}
                             style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: busy === item.id ? 0.5 : 1 }}>
@@ -865,14 +876,49 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                           </button>
                         )}
                         {isAdmin && delBtn(() => deleteItem(item.id), busy === item.id)}
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-3)', alignSelf: 'center' }}>{isOpen ? '▲' : '▼'}</span>
                       </div>
                     </div>
+
+                    {isOpen && (
+                      <div style={{ padding: '4px 14px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px', fontSize: '0.76rem', color: 'var(--text-2)', margin: '10px 0' }}>
+                          {typeLabel && <span><b style={{ color: 'var(--text-1)' }}>{isAr ? 'النوع:' : 'Type:'}</b> {typeLabel}</span>}
+                          <span><b style={{ color: 'var(--text-1)' }}>{isAr ? 'المحطة:' : 'Station:'}</b> {item.found_location || '—'}</span>
+                          <span><b style={{ color: 'var(--text-1)' }}>{isAr ? 'المسجّل:' : 'Registered by:'}</b> {item.created_by_name || '—'}</span>
+                          {item.donated_at && <span><b style={{ color: 'var(--text-1)' }}>{isAr ? 'تاريخ التسليم للجمعية:' : 'Donated on:'}</b> {new Date(item.donated_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</span>}
+                        </div>
+
+                        <p style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', margin: '0 0 6px' }}>
+                          {isAr ? 'الصور' : 'Photos'} {photos.length > 0 && `(${photos.length})`}
+                        </p>
+                        {photos.length === 0 ? (
+                          <p style={{ fontSize: '0.75rem', color: 'var(--text-3)', margin: 0 }}>{isAr ? 'لا توجد صور مرفقة' : 'No photos attached'}</p>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {photos.map((url, pi) => (
+                              <img key={pi} src={url} alt="" onClick={() => setLightbox(url)}
+                                style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer' }} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })
           )}
         </div>
       </div>
+
+      {lightbox && (
+        <div onClick={() => setLightbox(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, cursor: 'zoom-out' }}>
+          <img src={lightbox} alt="" style={{ maxWidth: '100%', maxHeight: '90vh', borderRadius: 8 }} />
+          <button onClick={() => setLightbox(null)}
+            style={{ position: 'absolute', top: 18, insetInlineEnd: 18, width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>×</button>
+        </div>
+      )}
     </div>
   )
 }
