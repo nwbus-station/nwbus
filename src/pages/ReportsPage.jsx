@@ -31,8 +31,18 @@ const AUDIT_FIELD_LABELS = {
   // الموجودات
   status: 'الحالة', description: 'الوصف',
   owner_name: 'اسم المالك', owner_contact: 'تواصل المالك', resolved_date: 'تاريخ التسليم',
+  // التقييمات
+  total_score: 'النتيجة الإجمالية',
+  // الإجازات
+  employee_name: 'الموظف', leave_type: 'نوع الإجازة', start_date: 'تاريخ البداية', end_date: 'تاريخ النهاية',
+  supervisor_status: 'حالة المشرف', manager_status: 'حالة المدير',
 }
 const AUDIT_TRACKED_KEYS = Object.keys(AUDIT_FIELD_LABELS)
+// ترجمة القيم النصية الشائعة (حالات، أنواع) لعرضها بالعربي بدل رموزها بالإنجليزي
+const AUDIT_VALUE_LABELS = {
+  pending: 'قيد الانتظار', approved: 'موافق عليها', rejected: 'مرفوضة',
+  annual: 'سنوية', casual: 'عارضة', sick: 'مرضية', compensatory: 'تعويضية', bereavement: 'وفاة',
+}
 
 function auditFieldLabel(key) {
   return AUDIT_FIELD_LABELS[key] ?? key
@@ -41,6 +51,7 @@ function auditFormatValue(key, v, stations) {
   if (v === null || v === undefined || v === '') return '—'
   if (typeof v === 'boolean') return v ? 'نعم' : 'لا'
   if (key === 'station_id') return stations.find(s => s.id === v)?.name_ar ?? v
+  if (AUDIT_VALUE_LABELS[v]) return AUDIT_VALUE_LABELS[v]
   if (Array.isArray(v)) return v.length ? v.join('، ') : '—'
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
@@ -66,7 +77,7 @@ function computeAuditDiff(row) {
 }
 
 // جملة عربية واحدة تلخّص الحدث — بدل الاعتماد على فتح التفاصيل لفهم وش صار
-function auditSummary(row, stations, tripLookup) {
+function auditSummary(row, stations, tripLookup, userLookup) {
   const d = row.action === 'DELETE' ? (row.before_data || {}) : (row.after_data || {})
   const stationName = d.station_id ? stations.find(s => s.id === d.station_id)?.name_ar : null
 
@@ -88,9 +99,44 @@ function auditSummary(row, stations, tripLookup) {
     const verb = row.action === 'INSERT' ? 'أضاف موظف' : row.action === 'DELETE' ? 'حذف حساب' : 'عدّل بيانات'
     return verb + (d.full_name_ar ? `: ${d.full_name_ar}` : '')
   }
+  if (row.table_name === 'employee_evaluations') {
+    const name = userLookup[d.employee_id]
+    const verb = row.action === 'INSERT' ? 'قيّم موظف' : row.action === 'DELETE' ? 'حذف تقييم موظف' : 'عدّل تقييم موظف'
+    return verb + (name ? `: ${name}` : '')
+  }
+  if (row.table_name === 'supervisor_evaluations') {
+    const name = userLookup[d.supervisor_id]
+    const verb = row.action === 'INSERT' ? 'قيّم مشرف' : row.action === 'DELETE' ? 'حذف تقييم مشرف' : 'عدّل تقييم مشرف'
+    return verb + (name ? `: ${name}` : '')
+  }
+  if (row.table_name === 'station_evaluations') {
+    const verb = row.action === 'INSERT' ? 'قيّم محطة' : row.action === 'DELETE' ? 'حذف تقييم محطة' : 'عدّل تقييم محطة'
+    return verb + (stationName ? `: ${stationName}` : '')
+  }
+  if (row.table_name === 'leaves') {
+    const name = d.employee_name
+    if (row.action === 'INSERT') return 'قدّم طلب إجازة' + (name ? `: ${name}` : '')
+    if (row.action === 'DELETE') return 'حذف طلب إجازة' + (name ? `: ${name}` : '')
+    const before = row.before_data || {}, after = row.after_data || {}
+    if (before.supervisor_status !== after.supervisor_status && after.supervisor_status) {
+      const verb = after.supervisor_status === 'approved' ? 'وافق المشرف على إجازة'
+        : after.supervisor_status === 'rejected' ? 'رفض المشرف إجازة' : 'حدّث حالة إجازة'
+      return verb + (name ? `: ${name}` : '')
+    }
+    if (before.manager_status !== after.manager_status && after.manager_status) {
+      const verb = after.manager_status === 'approved' ? 'وافق المدير على إجازة'
+        : after.manager_status === 'rejected' ? 'رفض المدير إجازة' : 'حدّث حالة إجازة'
+      return verb + (name ? `: ${name}` : '')
+    }
+    return 'عدّل طلب إجازة' + (name ? `: ${name}` : '')
+  }
   return TABLE_LABELS_AR[row.table_name] ?? row.table_name
 }
-const TABLE_LABELS_AR = { trip_records: 'سجلات الرحلات', sales_records: 'سجلات المبيعات', lost_found_items: 'المفقودات', users: 'المستخدمون' }
+const TABLE_LABELS_AR = {
+  trip_records: 'سجلات الرحلات', sales_records: 'سجلات المبيعات', lost_found_items: 'المفقودات', users: 'المستخدمون',
+  employee_evaluations: 'تقييم الموظفين', supervisor_evaluations: 'تقييم المشرفين', station_evaluations: 'تقييم المحطات',
+  leaves: 'الإجازات',
+}
 
 // إحصائيات الالتزام لمجموعة حركات (وصول أو مغادرة)
 function complianceStats(list) {
@@ -241,12 +287,18 @@ export default function ReportsPage() {
   const [auditTotal,   setAuditTotal]   = useState(0)
   const [auditExpanded, setAuditExpanded] = useState(null) // id للسجل المفتوح تفاصيله
   const [tripLookup, setTripLookup] = useState({}) // trip_schedule_id → { trip_number, trip_name }
+  const [userLookup, setUserLookup] = useState({}) // user id → full_name_ar (لتقييمات الموظفين/المشرفين)
   useEffect(() => {
     if (!canSeeAudit) return
     supabase.from('trip_schedule').select('id, trip_number, trip_name').then(({ data }) => {
       const map = {}
       ;(data ?? []).forEach(t => { map[t.id] = t })
       setTripLookup(map)
+    })
+    supabase.from('users').select('id, full_name_ar').then(({ data }) => {
+      const map = {}
+      ;(data ?? []).forEach(u => { map[u.id] = u.full_name_ar })
+      setUserLookup(map)
     })
   }, [canSeeAudit])
 
@@ -1459,6 +1511,10 @@ export default function ReportsPage() {
           sales_records:  isAr ? 'سجلات المبيعات' : 'Sales records',
           lost_found_items: isAr ? 'المفقودات'    : 'Lost & Found',
           users:          isAr ? 'المستخدمون'     : 'Users',
+          employee_evaluations:   isAr ? 'تقييم الموظفين'  : 'Employee evaluations',
+          supervisor_evaluations: isAr ? 'تقييم المشرفين'  : 'Supervisor evaluations',
+          station_evaluations:    isAr ? 'تقييم المحطات'   : 'Station evaluations',
+          leaves:                 isAr ? 'الإجازات'        : 'Leaves',
         }
         const totalPages = Math.ceil(auditTotal / PAGE_SIZE)
         // نخفي حركات التحديث اللي ما فيها أي تغيير بحقل ذي معنى (مثل last_login عند كل تسجيل دخول)
@@ -1495,6 +1551,10 @@ export default function ReportsPage() {
                 <option value="sales_records">{TABLE_LABELS.sales_records}</option>
                 <option value="lost_found_items">{TABLE_LABELS.lost_found_items}</option>
                 <option value="users">{TABLE_LABELS.users}</option>
+                <option value="employee_evaluations">{TABLE_LABELS.employee_evaluations}</option>
+                <option value="supervisor_evaluations">{TABLE_LABELS.supervisor_evaluations}</option>
+                <option value="station_evaluations">{TABLE_LABELS.station_evaluations}</option>
+                <option value="leaves">{TABLE_LABELS.leaves}</option>
               </select>
 
               {/* فلتر المحطة — للأدمن فقط */}
@@ -1541,7 +1601,7 @@ export default function ReportsPage() {
                       const dt = new Date(row.created_at)
                       const isOpen = auditExpanded === row.id
                       const diff = isOpen ? computeAuditDiff(row) : []
-                      const summary = auditSummary(row, stations, tripLookup)
+                      const summary = auditSummary(row, stations, tripLookup, userLookup)
                       return (
                         <Fragment key={row.id}>
                         <tr style={{ borderBottom: isOpen ? 'none' : '1px solid var(--border)', background: i % 2 ? 'var(--surface)' : 'var(--card)', cursor: 'pointer' }}
