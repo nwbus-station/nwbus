@@ -677,6 +677,22 @@ function RegisterItemTab({ profile, isAr, stations }) {
 /* ══════════════════════════════════════════════════════════
    TAB 4 — سجل الأرشيف
 ══════════════════════════════════════════════════════════ */
+const DETAIL_ICON_PATHS = {
+  tag:      'M20.59 13.41 11 3.82A2 2 0 0 0 9.59 3.23H4a1 1 0 0 0-1 1v5.59a2 2 0 0 0 .59 1.41l9.59 9.59a2 2 0 0 0 2.82 0l4.59-4.59a2 2 0 0 0 0-2.82zM7 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2z',
+  pin:      'M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z|M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  user:     'M16 20v-1.6c0-2.24-1.79-4.06-4-4.06s-4 1.82-4 4.06V20|M12 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
+  calendar: 'M6.5 3v3.2|M15.5 3v3.2|M4 8.6h14|M4.8 5.8h12.4a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H4.8a1 1 0 0 1-1-1V6.8a1 1 0 0 1 1-1z',
+  phone:    'M17.6 14.4 15.7 13c-.4-.3-1-.3-1.3.1l-.9 1.1c-1.4-.6-2.9-2.1-3.5-3.5l1.1-.9c.4-.3.4-.9.1-1.3L9.6 6.4c-.4-.5-1.1-.6-1.6-.2l-1 .9c-1.5 1.5.2 5.4 3.2 8.4s6.9 4.7 8.4 3.2l.9-1c.4-.5.3-1.2-.2-1.6z',
+}
+function DetailIcon({ name, size = 13, color = 'currentColor' }) {
+  const d = DETAIL_ICON_PATHS[name]
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      {d.split('|').map((p, i) => <path key={i} d={p} />)}
+    </svg>
+  )
+}
+
 const delBtn = (onClick, loading) => (
   <button onClick={onClick} disabled={loading}
     style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, opacity: loading ? 0.5 : 1 }}>
@@ -696,6 +712,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
   const [busy, setBusy]       = useState(null)
   const [expandedItem, setExpandedItem] = useState(null) // id لعنصر مفتوح تفاصيله
   const [lightbox, setLightbox] = useState(null) // رابط صورة مفتوحة بالحجم الكامل
+  const [revealedPhones, setRevealedPhones] = useState(new Set()) // أرقام الجوال المكشوفة (خصوصية)
 
   const autoDeleteCutoff = new Date(Date.now() - 40 * 86400000).toISOString()
   const deliveredCutoff  = new Date(Date.now() - 30 * 86400000).toISOString()
@@ -709,7 +726,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
     await supabase.from('lost_found_items').delete().eq('status', 'claimed').not('delivered_to_client_at', 'is', null).lt('delivered_to_client_at', deliveredCutoff)
 
     let rq = supabase.from('lost_reports').select('*, from_st:from_station_id(name_ar), to_st:to_station_id(name_ar)').order('created_at', { ascending: false })
-    let iq = supabase.from('lost_found_items').select('*').order('created_at', { ascending: false })
+    let iq = supabase.from('lost_found_items').select('*, creator:created_by(phone)').order('created_at', { ascending: false })
     if (stationFilter) { rq = rq.eq('station_id', stationFilter); iq = iq.eq('station_id', stationFilter) }
     const [{ data: r }, { data: i }] = await Promise.all([rq, iq])
     const rpts = r ?? [], itms = i ?? []
@@ -740,6 +757,11 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
     const { error } = await supabase.from('lost_found_items').update({ status: 'donated', donated_at: now }).eq('id', id)
     if (!error) setItems(prev => prev.map(i => i.id === id ? { ...i, status: 'donated', donated_at: now } : i))
     setBusy(null)
+  }
+  function togglePhone(id) {
+    setRevealedPhones(prev => {
+      const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
+    })
   }
 
   const filtR = reports.filter(r => !search || r.customer_name?.includes(search) || r.contact_number?.includes(search) || r.created_by_name?.includes(search))
@@ -881,31 +903,54 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                     </div>
 
                     {isOpen && (
-                      <div style={{ padding: '16px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div style={{ padding: '18px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
                         {/* بيانات العنصر */}
                         <div style={{
-                          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12,
-                          background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px',
+                          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 0,
+                          background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12,
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)', overflow: 'hidden',
                         }}>
                           {typeLabel && (
-                            <div>
-                              <p style={{ margin: '0 0 2px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{isAr ? 'النوع' : 'Type'}</p>
-                              <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{typeLabel}</p>
+                            <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
+                              <p style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '0 0 4px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                <DetailIcon name="tag" color="var(--text-3)" /> {isAr ? 'النوع' : 'Type'}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{typeLabel}</p>
                             </div>
                           )}
-                          <div>
-                            <p style={{ margin: '0 0 2px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{isAr ? 'المحطة' : 'Station'}</p>
-                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{item.found_location || '—'}</p>
+                          <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
+                            <p style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '0 0 4px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                              <DetailIcon name="pin" color="var(--text-3)" /> {isAr ? 'المحطة' : 'Station'}
+                            </p>
+                            <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{item.found_location || '—'}</p>
                           </div>
-                          <div>
-                            <p style={{ margin: '0 0 2px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{isAr ? 'المسجّل' : 'Registered by'}</p>
-                            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{item.created_by_name || '—'}</p>
+                          <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
+                            <p style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '0 0 4px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                              <DetailIcon name="user" color="var(--text-3)" /> {isAr ? 'المسجّل' : 'Registered by'}
+                            </p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{item.created_by_name || '—'}</p>
+                              {item.creator?.phone && (
+                                revealedPhones.has(item.id) ? (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.74rem', fontFamily: 'monospace', color: 'var(--text-2)', direction: 'ltr' }}>
+                                    <DetailIcon name="phone" size={11} color="var(--text-3)" />{item.creator.phone}
+                                  </span>
+                                ) : (
+                                  <button onClick={() => togglePhone(item.id)}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-2)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '2px 9px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                                    <DetailIcon name="phone" size={10} /> {isAr ? 'إظهار الرقم' : 'Show number'}
+                                  </button>
+                                )
+                              )}
+                            </div>
                           </div>
                           {item.donated_at && (
-                            <div>
-                              <p style={{ margin: '0 0 2px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{isAr ? 'تسليم الجمعية' : 'Donated on'}</p>
-                              <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-1)' }}>{new Date(item.donated_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</p>
+                            <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--border)' }}>
+                              <p style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '0 0 4px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                <DetailIcon name="calendar" color="var(--text-3)" /> {isAr ? 'تسليم الجمعية' : 'Donated on'}
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{new Date(item.donated_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</p>
                             </div>
                           )}
                         </div>
