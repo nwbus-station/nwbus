@@ -303,6 +303,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
     setError('')
     try {
       if (!user) {
+        if (!form.national_id.trim()) throw new Error(isAr ? 'رقم الهوية/الإقامة مطلوب' : 'National/Iqama ID is required')
         if (!form.password) throw new Error(isAr ? 'كلمة المرور مطلوبة' : 'Password is required')
         if (form.password.length < 6) throw new Error(isAr ? 'كلمة المرور 6 أحرف على الأقل' : 'Password must be at least 6 characters')
 
@@ -578,8 +579,11 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
 
           {/* رقم الهوية */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'رقم الهوية / الإقامة' : 'National / Iqama ID'}</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              {isAr ? 'رقم الهوية / الإقامة' : 'National / Iqama ID'}{!user && ' *'}
+            </label>
             <input className={inputCls + ' font-mono'} value={form.national_id} inputMode="numeric" dir="ltr"
+              required={!user}
               onChange={e => handleNationalIdChange(e.target.value)}
               placeholder="1xxxxxxxxx" />
             {!user && form.full_name_en && form.national_id && (
