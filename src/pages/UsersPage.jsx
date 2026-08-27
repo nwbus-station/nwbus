@@ -256,16 +256,20 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
     newUserDraft?.stationSet ?? (user?.station_id ? [user.station_id] : [])
   ))
   const [stationSearch, setStationSearch] = useState('')
+  // المحطة الأساسية — تُستخدم بالتقييم والإجازات، يحددها الأدمن صراحة
+  const [primaryStationId, setPrimaryStationId] = useState(
+    newUserDraft?.primaryStationId ?? user?.station_id ?? null
+  )
 
   // حفظ مسودة "موظف جديد" عند كل تغيير — تحمي من فقدان البيانات بانقطاع النت أو تحديث الصفحة
   useEffect(() => {
     if (user) return
     try {
       sessionStorage.setItem(NEW_USER_DRAFT_KEY, JSON.stringify({
-        form, stationSet: [...stationSet],
+        form, stationSet: [...stationSet], primaryStationId,
       }))
     } catch {}
-  }, [user, form, stationSet])
+  }, [user, form, stationSet, primaryStationId])
   useEffect(() => {
     if (user?.id && (user.role === 'station_admin' || user.role === 'area_supervisor')) {
       supabase.from('user_stations').select('station_id').eq('user_id', user.id)
@@ -273,16 +277,29 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
     }
   }, [user?.id])
   const toggleStation = sid => setStationSet(prev => {
-    const n = new Set(prev); n.has(sid) ? n.delete(sid) : n.add(sid); return n
+    const n = new Set(prev)
+    if (n.has(sid)) {
+      n.delete(sid)
+      // لو ألغينا المحطة الأساسية، ننقلها لأول محطة متبقية (أو نمسحها)
+      setPrimaryStationId(cur => cur === sid ? ([...n][0] ?? null) : cur)
+    } else {
+      n.add(sid)
+      // أول محطة تُختار تصير الأساسية تلقائياً لو ما فيه أساسية بعد
+      setPrimaryStationId(cur => cur ?? sid)
+    }
+    return n
   })
   async function syncStations(uid) {
     await supabase.from('user_stations').delete().eq('user_id', uid)
     const ids = [...stationSet]
     if (ids.length) await supabase.from('user_stations').insert(ids.map(sid => ({ user_id: uid, station_id: sid })))
   }
-  // المحطة الأساسية للمشرف = أول محطة مختارة (للتوافق مع station_id)
+  const isMultiStationRole = form.role === 'station_admin' || form.role === 'area_supervisor'
+  // المحطة الأساسية للمشرف = اللي حددها الأدمن صراحة (أو أول محطة كاحتياط)
   const primaryStation = () =>
-    (form.role === 'station_admin' && stationSet.size) ? [...stationSet][0] : (form.station_id || null)
+    isMultiStationRole && stationSet.size
+      ? (stationSet.has(primaryStationId) ? primaryStationId : [...stationSet][0])
+      : (form.station_id || null)
 
   function toggleModule(mod) {
     setForm(f => {
@@ -627,7 +644,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           </div>
 
           {/* Station — single (لغير المشرف) */}
-          {!(isGeneralAdmin && (form.role === 'station_admin' || form.role === 'area_supervisor')) && (
+          {!(isGeneralAdmin && isMultiStationRole) && (
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المحطة' : 'Station'}</label>
               <select className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}
@@ -641,19 +658,24 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           )}
 
           {/* Multi-station — for supervisor (station_admin) or area_supervisor, admin assigns */}
-          {isGeneralAdmin && (form.role === 'station_admin' || form.role === 'area_supervisor') && (
+          {isGeneralAdmin && isMultiStationRole && (
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-medium text-gray-600">
                   {isAr ? 'محطات المشرف (يمكن اختيار أكثر من محطة)' : 'Supervisor Stations (multiple allowed)'}
                 </label>
                 {stationSet.size > 0 && (
-                  <button type="button" onClick={() => setStationSet(new Set())}
+                  <button type="button" onClick={() => { setStationSet(new Set()); setPrimaryStationId(null) }}
                     className="text-[11px] text-red-400 hover:text-red-600">
                     {isAr ? 'مسح الكل' : 'Clear all'}
                   </button>
                 )}
               </div>
+              {stationSet.size > 1 && (
+                <p className="text-[11px] text-amber-600 mb-1.5">
+                  {isAr ? '★ حدد المحطة الأساسية — هي اللي تظهر بالتقييم والإجازات' : '★ Pick the primary station — shown in evaluations & leaves'}
+                </p>
+              )}
               {/* Search inside station list */}
               <input
                 type="text"
@@ -670,9 +692,11 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                   })
                   .map(s => {
                     const on = stationSet.has(s.id)
+                    const isPrimary = on && primaryStationId === s.id
                     return (
-                      <button type="button" key={s.id} onClick={() => toggleStation(s.id)}
-                        className={`flex items-center gap-2 text-right rounded px-2 py-1.5 text-sm transition
+                      <div key={s.id} className="flex items-center gap-1">
+                      <button type="button" onClick={() => toggleStation(s.id)}
+                        className={`flex-1 min-w-0 flex items-center gap-2 text-right rounded px-2 py-1.5 text-sm transition
                           ${on ? 'bg-blue-50 text-nwbus-primary font-medium' : 'hover:bg-gray-50 text-gray-600'}`}>
                         <span className={`w-4 h-4 rounded grid place-items-center text-[10px] border shrink-0
                           ${on ? 'bg-nwbus-primary border-nwbus-primary text-white' : 'border-gray-300'}`}>
@@ -680,12 +704,27 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                         </span>
                         <span className="truncate">{isAr ? s.name_ar : s.name_en}</span>
                       </button>
+                      {on && (
+                        <button type="button" onClick={() => setPrimaryStationId(s.id)}
+                          title={isAr ? 'اجعلها المحطة الأساسية' : 'Set as primary station'}
+                          className={`shrink-0 w-6 h-6 grid place-items-center rounded transition
+                            ${isPrimary ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`}>
+                          {isPrimary ? '★' : '☆'}
+                        </button>
+                      )}
+                      </div>
                     )
                   })}
               </div>
               <p className="text-[11px] text-gray-400 mt-1">
                 {isAr ? `المختارة: ${stationSet.size}` : `Selected: ${stationSet.size}`}
                 {stationSearch && ` — ${isAr ? 'تصفية نشطة' : 'filtered'}`}
+                {primaryStationId && stationSet.has(primaryStationId) && (
+                  <> · <span className="text-amber-600 font-medium">
+                    ★ {isAr ? 'الأساسية: ' : 'Primary: '}
+                    {(isAr ? stations.find(s => s.id === primaryStationId)?.name_ar : stations.find(s => s.id === primaryStationId)?.name_en) ?? ''}
+                  </span></>
+                )}
               </p>
             </div>
           )}
