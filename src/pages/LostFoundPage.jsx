@@ -709,6 +709,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
   const [items, setItems]     = useState(() => initialLogsCache?.items ?? [])
   const [loading, setLoading] = useState(() => !initialLogsCache)
   const [search, setSearch]   = useState('')
+  const [itemStation, setItemStation] = useState('') // فلتر محطة قائمة الموجودات
   const [busy, setBusy]       = useState(null)
   const [expandedItem, setExpandedItem] = useState(null) // id لعنصر مفتوح تفاصيله
   const [lightbox, setLightbox] = useState(null) // رابط صورة مفتوحة بالحجم الكامل
@@ -765,7 +766,14 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
   }
 
   const filtR = reports.filter(r => !search || r.customer_name?.includes(search) || r.contact_number?.includes(search) || r.created_by_name?.includes(search))
-  const filtI = items.filter(i => !search || i.item_description?.toLowerCase().includes(search.toLowerCase()) || i.created_by_name?.includes(search))
+  const filtI = items
+    .filter(i => !search || i.item_description?.toLowerCase().includes(search.toLowerCase()) || i.created_by_name?.includes(search))
+    .filter(i => !itemStation || i.station_id === itemStation)
+
+  // محطات الموجودات المتاحة للفلترة — مشتقة من البيانات نفسها (بدون طلب إضافي)
+  const itemStations = [...new Map(
+    items.filter(i => i.station_id && i.found_location).map(i => [i.station_id, i.found_location])
+  ).entries()].sort((a, b) => a[1].localeCompare(b[1]))
 
   const subBtn = (id, label, count) => (
     <button onClick={() => setSub(id)}
@@ -795,9 +803,20 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
         </div>
 
         <div style={{ padding: '14px 20px' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder={isAr ? 'بحث...' : 'Search...'}
-            style={{ ...inp, marginBottom: 14, boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder={isAr ? 'بحث...' : 'Search...'}
+              style={{ ...inp, flex: '1 1 200px', boxSizing: 'border-box', marginBottom: 0 }} />
+            {sub === 'items' && !stationFilter && itemStations.length > 1 && (
+              <select value={itemStation} onChange={e => setItemStation(e.target.value)}
+                style={{ ...inp, flex: '0 1 180px', boxSizing: 'border-box', marginBottom: 0 }}>
+                <option value="">{isAr ? 'كل المحطات' : 'All stations'}</option>
+                {itemStations.map(([sid, name]) => (
+                  <option key={sid} value={sid}>{name}</option>
+                ))}
+              </select>
+            )}
+          </div>
 
           {loading ? (
             <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: 24 }}>{isAr ? 'جارٍ التحميل...' : 'Loading...'}</p>
