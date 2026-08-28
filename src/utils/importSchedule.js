@@ -20,7 +20,14 @@ const isMissingFn = err =>
   err && (err.code === 'PGRST202' || /could not find the function|does not exist/i.test(err.message || ''))
 
 export async function importSchedule(parsed, profile, fileName = '', opts = {}) {
-  const { startDate = null, endDate = null } = opts
+  const { startDate = null, endDate = null, keepManualIds = [] } = opts
+
+  // بعد أي مسار رفع: نعيد تفعيل الرحلات اليدوية اللي الأدمن اختار إبقاءها
+  // (الدالة/المسار القديم يعطّل أي رحلة غير موجودة بالملف، بما فيها اليدوية — نرجعها فوراً)
+  async function reactivateKept() {
+    if (!keepManualIds.length) return
+    await supabase.from('trip_schedule').update({ is_active: true }).in('id', keepManualIds)
+  }
 
   /* المسار الذرّي: دالة import_schedule داخل القاعدة تنفذ كل الخطوات
      في معاملة واحدة — يا كله يا بلاش. (migration 012) */
@@ -30,7 +37,7 @@ export async function importSchedule(parsed, profile, fileName = '', opts = {}) 
     start_date: startDate,
     end_date: endDate,
   })
-  if (!rpc.error) return rpc.data
+  if (!rpc.error) { await reactivateKept(); return rpc.data }
   if (!isMissingFn(rpc.error)) throw new Error('فشل الرفع: ' + rpc.error.message)
 
   /* الدالة غير منصّبة بعد → المسار القديم خطوة بخطوة */
@@ -245,6 +252,7 @@ export async function importSchedule(parsed, profile, fileName = '', opts = {}) 
     uploaded_by_name: profile.full_name_ar,
   })
 
+  await reactivateKept()
   return summary
 }
 

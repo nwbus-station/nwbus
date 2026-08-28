@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import SearchSelect from '../shared/SearchSelect'
 import { isRestStation } from '../../utils/stations'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { todayStr } from '../../utils/dates'
 
 /**
  * إضافة رحلة (خط) جديدة يدوياً — للأدمن فقط.
@@ -11,6 +12,16 @@ import { useEscapeKey } from '../../hooks/useEscapeKey'
  * وتفعيلها مباشرة في ترحيل محطاتها (اختياري).
  */
 const BUS_TYPES = ['STANDARD', 'VIP', 'WHEELCHAIR', 'QAID']
+// 0=أحد..6=سبت — نفس ترقيم Date.getDay()
+const WEEKDAYS = [
+  { value: 0, ar: 'أحد',     en: 'Sun' },
+  { value: 1, ar: 'اثنين',   en: 'Mon' },
+  { value: 2, ar: 'ثلاثاء',  en: 'Tue' },
+  { value: 3, ar: 'أربعاء',  en: 'Wed' },
+  { value: 4, ar: 'خميس',    en: 'Thu' },
+  { value: 5, ar: 'جمعة',    en: 'Fri' },
+  { value: 6, ar: 'سبت',     en: 'Sat' },
+]
 
 export default function NewTripModal({ isAr, onClose, onCreated }) {
   useEscapeKey(onClose)
@@ -23,6 +34,12 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     from_station_id: '', to_station_id: '',
     scheduled_departure: '', scheduled_arrival: '',
     bus_type: 'WHEELCHAIR',
+    start_date: todayStr(), end_date: '',
+  })
+  const [recurrence, setRecurrence] = useState('daily') // 'daily' | 'custom'
+  const [selectedDays, setSelectedDays] = useState(new Set())
+  const toggleDay = d => setSelectedDays(prev => {
+    const n = new Set(prev); n.has(d) ? n.delete(d) : n.add(d); return n
   })
   const [stops, setStops]   = useState([])   // [{station_id, arrival_time, departure_time}]
   const [autoActivate, setAutoActivate] = useState(true)
@@ -54,6 +71,8 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     if (!form.from_station_id || !form.to_station_id) { setError(t('Pick origin and destination', 'اختر محطة الانطلاق والوصول')); return }
     if (form.from_station_id === form.to_station_id) { setError(t('Origin and destination must differ', 'محطة الانطلاق والوصول متطابقتان')); return }
     if (!form.scheduled_departure) { setError(t('Enter departure time', 'أدخل وقت المغادرة')); return }
+    if (!form.start_date) { setError(t('Enter start date', 'أدخل تاريخ البداية')); return }
+    if (recurrence === 'custom' && selectedDays.size === 0) { setError(t('Pick at least one day', 'اختر يوماً واحداً على الأقل')); return }
     const cleanStops = stops.filter(s => s.station_id)
     const dup = cleanStops.find((s, i) => cleanStops.findIndex(x => x.station_id === s.station_id) !== i
       || s.station_id === form.from_station_id || s.station_id === form.to_station_id)
@@ -73,6 +92,10 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
         scheduled_arrival: form.scheduled_arrival || null,
         bus_type: form.bus_type,
         is_active: true,
+        is_manual: true,
+        start_date: form.start_date,
+        end_date: form.end_date || null,
+        days_of_week: recurrence === 'custom' ? [...selectedDays].sort() : null,
       }).select('id').single()
       if (e1) throw e1
       newTripId = newTrip.id
@@ -185,6 +208,52 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
               <select value={form.bus_type} onChange={e => set('bus_type', e.target.value)} className={inputCls}>
                 {BUS_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
+            </div>
+          </div>
+
+          {/* التكرار */}
+          <div>
+            <label className="block text-[11px] text-gray-500 mb-1">{t('Recurrence', 'التكرار')}</label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setRecurrence('daily')}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors
+                  ${recurrence === 'daily' ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                {t('Daily', 'يومي')}
+              </button>
+              <button type="button" onClick={() => setRecurrence('custom')}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors
+                  ${recurrence === 'custom' ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                {t('Specific days', 'أيام محددة')}
+              </button>
+            </div>
+            {recurrence === 'custom' && (
+              <div className="flex gap-1.5 mt-2 flex-wrap">
+                {WEEKDAYS.map(d => {
+                  const on = selectedDays.has(d.value)
+                  return (
+                    <button type="button" key={d.value} onClick={() => toggleDay(d.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors
+                        ${on ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                      {isAr ? d.ar : d.en}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* صلاحية الرحلة بالتاريخ */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-gray-500 mb-1">{t('Start date *', 'تاريخ البداية *')}</label>
+              <input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)}
+                className={inputCls} dir="ltr" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-500 mb-1">{t('End date (optional)', 'تاريخ النهاية (اختياري)')}</label>
+              <input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)}
+                min={form.start_date || undefined} className={inputCls} dir="ltr" />
+              <p className="text-[10px] text-gray-400 mt-0.5">{t('Leave empty to keep running indefinitely', 'اتركه فارغاً لتستمر الرحلة بدون نهاية')}</p>
             </div>
           </div>
 

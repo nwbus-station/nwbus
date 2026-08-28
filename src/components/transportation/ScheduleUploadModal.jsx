@@ -23,6 +23,11 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
   const [confirmCancel, setConfirmCancel] = useState(null)
   const [newStationNames, setNewStationNames] = useState([])
   const [confirmNewStations, setConfirmNewStations] = useState(false)
+  const [manualAtRisk, setManualAtRisk] = useState([]) // رحلات يدوية مو موجودة بالملف الجديد
+  const [keepManual, setKeepManual] = useState(new Set()) // اللي اخترنا نبقيها منها
+  const toggleKeepManual = id => setKeepManual(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
+  })
 
   const loadPending = () => supabase.from('schedule_uploads')
     .select('id, file_name, period, start_date, end_date')
@@ -43,6 +48,7 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
     if (!file) return
     setError(''); setParsed(null); setResult(null); setFileName(file.name); setReading(true)
     setNewStationNames([]); setConfirmNewStations(false)
+    setManualAtRisk([]); setKeepManual(new Set())
     try {
       const buf = await file.arrayBuffer()
       const data = parseSchedule(buf)
@@ -52,6 +58,14 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
       const existNames = new Set((existSt || []).map(s => s.name_en))
       const allNames = [...new Set([...data.stations, ...data.stops.map(s => s.station).filter(Boolean)])]
       setNewStationNames(allNames.filter(n => !existNames.has(n)))
+      // كشف الرحلات المضافة يدوياً واللي مو موجودة بالملف الجديد — بترحل للتعطيل التلقائي
+      const fileCodes = new Set(data.trips.map(t => t.code))
+      const { data: manualTrips } = await supabase.from('trip_schedule')
+        .select('id, trip_number, trip_name, scheduled_departure')
+        .eq('is_manual', true).eq('is_active', true)
+      const atRisk = (manualTrips ?? []).filter(t => !fileCodes.has(t.trip_number))
+      setManualAtRisk(atRisk)
+      setKeepManual(new Set(atRisk.map(t => t.id))) // افتراضياً: نبقيها كلها
       setParsed(data)
     } catch (err) {
       setError(err.message || 'تعذّر قراءة الملف')
@@ -70,7 +84,7 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
         await savePendingSchedule(parsed, profile, fileName, { startDate, endDate: endDate || null })
         setResult({ pending: true, startDate, endDate })
       } else {
-        const summary = await importSchedule(parsed, profile, fileName, { startDate, endDate: endDate || null })
+        const summary = await importSchedule(parsed, profile, fileName, { startDate, endDate: endDate || null, keepManualIds: [...keepManual] })
         setResult(summary)
       }
       onDone?.()
@@ -205,6 +219,28 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
                         <input type="checkbox" checked={confirmNewStations} onChange={e => setConfirmNewStations(e.target.checked)} />
                         أؤكد إضافة هذه المحطات الجديدة
                       </label>
+                    </div>
+                  )}
+
+                  {/* رحلات مضافة يدوياً غير موجودة بالملف الجديد */}
+                  {manualAtRisk.length > 0 && (
+                    <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 space-y-2">
+                      <div className="text-sm font-bold text-amber-800">
+                        ⚠ {manualAtRisk.length} {isAr ? 'رحلة مضافة يدوياً غير موجودة بهذا الملف' : 'manually-added trips not in this file'}
+                      </div>
+                      <p className="text-xs text-amber-700">
+                        {isAr ? 'عادةً تُعطَّل الرحلات الغائبة عن الملف تلقائياً. اختر أي منها تبي تبقيها فعّالة:' : 'Trips missing from the file are normally deactivated. Choose which to keep active:'}
+                      </p>
+                      <div className="space-y-1.5">
+                        {manualAtRisk.map(t => (
+                          <label key={t.id} className="flex items-center gap-2 text-sm text-amber-900 bg-white border border-amber-200 rounded-lg px-3 py-2 cursor-pointer">
+                            <input type="checkbox" checked={keepManual.has(t.id)} onChange={() => toggleKeepManual(t.id)} />
+                            <span className="font-mono font-bold">{t.trip_number}</span>
+                            <span className="text-amber-600">{t.trip_name}</span>
+                            {t.scheduled_departure && <span className="text-amber-500 text-xs mr-auto">{String(t.scheduled_departure).slice(0, 5)}</span>}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   )}
 
