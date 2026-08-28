@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import SearchSelect from '../shared/SearchSelect'
+import DatePicker from '../shared/DatePicker'
 import { isRestStation } from '../../utils/stations'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { todayStr } from '../../utils/dates'
@@ -211,49 +212,57 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
             </div>
           </div>
 
-          {/* التكرار */}
-          <div>
-            <label className="block text-[11px] text-gray-500 mb-1">{t('Recurrence', 'التكرار')}</label>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setRecurrence('daily')}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors
-                  ${recurrence === 'daily' ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                {t('Daily', 'يومي')}
-              </button>
-              <button type="button" onClick={() => setRecurrence('custom')}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors
-                  ${recurrence === 'custom' ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                {t('Specific days', 'أيام محددة')}
-              </button>
-            </div>
-            {recurrence === 'custom' && (
-              <div className="flex gap-1.5 mt-2 flex-wrap">
-                {WEEKDAYS.map(d => {
-                  const on = selectedDays.has(d.value)
-                  return (
-                    <button type="button" key={d.value} onClick={() => toggleDay(d.value)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors
-                        ${on ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
-                      {isAr ? d.ar : d.en}
-                    </button>
-                  )
-                })}
+          {/* التكرار + الصلاحية */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+            {/* التكرار */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">{t('Recurrence', 'التكرار')}</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setRecurrence('daily')}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors
+                    ${recurrence === 'daily' ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                  {t('Daily', 'يومي')}
+                </button>
+                <button type="button" onClick={() => setRecurrence('custom')}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors
+                    ${recurrence === 'custom' ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                  {t('Specific days', 'أيام محددة')}
+                </button>
               </div>
-            )}
-          </div>
-
-          {/* صلاحية الرحلة بالتاريخ */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] text-gray-500 mb-1">{t('Start date *', 'تاريخ البداية *')}</label>
-              <input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)}
-                className={inputCls} dir="ltr" />
+              {recurrence === 'custom' && (
+                <div className="flex gap-1.5 mt-2 flex-wrap" dir="ltr">
+                  {WEEKDAYS.map(d => {
+                    const on = selectedDays.has(d.value)
+                    return (
+                      <button type="button" key={d.value} onClick={() => toggleDay(d.value)}
+                        className={`w-11 py-1.5 rounded-full text-xs font-bold border transition-colors
+                          ${on ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
+                        {d.en}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
+
+            {/* صلاحية الرحلة بالتاريخ */}
             <div>
-              <label className="block text-[11px] text-gray-500 mb-1">{t('End date (optional)', 'تاريخ النهاية (اختياري)')}</label>
-              <input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)}
-                min={form.start_date || undefined} className={inputCls} dir="ltr" />
-              <p className="text-[10px] text-gray-400 mt-0.5">{t('Leave empty to keep running indefinitely', 'اتركه فارغاً لتستمر الرحلة بدون نهاية')}</p>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">{t('Valid from / until', 'صلاحية الرحلة')}</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-1">{t('Start date *', 'تاريخ البداية *')}</label>
+                  <DatePicker value={form.start_date} onChange={v => set('start_date', v)} isAr={isAr}
+                    className="w-full border rounded-lg px-3 py-2 text-sm bg-white" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-1">{t('End date (optional)', 'تاريخ النهاية (اختياري)')}</label>
+                  <DatePicker value={form.end_date} onChange={v => set('end_date', v)} isAr={isAr}
+                    className="w-full border rounded-lg px-3 py-2 text-sm bg-white" />
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1.5">
+                {t('No end date = trip keeps running until you edit or deactivate it', 'بدون تاريخ نهاية = الرحلة تستمر تلقائياً حتى تعدّلها أو توقفها لاحقاً')}
+              </p>
             </div>
           </div>
 
