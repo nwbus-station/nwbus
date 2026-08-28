@@ -880,10 +880,9 @@ export default function UsersPage() {
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
-  // حذف الحساب — للأدمن، وللمشرف ضمن محطته فقط
+  // حذف الحساب — للأدمن العام فقط
   async function deleteUser(u) {
-    const canDelete = isGeneralAdmin || (isStationAdmin && u.station_id === profile?.station_id && u.id !== profile?.id)
-    if (!canDelete) return
+    if (!isGeneralAdmin) return
     setConfirmDlg({
       message: isAr ? `حذف حساب «${u.full_name_ar}» نهائياً؟` : `Delete «${u.full_name_ar}» permanently?`,
       onConfirm: () => { setConfirmDlg(null); doDelete(u) },
@@ -1102,10 +1101,12 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
-                      <button onClick={() => setModal(u)}
-                        className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1 hover:bg-nwbus-primary hover:text-white transition-colors">
-                        {isAr ? 'تعديل' : 'Edit'}
-                      </button>
+                      {isGeneralAdmin && (
+                        <button onClick={() => setModal(u)}
+                          className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1 hover:bg-nwbus-primary hover:text-white transition-colors">
+                          {isAr ? 'تعديل' : 'Edit'}
+                        </button>
+                      )}
                       {isGeneralAdmin && u.login_password && (
                         <button onClick={() => setCardUser(u)}
                           className="text-xs border border-amber-300 text-amber-600 rounded-lg px-2.5 py-1 hover:bg-amber-500 hover:text-white transition-colors"
@@ -1113,7 +1114,7 @@ export default function UsersPage() {
                           
                         </button>
                       )}
-                      {(isGeneralAdmin || (isStationAdmin && u.station_id === profile?.station_id && u.id !== profile?.id)) && (
+                      {isGeneralAdmin && (
                         <button onClick={() => deleteUser(u)}
                           className="text-xs border border-red-300 text-red-500 rounded-lg px-2.5 py-1 hover:bg-red-500 hover:text-white transition-colors">
                           {isAr ? 'حذف' : 'Delete'}
