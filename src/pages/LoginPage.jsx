@@ -31,8 +31,14 @@ export default function LoginPage() {
     try {
       await signIn(username.trim(), password)
       navigate('/')
-    } catch {
-      setError(isAr ? 'اسم المستخدم أو كلمة المرور غير صحيحة' : 'Invalid username or password')
+    } catch (err) {
+      // خطأ اتصال (لا إنترنت / تعذّر الوصول للخادم) — نميّزه عن خطأ بيانات الدخول الفعلي
+      const isNetworkError = !navigator.onLine
+        || err?.name === 'AuthRetryableFetchError'
+        || /fetch|network/i.test(err?.message || '')
+      setError(isNetworkError
+        ? (isAr ? 'تعذّر الاتصال بالخادم — تحقّق من اتصال الإنترنت وحاول مجدداً' : 'Could not connect to the server — check your internet connection and try again')
+        : (isAr ? 'اسم المستخدم أو كلمة المرور غير صحيحة' : 'Invalid username or password'))
     } finally {
       setLoading(false)
     }
