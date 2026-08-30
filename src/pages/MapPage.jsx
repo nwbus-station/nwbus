@@ -372,7 +372,7 @@ export default function MapPage() {
           <div ref={mapWrapRef} className="map-container-wrap" style={{ width: '100%', height: '100%' }}>
           <MapContainer center={saudiCenter} zoom={6} style={{ width: '100%', height: '100%' }} zoomControl={false}>
             <ZoomController onReady={m => { mapRef.current = m }} />
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
             {stations.length > 0 && <FitBounds stations={stations} />}
             {flyTo && <FlyTo coords={flyTo} />}
 
