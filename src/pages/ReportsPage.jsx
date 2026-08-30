@@ -946,7 +946,7 @@ export default function ReportsPage() {
     const printHeader = `
       <div style="background:#1C2B36;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
         <div>
-          <div style="font-size:15px;font-weight:700;letter-spacing:.2px">${reportTypes.length === 0 ? 'التقرير الشامل' : types.map(t => REPORT_LABEL[t]).join(' + ')}</div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:.2px">${reportTypes.length === 0 ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', ')}</div>
           <div style="font-size:9px;opacity:.7;margin-top:3px">الفترة: ${dateFrom} → ${dateTo} &nbsp;·&nbsp; المحطة: ${stationLabel}</div>
         </div>
         <div style="text-align:center">
