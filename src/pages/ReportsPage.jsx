@@ -944,7 +944,7 @@ export default function ReportsPage() {
     const types = reportTypes.length === 0 ? ALL_TYPES : ALL_TYPES.filter(t => reportTypes.includes(t))
     const isMulti = reportTypes.length > 0 && types.length > 1
     const mainTitle = reportTypes.length === 0 ? (isAr ? 'التقرير الشامل' : 'Full Report')
-      : isMulti ? (isAr ? 'تقرير مخصص' : 'Custom Report')
+      : isMulti ? (isAr ? 'تقرير مجمّع' : 'Combined Report')
       : REPORT_LABEL[types[0]]
 
     // header احترافي موحّد لجميع الأقسام
