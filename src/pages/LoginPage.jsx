@@ -16,6 +16,19 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false)
   const [error,    setError]    = useState('')
   const [loading,  setLoading]  = useState(false)
+  const [offline,  setOffline]  = useState(() => !navigator.onLine)
+
+  // تنبيه فوري لو ما فيه اتصال — حتى قبل ما يحاول المستخدم يسجّل دخول
+  useEffect(() => {
+    const goOffline = () => setOffline(true)
+    const goOnline  = () => setOffline(false)
+    window.addEventListener('offline', goOffline)
+    window.addEventListener('online', goOnline)
+    return () => {
+      window.removeEventListener('offline', goOffline)
+      window.removeEventListener('online', goOnline)
+    }
+  }, [])
 
   // تطبيق الثيم المحفوظ قبل أول render لتجنب الوميض
   const saved = localStorage.getItem('nwbus_theme') ?? 'light'
@@ -87,6 +100,22 @@ export default function LoginPage() {
           <div style={{ flex: 1, borderTop: '1px dashed #2C3B47' }} />
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#2C3B47', flexShrink: 0 }} />
         </div>
+
+        {/* ── تنبيه انقطاع الاتصال ── */}
+        {offline && (
+          <div style={{
+            marginBottom: 16, padding: '9px 12px', fontSize: '0.75rem',
+            background: 'rgba(245,158,11,0.12)', color: '#FBBF24',
+            borderRadius: 4, fontWeight: 500,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            {isAr ? 'لا يوجد اتصال بالإنترنت حالياً' : 'No internet connection right now'}
+          </div>
+        )}
 
         {/* ── Form panel ── */}
         <form onSubmit={handleSubmit} style={{
