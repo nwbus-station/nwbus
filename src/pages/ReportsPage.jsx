@@ -942,14 +942,11 @@ export default function ReportsPage() {
   function printReport() {
     const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost']
     const types = reportTypes.length === 0 ? ALL_TYPES : ALL_TYPES.filter(t => reportTypes.includes(t))
-    const mainTitle = reportTypes.length === 0 ? (isAr ? 'التقرير الشامل' : 'Full Report')
-      : types.map(t => REPORT_LABEL[t]).join(' · ')
-
     // header احترافي موحّد لجميع الأقسام
     const printHeader = `
       <div style="background:#1C2B36;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
         <div>
-          <div style="font-size:15px;font-weight:700;letter-spacing:.2px">${mainTitle}</div>
+          <div style="font-size:15px;font-weight:700;letter-spacing:.2px">${reportTypes.length === 0 ? 'التقرير الشامل' : types.map(t => REPORT_LABEL[t]).join(' + ')}</div>
           <div style="font-size:9px;opacity:.7;margin-top:3px">الفترة: ${dateFrom} → ${dateTo} &nbsp;·&nbsp; المحطة: ${stationLabel}</div>
         </div>
         <div style="text-align:center">
