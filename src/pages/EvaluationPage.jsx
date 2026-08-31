@@ -771,7 +771,7 @@ export default function EvaluationPage() {
         const ev = empEvals.find(x => x.employee_id === e.id)
         return { name: e.full_name_ar, station: e.station?.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
       })
-    const html = buildReportHtml(rows, selMonth, selYear, filterStation, stations)
+    const html = buildReportHtml(rows, selMonth, selYear, filterStation, stations, profile?.full_name_ar)
     const w = window.open('', '_blank')
     w.document.write(html)
     w.document.close()
@@ -1202,6 +1202,7 @@ export default function EvaluationPage() {
 
 // ── مودال الطباعة المتقدمة ────────────────────────────────────
 function PrintModal({ type, employees, supervisors = [], stations, empEvals, supEvals = [], stnEvals, selMonth: initMonth, selYear: initYear, isAdmin, onClose }) {
+  const { profile } = useAuth()
   const now = new Date()
   const [selMonth, setSelMonth] = useState(initMonth)
   const [selYear,  setSelYear]  = useState(initYear)
@@ -1350,7 +1351,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
       const ev = empEvals.find(x => x.employee_id === e.id)
       return { name: e.full_name_ar, job_number: e.job_number, username: e.username, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
     })
-    printHtml(buildReportHtml(rows, selMonth, selYear, [...selStations], stations))
+    printHtml(buildReportHtml(rows, selMonth, selYear, [...selStations], stations, profile?.full_name_ar))
   }
 
   function printSupervisors() {
@@ -1361,7 +1362,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
       const roleLabel = s.role === 'area_supervisor' ? 'مشرف المنطقة' : 'مشرف المحطة'
       return { name: s.full_name_ar, job_number: s.job_number, username: s.username, station: s.station?.name_ar, role: roleLabel, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
     })
-    printHtml(buildReportHtml(rows, selMonth, selYear, [], stations))
+    printHtml(buildReportHtml(rows, selMonth, selYear, [], stations, profile?.full_name_ar))
   }
 
   function printStations() {
@@ -1373,16 +1374,16 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
       })
       .filter(r => r.score != null)
     if (rows.length === 0) { setModalErr('لا توجد محطات مقيّمة في الفترة المحددة'); return }
-    printHtml(buildStationReportHtml(rows, selMonth, selYear))
+    printHtml(buildStationReportHtml(rows, selMonth, selYear, profile?.full_name_ar))
   }
 
   function printRange() {
     if (!rangeData || rangeData.length === 0) { setModalErr('لا توجد بيانات في هذه الفترة'); return }
     if (rangeMode === 'employees') {
-      printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmpSet, employees))
+      printHtml(buildRangeReportHtml(rangeData, rangeStart, rangeEnd, selEmpSet, employees, profile?.full_name_ar))
     } else {
       const label = rangeMode === 'agent_stations' ? 'محطات الوكلاء' : 'المحطات'
-      printHtml(buildStnRangeReportHtml(rangeData, rangeStart, rangeEnd, 'all', stations, label))
+      printHtml(buildStnRangeReportHtml(rangeData, rangeStart, rangeEnd, 'all', stations, label, profile?.full_name_ar))
     }
   }
 
@@ -1734,6 +1735,16 @@ function reportCss() {
   }`
 }
 
+function footerHtml(printedBy) {
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('ar-SA')
+  const timeStr = now.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
+  return `<div class="footer">
+    <div class="footer-brand">طُبع بواسطة: ${escapeHtml(printedBy) || '—'}</div>
+    <div class="footer-meta">تاريخ الطباعة: ${dateStr} — ${timeStr}</div>
+  </div>`
+}
+
 function scoreBadge(s) {
   if (s == null) return '<span class="badge badge-none">لم يُقيَّم</span>'
   if (s >= 98)   return '<span class="badge badge-great">متميز ★</span>'
@@ -1757,7 +1768,7 @@ function scoreBarHtml(s) {
 }
 
 // ── HTML تقرير الموظفين ───────────────────────────────────────
-function buildReportHtml(rows, month, year, selStationIds, stations) {
+function buildReportHtml(rows, month, year, selStationIds, stations, printedBy) {
   const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
   const stnName = (!selStationIds || selStationIds.length === stations.length) ? 'جميع المحطات'
     : selStationIds.map(id => stations.find(s => s.id === id)?.name_ar).filter(Boolean).join('، ')
@@ -1816,7 +1827,6 @@ function buildReportHtml(rows, month, year, selStationIds, stations) {
         <td><span class="row-num">${i+1}</span></td>
         <td>
           <div class="emp-name">${escapeHtml(r.name) || '—'}${r.has_star ? ' <span style="color:#F59E0B">★</span>' : ''}</div>
-          ${r.username ? `<div class="emp-sub">${escapeHtml(r.username)}</div>` : ''}
         </td>
         <td>${r.job_number ? `<span class="job-tag">${escapeHtml(r.job_number)}</span>` : '<span style="color:#d1d5db">—</span>'}</td>
         <td><span class="station-text">${escapeHtml(r.station) || '—'}</span></td>
@@ -1828,15 +1838,12 @@ function buildReportHtml(rows, month, year, selStationIds, stations) {
     </table>
   </div>
 
-  <div class="footer">
-    <div class="footer-brand">NORTH WEST BUS &nbsp;—&nbsp; www.nwstation.com</div>
-    <div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div>
-  </div>
+  ${footerHtml(printedBy)}
 </div></body></html>`
 }
 
 // ── HTML تقرير المحطات ────────────────────────────────────────
-function buildStationReportHtml(rows, month, year) {
+function buildStationReportHtml(rows, month, year, printedBy) {
   const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
   const evaluated = rows.filter(r => r.score != null).length
   const stars = rows.filter(r => r.has_star).length
@@ -1873,12 +1880,12 @@ function buildStationReportHtml(rows, month, year) {
     </tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><div class="footer-brand">NORTH WEST BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
+  ${footerHtml(printedBy)}
 </div></body></html>`
 }
 
 // ── HTML تقرير الفترة ─────────────────────────────────────────
-function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmpSet, employees) {
+function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmpSet, employees, printedBy) {
   const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
   const empName = selEmpSet.size === 0 ? 'جميع الموظفين' : [...selEmpSet].map(id => employees.find(e => e.id === id)?.full_name_ar || '').filter(Boolean).join('، ')
   const sorted = [...data].sort((a,b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
@@ -1918,12 +1925,12 @@ function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmpSet, employees) 
     </tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><div class="footer-brand">NORTH WEST BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
+  ${footerHtml(printedBy)}
 </div></body></html>`
 }
 
 // ── HTML تقرير فترة المحطات ───────────────────────────────────
-function buildStnRangeReportHtml(data, rangeStart, rangeEnd, selStnRange, stations, reportLabel = 'المحطات') {
+function buildStnRangeReportHtml(data, rangeStart, rangeEnd, selStnRange, stations, reportLabel = 'المحطات', printedBy) {
   const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
   const allLabel = reportLabel === 'محطات الوكلاء' ? 'جميع محطات الوكلاء' : 'جميع المحطات'
   const stnName = selStnRange === 'all' ? allLabel : stations.find(s => s.id === selStnRange)?.name_ar || ''
@@ -1961,6 +1968,6 @@ function buildStnRangeReportHtml(data, rangeStart, rangeEnd, selStnRange, statio
     </tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><div class="footer-brand">NORTH WEST BUS &nbsp;—&nbsp; www.nwstation.com</div><div class="footer-meta">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-SA')}</div></div>
+  ${footerHtml(printedBy)}
 </div></body></html>`
 }
