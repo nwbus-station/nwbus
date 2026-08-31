@@ -693,7 +693,7 @@ export default function EvaluationPage() {
           })))
       )
       promises.push(
-        supabase.from('supervisor_evaluations').select('*')
+        supabase.from('supervisor_evaluations').select('*, evaluator:evaluator_id(full_name_ar, role)')
           .eq('eval_month', selMonth).eq('eval_year', selYear)
           .then(r => setSupEvals(r.data || []))
       )
@@ -708,7 +708,7 @@ export default function EvaluationPage() {
 
     // تقييمات الموظفين
     {
-      let q = supabase.from('employee_evaluations').select('*').eq('eval_month', selMonth).eq('eval_year', selYear)
+      let q = supabase.from('employee_evaluations').select('*, evaluator:evaluator_id(full_name_ar, role)').eq('eval_month', selMonth).eq('eval_year', selYear)
       if (!isAdmin) q = q.eq('evaluator_id', profile?.id)
       else if (!isGeneralAdmin && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
       promises.push(q.then(r => setEmpEvals(r.data || [])))
@@ -769,7 +769,7 @@ export default function EvaluationPage() {
     const rows = (filterStation === 'all' ? employees : filteredEmployees)
       .map(e => {
         const ev = empEvals.find(x => x.employee_id === e.id)
-        return { name: e.full_name_ar, station: e.station?.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
+        return { name: e.full_name_ar, station: e.station?.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD, evaluator: ev?.evaluator?.full_name_ar }
       })
     const html = buildReportHtml(rows, selMonth, selYear, filterStation, stations, profile?.full_name_ar)
     const w = window.open('', '_blank')
@@ -923,7 +923,16 @@ export default function EvaluationPage() {
                     </div>
                     {/* الدرجة — وسط */}
                     <div style={{ width: 160, flexShrink: 0, textAlign: 'center' }}>
-                      {ev ? <ScoreBar score={ev.total_score} isAr={isAr} /> : (
+                      {ev ? (
+                        <div>
+                          <ScoreBar score={ev.total_score} isAr={isAr} />
+                          {ev.evaluator?.full_name_ar && (
+                            <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
+                              {isAr ? 'بواسطة ' : 'By '}{ev.evaluator.full_name_ar}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
                         <span style={{ fontSize: '0.71rem', color: 'var(--text-3)', fontStyle: 'italic' }}>{isAr ? 'لم يُقيَّم بعد' : 'Not yet evaluated'}</span>
                       )}
                     </div>
@@ -992,7 +1001,16 @@ export default function EvaluationPage() {
                       </div>
                     </div>
                     <div style={{ width: 160, flexShrink: 0, textAlign: 'center' }}>
-                      {ev ? <ScoreBar score={ev.total_score} isAr={isAr} /> : (
+                      {ev ? (
+                        <div>
+                          <ScoreBar score={ev.total_score} isAr={isAr} />
+                          {ev.evaluator?.full_name_ar && (
+                            <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
+                              {isAr ? 'بواسطة ' : 'By '}{ev.evaluator.full_name_ar}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
                         <span style={{ fontSize: '0.71rem', color: 'var(--text-3)', fontStyle: 'italic' }}>{isAr ? 'لم يُقيَّم بعد' : 'Not yet evaluated'}</span>
                       )}
                     </div>
@@ -1299,7 +1317,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
     if (rangeMode === 'employees') {
       const empIds = selEmpSet.size > 0 ? [...selEmpSet] : null
       const results = await Promise.all(months.map(async ({ month, year }) => {
-        let q = supabase.from('employee_evaluations').select('*, employee:employee_id(full_name_ar, username, job_number, role, station:station_id(name_ar))')
+        let q = supabase.from('employee_evaluations').select('*, employee:employee_id(full_name_ar, username, job_number, role, station:station_id(name_ar)), evaluator:evaluator_id(full_name_ar)')
           .eq('eval_month', month).eq('eval_year', year)
         if (empIds) q = q.in('employee_id', empIds)
         const { data } = await q
@@ -1310,7 +1328,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
       const savedIds = savedGroups[rangeMode]
       const ids = savedIds.size > 0 ? [...savedIds] : null
       const results = await Promise.all(months.map(async ({ month, year }) => {
-        let q = supabase.from('station_evaluations').select('*, station:station_id(name_ar, name_en)')
+        let q = supabase.from('station_evaluations').select('*, station:station_id(name_ar, name_en), evaluator:evaluator_id(full_name_ar)')
           .eq('eval_month', month).eq('eval_year', year)
         if (ids) q = q.in('station_id', ids)
         const { data } = await q
@@ -1320,7 +1338,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
     } else {
       const stnId = selStnRange === 'all' ? null : selStnRange
       const results = await Promise.all(months.map(async ({ month, year }) => {
-        let q = supabase.from('station_evaluations').select('*, station:station_id(name_ar, name_en)')
+        let q = supabase.from('station_evaluations').select('*, station:station_id(name_ar, name_en), evaluator:evaluator_id(full_name_ar)')
           .eq('eval_month', month).eq('eval_year', year)
         if (stnId) q = q.eq('station_id', stnId)
         const { data } = await q
@@ -1349,7 +1367,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
     const filtered = employees.filter(e => selStations.has(e.station_id))
     const rows = filtered.map(e => {
       const ev = empEvals.find(x => x.employee_id === e.id)
-      return { name: e.full_name_ar, job_number: e.job_number, username: e.username, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
+      return { name: e.full_name_ar, job_number: e.job_number, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD, evaluator: ev?.evaluator?.full_name_ar }
     })
     printHtml(buildReportHtml(rows, selMonth, selYear, [...selStations], stations, profile?.full_name_ar))
   }
@@ -1360,7 +1378,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
     const rows = filtered.map(s => {
       const ev = supEvals.find(x => x.supervisor_id === s.id)
       const roleLabel = s.role === 'area_supervisor' ? 'مشرف المنطقة' : 'مشرف المحطة'
-      return { name: s.full_name_ar, job_number: s.job_number, username: s.username, station: s.station?.name_ar, role: roleLabel, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
+      return { name: s.full_name_ar, job_number: s.job_number, station: s.station?.name_ar, role: roleLabel, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD, evaluator: ev?.evaluator?.full_name_ar }
     })
     printHtml(buildReportHtml(rows, selMonth, selYear, [], stations, profile?.full_name_ar))
   }
@@ -1370,7 +1388,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
     const rows = filtered
       .map(s => {
         const ev = stnEvals.find(x => x.station_id === s.id)
-        return { name: s.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD }
+        return { name: s.name_ar, score: ev?.total_score ?? null, has_star: ev?.total_score >= STAR_THRESHOLD, evaluator: ev?.evaluator?.full_name_ar }
       })
       .filter(r => r.score != null)
     if (rows.length === 0) { setModalErr('لا توجد محطات مقيّمة في الفترة المحددة'); return }
@@ -1821,6 +1839,7 @@ function buildReportHtml(rows, month, year, selStationIds, stations, printedBy) 
         <th>الوظيفة</th>
         <th>النتيجة</th>
         <th>التقدير</th>
+        <th>قيّم بواسطة</th>
       </tr></thead>
       <tbody>
       ${rows.map((r, i) => `<tr>
@@ -1833,6 +1852,7 @@ function buildReportHtml(rows, month, year, selStationIds, stations, printedBy) 
         <td><span class="role-text">${escapeHtml(r.role) || '—'}</span></td>
         <td>${scoreBarHtml(r.score)}</td>
         <td>${scoreBadge(r.score)}</td>
+        <td><span class="station-text">${escapeHtml(r.evaluator) || '—'}</span></td>
       </tr>`).join('')}
       </tbody>
     </table>
@@ -1871,12 +1891,13 @@ function buildStationReportHtml(rows, month, year, printedBy) {
   </div>
   <div class="table-wrap">
     <div class="table-head"><div class="table-head-dot"></div><div class="table-head-title">قائمة المحطات — ${MN[month-1]} ${year}</div></div>
-    <table><thead><tr><th style="width:36px">#</th><th>المحطة</th><th>النتيجة</th><th>التقدير</th></tr></thead><tbody>
+    <table><thead><tr><th style="width:36px">#</th><th>المحطة</th><th>النتيجة</th><th>التقدير</th><th>قيّم بواسطة</th></tr></thead><tbody>
     ${rows.map((r,i) => `<tr>
       <td><span class="row-num">${i+1}</span></td>
       <td><div class="emp-name">${escapeHtml(r.name)||'—'}${r.has_star?' <span style="color:#F59E0B">★</span>':''}</div></td>
       <td>${scoreBarHtml(r.score)}</td>
       <td>${scoreBadge(r.score)}</td>
+      <td><span class="station-text">${escapeHtml(r.evaluator) || '—'}</span></td>
     </tr>`).join('')}
     </tbody></table>
   </div>
@@ -1913,7 +1934,7 @@ function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmpSet, employees, 
   </div>
   <div class="table-wrap">
     <div class="table-head"><div class="table-head-dot"></div><div class="table-head-title">سجل التقييمات</div></div>
-    <table><thead><tr><th style="width:36px">#</th><th>الموظف</th><th>الرقم الوظيفي</th><th>الشهر</th><th>المحطة</th><th>النتيجة</th><th>التقدير</th></tr></thead><tbody>
+    <table><thead><tr><th style="width:36px">#</th><th>الموظف</th><th>الرقم الوظيفي</th><th>الشهر</th><th>المحطة</th><th>النتيجة</th><th>التقدير</th><th>قيّم بواسطة</th></tr></thead><tbody>
     ${sorted.map((r,i) => `<tr>
       <td><span class="row-num">${i+1}</span></td>
       <td><div class="emp-name">${escapeHtml(r.employee?.full_name_ar)||'—'}</div></td>
@@ -1922,6 +1943,7 @@ function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmpSet, employees, 
       <td><span class="station-text">${escapeHtml(r.employee?.station?.name_ar)||'—'}</span></td>
       <td>${scoreBarHtml(r.total_score)}</td>
       <td>${scoreBadge(r.total_score)}</td>
+      <td><span class="station-text">${escapeHtml(r.evaluator?.full_name_ar) || '—'}</span></td>
     </tr>`).join('')}
     </tbody></table>
   </div>
@@ -1958,13 +1980,14 @@ function buildStnRangeReportHtml(data, rangeStart, rangeEnd, selStnRange, statio
   </div>
   <div class="table-wrap">
     <div class="table-head"><div class="table-head-dot"></div><div class="table-head-title">سجل تقييمات المحطات</div></div>
-    <table><thead><tr><th style="width:36px">#</th><th>المحطة</th><th>الشهر</th><th>النتيجة</th><th>التقدير</th></tr></thead><tbody>
+    <table><thead><tr><th style="width:36px">#</th><th>المحطة</th><th>الشهر</th><th>النتيجة</th><th>التقدير</th><th>قيّم بواسطة</th></tr></thead><tbody>
     ${sorted.map((r,i) => `<tr>
       <td><span class="row-num">${i+1}</span></td>
       <td><div class="emp-name">${escapeHtml(r.station?.name_ar)||'—'}</div></td>
       <td><span style="font-family:monospace;font-size:12px;color:#6B7280">${MN[r.month-1]} ${r.year}</span></td>
       <td>${scoreBarHtml(r.total_score)}</td>
       <td>${scoreBadge(r.total_score)}</td>
+      <td><span class="station-text">${escapeHtml(r.evaluator?.full_name_ar) || '—'}</span></td>
     </tr>`).join('')}
     </tbody></table>
   </div>
