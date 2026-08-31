@@ -224,6 +224,19 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
   const [error,     setError]     = useState('')
   const [showPass,  setShowPass]  = useState(false)
   const [credential, setCredential] = useState(null) // { username, password, nameAr }
+  const [sensitive, setSensitive] = useState(null) // { phone, national_id, login_password } — أدمن فقط، تُجلب عند فتح التعديل
+
+  // الحقول الحساسة (جوال، هوية، كلمة مرور) ما تعود من قائمة المستخدمين بعد الآن —
+  // تُجلب فقط هنا عند فتح تعديل موظف موجود، عبر دالة تتحقق من صلاحية الأدمن بقاعدة البيانات
+  useEffect(() => {
+    if (!user?.id) return
+    supabase.rpc('get_user_sensitive', { p_id: user.id }).then(({ data, error: e }) => {
+      if (e || !data?.length) return
+      const row = data[0]
+      setSensitive(row)
+      setForm(f => ({ ...f, phone: row.phone ?? '', national_id: row.national_id ?? '' }))
+    })
+  }, [user?.id])
   // password reset for edit mode
   const [newPwd,      setNewPwd]      = useState('')
   const [showNewPwd,  setShowNewPwd]  = useState(false)
@@ -424,7 +437,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
     try {
       await resetPasswordViaEdge(user.auth_id, newPwd)
       setPwdMsg(isAr ? '✓ تم تغيير كلمة المرور' : '✓ Password updated')
-      setCredential({ username: user.username, password: newPwd, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: user.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })
+      setCredential({ username: user.username, password: newPwd, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: sensitive?.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })
       setNewPwd('')
     } catch (err) {
       setPwdMsg('⚠ ' + err.message)
@@ -522,9 +535,9 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
                   {isAr ? 'بيانات الدخول' : 'Login Info'}
                 </p>
-                {user.login_password && (
+                {sensitive?.login_password && (
                   <button type="button"
-                    onClick={() => setCredential({ username: user.username, password: user.login_password, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: user.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })}
+                    onClick={() => setCredential({ username: user.username, password: sensitive.login_password, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: sensitive.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })}
                     className="text-xs text-nwbus-primary underline">
                     {isAr ? 'عرض البطاقة' : 'Show Card'}
                   </button>
@@ -845,7 +858,6 @@ export default function UsersPage() {
   const [stationFilter, setStationFilter] = useState('')
   const [statusFilter,  setStatusFilter]  = useState('')   // '' | 'active' | 'inactive'
   const [jobFilter,     setJobFilter]     = useState('')
-  const [cardUser, setCardUser] = useState(null)
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm, onCancel? }
 
   const fetchAll = useCallback(async (bust = false) => {
@@ -853,9 +865,10 @@ export default function UsersPage() {
     if (bust) clearCached(cacheKey)
     const cached = getCached(cacheKey)
     if (cached) { setUsers(cached.users); setStations(cached.stations); setLoading(false) } else { setLoading(true) }
+    // بدون phone/national_id/login_password — حقول حساسة تُجلب فقط عند الحاجة عبر get_user_sensitive (أدمن فقط)
     let usersQuery = supabase
       .from('users')
-      .select('*, station:station_id(name_ar, name_en)')
+      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, hire_date, is_accountant, is_agent, created_at, last_login, station:station_id(name_ar, name_en)')
       .order('created_at', { ascending: false })
 
     // Station admin only sees users of their station; area supervisor sees their assigned stations
@@ -925,9 +938,7 @@ export default function UsersPage() {
       (u.full_name_ar ?? '').toLowerCase().includes(q) ||
       (u.username     ?? '').toLowerCase().includes(q) ||
       (u.full_name_en ?? '').toLowerCase().includes(q) ||
-      (u.job_number   ?? '').includes(q) ||
-      (u.phone        ?? '').includes(q) ||
-      (u.national_id  ?? '').includes(q)
+      (u.job_number   ?? '').includes(q)
     const matchRole    = !roleFilter    || u.role       === roleFilter
     const matchStation = !stationFilter || u.station_id === stationFilter
     const matchStatus  = !statusFilter  || (statusFilter === 'active' ? u.is_active : !u.is_active)
@@ -966,7 +977,7 @@ export default function UsersPage() {
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
           <input
-            placeholder={isAr ? 'بحث بالاسم، المستخدم، الرقم الوظيفي، الجوال، الهوية...' : 'Search name, username, emp#, phone, ID...'}
+            placeholder={isAr ? 'بحث بالاسم، المستخدم، الرقم الوظيفي...' : 'Search name, username, emp#...'}
             value={search} onChange={e => setSearch(e.target.value)}
             className={`w-full border rounded-lg py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-gray-50 ${isAr ? 'pr-9 pl-3' : 'pl-9 pr-3'}`}
           />
@@ -1072,9 +1083,6 @@ export default function UsersPage() {
                     <p className="font-semibold text-gray-800">{u.full_name_ar}
                       {u.is_accountant && <span className="ms-1 text-[10px] bg-yellow-100 text-yellow-700 rounded px-1.5 py-0.5">+ محاسب</span>}
                     </p>
-                    {(isGeneralAdmin || isAccountant) && u.phone && (
-                      <p className="text-xs text-gray-500 font-mono" dir="ltr">{u.phone}</p>
-                    )}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">
                     {u.job_title ? (JOB_TITLES.find(j => j.value === u.job_title)?.[isAr ? 'ar' : 'en'] ?? u.job_title) : '—'}
@@ -1107,13 +1115,6 @@ export default function UsersPage() {
                           {isAr ? 'تعديل' : 'Edit'}
                         </button>
                       )}
-                      {isGeneralAdmin && u.login_password && (
-                        <button onClick={() => setCardUser(u)}
-                          className="text-xs border border-amber-300 text-amber-600 rounded-lg px-2.5 py-1 hover:bg-amber-500 hover:text-white transition-colors"
-                          title={isAr ? 'بطاقة بيانات الدخول' : 'Credential Card'}>
-                          
-                        </button>
-                      )}
                       {isGeneralAdmin && (
                         <button onClick={() => deleteUser(u)}
                           className="text-xs border border-red-300 text-red-500 rounded-lg px-2.5 py-1 hover:bg-red-500 hover:text-white transition-colors">
@@ -1136,15 +1137,6 @@ export default function UsersPage() {
           supervisors={supervisors}
           onClose={() => setModal(null)}
           onSaved={() => fetchAll(true)}
-        />
-      )}
-
-      {cardUser && (
-        <CredentialCard
-          username={cardUser.username}
-          password={cardUser.login_password}
-          nameAr={cardUser.full_name_ar}
-          onClose={() => setCardUser(null)}
         />
       )}
 
