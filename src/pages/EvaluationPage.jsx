@@ -949,7 +949,7 @@ export default function EvaluationPage() {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
                 <span style={{ width:7, height:7, borderRadius:'50%', background:'#1C2B4A', flexShrink:0 }} />
-                <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>{supEvals.length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {supervisors.length}</span>
+                <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>{supervisors.filter(s => supEvals.find(ev => ev.supervisor_id === s.id)).length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {supervisors.length}</span>
               </div>
             </div>
             <div style={{ ...card, overflow: 'hidden' }}>
@@ -1017,7 +1017,7 @@ export default function EvaluationPage() {
             <div className="ev-filter-row" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', direction: 'rtl' }}>
               <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
                 <span style={{ width:7, height:7, borderRadius:'50%', background:'#1C2B4A', flexShrink:0 }} />
-                <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>{stnEvals.length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {stations.length}</span>
+                <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>{stations.filter(s => stnEvals.find(ev => ev.station_id === s.id)).length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {stations.length}</span>
               </div>
               <input className="ev-input" value={stnSearchQuery} onChange={e => setStnSearchQuery(e.target.value)}
                 placeholder="بحث باسم المحطة..." style={{ flex:1, maxWidth: 280, marginInlineStart:'auto' }} />
@@ -1454,11 +1454,11 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
                 <div style={{ display:'flex', flexDirection:'column', maxHeight:200, overflowY:'auto', borderRadius:12, border:'1px solid var(--border)' }}>
                   {supervisors.map((s, i) => {
                     const ev = supEvals.find(x => x.supervisor_id === s.id)
-                    const checked = selSupSet.size === 0 ? false : selSupSet.has(s.id)
+                    const checked = selSupSet.has(s.id)
                     return (
                       <label key={s.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'10px 16px', background:'transparent', borderBottom: i < supervisors.length-1 ? '1px solid var(--border)' : 'none' }}>
                         <input type="checkbox" checked={checked} onChange={() => setSelSupSet(prev => {
-                          const next = new Set(prev.size === 0 ? supervisors.map(x => x.id) : prev)
+                          const next = new Set(prev)
                           next.has(s.id) ? next.delete(s.id) : next.add(s.id)
                           return next
                         })} style={{ width:16, height:16, accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />
