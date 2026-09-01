@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import SearchSelect from '../shared/SearchSelect'
 import DatePicker from '../shared/DatePicker'
+import TimeInput24 from '../shared/TimeInput24'
 import { isRestStation } from '../../utils/stations'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { todayStr } from '../../utils/dates'
@@ -196,13 +197,11 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
             </div>
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Departure time *', 'وقت المغادرة *')}</label>
-              <input type="time" value={form.scheduled_departure} onChange={e => set('scheduled_departure', e.target.value)}
-                className={inputCls} dir="ltr" lang="en-GB" />
+              <TimeInput24 value={form.scheduled_departure} onChange={v => set('scheduled_departure', v)} style={{ fontSize: '0.9rem', padding: '8px 12px' }} />
             </div>
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Arrival time', 'وقت الوصول للوجهة')}</label>
-              <input type="time" value={form.scheduled_arrival} onChange={e => set('scheduled_arrival', e.target.value)}
-                className={inputCls} dir="ltr" lang="en-GB" />
+              <TimeInput24 value={form.scheduled_arrival} onChange={v => set('scheduled_arrival', v)} style={{ fontSize: '0.9rem', padding: '8px 12px' }} />
             </div>
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Bus type', 'نوع الحافلة')}</label>
@@ -289,13 +288,13 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
                     </div>
                     <div className="shrink-0">
                       <label className="block text-[9px] text-gray-400">{t('Arr.', 'وصول')}</label>
-                      <input type="time" value={s.arrival_time} onChange={e => setStop(i, 'arrival_time', e.target.value)}
-                        className="border rounded px-1.5 py-1 text-xs" dir="ltr" lang="en-GB" />
+                      <TimeInput24 value={s.arrival_time} onChange={v => setStop(i, 'arrival_time', v)}
+                        style={{ width: 74, fontSize: '0.75rem', fontWeight: 500, padding: '4px 6px', letterSpacing: 0 }} />
                     </div>
                     <div className="shrink-0">
                       <label className="block text-[9px] text-gray-400">{t('Dep.', 'مغادرة')}</label>
-                      <input type="time" value={s.departure_time} onChange={e => setStop(i, 'departure_time', e.target.value)}
-                        className="border rounded px-1.5 py-1 text-xs" dir="ltr" lang="en-GB" />
+                      <TimeInput24 value={s.departure_time} onChange={v => setStop(i, 'departure_time', v)}
+                        style={{ width: 74, fontSize: '0.75rem', fontWeight: 500, padding: '4px 6px', letterSpacing: 0 }} />
                     </div>
                     <button type="button" onClick={() => delStop(i)} className="text-gray-400 hover:text-red-500 shrink-0">×</button>
                   </div>
