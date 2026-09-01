@@ -428,7 +428,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
             <label className="flex items-center gap-2 text-sm cursor-pointer font-semibold text-gray-700">
               <input type="checkbox" className="rounded accent-amber-500"
                 checked={hasReturn} onChange={e => setHasReturn(e.target.checked)} />
-              <span>{t('This line has a return trip', 'فيها رحلة عودة')}</span>
+              <span>{t('Add a return trip', 'إضافة رحلة عودة')}</span>
               {hasReturn && (
                 <span className="text-[10px] bg-amber-500 text-white rounded-full px-2 py-0.5 font-bold">
                   {t('Round trip', 'ذهاب وعودة')}
