@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import SearchSelect from '../shared/SearchSelect'
@@ -99,6 +99,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     set('scheduled_departure', tr.scheduled_departure || '')
     set('scheduled_arrival', tr.scheduled_arrival || '')
     set('bus_type', tr.bus_type || 'WHEELCHAIR')
+    lastDepartureRef.current = tr.scheduled_departure || ''
     setStops(previewStops.filter(s => s.on).map(s => ({
       station_id: s.station_id, arrival_time: s.arrival_time || '', departure_time: s.departure_time || '',
     })))
@@ -116,18 +117,25 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     if (total < 0) total += 1440
     return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
   }
+  // آخر وقت مغادرة "مكتمل" فعلياً — نحتفظ فيه بمرجع منفصل لأن مسح الحقل قبل إعادة الكتابة
+  // يمرّ بقيمة فاضية مؤقتة، ولو اعتمدنا على form.scheduled_departure مباشرة يضيع الوقت الأصلي قبل ما يكتمل الرقم الجديد
+  const lastDepartureRef = useRef('')
   function changeDeparture(v) {
-    const old = form.scheduled_departure
     set('scheduled_departure', v)
-    if (!old || !v || old === v) return
-    const delta = toMinutes(v.slice(0, 5)) - toMinutes(old.slice(0, 5))
-    if (!delta) return
-    if (form.scheduled_arrival) set('scheduled_arrival', shiftTime(form.scheduled_arrival, delta))
-    setStops(prev => prev.map(s => ({
-      ...s,
-      arrival_time: s.arrival_time ? shiftTime(s.arrival_time, delta) : s.arrival_time,
-      departure_time: s.departure_time ? shiftTime(s.departure_time, delta) : s.departure_time,
-    })))
+    if (!v) return
+    const old = lastDepartureRef.current
+    if (old && old !== v) {
+      const delta = toMinutes(v.slice(0, 5)) - toMinutes(old.slice(0, 5))
+      if (delta) {
+        if (form.scheduled_arrival) set('scheduled_arrival', shiftTime(form.scheduled_arrival, delta))
+        setStops(prev => prev.map(s => ({
+          ...s,
+          arrival_time: s.arrival_time ? shiftTime(s.arrival_time, delta) : s.arrival_time,
+          departure_time: s.departure_time ? shiftTime(s.departure_time, delta) : s.departure_time,
+        })))
+      }
+    }
+    lastDepartureRef.current = v
   }
 
   const pickerShown = pickerTrips.filter(tr => {
