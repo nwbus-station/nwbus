@@ -125,12 +125,12 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     const next = String(parseInt(digits, 10) + 1).padStart(digits.length, '0')
     return prefix + next
   }
-  function toggleHasReturn(checked) {
-    setHasReturn(checked)
-    if (checked && !returnForm.trip_number && form.trip_number.trim()) {
+  // يقترح رقم العودة أول ما تتوفر رحلة عودة + رقم رحلة أصلي — بغض النظر عن ترتيب تعبئة الحقول
+  useEffect(() => {
+    if (hasReturn && !returnForm.trip_number && form.trip_number.trim()) {
       setReturn('trip_number', suggestReturnNumber(form.trip_number.trim().toUpperCase()))
     }
-  }
+  }, [hasReturn, form.trip_number])
 
   // إزاحة كل الأوقات تلقائياً عند تغيير وقت المغادرة — نفس فرق الدقائق يُطبَّق على الوصول ونقاط التوقف
   const toMinutes = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
@@ -460,7 +460,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
           <div className={`rounded-xl border p-3 transition-colors ${hasReturn ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'}`}>
             <label className="flex items-center gap-2 text-sm cursor-pointer font-semibold text-gray-700">
               <input type="checkbox" className="rounded accent-amber-500"
-                checked={hasReturn} onChange={e => toggleHasReturn(e.target.checked)} />
+                checked={hasReturn} onChange={e => setHasReturn(e.target.checked)} />
               <span>{t('Add a return trip', 'إضافة رحلة عودة')}</span>
               {hasReturn && (
                 <span className="text-[10px] bg-amber-500 text-white rounded-full px-2 py-0.5 font-bold">
