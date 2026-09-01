@@ -28,6 +28,16 @@ export function AuthProvider({ children }) {
       .select('*, station:station_id(id, name_ar, name_en, type)')
       .eq('auth_id', authUser.id)
       .maybeSingle()
+    if (data && data.is_active === false) {
+      // حساب معطّل — خروج فوري، سواء كانت هذي بداية تسجيل الدخول أو جلسة قائمة صار تعطيلها
+      await supabase.auth.signOut()
+      profileIdRef.current = null
+      setProfile(null)
+      setAllowedStationIds(null)
+      setProfileError('ACCOUNT_DISABLED')
+      setLoading(false)
+      return 'disabled'
+    }
     if (data) {
       profileIdRef.current = data.id
       setProfile(data)
@@ -50,6 +60,7 @@ export function AuthProvider({ children }) {
       setProfileError(msg)
     }
     setLoading(false)
+    return 'ok'
   }
 
   useEffect(() => {
@@ -122,7 +133,16 @@ export function AuthProvider({ children }) {
           .select('*, station:station_id(id, name_ar, name_en, type)')
           .eq('id', id)
           .maybeSingle()
-        if (data) setProfile(data)
+        if (!data) return
+        if (data.is_active === false) {
+          // تعطيل الحساب أثناء استخدامه فعلياً — خروج فوري بدون انتظار
+          profileIdRef.current = null
+          await supabase.auth.signOut()
+          setProfile(null)
+          setAllowedStationIds(null)
+          return
+        }
+        setProfile(data)
       })
       .subscribe()
     return () => supabase.removeChannel(channel)
@@ -136,7 +156,8 @@ export function AuthProvider({ children }) {
     localStorage.setItem(LOGIN_AT_KEY, String(Date.now()))   // بداية عدّ الـ 8 ساعات
     sessionStorage.setItem(TAB_AUTH_KEY, '1')              // علامة التبويب المصرّح
     if (data?.user) {
-      await fetchProfile(data.user)
+      const status = await fetchProfile(data.user)
+      if (status === 'disabled') throw new Error('ACCOUNT_DISABLED')
       // تحديث last_login — نعطّل الـ ref مؤقتاً لمنع الـ realtime من إعادة الجلب
       const savedId = profileIdRef.current
       profileIdRef.current = null

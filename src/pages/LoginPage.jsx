@@ -49,7 +49,9 @@ export default function LoginPage() {
       const isNetworkError = !navigator.onLine
         || err?.name === 'AuthRetryableFetchError'
         || /fetch|network/i.test(err?.message || '')
-      setError(isNetworkError
+      setError(err?.message === 'ACCOUNT_DISABLED'
+        ? (isAr ? 'هذا الحساب معطّل — تواصل مع الإدارة' : 'This account is disabled — contact your administrator')
+        : isNetworkError
         ? (isAr ? 'تعذّر الاتصال بالخادم — تحقّق من اتصال الإنترنت وحاول مجدداً' : 'Could not connect to the server — check your internet connection and try again')
         : (isAr ? 'اسم المستخدم أو كلمة المرور غير صحيحة' : 'Invalid username or password'))
     } finally {
