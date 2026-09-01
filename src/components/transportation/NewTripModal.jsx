@@ -96,15 +96,19 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
 
   function applyBase() {
     const tr = previewTrip
-    set('trip_number', '')
+    const dep = tr.scheduled_departure ? tr.scheduled_departure.slice(0, 5) : ''
+    const arr = tr.scheduled_arrival ? tr.scheduled_arrival.slice(0, 5) : ''
+    set('trip_number', tr.trip_number || '')
     set('from_station_id', tr.from_station?.id || '')
     set('to_station_id', tr.to_station?.id || '')
-    set('scheduled_departure', tr.scheduled_departure || '')
-    set('scheduled_arrival', tr.scheduled_arrival || '')
+    set('scheduled_departure', dep)
+    set('scheduled_arrival', arr)
     set('bus_type', tr.bus_type || 'WHEELCHAIR')
-    lastDepartureRef.current = tr.scheduled_departure || ''
+    lastDepartureRef.current = dep
     setStops(previewStops.filter(s => s.on && !s.endpoint).map(s => ({
-      station_id: s.station_id, arrival_time: s.arrival_time || '', departure_time: s.departure_time || '',
+      station_id: s.station_id,
+      arrival_time: s.arrival_time ? s.arrival_time.slice(0, 5) : '',
+      departure_time: s.departure_time ? s.departure_time.slice(0, 5) : '',
     })))
     setPreviewTrip(null)
     setPreviewStops([])
