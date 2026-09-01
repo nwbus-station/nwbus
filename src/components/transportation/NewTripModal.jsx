@@ -32,7 +32,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
 
   const [stations, setStations] = useState([])
   const [form, setForm] = useState({
-    trip_number: '', route: '',
+    trip_number: '',
     from_station_id: '', to_station_id: '',
     scheduled_departure: '', scheduled_arrival: '',
     bus_type: 'WHEELCHAIR',
@@ -97,7 +97,6 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
   function applyBase() {
     const tr = previewTrip
     set('trip_number', '')
-    set('route', tr.route || '')
     set('from_station_id', tr.from_station?.id || '')
     set('to_station_id', tr.to_station?.id || '')
     set('scheduled_departure', tr.scheduled_departure || '')
@@ -113,6 +112,21 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
   }
 
   const togglePreviewStop = id => setPreviewStops(prev => prev.map(s => s.station_id === id ? { ...s, on: !s.on } : s))
+
+  // اقتراح رقم رحلة العودة — نفس رقم الذهاب مع رفع آخر رقم فيه بواحد (مثلاً NW28-I-1 → NW28-I-2)
+  function suggestReturnNumber(num) {
+    const m = num.match(/^(.*?)(\d+)$/)
+    if (!m) return ''
+    const [, prefix, digits] = m
+    const next = String(parseInt(digits, 10) + 1).padStart(digits.length, '0')
+    return prefix + next
+  }
+  function toggleHasReturn(checked) {
+    setHasReturn(checked)
+    if (checked && !returnForm.trip_number && form.trip_number.trim()) {
+      setReturn('trip_number', suggestReturnNumber(form.trip_number.trim().toUpperCase()))
+    }
+  }
 
   // إزاحة كل الأوقات تلقائياً عند تغيير وقت المغادرة — نفس فرق الدقائق يُطبَّق على الوصول ونقاط التوقف
   const toMinutes = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
@@ -188,8 +202,8 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
       /* 1) الرحلة */
       const { data: newTrip, error: e1 } = await supabase.from('trip_schedule').insert({
         trip_number: num,
-        trip_name: form.route.trim() || num,
-        route: form.route.trim() || null,
+        trip_name: num,
+        route: null,
         from_station_id: form.from_station_id,
         to_station_id: form.to_station_id,
         scheduled_departure: form.scheduled_departure,
@@ -242,8 +256,8 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
         const retNum = returnForm.trip_number.trim().toUpperCase()
         const { data: newReturn, error: r1 } = await supabase.from('trip_schedule').insert({
           trip_number: retNum,
-          trip_name: form.route.trim() || retNum,
-          route: form.route.trim() || null,
+          trip_name: retNum,
+          route: null,
           from_station_id: form.to_station_id,
           to_station_id: form.from_station_id,
           scheduled_departure: returnForm.scheduled_departure,
@@ -402,14 +416,9 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="col-span-2">
               <label className="block text-[11px] text-gray-500 mb-1">{t('Trip number *', 'رقم الرحلة *')}</label>
               <input value={form.trip_number} onChange={e => set('trip_number', e.target.value)} dir="ltr"
-                className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-[11px] text-gray-500 mb-1">{t('Route name', 'اسم الخط (اختياري)')}</label>
-              <input value={form.route} onChange={e => set('route', e.target.value)} dir="ltr"
                 className={inputCls} />
             </div>
             <div>
@@ -447,7 +456,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
           <div className={`rounded-xl border p-3 transition-colors ${hasReturn ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'}`}>
             <label className="flex items-center gap-2 text-sm cursor-pointer font-semibold text-gray-700">
               <input type="checkbox" className="rounded accent-amber-500"
-                checked={hasReturn} onChange={e => setHasReturn(e.target.checked)} />
+                checked={hasReturn} onChange={e => toggleHasReturn(e.target.checked)} />
               <span>{t('Add a return trip', 'إضافة رحلة عودة')}</span>
               {hasReturn && (
                 <span className="text-[10px] bg-amber-500 text-white rounded-full px-2 py-0.5 font-bold">
@@ -461,6 +470,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
                   <label className="block text-[11px] text-gray-500 mb-1">{t('Return trip number *', 'رقم رحلة العودة *')}</label>
                   <input value={returnForm.trip_number} onChange={e => setReturn('trip_number', e.target.value)} dir="ltr"
                     className={inputCls} />
+                  <p className="text-[10px] text-amber-700 mt-1">{t('Auto-suggested from the trip number — confirm it\'s correct before creating', 'اقتراح تلقائي من رقم الرحلة — تأكد إنه صحيح قبل الإنشاء')}</p>
                 </div>
                 <div>
                   <label className="block text-[11px] text-gray-500 mb-1">{t('Return departure *', 'وقت مغادرة العودة *')}</label>
