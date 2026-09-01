@@ -86,7 +86,11 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
       .select('station_id, arrival_time, departure_time, stop_order, station:station_id(id, name_ar, name_en)')
       .eq('trip_schedule_id', tr.id).order('stop_order')
     const mid = (data ?? []).filter(s => s.station_id !== tr.from_station?.id && s.station_id !== tr.to_station?.id)
-    setPreviewStops(mid.map(s => ({ ...s, on: true })))
+    const list = []
+    if (tr.from_station) list.push({ station_id: tr.from_station.id, station: tr.from_station, arrival_time: null, departure_time: tr.scheduled_departure, endpoint: 'from', on: true })
+    mid.forEach(s => list.push({ ...s, on: true }))
+    if (tr.to_station) list.push({ station_id: tr.to_station.id, station: tr.to_station, arrival_time: tr.scheduled_arrival, departure_time: null, endpoint: 'to', on: true })
+    setPreviewStops(list)
     setPreviewLoading(false)
   }
 
@@ -100,7 +104,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     set('scheduled_arrival', tr.scheduled_arrival || '')
     set('bus_type', tr.bus_type || 'WHEELCHAIR')
     lastDepartureRef.current = tr.scheduled_departure || ''
-    setStops(previewStops.filter(s => s.on).map(s => ({
+    setStops(previewStops.filter(s => s.on && !s.endpoint).map(s => ({
       station_id: s.station_id, arrival_time: s.arrival_time || '', departure_time: s.departure_time || '',
     })))
     setPreviewTrip(null)
@@ -356,10 +360,10 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
                 </div>
                 <div className="px-2.5 pt-2 pb-1 flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-gray-500">{t('Intermediate stops — pick which to add', 'نقاط التوقف — اختر أيها تضاف')}</span>
-                  {previewStops.length > 0 && (
+                  {previewStops.some(s => !s.endpoint) && (
                     <div className="flex gap-2 text-[10px]">
-                      <button type="button" onClick={() => setPreviewStops(p => p.map(s => ({ ...s, on: true })))} className="text-nwbus-primary hover:underline">{t('All', 'الكل')}</button>
-                      <button type="button" onClick={() => setPreviewStops(p => p.map(s => ({ ...s, on: false })))} className="text-gray-400 hover:underline">{t('None', 'لا شيء')}</button>
+                      <button type="button" onClick={() => setPreviewStops(p => p.map(s => s.endpoint ? s : { ...s, on: true }))} className="text-nwbus-primary hover:underline">{t('All', 'الكل')}</button>
+                      <button type="button" onClick={() => setPreviewStops(p => p.map(s => s.endpoint ? s : { ...s, on: false }))} className="text-gray-400 hover:underline">{t('None', 'لا شيء')}</button>
                     </div>
                   )}
                 </div>
@@ -370,9 +374,17 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
                     <p className="text-center text-gray-400 py-4 text-xs">{t('This trip has no intermediate stops', 'هذي الرحلة بدون نقاط توقف')}</p>
                   ) : previewStops.map(s => (
                     <label key={s.station_id}
-                      className={`flex items-center gap-2.5 rounded-lg border px-3 py-1.5 cursor-pointer transition ${s.on ? 'border-nwbus-primary bg-gray-50' : 'border-gray-200'}`}>
-                      <input type="checkbox" checked={s.on} onChange={() => togglePreviewStop(s.station_id)} className="rounded accent-nwbus-primary" />
-                      <span className="flex-1 text-xs text-gray-700">{(isAr ? s.station?.name_ar : s.station?.name_en) || '—'}</span>
+                      className={`flex items-center gap-2.5 rounded-lg border px-3 py-1.5 transition ${s.endpoint ? 'border-gray-100 bg-gray-50' : (s.on ? 'border-nwbus-primary bg-gray-50 cursor-pointer' : 'border-gray-200 cursor-pointer')}`}>
+                      {s.endpoint ? (
+                        <span className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <input type="checkbox" checked={s.on} onChange={() => togglePreviewStop(s.station_id)} className="rounded accent-nwbus-primary" />
+                      )}
+                      <span className="flex-1 text-xs text-gray-700">
+                        {(isAr ? s.station?.name_ar : s.station?.name_en) || '—'}
+                        {s.endpoint === 'from' && <span className="text-[10px] text-green-600 ms-2">{t('Origin', 'المنشأ')}</span>}
+                        {s.endpoint === 'to' && <span className="text-[10px] text-blue-600 ms-2">{t('Destination', 'الوجهة')}</span>}
+                      </span>
                       <span className="text-[11px] text-gray-400 font-mono">
                         {s.departure_time ? s.departure_time.slice(0, 5) : (s.arrival_time ? s.arrival_time.slice(0, 5) : '')}
                       </span>
