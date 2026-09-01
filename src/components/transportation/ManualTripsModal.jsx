@@ -3,6 +3,16 @@ import { supabase } from '../../lib/supabase'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import ConfirmDialog from '../shared/ConfirmDialog'
 
+const WEEKDAYS = [
+  { value: 0, ar: 'أحد',     en: 'Sun' },
+  { value: 1, ar: 'اثنين',   en: 'Mon' },
+  { value: 2, ar: 'ثلاثاء',  en: 'Tue' },
+  { value: 3, ar: 'أربعاء',  en: 'Wed' },
+  { value: 4, ar: 'خميس',    en: 'Thu' },
+  { value: 5, ar: 'جمعة',    en: 'Fri' },
+  { value: 6, ar: 'سبت',     en: 'Sat' },
+]
+
 /**
  * قائمة الرحلات المُضافة يدوياً (is_manual) مع إمكانية حذف أي رحلة نهائياً.
  */
@@ -19,7 +29,7 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
   const load = () => {
     setLoading(true)
     supabase.from('trip_schedule')
-      .select('id, trip_number, scheduled_departure, scheduled_arrival, is_active, from_station_id, to_station_id, return_trip_id, from_station:from_station_id(name_ar, name_en), to_station:to_station_id(name_ar, name_en), return_trip:return_trip_id(trip_number, scheduled_departure)')
+      .select('id, trip_number, scheduled_departure, scheduled_arrival, is_active, from_station_id, to_station_id, return_trip_id, start_date, end_date, days_of_week, from_station:from_station_id(name_ar, name_en), to_station:to_station_id(name_ar, name_en), return_trip:return_trip_id(trip_number, scheduled_departure)')
       .eq('is_manual', true)
       .order('trip_number')
       .then(({ data, error }) => {
@@ -149,6 +159,22 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
                             ) : (
                               <span>{t('No linked return trip', 'بدون رحلة عودة مرتبطة')}</span>
                             )}
+                          </div>
+                          <div className="text-xs text-gray-500 pt-2 border-t border-gray-200 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span>{t('Valid from', 'تاريخ البداية')}</span>
+                              <span className="font-mono">{tr.start_date ? new Date(tr.start_date).toLocaleDateString(isAr ? 'ar-SA' : 'en-US') : '—'}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>{t('Valid until', 'تاريخ النهاية')}</span>
+                              <span className="font-mono">{tr.end_date ? new Date(tr.end_date).toLocaleDateString(isAr ? 'ar-SA' : 'en-US') : t('No end date — ongoing', 'بدون نهاية — مستمرة')}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>{t('Runs on', 'التكرار')}</span>
+                              <span>{tr.days_of_week?.length
+                                ? tr.days_of_week.map(d => WEEKDAYS.find(w => w.value === d)?.[isAr ? 'ar' : 'en']).join('، ')
+                                : t('Daily', 'يومياً')}</span>
+                            </div>
                           </div>
                         </div>
                       )}
