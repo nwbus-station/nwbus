@@ -197,12 +197,12 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Departure time *', 'وقت المغادرة *')}</label>
               <input type="time" value={form.scheduled_departure} onChange={e => set('scheduled_departure', e.target.value)}
-                className={inputCls} dir="ltr" />
+                className={inputCls} dir="ltr" lang="en-GB" />
             </div>
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Arrival time', 'وقت الوصول للوجهة')}</label>
               <input type="time" value={form.scheduled_arrival} onChange={e => set('scheduled_arrival', e.target.value)}
-                className={inputCls} dir="ltr" />
+                className={inputCls} dir="ltr" lang="en-GB" />
             </div>
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Bus type', 'نوع الحافلة')}</label>
@@ -290,12 +290,12 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
                     <div className="shrink-0">
                       <label className="block text-[9px] text-gray-400">{t('Arr.', 'وصول')}</label>
                       <input type="time" value={s.arrival_time} onChange={e => setStop(i, 'arrival_time', e.target.value)}
-                        className="border rounded px-1.5 py-1 text-xs" dir="ltr" />
+                        className="border rounded px-1.5 py-1 text-xs" dir="ltr" lang="en-GB" />
                     </div>
                     <div className="shrink-0">
                       <label className="block text-[9px] text-gray-400">{t('Dep.', 'مغادرة')}</label>
                       <input type="time" value={s.departure_time} onChange={e => setStop(i, 'departure_time', e.target.value)}
-                        className="border rounded px-1.5 py-1 text-xs" dir="ltr" />
+                        className="border rounded px-1.5 py-1 text-xs" dir="ltr" lang="en-GB" />
                     </div>
                     <button type="button" onClick={() => delStop(i)} className="text-gray-400 hover:text-red-500 shrink-0">×</button>
                   </div>
