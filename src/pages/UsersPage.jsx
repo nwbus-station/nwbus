@@ -1056,6 +1056,7 @@ export default function UsersPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-nwbus-primary text-white text-xs">
               <tr>
@@ -1127,6 +1128,7 @@ export default function UsersPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
