@@ -52,10 +52,52 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
   const [error, setError]   = useState('')
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  // نسخ من رحلة موجودة (نفس فكرة اختيار الرحلة الأساسية بالرحلة الإضافية RF)
+  const [showPicker, setShowPicker] = useState(false)
+  const [pickerTrips, setPickerTrips] = useState([])
+  const [pickerLoading, setPickerLoading] = useState(false)
+  const [pickerSearch, setPickerSearch] = useState('')
+
   useEffect(() => {
     supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_en')
       .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
   }, [])
+
+  function openPicker() {
+    setShowPicker(true)
+    if (pickerTrips.length) return
+    setPickerLoading(true)
+    supabase.from('trip_schedule')
+      .select('id, trip_number, trip_name, route, scheduled_departure, scheduled_arrival, bus_type, from_station:from_station_id(id, name_en, name_ar), to_station:to_station_id(id, name_en, name_ar)')
+      .eq('is_active', true).or('is_rf.is.null,is_rf.eq.false')
+      .order('scheduled_departure').limit(4000)
+      .then(({ data }) => { setPickerTrips(data ?? []); setPickerLoading(false) })
+  }
+
+  async function pickBase(tr) {
+    set('trip_number', '')
+    set('route', tr.route || '')
+    set('from_station_id', tr.from_station?.id || '')
+    set('to_station_id', tr.to_station?.id || '')
+    set('scheduled_departure', tr.scheduled_departure || '')
+    set('scheduled_arrival', tr.scheduled_arrival || '')
+    set('bus_type', tr.bus_type || 'WHEELCHAIR')
+    const { data } = await supabase.from('trip_schedule_stops')
+      .select('station_id, arrival_time, departure_time, stop_order, station:station_id(id)')
+      .eq('trip_schedule_id', tr.id).order('stop_order')
+    const mid = (data ?? []).filter(s => s.station_id !== tr.from_station?.id && s.station_id !== tr.to_station?.id)
+    setStops(mid.map(s => ({ station_id: s.station_id, arrival_time: s.arrival_time || '', departure_time: s.departure_time || '' })))
+    setShowPicker(false)
+  }
+
+  const pickerShown = pickerTrips.filter(tr => {
+    if (!pickerSearch) return true
+    const q = pickerSearch.toLowerCase()
+    return (tr.trip_number ?? '').toLowerCase().includes(q) ||
+           (tr.route ?? '').toLowerCase().includes(q) ||
+           (tr.from_station?.name_en ?? '').toLowerCase().includes(q) ||
+           (tr.to_station?.name_en ?? '').toLowerCase().includes(q)
+  })
 
   const stName = id => {
     const s = stations.find(x => x.id === id)
@@ -220,6 +262,45 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
         {error && <div className="m-4 mb-0 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-2">{error}</div>}
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* نسخ من رحلة موجودة */}
+          <div className="rounded-xl border border-gray-200 overflow-hidden">
+            <button type="button" onClick={() => showPicker ? setShowPicker(false) : openPicker()}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
+              <span className="text-xs font-semibold text-gray-600">{t('Copy from an existing trip (optional)', 'نسخ من رحلة موجودة (اختياري)')}</span>
+              <span className="text-gray-400 text-xs">{showPicker ? '▲' : '▼'}</span>
+            </button>
+            {showPicker && (
+              <div className="border-t border-gray-200">
+                <div className="p-2.5 border-b border-gray-100">
+                  <input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)}
+                    placeholder={t('Search trips…', 'بحث برقم الرحلة أو المحطة…')}
+                    className="w-full border rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-nwbus-primary focus:outline-none" />
+                </div>
+                <div className="max-h-52 overflow-y-auto p-2 space-y-1">
+                  {pickerLoading ? (
+                    <p className="text-center text-gray-400 py-6 text-xs">{t('Loading…', 'جارٍ التحميل…')}</p>
+                  ) : pickerShown.length === 0 ? (
+                    <p className="text-center text-gray-400 py-6 text-xs">{t('No trips found', 'لا توجد رحلات')}</p>
+                  ) : pickerShown.map(tr => (
+                    <button key={tr.id} type="button" onClick={() => pickBase(tr)}
+                      className="w-full text-start rounded-lg border border-gray-200 px-3 py-2 hover:border-nwbus-primary hover:bg-gray-50 transition">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-nwbus-primary">{tr.trip_number}</span>
+                        {tr.route && <span className="text-[11px] text-gray-400">{tr.route}</span>}
+                      </div>
+                      <div className="text-[11px] text-gray-500 mt-0.5 truncate">
+                        {(isAr ? tr.from_station?.name_ar : tr.from_station?.name_en) || '—'}
+                        {' → '}
+                        {(isAr ? tr.to_station?.name_ar : tr.to_station?.name_en) || '—'}
+                        {tr.scheduled_departure && <span className="text-gray-400"> · {tr.scheduled_departure.slice(0, 5)}</span>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Trip number *', 'رقم الرحلة *')}</label>
