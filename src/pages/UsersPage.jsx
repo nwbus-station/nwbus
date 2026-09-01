@@ -1056,8 +1056,8 @@ export default function UsersPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl shadow overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full">
+          <table className="w-full text-sm" style={{ minWidth: 860 }}>
             <thead className="bg-nwbus-primary text-white text-xs">
               <tr>
                 {[
