@@ -15,6 +15,7 @@ import StationTripsModal from '../components/transportation/StationTripsModal'
 import ExtraTripModal from '../components/transportation/ExtraTripModal'
 import QRScannerModal from '../components/shared/QRScannerModal'
 import NewTripModal from '../components/transportation/NewTripModal'
+import ManualTripsModal from '../components/transportation/ManualTripsModal'
 import { applyDueSchedules } from '../utils/importSchedule'
 
 /* ─── helpers ────────────────────────────────────────────── */
@@ -636,6 +637,7 @@ export default function TransportationPage() {
   ]
   const [showExtra, setShowExtra]         = useState(false)
   const [showNewTrip, setShowNewTrip]     = useState(false)
+  const [showManualTrips, setShowManualTrips] = useState(false)
 
 
   // الأدمن/المحاسب يتنقّلون بين كل المحطات؛ المشرف بين محطاته المعيّنة فقط
@@ -1041,6 +1043,13 @@ export default function TransportationPage() {
               {isAr ? 'رحلة جديدة' : 'New Trip'}
             </button>
           )}
+          {/* Manage manually added trips — admin only */}
+          {isGeneralAdmin && (
+            <button onClick={() => setShowManualTrips(true)}
+              className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
+              {isAr ? 'الرحلات المضافة' : 'Added Trips'}
+            </button>
+          )}
           {/* Select station trips — supervisor & admin */}
           {isGeneralAdmin && stationId && (
             <button onClick={() => setShowSelect(true)}
@@ -1444,6 +1453,14 @@ export default function TransportationPage() {
           isAr={isAr}
           onClose={() => setShowNewTrip(false)}
           onCreated={fetchData}
+        />
+      )}
+
+      {showManualTrips && (
+        <ManualTripsModal
+          isAr={isAr}
+          onClose={() => setShowManualTrips(false)}
+          onChanged={fetchData}
         />
       )}
 

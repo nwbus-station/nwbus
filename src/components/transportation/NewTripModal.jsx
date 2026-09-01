@@ -44,6 +44,9 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     const n = new Set(prev); n.has(d) ? n.delete(d) : n.add(d); return n
   })
   const [stops, setStops]   = useState([])   // [{station_id, arrival_time, departure_time}]
+  const [hasReturn, setHasReturn] = useState(false)
+  const [returnForm, setReturnForm] = useState({ trip_number: '', scheduled_departure: '', scheduled_arrival: '' })
+  const setReturn = (k, v) => setReturnForm(f => ({ ...f, [k]: v }))
   const [autoActivate, setAutoActivate] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
@@ -75,6 +78,10 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     if (!form.scheduled_departure) { setError(t('Enter departure time', 'أدخل وقت المغادرة')); return }
     if (!form.start_date) { setError(t('Enter start date', 'أدخل تاريخ البداية')); return }
     if (recurrence === 'custom' && selectedDays.size === 0) { setError(t('Pick at least one day', 'اختر يوماً واحداً على الأقل')); return }
+    if (hasReturn) {
+      if (!returnForm.trip_number.trim()) { setError(t('Enter the return trip number', 'أدخل رقم رحلة العودة')); return }
+      if (!returnForm.scheduled_departure) { setError(t('Enter the return departure time', 'أدخل وقت مغادرة العودة')); return }
+    }
     const cleanStops = stops.filter(s => s.station_id)
     const dup = cleanStops.find((s, i) => cleanStops.findIndex(x => x.station_id === s.station_id) !== i
       || s.station_id === form.from_station_id || s.station_id === form.to_station_id)
@@ -82,6 +89,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
 
     setSaving(true)
     let newTripId = null
+    let newReturnTripId = null
     try {
       /* 1) الرحلة */
       const { data: newTrip, error: e1 } = await supabase.from('trip_schedule').insert({
@@ -135,10 +143,50 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
         if (e3) throw e3
       }
 
+      /* 4) رحلة العودة (اختياري) — نفس الخط بعكس الاتجاه */
+      if (hasReturn) {
+        const retNum = returnForm.trip_number.trim().toUpperCase()
+        const { data: newReturn, error: r1 } = await supabase.from('trip_schedule').insert({
+          trip_number: retNum,
+          trip_name: form.route.trim() || retNum,
+          route: form.route.trim() || null,
+          from_station_id: form.to_station_id,
+          to_station_id: form.from_station_id,
+          scheduled_departure: returnForm.scheduled_departure,
+          scheduled_arrival: returnForm.scheduled_arrival || null,
+          bus_type: form.bus_type,
+          is_active: true,
+          is_manual: true,
+          start_date: form.start_date,
+          end_date: form.end_date || null,
+          days_of_week: recurrence === 'custom' ? [...selectedDays].sort() : null,
+        }).select('id').single()
+        if (r1) throw r1
+        newReturnTripId = newReturn.id
+
+        if (autoActivate) {
+          const retRows = [
+            { station_id: form.to_station_id, departure_time: returnForm.scheduled_departure.slice(0, 5), arrival_time: null },
+            { station_id: form.from_station_id, departure_time: null, arrival_time: returnForm.scheduled_arrival ? returnForm.scheduled_arrival.slice(0, 5) : null },
+          ].map(r => ({
+            ...r, trip_schedule_id: newReturn.id,
+            departure_station_id: null, dep_enabled: true, arr_enabled: true,
+            selected_by: profile.id, selected_by_name: profile.full_name_ar,
+          }))
+          const { error: r2 } = await supabase.from('station_trips')
+            .upsert(retRows, { onConflict: 'station_id,trip_schedule_id' })
+          if (r2) throw r2
+        }
+      }
+
       onCreated?.()
       onClose()
     } catch (err) {
       // تنظيف: لا نُبقي رحلة ناقصة
+      if (newReturnTripId) {
+        await supabase.from('station_trips').delete().eq('trip_schedule_id', newReturnTripId)
+        await supabase.from('trip_schedule').delete().eq('id', newReturnTripId)
+      }
       if (newTripId) {
         await supabase.from('station_trips').delete().eq('trip_schedule_id', newTripId)
         await supabase.from('trip_schedule_stops').delete().eq('trip_schedule_id', newTripId)
@@ -209,6 +257,42 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
                 {BUS_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* رحلة عودة */}
+          <div className={`rounded-xl border p-3 transition-colors ${hasReturn ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'}`}>
+            <label className="flex items-center gap-2 text-sm cursor-pointer font-semibold text-gray-700">
+              <input type="checkbox" className="rounded accent-amber-500"
+                checked={hasReturn} onChange={e => setHasReturn(e.target.checked)} />
+              <span>{t('This line has a return trip', 'فيها رحلة عودة')}</span>
+              {hasReturn && (
+                <span className="text-[10px] bg-amber-500 text-white rounded-full px-2 py-0.5 font-bold">
+                  {t('Round trip', 'ذهاب وعودة')}
+                </span>
+              )}
+            </label>
+            {hasReturn && (
+              <div className="grid grid-cols-3 gap-3 mt-3">
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-1">{t('Return trip number *', 'رقم رحلة العودة *')}</label>
+                  <input value={returnForm.trip_number} onChange={e => setReturn('trip_number', e.target.value)} dir="ltr"
+                    className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-1">{t('Return departure *', 'وقت مغادرة العودة *')}</label>
+                  <TimeInput24 value={returnForm.scheduled_departure} onChange={v => setReturn('scheduled_departure', v)} style={{ fontSize: '0.9rem', padding: '8px 12px' }} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-1">{t('Return arrival', 'وقت وصول العودة')}</label>
+                  <TimeInput24 value={returnForm.scheduled_arrival} onChange={v => setReturn('scheduled_arrival', v)} style={{ fontSize: '0.9rem', padding: '8px 12px' }} />
+                </div>
+                <p className="col-span-3 text-[11px] text-gray-500">
+                  {form.to_station_id && form.from_station_id
+                    ? `${stName(form.to_station_id)} → ${stName(form.from_station_id)}`
+                    : t('Same line, reversed direction', 'نفس الخط بعكس الاتجاه')}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* التكرار + الصلاحية */}
