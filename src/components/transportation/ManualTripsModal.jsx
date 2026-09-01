@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import ConfirmDialog from '../shared/ConfirmDialog'
+import NewTripModal from './NewTripModal'
 
 const WEEKDAYS = [
   { value: 0, ar: 'أحد',     en: 'Sun' },
@@ -25,6 +26,7 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
   const [confirmId, setConfirmId] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [err, setErr] = useState('')
+  const [editTrip, setEditTrip] = useState(null)
 
   const load = () => {
     setLoading(true)
@@ -118,6 +120,10 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
                         className="text-xs border border-gray-300 text-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-100 transition-colors">
                         {expandedId === tr.id ? t('Hide', 'إخفاء') : t('Details', 'تفاصيل')}
                       </button>
+                      <button onClick={() => setEditTrip(tr)}
+                        className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1.5 hover:bg-nwbus-primary hover:text-white transition-colors">
+                        {t('Edit', 'تعديل')}
+                      </button>
                       <button onClick={() => setConfirmId(tr.id)} disabled={deletingId === tr.id}
                         className="text-xs border border-red-300 text-red-500 rounded-lg px-3 py-1.5 hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50">
                         {deletingId === tr.id ? '…' : t('Delete', 'حذف')}
@@ -194,6 +200,20 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
           cancelLabel={t('Cancel', 'إلغاء')}
           onConfirm={() => doDelete(confirmId)}
           onCancel={() => setConfirmId(null)}
+        />
+      )}
+
+      {editTrip && (
+        <NewTripModal
+          isAr={isAr}
+          editTrip={editTrip}
+          onClose={() => setEditTrip(null)}
+          onCreated={() => {
+            setEditTrip(null)
+            setStopsCache(p => { const n = { ...p }; delete n[editTrip.id]; return n })
+            load()
+            onChanged?.()
+          }}
         />
       )}
     </div>

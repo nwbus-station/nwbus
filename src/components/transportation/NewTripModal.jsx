@@ -25,21 +25,30 @@ const WEEKDAYS = [
   { value: 6, ar: 'سبت',     en: 'Sat' },
 ]
 
-export default function NewTripModal({ isAr, onClose, onCreated }) {
+export default function NewTripModal({ isAr, onClose, onCreated, editTrip }) {
   useEscapeKey(onClose)
   const { profile } = useAuth()
   const t = (en, ar) => isAr ? ar : en
+  const isEdit = !!editTrip
 
   const [stations, setStations] = useState([])
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => editTrip ? {
+    trip_number: editTrip.trip_number || '',
+    from_station_id: editTrip.from_station_id || '',
+    to_station_id: editTrip.to_station_id || '',
+    scheduled_departure: editTrip.scheduled_departure ? editTrip.scheduled_departure.slice(0, 5) : '',
+    scheduled_arrival: editTrip.scheduled_arrival ? editTrip.scheduled_arrival.slice(0, 5) : '',
+    bus_type: editTrip.bus_type || 'WHEELCHAIR',
+    start_date: editTrip.start_date || todayStr(), end_date: editTrip.end_date || '',
+  } : {
     trip_number: '',
     from_station_id: '', to_station_id: '',
     scheduled_departure: '', scheduled_arrival: '',
     bus_type: 'WHEELCHAIR',
     start_date: todayStr(), end_date: '',
   })
-  const [recurrence, setRecurrence] = useState('daily') // 'daily' | 'custom'
-  const [selectedDays, setSelectedDays] = useState(new Set())
+  const [recurrence, setRecurrence] = useState(() => editTrip?.days_of_week?.length ? 'custom' : 'daily')
+  const [selectedDays, setSelectedDays] = useState(() => new Set(editTrip?.days_of_week || []))
   const toggleDay = d => setSelectedDays(prev => {
     const n = new Set(prev); n.has(d) ? n.delete(d) : n.add(d); return n
   })
@@ -62,6 +71,22 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_en')
       .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
   }, [])
+
+  // تعديل رحلة موجودة — نجيب نقاط توقفها الحالية
+  useEffect(() => {
+    if (!editTrip) return
+    supabase.from('trip_schedule_stops')
+      .select('station_id, arrival_time, departure_time, stop_order')
+      .eq('trip_schedule_id', editTrip.id).order('stop_order')
+      .then(({ data }) => {
+        const mid = (data || []).filter(s => s.station_id !== editTrip.from_station_id && s.station_id !== editTrip.to_station_id)
+        setStops(mid.map(s => ({
+          station_id: s.station_id,
+          arrival_time: s.arrival_time ? s.arrival_time.slice(0, 5) : '',
+          departure_time: s.departure_time ? s.departure_time.slice(0, 5) : '',
+        })))
+      })
+  }, [editTrip])
 
   function openPicker() {
     setShowPicker(true)
@@ -141,7 +166,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
   }
   // آخر وقت مغادرة "مكتمل" فعلياً — نحتفظ فيه بمرجع منفصل لأن مسح الحقل قبل إعادة الكتابة
   // يمرّ بقيمة فاضية مؤقتة، ولو اعتمدنا على form.scheduled_departure مباشرة يضيع الوقت الأصلي قبل ما يكتمل الرقم الجديد
-  const lastDepartureRef = useRef('')
+  const lastDepartureRef = useRef(editTrip?.scheduled_departure ? editTrip.scheduled_departure.slice(0, 5) : '')
   function changeDeparture(v) {
     set('scheduled_departure', v)
     if (!v) return
@@ -209,6 +234,76 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     if (dup) { setError(t('A stop is duplicated or matches an endpoint', 'محطة عبور مكررة أو تطابق الانطلاق/الوصول')); return }
 
     setSaving(true)
+
+    if (isEdit) {
+      try {
+        const { error: eu } = await supabase.from('trip_schedule').update({
+          trip_number: num,
+          trip_name: num,
+          from_station_id: form.from_station_id,
+          to_station_id: form.to_station_id,
+          scheduled_departure: form.scheduled_departure,
+          scheduled_arrival: form.scheduled_arrival || null,
+          bus_type: form.bus_type,
+          start_date: form.start_date,
+          end_date: form.end_date || null,
+          days_of_week: recurrence === 'custom' ? [...selectedDays].sort() : null,
+        }).eq('id', editTrip.id)
+        if (eu) throw eu
+
+        await supabase.from('trip_schedule_stops').delete().eq('trip_schedule_id', editTrip.id)
+        if (cleanStops.length) {
+          const { error: es } = await supabase.from('trip_schedule_stops').insert(
+            cleanStops.map((s, i) => ({
+              trip_schedule_id: editTrip.id, station_id: s.station_id,
+              stop_order: i + 1,
+              arrival_time: s.arrival_time || null,
+              departure_time: s.departure_time || null,
+            }))
+          )
+          if (es) throw es
+        }
+
+        // تحديث ترحيل المحطات — يشتغل دايماً بالتعديل، مو مربوط بخيار "تفعيل مباشر"،
+        // عشان أي تعديل ينعكس على كل الجداول والتقارير بدون ما ينسى المستخدم يفعّل الخيار
+        const currentStationIds = new Set([form.from_station_id, form.to_station_id, ...cleanStops.map(s => s.station_id)])
+        const { data: oldRows } = await supabase.from('station_trips').select('station_id').eq('trip_schedule_id', editTrip.id)
+        const toRemove = (oldRows || []).map(r => r.station_id).filter(id => !currentStationIds.has(id))
+        if (toRemove.length) {
+          const { error: edel } = await supabase.from('station_trips').delete()
+            .eq('trip_schedule_id', editTrip.id).in('station_id', toRemove)
+          if (edel) throw edel
+        }
+        const rows = [
+          { station_id: form.from_station_id, departure_time: form.scheduled_departure.slice(0, 5), arrival_time: null },
+          { station_id: form.to_station_id, departure_time: null, arrival_time: form.scheduled_arrival ? form.scheduled_arrival.slice(0, 5) : null },
+          ...cleanStops.map(s => ({
+            station_id: s.station_id,
+            arrival_time: s.arrival_time ? s.arrival_time.slice(0, 5) : null,
+            departure_time: s.departure_time ? s.departure_time.slice(0, 5) : null,
+          })),
+        ].map(r => ({
+          ...r, trip_schedule_id: editTrip.id,
+          departure_station_id: null, dep_enabled: true, arr_enabled: true,
+          selected_by: profile.id, selected_by_name: profile.full_name_ar,
+        }))
+        const { error: eup } = await supabase.from('station_trips')
+          .upsert(rows, { onConflict: 'station_id,trip_schedule_id' })
+        if (eup) throw eup
+
+        onCreated?.()
+        onClose()
+      } catch (err) {
+        const dupErr = /duplicate key|unique constraint/i.test(err.message || '')
+        setError(dupErr
+          ? t('Trip number already exists — change it', 'رقم الرحلة موجود مسبقاً — غيّر الرقم')
+          : (err.message || t('Failed to save', 'تعذّر الحفظ')))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
     let newTripId = null
     let newReturnTripId = null
     try {
@@ -336,9 +431,9 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
         {/* Header */}
         <div className="flex items-center justify-between bg-nwbus-primary text-white px-5 py-3 rounded-t-2xl">
           <div>
-            <h3 className="font-bold">{t('New Trip (Route)', 'إضافة رحلة جديدة (خط)')}</h3>
+            <h3 className="font-bold">{isEdit ? t('Edit Trip', 'تعديل الرحلة') : t('New Trip (Route)', 'إضافة رحلة جديدة (خط)')}</h3>
             <p className="text-xs text-white/70 mt-0.5">
-              {t('Permanent trip without Excel upload', 'رحلة دائمة في الجدول بدون رفع Excel')}
+              {isEdit ? editTrip.trip_number : t('Permanent trip without Excel upload', 'رحلة دائمة في الجدول بدون رفع Excel')}
             </p>
           </div>
           <button onClick={onClose} className="text-white/60 hover:text-white text-2xl leading-none">×</button>
@@ -347,7 +442,8 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
         {error && <div className="m-4 mb-0 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-2">{error}</div>}
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* نسخ من رحلة موجودة */}
+          {/* نسخ من رحلة موجودة — إنشاء فقط */}
+          {!isEdit && (
           <div className="rounded-xl border border-gray-200 overflow-hidden">
             <button type="button" onClick={() => { if (showPicker) { setShowPicker(false); setPreviewTrip(null); setPreviewStops([]) } else openPicker() }}
               className="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
@@ -433,6 +529,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
               </div>
             )}
           </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
@@ -471,7 +568,8 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
             </div>
           </div>
 
-          {/* رحلة عودة */}
+          {/* رحلة عودة — إنشاء فقط */}
+          {!isEdit && (
           <div className={`rounded-xl border p-3 transition-colors ${hasReturn ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'}`}>
             <label className="flex items-center gap-2 text-sm cursor-pointer font-semibold text-gray-700">
               <input type="checkbox" className="rounded accent-amber-500"
@@ -510,6 +608,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
               </div>
             )}
           </div>
+          )}
 
           {/* التكرار + الصلاحية */}
           <div className="bg-gray-50 rounded-xl p-4 space-y-4">
@@ -604,25 +703,38 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
           </div>
 
           {/* تفعيل مباشر */}
-          <label className="flex items-center gap-2 text-sm cursor-pointer bg-blue-50 border border-blue-100 rounded-lg p-3">
-            <input type="checkbox" className="rounded accent-nwbus-primary"
-              checked={autoActivate} onChange={e => setAutoActivate(e.target.checked)} />
-            <span>
-              {t('Activate immediately in transportation for its stations', 'تفعيلها مباشرة في ترحيل محطاتها')}
-              <span className="block text-[11px] text-gray-500 mt-0.5">
-                {form.from_station_id
-                  ? `${stName(form.from_station_id)} → ${stops.filter(s => s.station_id).map(s => stName(s.station_id)).join(' → ')}${stops.some(s => s.station_id) ? ' → ' : ''}${stName(form.to_station_id)}`
-                  : t('Trip appears for supervisors without manual selection', 'تظهر الرحلة للمشرفين بدون اختيار يدوي')}
+          {isEdit ? (
+            <div className="flex items-center gap-2 text-sm bg-blue-50 border border-blue-100 rounded-lg p-3">
+              <span>
+                {t('Changes sync to all stations automatically', 'أي تعديل ينعكس تلقائياً على ترحيل كل محطاتها')}
+                <span className="block text-[11px] text-gray-500 mt-0.5">
+                  {stName(form.from_station_id)} → {stops.filter(s => s.station_id).map(s => stName(s.station_id)).join(' → ')}{stops.some(s => s.station_id) ? ' → ' : ''}{stName(form.to_station_id)}
+                </span>
               </span>
-            </span>
-          </label>
+            </div>
+          ) : (
+            <label className="flex items-center gap-2 text-sm cursor-pointer bg-blue-50 border border-blue-100 rounded-lg p-3">
+              <input type="checkbox" className="rounded accent-nwbus-primary"
+                checked={autoActivate} onChange={e => setAutoActivate(e.target.checked)} />
+              <span>
+                {t('Activate immediately in transportation for its stations', 'تفعيلها مباشرة في ترحيل محطاتها')}
+                <span className="block text-[11px] text-gray-500 mt-0.5">
+                  {form.from_station_id
+                    ? `${stName(form.from_station_id)} → ${stops.filter(s => s.station_id).map(s => stName(s.station_id)).join(' → ')}${stops.some(s => s.station_id) ? ' → ' : ''}${stName(form.to_station_id)}`
+                    : t('Trip appears for supervisors without manual selection', 'تظهر الرحلة للمشرفين بدون اختيار يدوي')}
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-end px-5 py-3 border-t border-gray-100">
           <button onClick={create} disabled={saving}
             className="bg-nwbus-primary text-white rounded-lg px-6 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
-            {saving ? t('Creating…', 'جارٍ الإنشاء…') : `✓ ${t('Create trip', 'إنشاء الرحلة')}`}
+            {isEdit
+              ? (saving ? t('Saving…', 'جارٍ الحفظ…') : `✓ ${t('Save changes', 'حفظ التعديلات')}`)
+              : (saving ? t('Creating…', 'جارٍ الإنشاء…') : `✓ ${t('Create trip', 'إنشاء الرحلة')}`)}
           </button>
         </div>
       </div>
