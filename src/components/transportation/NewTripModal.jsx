@@ -74,7 +74,24 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
       .then(({ data }) => { setPickerTrips(data ?? []); setPickerLoading(false) })
   }
 
-  async function pickBase(tr) {
+  // معاينة رحلة قبل نسخها — تعرض نقاط توقفها ليختار المستخدم أيها يضيف
+  const [previewTrip, setPreviewTrip] = useState(null)
+  const [previewStops, setPreviewStops] = useState([])
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+  async function previewBase(tr) {
+    setPreviewTrip(tr)
+    setPreviewLoading(true)
+    const { data } = await supabase.from('trip_schedule_stops')
+      .select('station_id, arrival_time, departure_time, stop_order, station:station_id(id, name_ar, name_en)')
+      .eq('trip_schedule_id', tr.id).order('stop_order')
+    const mid = (data ?? []).filter(s => s.station_id !== tr.from_station?.id && s.station_id !== tr.to_station?.id)
+    setPreviewStops(mid.map(s => ({ ...s, on: true })))
+    setPreviewLoading(false)
+  }
+
+  function applyBase() {
+    const tr = previewTrip
     set('trip_number', '')
     set('route', tr.route || '')
     set('from_station_id', tr.from_station?.id || '')
@@ -82,12 +99,35 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     set('scheduled_departure', tr.scheduled_departure || '')
     set('scheduled_arrival', tr.scheduled_arrival || '')
     set('bus_type', tr.bus_type || 'WHEELCHAIR')
-    const { data } = await supabase.from('trip_schedule_stops')
-      .select('station_id, arrival_time, departure_time, stop_order, station:station_id(id)')
-      .eq('trip_schedule_id', tr.id).order('stop_order')
-    const mid = (data ?? []).filter(s => s.station_id !== tr.from_station?.id && s.station_id !== tr.to_station?.id)
-    setStops(mid.map(s => ({ station_id: s.station_id, arrival_time: s.arrival_time || '', departure_time: s.departure_time || '' })))
+    setStops(previewStops.filter(s => s.on).map(s => ({
+      station_id: s.station_id, arrival_time: s.arrival_time || '', departure_time: s.departure_time || '',
+    })))
+    setPreviewTrip(null)
+    setPreviewStops([])
     setShowPicker(false)
+  }
+
+  const togglePreviewStop = id => setPreviewStops(prev => prev.map(s => s.station_id === id ? { ...s, on: !s.on } : s))
+
+  // إزاحة كل الأوقات تلقائياً عند تغيير وقت المغادرة — نفس فرق الدقائق يُطبَّق على الوصول ونقاط التوقف
+  const toMinutes = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m }
+  const shiftTime = (hhmm, delta) => {
+    let total = (toMinutes(hhmm) + delta) % 1440
+    if (total < 0) total += 1440
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+  }
+  function changeDeparture(v) {
+    const old = form.scheduled_departure
+    set('scheduled_departure', v)
+    if (!old || !v || old === v) return
+    const delta = toMinutes(v.slice(0, 5)) - toMinutes(old.slice(0, 5))
+    if (!delta) return
+    if (form.scheduled_arrival) set('scheduled_arrival', shiftTime(form.scheduled_arrival, delta))
+    setStops(prev => prev.map(s => ({
+      ...s,
+      arrival_time: s.arrival_time ? shiftTime(s.arrival_time, delta) : s.arrival_time,
+      departure_time: s.departure_time ? shiftTime(s.departure_time, delta) : s.departure_time,
+    })))
   }
 
   const pickerShown = pickerTrips.filter(tr => {
@@ -264,12 +304,12 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* نسخ من رحلة موجودة */}
           <div className="rounded-xl border border-gray-200 overflow-hidden">
-            <button type="button" onClick={() => showPicker ? setShowPicker(false) : openPicker()}
+            <button type="button" onClick={() => { if (showPicker) { setShowPicker(false); setPreviewTrip(null); setPreviewStops([]) } else openPicker() }}
               className="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
               <span className="text-xs font-semibold text-gray-600">{t('Copy from an existing trip (optional)', 'نسخ من رحلة موجودة (اختياري)')}</span>
               <span className="text-gray-400 text-xs">{showPicker ? '▲' : '▼'}</span>
             </button>
-            {showPicker && (
+            {showPicker && !previewTrip && (
               <div className="border-t border-gray-200">
                 <div className="p-2.5 border-b border-gray-100">
                   <input value={pickerSearch} onChange={e => setPickerSearch(e.target.value)}
@@ -282,7 +322,7 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
                   ) : pickerShown.length === 0 ? (
                     <p className="text-center text-gray-400 py-6 text-xs">{t('No trips found', 'لا توجد رحلات')}</p>
                   ) : pickerShown.map(tr => (
-                    <button key={tr.id} type="button" onClick={() => pickBase(tr)}
+                    <button key={tr.id} type="button" onClick={() => previewBase(tr)}
                       className="w-full text-start rounded-lg border border-gray-200 px-3 py-2 hover:border-nwbus-primary hover:bg-gray-50 transition">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-xs text-nwbus-primary">{tr.trip_number}</span>
@@ -296,6 +336,46 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
                       </div>
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+            {showPicker && previewTrip && (
+              <div className="border-t border-gray-200">
+                <div className="p-2.5 border-b border-gray-100 flex items-center justify-between">
+                  <button type="button" onClick={() => { setPreviewTrip(null); setPreviewStops([]) }}
+                    className="text-xs text-gray-500 hover:text-gray-700">← {t('Back', 'رجوع')}</button>
+                  <span className="text-xs font-bold text-nwbus-primary">{previewTrip.trip_number}</span>
+                </div>
+                <div className="px-2.5 pt-2 pb-1 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-gray-500">{t('Intermediate stops — pick which to add', 'نقاط التوقف — اختر أيها تضاف')}</span>
+                  {previewStops.length > 0 && (
+                    <div className="flex gap-2 text-[10px]">
+                      <button type="button" onClick={() => setPreviewStops(p => p.map(s => ({ ...s, on: true })))} className="text-nwbus-primary hover:underline">{t('All', 'الكل')}</button>
+                      <button type="button" onClick={() => setPreviewStops(p => p.map(s => ({ ...s, on: false })))} className="text-gray-400 hover:underline">{t('None', 'لا شيء')}</button>
+                    </div>
+                  )}
+                </div>
+                <div className="max-h-40 overflow-y-auto px-2 pb-2 space-y-1">
+                  {previewLoading ? (
+                    <p className="text-center text-gray-400 py-4 text-xs">{t('Loading…', 'جارٍ التحميل…')}</p>
+                  ) : previewStops.length === 0 ? (
+                    <p className="text-center text-gray-400 py-4 text-xs">{t('This trip has no intermediate stops', 'هذي الرحلة بدون نقاط توقف')}</p>
+                  ) : previewStops.map(s => (
+                    <label key={s.station_id}
+                      className={`flex items-center gap-2.5 rounded-lg border px-3 py-1.5 cursor-pointer transition ${s.on ? 'border-nwbus-primary bg-gray-50' : 'border-gray-200'}`}>
+                      <input type="checkbox" checked={s.on} onChange={() => togglePreviewStop(s.station_id)} className="rounded accent-nwbus-primary" />
+                      <span className="flex-1 text-xs text-gray-700">{(isAr ? s.station?.name_ar : s.station?.name_en) || '—'}</span>
+                      <span className="text-[11px] text-gray-400 font-mono">
+                        {s.departure_time ? s.departure_time.slice(0, 5) : (s.arrival_time ? s.arrival_time.slice(0, 5) : '')}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <div className="px-2.5 pb-2.5">
+                  <button type="button" onClick={applyBase}
+                    className="w-full bg-nwbus-primary text-white rounded-lg py-1.5 text-xs font-semibold hover:opacity-90">
+                    {t('Use this trip', 'استخدام هذه الرحلة')}
+                  </button>
                 </div>
               </div>
             )}
@@ -326,7 +406,10 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
             </div>
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Departure time *', 'وقت المغادرة *')}</label>
-              <TimeInput24 value={form.scheduled_departure} onChange={v => set('scheduled_departure', v)} style={{ fontSize: '0.9rem', padding: '8px 12px' }} />
+              <TimeInput24 value={form.scheduled_departure} onChange={changeDeparture} style={{ fontSize: '0.9rem', padding: '8px 12px' }} />
+              {(stops.length > 0 || form.scheduled_arrival) && (
+                <p className="text-[10px] text-gray-400 mt-1">{t('Changing this shifts arrival & stop times by the same amount', 'تغيير الوقت يزيح وقت الوصول ونقاط التوقف بنفس الفرق تلقائياً')}</p>
+              )}
             </div>
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Arrival time', 'وقت الوصول للوجهة')}</label>
