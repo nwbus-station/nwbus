@@ -19,7 +19,7 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
   const load = () => {
     setLoading(true)
     supabase.from('trip_schedule')
-      .select('id, trip_number, scheduled_departure, is_active, from_station:from_station_id(name_ar, name_en), to_station:to_station_id(name_ar, name_en)')
+      .select('id, trip_number, scheduled_departure, scheduled_arrival, is_active, from_station_id, to_station_id, from_station:from_station_id(name_ar, name_en), to_station:to_station_id(name_ar, name_en)')
       .eq('is_manual', true)
       .order('trip_number')
       .then(({ data, error }) => {
@@ -29,6 +29,24 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
       })
   }
   useEffect(load, [])
+
+  // نقاط التوقف — تُحمّل عند فتح التفاصيل فقط وتُخزَّن مؤقتاً لكل رحلة
+  const [expandedId, setExpandedId] = useState(null)
+  const [stopsCache, setStopsCache] = useState({})
+  const [stopsLoading, setStopsLoading] = useState(null)
+
+  async function toggleDetails(tr) {
+    if (expandedId === tr.id) { setExpandedId(null); return }
+    setExpandedId(tr.id)
+    if (stopsCache[tr.id]) return
+    setStopsLoading(tr.id)
+    const { data } = await supabase.from('trip_schedule_stops')
+      .select('station_id, arrival_time, departure_time, stop_order, station:station_id(name_ar, name_en)')
+      .eq('trip_schedule_id', tr.id).order('stop_order')
+    const mid = (data || []).filter(s => s.station_id !== tr.from_station_id && s.station_id !== tr.to_station_id)
+    setStopsCache(p => ({ ...p, [tr.id]: mid }))
+    setStopsLoading(null)
+  }
 
   async function doDelete(id) {
     setConfirmId(null)
@@ -69,25 +87,63 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
           ) : (
             <div className="space-y-2">
               {trips.map(tr => (
-                <div key={tr.id} className="flex items-center justify-between border border-gray-200 rounded-xl px-4 py-3 gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-sm text-nwbus-primary">{tr.trip_number}</span>
-                      {!tr.is_active && (
-                        <span className="text-[10px] bg-gray-100 text-gray-400 rounded-full px-2 py-0.5">{t('Inactive', 'معطّلة')}</span>
+                <div key={tr.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-nwbus-primary">{tr.trip_number}</span>
+                        {!tr.is_active && (
+                          <span className="text-[10px] bg-gray-100 text-gray-400 rounded-full px-2 py-0.5">{t('Inactive', 'معطّلة')}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1 truncate">
+                        {(isAr ? tr.from_station?.name_ar : tr.from_station?.name_en) || '—'}
+                        {' ← '}
+                        {(isAr ? tr.to_station?.name_ar : tr.to_station?.name_en) || '—'}
+                        {tr.scheduled_departure && <> {' · '}{tr.scheduled_departure.slice(0, 5)}</>}
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button onClick={() => toggleDetails(tr)}
+                        className="text-xs border border-gray-300 text-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-100 transition-colors">
+                        {expandedId === tr.id ? t('Hide', 'إخفاء') : t('Details', 'تفاصيل')}
+                      </button>
+                      <button onClick={() => setConfirmId(tr.id)} disabled={deletingId === tr.id}
+                        className="text-xs border border-red-300 text-red-500 rounded-lg px-3 py-1.5 hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50">
+                        {deletingId === tr.id ? '…' : t('Delete', 'حذف')}
+                      </button>
+                    </div>
+                  </div>
+
+                  {expandedId === tr.id && (
+                    <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
+                      {stopsLoading === tr.id ? (
+                        <p className="text-xs text-gray-400 text-center py-2">{t('Loading...', 'جاري التحميل...')}</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 font-semibold">{(isAr ? tr.from_station?.name_ar : tr.from_station?.name_en) || '—'}</span>
+                            <span className="text-[10px] text-green-600 font-medium">{t('Origin', 'الانطلاق')} · {tr.scheduled_departure ? tr.scheduled_departure.slice(0, 5) : '—'}</span>
+                          </div>
+                          {(stopsCache[tr.id] || []).map((s, i) => (
+                            <div key={s.station_id} className="flex items-center justify-between text-xs ps-3 border-s-2 border-gray-200">
+                              <span className="text-gray-600">{i + 1}. {(isAr ? s.station?.name_ar : s.station?.name_en) || '—'}</span>
+                              <span className="text-[10px] text-gray-400 font-mono">
+                                {s.arrival_time ? s.arrival_time.slice(0, 5) : (s.departure_time ? s.departure_time.slice(0, 5) : '—')}
+                              </span>
+                            </div>
+                          ))}
+                          {(stopsCache[tr.id] || []).length === 0 && (
+                            <p className="text-[11px] text-gray-400 ps-3">{t('No intermediate stops — direct trip', 'بدون محطات عبور — رحلة مباشرة')}</p>
+                          )}
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-700 font-semibold">{(isAr ? tr.to_station?.name_ar : tr.to_station?.name_en) || '—'}</span>
+                            <span className="text-[10px] text-blue-600 font-medium">{t('Destination', 'الوصول')} · {tr.scheduled_arrival ? tr.scheduled_arrival.slice(0, 5) : '—'}</span>
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1 truncate">
-                      {(isAr ? tr.from_station?.name_ar : tr.from_station?.name_en) || '—'}
-                      {' ← '}
-                      {(isAr ? tr.to_station?.name_ar : tr.to_station?.name_en) || '—'}
-                      {tr.scheduled_departure && <> {' · '}{tr.scheduled_departure.slice(0, 5)}</>}
-                    </p>
-                  </div>
-                  <button onClick={() => setConfirmId(tr.id)} disabled={deletingId === tr.id}
-                    className="text-xs border border-red-300 text-red-500 rounded-lg px-3 py-1.5 hover:bg-red-500 hover:text-white transition-colors shrink-0 disabled:opacity-50">
-                    {deletingId === tr.id ? '…' : t('Delete', 'حذف')}
-                  </button>
+                  )}
                 </div>
               ))}
             </div>
