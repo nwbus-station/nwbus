@@ -160,6 +160,15 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
     lastDepartureRef.current = v
   }
 
+  // وقت وصول العودة = وقت مغادرة العودة + نفس مدة رحلة الذهاب (نفس المسافة، اتجاه معاكس)
+  function changeReturnDeparture(v) {
+    setReturn('scheduled_departure', v)
+    if (v && form.scheduled_departure && form.scheduled_arrival) {
+      const duration = ((toMinutes(form.scheduled_arrival.slice(0, 5)) - toMinutes(form.scheduled_departure.slice(0, 5))) % 1440 + 1440) % 1440
+      setReturn('scheduled_arrival', shiftTime(v.slice(0, 5), duration))
+    }
+  }
+
   const pickerShown = pickerTrips.filter(tr => {
     if (!pickerSearch) return true
     const q = pickerSearch.toLowerCase()
@@ -478,7 +487,10 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
                 </div>
                 <div>
                   <label className="block text-[11px] text-gray-500 mb-1">{t('Return departure *', 'وقت مغادرة العودة *')}</label>
-                  <TimeInput24 value={returnForm.scheduled_departure} onChange={v => setReturn('scheduled_departure', v)} style={{ fontSize: '0.9rem', padding: '8px 12px' }} />
+                  <TimeInput24 value={returnForm.scheduled_departure} onChange={changeReturnDeparture} style={{ fontSize: '0.9rem', padding: '8px 12px' }} />
+                  {form.scheduled_departure && form.scheduled_arrival && (
+                    <p className="text-[10px] text-amber-700 mt-1">{t('Arrival is calculated using the outbound trip\'s duration', 'وقت الوصول يُحسب تلقائياً بنفس مدة رحلة الذهاب')}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[11px] text-gray-500 mb-1">{t('Return arrival', 'وقت وصول العودة')}</label>
