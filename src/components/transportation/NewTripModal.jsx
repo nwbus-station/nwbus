@@ -298,6 +298,12 @@ export default function NewTripModal({ isAr, onClose, onCreated }) {
             .upsert(retRows, { onConflict: 'station_id,trip_schedule_id' })
           if (r2) throw r2
         }
+
+        // ربط الرحلتين ببعض عشان تظهر إشارة "لها رحلة عودة" بتفاصيل كل وحدة منهم
+        const { error: r3 } = await supabase.from('trip_schedule').update({ return_trip_id: newReturn.id }).eq('id', newTrip.id)
+        if (r3) throw r3
+        const { error: r4 } = await supabase.from('trip_schedule').update({ return_trip_id: newTrip.id }).eq('id', newReturn.id)
+        if (r4) throw r4
       }
 
       onCreated?.()

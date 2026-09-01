@@ -19,7 +19,7 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
   const load = () => {
     setLoading(true)
     supabase.from('trip_schedule')
-      .select('id, trip_number, scheduled_departure, scheduled_arrival, is_active, from_station_id, to_station_id, from_station:from_station_id(name_ar, name_en), to_station:to_station_id(name_ar, name_en)')
+      .select('id, trip_number, scheduled_departure, scheduled_arrival, is_active, from_station_id, to_station_id, return_trip_id, from_station:from_station_id(name_ar, name_en), to_station:to_station_id(name_ar, name_en), return_trip:return_trip_id(trip_number, scheduled_departure)')
       .eq('is_manual', true)
       .order('trip_number')
       .then(({ data, error }) => {
@@ -139,6 +139,16 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-gray-700 font-semibold">{(isAr ? tr.to_station?.name_ar : tr.to_station?.name_en) || '—'}</span>
                             <span className="text-[10px] text-blue-600 font-medium">{t('Destination', 'الوصول')} · {tr.scheduled_arrival ? tr.scheduled_arrival.slice(0, 5) : '—'}</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-200 text-xs ${tr.return_trip ? 'text-amber-700' : 'text-gray-400'}`}>
+                            {tr.return_trip ? (
+                              <>
+                                <span className="text-[10px] bg-amber-500 text-white rounded-full px-2 py-0.5 font-bold shrink-0">{t('Round trip', 'ذهاب وعودة')}</span>
+                                <span>{t('Return trip', 'رحلة العودة')}: <span className="font-mono font-bold">{tr.return_trip.trip_number}</span>{tr.return_trip.scheduled_departure && <> · {tr.return_trip.scheduled_departure.slice(0, 5)}</>}</span>
+                              </>
+                            ) : (
+                              <span>{t('No linked return trip', 'بدون رحلة عودة مرتبطة')}</span>
+                            )}
                           </div>
                         </div>
                       )}
