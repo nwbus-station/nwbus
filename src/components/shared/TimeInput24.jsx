@@ -37,7 +37,6 @@ export default function TimeInput24({ value = '', onChange, placeholder = '--:--
     <input
       value={text}
       onChange={handle}
-      onBlur={blur}
       inputMode="numeric"
       maxLength={5}
       placeholder={placeholder}

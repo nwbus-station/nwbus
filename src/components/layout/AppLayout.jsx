@@ -202,6 +202,7 @@ const NAV_GROUPS = [
       { to: '/leaves',         labelAr: 'الإجازات',        labelEn: 'Leaves',         icon: 'leave',   roles: null, module: 'leaves' },
       { to: '/survey',         labelAr: 'تقييم الركاب',   labelEn: 'Passenger Rating', icon: 'star',  roles: null, module: 'survey' },
       { to: '/evaluation',     labelAr: 'التقييم الوظيفي', labelEn: 'Evaluations',      icon: 'report', roles: ['general_admin','station_admin','shift_supervisor','area_supervisor'], module: 'evaluation' },
+      { to: '/my-rating',      labelAr: 'تقييم العميل', labelEn: 'My QR', icon: 'star', roles: null, module: null, requireFlag: 'can_rate_customers' },
     ]
   },
   {
@@ -210,6 +211,7 @@ const NAV_GROUPS = [
       { to: '/stations', labelAr: 'المحطات',  labelEn: 'Stations',  icon: 'station', roles: ['general_admin'],                 module: null },
       { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ['general_admin'],               module: null },
       { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: ['general_admin','station_admin'], module: 'map' },
+      { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ['general_admin'], module: 'customer_ratings' },
     ]
   },
 ]
@@ -312,6 +314,7 @@ export default function AppLayout() {
     items: g.items.filter(n => {
       if (n.roles && !n.roles.includes(profile?.role)) return false
       if (n.module && mods && !mods.includes(n.module)) return false
+      if (n.requireFlag && !profile?.[n.requireFlag]) return false
       return true
     })
   })).filter(g => g.items.length > 0)

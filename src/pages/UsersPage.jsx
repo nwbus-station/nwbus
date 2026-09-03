@@ -216,6 +216,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
     hire_date:       user?.hire_date        ?? '',
     is_accountant:   user?.is_accountant   ?? false,
     is_agent:        user?.is_agent        ?? false,
+    can_rate_customers: user?.can_rate_customers ?? false,
     language:        user?.language        ?? 'ar',
     is_active:       user?.is_active       ?? true,
     allowed_modules: user?.allowed_modules ?? null,
@@ -379,7 +380,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
             national_id: form.national_id.trim() || null,
             job_title: form.job_title || null,
             hire_date: form.hire_date || null,
-            ...(isGeneralAdmin ? { is_accountant: !!form.is_accountant, is_agent: !!form.is_agent } : {}),
+            ...(isGeneralAdmin ? { is_accountant: !!form.is_accountant, is_agent: !!form.is_agent, can_rate_customers: !!form.can_rate_customers } : {}),
           }).eq('id', inserted.id)
           if (nErr && !nErr.message?.includes('column') && !nErr.message?.includes('does not exist')) throw nErr
         }
@@ -410,6 +411,11 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
         })
         if (updErr) throw updErr
         if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor') await syncStations(user.id)
+
+        // خانة "تقييم العميل" أضيفت بعد إنشاء admin_update_user — تحديث مباشر بدل تعديل الدالة
+        if (isGeneralAdmin) {
+          await supabase.from('users').update({ can_rate_customers: !!form.can_rate_customers }).eq('id', user.id)
+        }
 
         await onSaved()
         onClose()
@@ -646,6 +652,13 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
                   {isAr ? 'حساب وكيل (لا يظهر في التقييم والإجازات)' : 'Agent account (hidden from evaluations & leaves)'}
                 </label>
               )}
+              {isGeneralAdmin && (
+                <label className="flex items-center gap-2 mt-2 text-xs text-gray-600 cursor-pointer">
+                  <input type="checkbox" className="rounded accent-nwbus-primary"
+                    checked={form.can_rate_customers} onChange={e => set('can_rate_customers', e.target.checked)} />
+                  {isAr ? 'يُقيَّم من العميل (خدمة عملاء / مرحّل)' : 'Rated by customers (service/agent)'}
+                </label>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اللغة' : 'Language'}</label>
@@ -868,7 +881,7 @@ export default function UsersPage() {
     // بدون phone/national_id/login_password — حقول حساسة تُجلب فقط عند الحاجة عبر get_user_sensitive (أدمن فقط)
     let usersQuery = supabase
       .from('users')
-      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, hire_date, is_accountant, is_agent, created_at, last_login, station:station_id(name_ar, name_en)')
+      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, hire_date, is_accountant, is_agent, can_rate_customers, created_at, last_login, station:station_id(name_ar, name_en)')
       .order('created_at', { ascending: false })
 
     // Station admin only sees users of their station; area supervisor sees their assigned stations

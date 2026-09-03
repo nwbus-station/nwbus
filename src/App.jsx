@@ -33,6 +33,9 @@ import SettingsPage     from './pages/SettingsPage'
 import LeavePage        from './pages/LeavePage'
 import SurveyPage       from './pages/SurveyPage'
 import EvaluationPage   from './pages/EvaluationPage'
+import EmployeeRatingPage from './pages/EmployeeRatingPage'
+import PublicRatingPage from './pages/PublicRatingPage'
+import CustomerRatingsAdminPage from './pages/CustomerRatingsAdminPage'
 
 // Layout
 import AppLayout        from './components/layout/AppLayout'
@@ -98,6 +101,9 @@ export default function App() {
       <Route path="/survey/:city" element={<SurveyPage />} />
       <Route path="/survey"       element={<SurveyPage />} />
 
+      {/* تقييم العميل للموظف — عامة بدون تسجيل دخول */}
+      <Route path="/rate/:token" element={<PublicRatingPage />} />
+
       <Route path="/" element={
         <RequireAuth>
           <AppLayout />
@@ -133,6 +139,12 @@ export default function App() {
         } />
         <Route path="leaves"     element={<LeavePage />} />
         <Route path="evaluation" element={<EvaluationPage />} />
+        <Route path="my-rating" element={<EmployeeRatingPage />} />
+        <Route path="customer-ratings" element={
+          <RequireAuth allowedRoles={['general_admin']}>
+            <CustomerRatingsAdminPage />
+          </RequireAuth>
+        } />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 

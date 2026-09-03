@@ -43,6 +43,7 @@ export const MODULES = [
   { value: 'evaluation',     ar: 'التقييم الوظيفي',  en: 'Staff Evaluation' },
   { value: 'users',          ar: 'الموظفون',         en: 'Staff' },
   { value: 'map',            ar: 'الخريطة',          en: 'Map' },
+  { value: 'customer_ratings', ar: 'تقييم العملاء', en: 'Customer Ratings' },
 ]
 
 // Departure accuracy thresholds (minutes)
