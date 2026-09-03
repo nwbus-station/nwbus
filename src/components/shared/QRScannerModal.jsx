@@ -77,12 +77,13 @@ export function isColoredBackground(video) {
   } catch { return false }
 }
 
-export function buildOCRCanvas(video) {
+export function buildOCRCanvas(video, crop = {}) {
   const vw = video.videoWidth, vh = video.videoHeight
   const scale = 1.5
-  // اقتصاص ضيق يطابق الإطار المرئي فقط (35%–65% عمودياً، 8%–92% أفقياً)
-  const sx = Math.floor(vw * 0.08), sy = Math.floor(vh * 0.35)
-  const sw = Math.floor(vw * 0.84), sh = Math.floor(vh * 0.30)
+  // اقتصاص ضيق يطابق الإطار المرئي فقط (35%–65% عمودياً، 8%–92% أفقياً) — قابل للتخصيص عند الحاجة لإطار أوسع
+  const { x = 0.08, y = 0.35, w = 0.84, h = 0.30 } = crop
+  const sx = Math.floor(vw * x), sy = Math.floor(vh * y)
+  const sw = Math.floor(vw * w), sh = Math.floor(vh * h)
   const c = document.createElement('canvas')
   c.width = Math.round(sw * scale)
   c.height = Math.round(sh * scale)

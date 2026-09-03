@@ -16,6 +16,9 @@ export default function PublicRatingPage() {
   const [showScanner, setShowScanner] = useState(false)
 
   const [ticketNumber, setTicketNumber] = useState('')
+  // تُملأ تلقائياً بس من الماسح (بدون أي حقل بالواجهة) — مو مطلوبة من العميل يدوياً
+  const [referenceNumber, setReferenceNumber] = useState(null)
+  const [ticketDate, setTicketDate] = useState(null)
   const [rating, setRating] = useState(0)
   const [hoverRating, setHoverRating] = useState(0)
   const [comment, setComment] = useState('')
@@ -49,6 +52,8 @@ export default function PublicRatingPage() {
       window_number: target.window_number,
       shift: target.shift,
       ticket_number: cleanTicket,
+      reference_number: referenceNumber,
+      ticket_date: ticketDate ? ticketDate.toISOString().slice(0, 10) : null,
       rating,
       comment: comment.trim().slice(0, 500) || null,
     })
@@ -120,7 +125,7 @@ export default function PublicRatingPage() {
         </div>
 
         <div style={{ position: 'relative', marginBottom: 10 }}>
-          <input value={ticketNumber} onChange={e => setTicketNumber(e.target.value)}
+          <input value={ticketNumber} onChange={e => { setTicketNumber(e.target.value); setReferenceNumber(null); setTicketDate(null) }}
             placeholder="رقم التذكرة *" dir="ltr" maxLength={7} inputMode="numeric"
             style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #E2E5EA', borderRadius: 10, padding: '10px 44px 10px 14px', fontSize: '0.9rem', textAlign: 'center' }} />
           <button type="button" onClick={() => setShowScanner(true)}
@@ -144,7 +149,11 @@ export default function PublicRatingPage() {
 
       {showScanner && (
         <TicketNumberScanner
-          onScan={t => setTicketNumber(t)}
+          onScan={r => {
+            setTicketNumber(r.ticketNumber)
+            setReferenceNumber(r.referenceNumber)
+            setTicketDate(r.ticketDate)
+          }}
           onClose={() => setShowScanner(false)}
         />
       )}

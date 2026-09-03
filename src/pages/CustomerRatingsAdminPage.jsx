@@ -50,7 +50,7 @@ function RatingsTab() {
   function load() {
     setLoading(true)
     let q = supabase.from('customer_ratings')
-      .select('id, window_number, shift, ticket_number, rating, comment, created_at, employee:employee_id(full_name_ar), station:station_id(name_ar)')
+      .select('id, window_number, shift, ticket_number, reference_number, ticket_date, rating, comment, created_at, employee:employee_id(full_name_ar), station:station_id(name_ar)')
     if (stationFilter) q = q.eq('station_id', stationFilter)
     if (shiftFilter) q = q.eq('shift', shiftFilter)
     if (dateFrom) q = q.gte('created_at', dateFrom)
@@ -76,6 +76,8 @@ function RatingsTab() {
       <td>${escapeHtml(r.window_number) || '—'}</td>
       <td>${r.rating} / 5</td>
       <td>${escapeHtml(r.ticket_number) || '—'}</td>
+      <td>${escapeHtml(r.reference_number) || '—'}</td>
+      <td>${r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA') : '—'}</td>
       <td>${new Date(r.created_at).toLocaleDateString('ar-SA')}</td>
       <td>${escapeHtml(r.comment)}</td>
     </tr>`).join('')
@@ -89,7 +91,7 @@ function RatingsTab() {
         th{background:#1C2B4A; color:#fff}
       </style></head><body>
       <h2>تقرير تقييم العملاء — إجمالي: ${rows.length} · المتوسط: ${avg}</h2>
-      <table><thead><tr><th>الموظف</th><th>المحطة</th><th>الشباك</th><th>التقييم</th><th>رقم التذكرة</th><th>التاريخ</th><th>ملاحظة</th></tr></thead>
+      <table><thead><tr><th>الموظف</th><th>المحطة</th><th>الشباك</th><th>التقييم</th><th>رقم التذكرة</th><th>رقم المرجع</th><th>تاريخ التذكرة</th><th>تاريخ التقييم</th><th>ملاحظة</th></tr></thead>
       <tbody>${rowsHtml}</tbody></table>
       <script>window.print()</script></body></html>`)
     w.document.close()
@@ -144,7 +146,9 @@ function RatingsTab() {
                 <th className="px-4 py-2 text-right">الشباك</th>
                 <th className="px-4 py-2 text-right">التقييم</th>
                 <th className="px-4 py-2 text-right">التذكرة</th>
-                <th className="px-4 py-2 text-right">التاريخ</th>
+                <th className="px-4 py-2 text-right">المرجع</th>
+                <th className="px-4 py-2 text-right">تاريخ التذكرة</th>
+                <th className="px-4 py-2 text-right">تاريخ التقييم</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -158,6 +162,8 @@ function RatingsTab() {
                     {r.comment && <p className="text-xs text-gray-400 mt-0.5">{r.comment}</p>}
                   </td>
                   <td className="px-4 py-2.5 text-gray-500 font-mono">{r.ticket_number || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">{r.reference_number || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-400 text-xs">{r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA') : '—'}</td>
                   <td className="px-4 py-2.5 text-gray-400 text-xs">{new Date(r.created_at).toLocaleDateString('ar-SA')}</td>
                 </tr>
               ))}
