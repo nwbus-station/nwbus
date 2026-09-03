@@ -17,7 +17,9 @@ export default function PublicRatingPage() {
   const [hoverRating, setHoverRating] = useState(0)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [done, setDone] = useState(false)
+  const [done, setDone] = useState(() => {
+    try { return localStorage.getItem('nwbus_rated_' + token) === '1' } catch { return false }
+  })
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -43,7 +45,12 @@ export default function PublicRatingPage() {
       comment: comment.trim() || null,
     })
     setSubmitting(false)
-    if (error) { setError('تعذّر إرسال التقييم، حاول مرة أخرى'); return }
+    if (error) {
+      const dup = /duplicate key|unique constraint/i.test(error.message || '')
+      setError(dup ? 'هذي التذكرة تم تقييمها من قبل — شكراً لك' : 'تعذّر إرسال التقييم، حاول مرة أخرى')
+      return
+    }
+    try { localStorage.setItem('nwbus_rated_' + token, '1') } catch {}
     setDone(true)
   }
 
