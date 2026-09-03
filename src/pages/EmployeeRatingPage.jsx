@@ -56,7 +56,7 @@ export default function EmployeeRatingPage() {
       </style></head><body>
       <div class="card">
         <h2>${profile.full_name_ar}</h2>
-        <p>${profile.station?.name_ar || ''} ${windowNumber ? '· شباك ' + windowNumber : ''}</p>
+        <p>${profile.station?.name_ar || ''}</p>
         <img src="${qrDataUrl}" />
         <p style="margin-top:16px">امسح الرمز لتقييم الخدمة</p>
       </div>
