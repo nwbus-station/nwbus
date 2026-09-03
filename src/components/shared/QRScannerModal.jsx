@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
 
 /* ─── صوت ─── */
-function playBeep(type = 'found') {
+export function playBeep(type = 'found') {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
     const osc = ctx.createOscillator(), gain = ctx.createGain()
@@ -36,7 +36,7 @@ export function extractTicketNumber(raw) {
   return m ? m[1] : null
 }
 
-function pickTicketFromText(text) {
+export function pickTicketFromText(text) {
   const patterns = [
     /(?:رقم.*?التذكرة|ticket\s*(?:number|no|#)?)\s*[:\-]\s*(\d{7})(?!\d)/i,
     /[:\-]\s*(\d{7})(?!\d)/,
@@ -49,7 +49,7 @@ function pickTicketFromText(text) {
 /* بعض هواتف أندرويد (Galaxy/Honor وغيرها) تفتح الكاميرا بوضع تركيز ثابت
    مخصص للفيديو (continuous-video) بدل التركيز على الأجسام القريبة
    (continuous-picture) — هذا يخلي النص غير واضح للـOCR رغم أن الكاميرا تعمل. */
-async function applyFocusConstraints(stream) {
+export async function applyFocusConstraints(stream) {
   try {
     const track = stream.getVideoTracks()[0]
     if (!track?.getCapabilities) return
@@ -60,7 +60,7 @@ async function applyFocusConstraints(stream) {
   } catch {}
 }
 
-function isColoredBackground(video) {
+export function isColoredBackground(video) {
   try {
     const vw = video.videoWidth, vh = video.videoHeight
     if (!vw || !vh) return false
@@ -77,7 +77,7 @@ function isColoredBackground(video) {
   } catch { return false }
 }
 
-function buildOCRCanvas(video) {
+export function buildOCRCanvas(video) {
   const vw = video.videoWidth, vh = video.videoHeight
   const scale = 1.5
   // اقتصاص ضيق يطابق الإطار المرئي فقط (35%–65% عمودياً، 8%–92% أفقياً)

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import TicketNumberScanner from '../components/shared/TicketNumberScanner'
 
 const STARS = [1, 2, 3, 4, 5]
 
@@ -9,6 +10,7 @@ export default function PublicRatingPage() {
   const [target, setTarget] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
 
   const [ticketNumber, setTicketNumber] = useState('')
   const [rating, setRating] = useState(0)
@@ -27,6 +29,7 @@ export default function PublicRatingPage() {
   }, [token])
 
   async function submit() {
+    if (!ticketNumber.trim()) { setError('أدخل رقم التذكرة أو امسحه بالكاميرا'); return }
     if (!rating) { setError('اختر تقييمك أولاً'); return }
     setError('')
     setSubmitting(true)
@@ -35,7 +38,7 @@ export default function PublicRatingPage() {
       station_id: target.station_id,
       window_number: target.window_number,
       shift: target.shift,
-      ticket_number: ticketNumber.trim() || null,
+      ticket_number: ticketNumber.trim(),
       rating,
       comment: comment.trim() || null,
     })
@@ -91,9 +94,16 @@ export default function PublicRatingPage() {
           ))}
         </div>
 
-        <input value={ticketNumber} onChange={e => setTicketNumber(e.target.value)}
-          placeholder="رقم التذكرة (اختياري)" dir="ltr"
-          style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #E2E5EA', borderRadius: 10, padding: '10px 14px', fontSize: '0.9rem', marginBottom: 10, textAlign: 'center' }} />
+        <div style={{ position: 'relative', marginBottom: 10 }}>
+          <input value={ticketNumber} onChange={e => setTicketNumber(e.target.value)}
+            placeholder="رقم التذكرة *" dir="ltr" maxLength={7} inputMode="numeric"
+            style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #E2E5EA', borderRadius: 10, padding: '10px 44px 10px 14px', fontSize: '0.9rem', textAlign: 'center' }} />
+          <button type="button" onClick={() => setShowScanner(true)}
+            style={{ position: 'absolute', insetInlineStart: 6, top: '50%', transform: 'translateY(-50%)', width: 32, height: 32, border: 'none', background: '#1C2B4A', borderRadius: 8, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}
+            title="مسح رقم التذكرة بالكاميرا">
+            📷
+          </button>
+        </div>
 
         <textarea value={comment} onChange={e => setComment(e.target.value)}
           placeholder="ملاحظة إضافية (اختياري)" rows={3}
@@ -106,6 +116,13 @@ export default function PublicRatingPage() {
           {submitting ? 'جارٍ الإرسال…' : 'إرسال التقييم'}
         </button>
       </div>
+
+      {showScanner && (
+        <TicketNumberScanner
+          onScan={t => setTicketNumber(t)}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
     </div>
   )
 }
