@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { todayStr } from '../utils/dates'
+import { escapeHtml } from '../utils/digits'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ' },
@@ -70,13 +71,13 @@ function RatingsTab() {
 
   function printReport() {
     const rowsHtml = sorted.map(r => `<tr>
-      <td>${r.employee?.full_name_ar || '—'}</td>
-      <td>${r.station?.name_ar || '—'}</td>
-      <td>${r.window_number || '—'}</td>
+      <td>${escapeHtml(r.employee?.full_name_ar) || '—'}</td>
+      <td>${escapeHtml(r.station?.name_ar) || '—'}</td>
+      <td>${escapeHtml(r.window_number) || '—'}</td>
       <td>${r.rating} / 5</td>
-      <td>${r.ticket_number || '—'}</td>
+      <td>${escapeHtml(r.ticket_number) || '—'}</td>
       <td>${new Date(r.created_at).toLocaleDateString('ar-SA')}</td>
-      <td>${r.comment || ''}</td>
+      <td>${escapeHtml(r.comment)}</td>
     </tr>`).join('')
     const w = window.open('', '_blank')
     w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير تقييم العملاء</title>
