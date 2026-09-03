@@ -37,7 +37,9 @@ export default function PublicRatingPage() {
   }, [token])
 
   async function submit() {
-    if (!ticketNumber.trim()) { setError('أدخل رقم التذكرة أو امسحه بالكاميرا'); return }
+    const cleanTicket = ticketNumber.trim()
+    if (!cleanTicket) { setError('أدخل رقم التذكرة أو امسحه بالكاميرا'); return }
+    if (!/^\d{7}$/.test(cleanTicket)) { setError('رقم التذكرة لازم يكون ٧ أرقام'); return }
     if (!rating) { setError('اختر تقييمك أولاً'); return }
     setError('')
     setSubmitting(true)
@@ -46,9 +48,9 @@ export default function PublicRatingPage() {
       station_id: target.station_id,
       window_number: target.window_number,
       shift: target.shift,
-      ticket_number: ticketNumber.trim(),
+      ticket_number: cleanTicket,
       rating,
-      comment: comment.trim() || null,
+      comment: comment.trim().slice(0, 500) || null,
     })
     setSubmitting(false)
     if (error) {
@@ -71,6 +73,16 @@ export default function PublicRatingPage() {
         <p style={{ fontSize: '2rem', marginBottom: 12 }}>—</p>
         <h2 style={{ color: '#333', margin: '0 0 8px' }}>الرابط غير متاح</h2>
         <p style={{ color: '#888', fontSize: '0.9rem' }}>تأكد من الرمز أو تواصل مع الموظف</p>
+      </div>
+    </div>
+  )
+
+  if (target.active === false) return (
+    <div style={wrap} dir="rtl">
+      <div style={card}>
+        <p style={{ fontSize: '2rem', marginBottom: 12 }}>—</p>
+        <h2 style={{ color: '#333', margin: '0 0 8px' }}>غير متاح حالياً</h2>
+        <p style={{ color: '#888', fontSize: '0.9rem' }}>الموظف ما فعّل استقبال التقييمات الآن، حاول لاحقاً</p>
       </div>
     </div>
   )
@@ -119,7 +131,7 @@ export default function PublicRatingPage() {
         </div>
 
         <textarea value={comment} onChange={e => setComment(e.target.value)}
-          placeholder="ملاحظة إضافية (اختياري)" rows={3}
+          placeholder="ملاحظة إضافية (اختياري)" rows={3} maxLength={500}
           style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #E2E5EA', borderRadius: 10, padding: '10px 14px', fontSize: '0.9rem', marginBottom: 14, resize: 'none', fontFamily: 'inherit' }} />
 
         {error && <p style={{ color: '#DC2626', fontSize: '0.82rem', marginBottom: 10 }}>{error}</p>}

@@ -37,6 +37,7 @@ export default function EmployeeRatingPage() {
     await supabase.from('users').update({
       rating_window_number: windowNumber.trim(),
       rating_shift: shift,
+      rating_active: true,
     }).eq('id', profile.id)
     setSaving(false)
     setSaved(true)
@@ -73,6 +74,11 @@ export default function EmployeeRatingPage() {
     <div className="max-w-lg mx-auto p-6" dir="rtl">
       <h1 className="text-xl font-bold text-gray-800 mb-1">تقييم العميل</h1>
       <p className="text-sm text-gray-500 mb-6">حدّد رقم شباكك ووردية عملك الحالية، وقدّم رمز QR للعميل ليقيّم خدمتك</p>
+
+      <div className={`rounded-xl border px-4 py-3 mb-4 text-sm font-semibold flex items-center gap-2 ${profile?.rating_active ? 'bg-green-50 border-green-200 text-green-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+        <span className={`w-2 h-2 rounded-full ${profile?.rating_active ? 'bg-green-500' : 'bg-amber-500'}`} />
+        {profile?.rating_active ? 'الرمز مفعّل حالياً — العميل يقدر يقيّمك' : 'الرمز غير مفعّل — فعّله لتبدأ استقبال التقييمات'}
+      </div>
 
       <div className="bg-white rounded-2xl shadow border border-gray-200 p-5 space-y-4 mb-6">
         <div>
