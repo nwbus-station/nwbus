@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase'
 import TicketNumberScanner from '../components/shared/TicketNumberScanner'
 
 const STARS = [1, 2, 3, 4, 5]
+// نمنع إعادة الإرسال من نفس الجهاز لفترة قصيرة بس (منع تحديث الصفحة وإعادة الإرسال) —
+// مو منع دائم، لأن نفس العميل ممكن يرجع يوم ثاني ويستاهل يقيّم رحلة جديدة فعلية
+const RESUBMIT_BLOCK_MS = 12 * 60 * 60 * 1000 // 12 ساعة
 
 export default function PublicRatingPage() {
   const { token } = useParams()
@@ -18,7 +21,10 @@ export default function PublicRatingPage() {
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(() => {
-    try { return localStorage.getItem('nwbus_rated_' + token) === '1' } catch { return false }
+    try {
+      const ts = Number(localStorage.getItem('nwbus_rated_' + token))
+      return !!ts && (Date.now() - ts) < RESUBMIT_BLOCK_MS
+    } catch { return false }
   })
   const [error, setError] = useState('')
 
@@ -50,7 +56,7 @@ export default function PublicRatingPage() {
       setError(dup ? 'هذي التذكرة تم تقييمها من قبل — شكراً لك' : 'تعذّر إرسال التقييم، حاول مرة أخرى')
       return
     }
-    try { localStorage.setItem('nwbus_rated_' + token, '1') } catch {}
+    try { localStorage.setItem('nwbus_rated_' + token, String(Date.now())) } catch {}
     setDone(true)
   }
 
