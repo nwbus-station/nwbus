@@ -33,8 +33,10 @@ const STAR_THRESHOLD = 98
 
 // ── تقييم مشرف الوردية نفسه: يتقيّم من شخصين — مشرفه المباشر (المحدد له بحقل "المشرف")
 // والمدير التنفيذي للمحطات — بعكس مشرف المحطة/المنطقة اللي يستمر تقييمه من مصدر واحد فقط
-// (الأدمن/المدير) زي ما كان دايماً.
-const SUP_EVAL_WEIGHTS = { assigned_supervisor: 50, stations_executive_director: 50 }
+// (الأدمن/المدير) زي ما كان دايماً. نفس نسب جدول تقييم الموظفين بالضبط (نفس الجدول يُستخدم
+// على الكل) — ٣٥٪ لمشرفه المباشر (بند "مشرف المحطة") و٤٠٪ للمدير التنفيذي، وتُطبَّع النسبة
+// النهائية على مجموع الوزنين (٧٥) بما إن بند "مشرف الوردية" ٢٥٪ ما ينطبق هنا أصلاً.
+const SUP_EVAL_WEIGHTS = { assigned_supervisor: EVAL_SOURCE_WEIGHTS.station_admin, stations_executive_director: EVAL_SOURCE_WEIGHTS.stations_executive_director }
 const SUP_EVAL_LABELS    = { assigned_supervisor: 'المشرف المباشر', stations_executive_director: 'المدير التنفيذي' }
 const SUP_EVAL_LABELS_EN = { assigned_supervisor: 'Direct Supervisor', stations_executive_director: 'Executive Director' }
 const SUP_EVAL_SHORT     = { assigned_supervisor: 'مباشر', stations_executive_director: 'مدير' }
@@ -53,11 +55,15 @@ function computeSupFinalScore(targetRole, rows) {
     if (row) bySource[s] = row
   }
   const complete = sources.every(s => bySource[s])
-  const final = complete
-    ? (sources.length === 1
-        ? bySource[sources[0]].total_score
-        : Math.round(sources.reduce((sum, s) => sum + bySource[s].total_score * SUP_EVAL_WEIGHTS[s], 0) / 100 * 10) / 10)
-    : null
+  let final = null
+  if (complete) {
+    if (sources.length === 1) {
+      final = bySource[sources[0]].total_score
+    } else {
+      const weightSum = sources.reduce((sum, s) => sum + SUP_EVAL_WEIGHTS[s], 0)
+      final = Math.round(sources.reduce((sum, s) => sum + bySource[s].total_score * SUP_EVAL_WEIGHTS[s], 0) / weightSum * 10) / 10
+    }
+  }
   return { bySource, complete, final, sources }
 }
 
