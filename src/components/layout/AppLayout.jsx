@@ -218,7 +218,7 @@ const NAV_GROUPS = [
 ]
 
 const ROLE_LABELS = {
-  general_admin:    { ar: 'المدير التنفيذي التجاري', en: 'Executive Director' },
+  general_admin:    { ar: 'أدمن عام', en: 'General Admin' },
   stations_executive_director: { ar: 'المدير التنفيذي للمحطات', en: 'Stations Executive Director' },
   station_admin:    { ar: 'مشرف المحطة', en: 'Supervisor' },
   accountant:       { ar: 'محاسب',        en: 'Accountant' },

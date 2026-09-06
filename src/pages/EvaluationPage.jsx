@@ -127,7 +127,7 @@ const SCORE_LABELS_EN = ['', 'Poor',  'Acceptable', 'Good', 'Very Good', 'Excell
 const SCORE_COLORS    = ['', '#DC2626', '#D97706', '#2563EB', '#059669', '#7C3AED']
 
 const ROLE_LABELS = {
-  general_admin:    'المدير التنفيذي التجاري',
+  general_admin:    'أدمن عام',
   stations_executive_director: 'المدير التنفيذي للمحطات',
   station_admin:    'مشرف المحطة',
   accountant:       'محاسب',
@@ -149,7 +149,7 @@ function getJobTitle(emp, isAr) {
 }
 
 const ROLE_LABELS_EN = {
-  general_admin:    'Executive Admin',
+  general_admin:    'General Admin',
   stations_executive_director: 'Stations Executive Director',
   station_admin:    'Station Supervisor',
   accountant:       'Accountant',
