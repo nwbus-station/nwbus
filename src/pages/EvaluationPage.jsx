@@ -953,7 +953,8 @@ export default function EvaluationPage() {
     ...(canEvalEmp ? [{ id: 'employees',   ar: 'تقييم الموظفين',  en: 'Employee Evaluation'   }] : []),
     ...(canEvalSup ? [{ id: 'supervisors', ar: 'تقييم المشرفين',  en: 'Supervisor Evaluation' }] : []),
     ...(canEvalStn ? [{ id: 'stations',    ar: 'تقييم المحطات',   en: 'Station Evaluation'    }] : []),
-    { id: 'my_eval', ar: 'تقييمي', en: 'My Evaluation' },
+    // "تقييمي" لموظف عادي بدون أي صلاحية تقييم فقط — المشرفون يقيّمون غيرهم، ما يشوفون هذا التبويب
+    ...(!canEvalEmp && !canEvalSup && !canEvalStn ? [{ id: 'my_eval', ar: 'تقييمي', en: 'My Evaluation' }] : []),
   ]
 
   // موظف عادي (بدون صلاحية تقييم أحد) يفتح على تبويب "تقييمي" مباشرة بدل تبويب فاضٍ
