@@ -7,6 +7,7 @@ import { getCached, setCached, clearCached } from '../lib/pageCache'
 import DatePicker from '../components/shared/DatePicker'
 import { notifyMany } from '../utils/notifications'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
+import { ADMIN_ROLE_VALUES } from '../utils/constants'
 
 /* ─── ثوابت ─── */
 const LEAVE_TYPES = [
@@ -387,7 +388,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
   const [bypassDeadline, setBypassDeadline] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
-  const isAdmin = profile?.role === 'general_admin'
+  const isAdmin = ADMIN_ROLE_VALUES.includes(profile?.role)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -533,7 +534,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
     } else {
       // المشرف رفع مباشرة → أشعر الأدمن
       const { data: admins } = await supabase.from('users')
-        .select('id').eq('role', 'general_admin').eq('is_active', true)
+        .select('id').in('role', ADMIN_ROLE_VALUES).eq('is_active', true)
       const typeLabel = LEAVE_TYPES.find(t => t.id === form.leave_type)?.ar ?? form.leave_type
       await notifyMany((admins ?? []).map(a => a.id), {
         title: `طلب إجازة بانتظار موافقتك — ${profile.full_name_ar}`,
@@ -907,7 +908,7 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
   const proofInputRef = useRef(null)
 
   const role        = profile?.role
-  const isAdmin     = role === 'general_admin'
+  const isAdmin     = ADMIN_ROLE_VALUES.includes(role)
   const isSupervisor = role === 'station_admin' || role === 'shift_supervisor'
   const isOwn       = leave.employee_id === profile?.id
 
@@ -1261,7 +1262,7 @@ export default function LeavePage() {
         })
         // إذا وافق → أشعر الأدمن
         if (isApproved) {
-          const { data: admins } = await supabase.from('users').select('id').eq('role', 'general_admin').eq('is_active', true)
+          const { data: admins } = await supabase.from('users').select('id').in('role', ADMIN_ROLE_VALUES).eq('is_active', true)
           await notifyMany((admins ?? []).map(a => a.id), {
             title: `طلب إجازة بانتظار موافقتك — ${leave.employee_name}`,
             body: `${typeLabel} · ${leave.days_count} أيام · وافق عليها المشرف`,

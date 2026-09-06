@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useEffect, lazy, Suspense, Component } from 'react'
 import { useAuth } from './context/AuthContext'
+import { ADMIN_ROLE_VALUES } from './utils/constants'
 
 class MapErrorBoundary extends Component {
   state = { error: null }
@@ -114,12 +115,12 @@ export default function App() {
         <Route path="lost-found"     element={<LostFoundPage />} />
         <Route path="sales"          element={<SalesPage />} />
         <Route path="reports"        element={
-          <RequireAuth allowedRoles={['general_admin', 'station_admin', 'accountant']}>
+          <RequireAuth allowedRoles={[...ADMIN_ROLE_VALUES, 'station_admin', 'accountant']}>
             <ReportsPage />
           </RequireAuth>
         } />
         <Route path="map" element={
-          <RequireAuth allowedRoles={['general_admin','station_admin']}>
+          <RequireAuth allowedRoles={[...ADMIN_ROLE_VALUES, 'station_admin']}>
             <MapErrorBoundary>
               <Suspense fallback={<LoadingSpinner />}>
                 <MapPage />
@@ -128,12 +129,12 @@ export default function App() {
           </RequireAuth>
         } />
         <Route path="users"    element={
-          <RequireAuth allowedRoles={['general_admin', 'station_admin']}>
+          <RequireAuth allowedRoles={[...ADMIN_ROLE_VALUES, 'station_admin']}>
             <UsersPage />
           </RequireAuth>
         } />
         <Route path="stations" element={
-          <RequireAuth allowedRoles={['general_admin']}>
+          <RequireAuth allowedRoles={ADMIN_ROLE_VALUES}>
             <StationsPage />
           </RequireAuth>
         } />
@@ -141,7 +142,7 @@ export default function App() {
         <Route path="evaluation" element={<EvaluationPage />} />
         <Route path="my-rating" element={<EmployeeRatingPage />} />
         <Route path="customer-ratings" element={
-          <RequireAuth allowedRoles={['general_admin']}>
+          <RequireAuth allowedRoles={ADMIN_ROLE_VALUES}>
             <CustomerRatingsAdminPage />
           </RequireAuth>
         } />

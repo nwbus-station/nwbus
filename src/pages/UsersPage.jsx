@@ -85,6 +85,71 @@ function RatingActivationAdmin({ userId, isAr }) {
   )
 }
 
+// مشرف الوردية ما يقيّم كل موظفي المحطة — بس جزء محدد له صراحة من هنا
+function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
+  const [employees, setEmployees] = useState([])
+  const [assigned, setAssigned] = useState(new Set())
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!stationId) { setEmployees([]); setLoading(false); return }
+    setLoading(true)
+    Promise.all([
+      supabase.from('users').select('id, full_name_ar, job_number')
+        .eq('station_id', stationId).eq('role', 'station_employee').eq('is_active', true),
+      supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', userId),
+    ]).then(([empRes, assignRes]) => {
+      setEmployees((empRes.data || []).sort((a, b) => (a.full_name_ar || '').localeCompare(b.full_name_ar || '', 'ar')))
+      setAssigned(new Set((assignRes.data || []).map(r => r.employee_id)))
+      setLoading(false)
+    })
+  }, [userId, stationId])
+
+  async function toggle(empId) {
+    const has = assigned.has(empId)
+    setBusy(true)
+    if (has) {
+      await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId).eq('employee_id', empId)
+    } else {
+      await supabase.from('shift_supervisor_assignments').insert({ supervisor_id: userId, employee_id: empId })
+    }
+    setBusy(false)
+    setAssigned(prev => {
+      const n = new Set(prev)
+      has ? n.delete(empId) : n.add(empId)
+      return n
+    })
+  }
+
+  if (!stationId) {
+    return <p className="text-xs text-amber-600 mt-2">{isAr ? 'حدد محطة الموظف أولاً حتى تقدر تحدد الموظفين اللي يقيّمهم' : 'Select a station first to assign employees'}</p>
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 mt-2">
+      <p className="text-xs font-semibold text-gray-600 mb-2">
+        {isAr ? `الموظفون اللي يقيّمهم (${assigned.size} محدد)` : `Employees they evaluate (${assigned.size} selected)`}
+      </p>
+      {loading ? (
+        <p className="text-xs text-gray-400">{isAr ? 'جارٍ التحميل…' : 'Loading…'}</p>
+      ) : employees.length === 0 ? (
+        <p className="text-xs text-gray-400">{isAr ? 'لا يوجد موظفون بهذه المحطة' : 'No employees at this station'}</p>
+      ) : (
+        <div className="max-h-48 overflow-y-auto space-y-1">
+          {employees.map(e => (
+            <label key={e.id} className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer py-0.5">
+              <input type="checkbox" className="rounded accent-nwbus-primary" checked={assigned.has(e.id)} disabled={busy} onChange={() => toggle(e.id)} />
+              {e.full_name_ar} {e.job_number && <span className="text-gray-400">({e.job_number})</span>}
+            </label>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-gray-400 mt-2">{isAr ? 'بدون تحديد، المشرف ما يقدر يقيّم أي موظف' : 'Without selection, this supervisor cannot evaluate any employee'}</p>
+    </div>
+  )
+}
+
 async function resetPasswordViaEdge(authId, newPassword) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
@@ -124,6 +189,7 @@ const JOB_TITLES = [
 
 const ROLE_COLORS = {
   general_admin:    'bg-red-100 text-red-700 border-red-200',
+  stations_executive_director: 'bg-rose-100 text-rose-700 border-rose-200',
   area_supervisor:  'bg-purple-100 text-purple-700 border-purple-200',
   station_admin:    'bg-amber-100 text-amber-700 border-amber-200',
   shift_supervisor: 'bg-orange-100 text-orange-700 border-orange-200',
@@ -747,6 +813,10 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
             <RatingActivationAdmin userId={user.id} isAr={isAr} />
           )}
 
+          {isGeneralAdmin && user?.id && form.role === 'shift_supervisor' && (
+            <ShiftSupervisorAssignments userId={user.id} stationId={primaryStation()} isAr={isAr} />
+          )}
+
           {/* Station — single (لغير المشرف) */}
           {!(isGeneralAdmin && isMultiStationRole) && (
             <div>
@@ -1021,7 +1091,7 @@ export default function UsersPage() {
     fetchAll()
   }
 
-  const supervisors = users.filter(u => ['station_admin', 'area_supervisor', 'general_admin'].includes(u.role))
+  const supervisors = users.filter(u => ['station_admin', 'area_supervisor', 'general_admin', 'stations_executive_director'].includes(u.role))
 
   const filtered = users.filter(u => {
     const q = search.toLowerCase()

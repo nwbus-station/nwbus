@@ -29,7 +29,11 @@ export const USER_ROLES = [
   { value: 'shift_supervisor',  ar: 'مشرف وردية',         en: 'Shift Supervisor' },
   { value: 'area_supervisor',   ar: 'مشرف منطقة',         en: 'Area Supervisor' },
   { value: 'general_admin',     ar: 'أدمن عام',           en: 'General Admin' },
+  { value: 'stations_executive_director', ar: 'المدير التنفيذي للمحطات', en: 'Stations Executive Director' },
 ]
+
+// أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف
+export const ADMIN_ROLE_VALUES = ['general_admin', 'stations_executive_director']
 
 // Modules (sections of the system)
 export const MODULES = [

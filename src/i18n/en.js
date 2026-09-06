@@ -37,6 +37,7 @@ export default {
   role_accountant: 'Accountant',
   role_station_admin: 'Station Admin',
   role_general_admin: 'General Admin',
+  role_stations_executive_director: 'Stations Executive Director',
 
   station_main: 'Main Station',
   station_transit: 'Transit Station',

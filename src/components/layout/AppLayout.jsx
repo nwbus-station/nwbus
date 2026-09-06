@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import { useAppSettings } from '../../context/AppSettingsContext'
 import { supabase } from '../../lib/supabase'
+import { ADMIN_ROLE_VALUES } from '../../utils/constants'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -198,26 +199,27 @@ const NAV_GROUPS = [
       { to: '/transportation', labelAr: 'الترحيل',        labelEn: 'Transportation', icon: 'bus',     roles: null,                                          module: 'transportation' },
       { to: '/lost-found',     labelAr: 'الموجودات',      labelEn: 'Lost & Found',   icon: 'bag',     roles: null,                                          module: 'lost_found' },
       { to: '/sales',          labelAr: 'الإيرادات',      labelEn: 'Sales',          icon: 'sales',   roles: null,                                          module: 'sales' },
-      { to: '/reports',        labelAr: 'التقارير',        labelEn: 'Reports',        icon: 'report',  roles: ['general_admin','station_admin','accountant'], module: 'reports' },
+      { to: '/reports',        labelAr: 'التقارير',        labelEn: 'Reports',        icon: 'report',  roles: [...ADMIN_ROLE_VALUES,'station_admin','accountant'], module: 'reports' },
       { to: '/leaves',         labelAr: 'الإجازات',        labelEn: 'Leaves',         icon: 'leave',   roles: null, module: 'leaves' },
       { to: '/survey',         labelAr: 'تقييم الركاب',   labelEn: 'Passenger Rating', icon: 'star',  roles: null, module: 'survey' },
-      { to: '/evaluation',     labelAr: 'التقييم الوظيفي', labelEn: 'Evaluations',      icon: 'report', roles: ['general_admin','station_admin','shift_supervisor','area_supervisor'], module: 'evaluation' },
+      { to: '/evaluation',     labelAr: 'التقييم الوظيفي', labelEn: 'Evaluations',      icon: 'report', roles: [...ADMIN_ROLE_VALUES,'station_admin','shift_supervisor','area_supervisor'], module: 'evaluation' },
       { to: '/my-rating',      labelAr: 'تقييم العميل', labelEn: 'My QR', icon: 'star', roles: null, module: null, requireFlag: 'can_rate_customers' },
     ]
   },
   {
     items: [
-      { to: '/users',    labelAr: 'الموظفون', labelEn: 'Staff',     icon: 'users',   roles: ['general_admin','station_admin'], module: 'users' },
-      { to: '/stations', labelAr: 'المحطات',  labelEn: 'Stations',  icon: 'station', roles: ['general_admin'],                 module: null },
-      { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ['general_admin'],               module: null },
-      { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: ['general_admin','station_admin'], module: 'map' },
-      { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ['general_admin'], module: 'customer_ratings' },
+      { to: '/users',    labelAr: 'الموظفون', labelEn: 'Staff',     icon: 'users',   roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'users' },
+      { to: '/stations', labelAr: 'المحطات',  labelEn: 'Stations',  icon: 'station', roles: ADMIN_ROLE_VALUES,                 module: null },
+      { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ADMIN_ROLE_VALUES,               module: null },
+      { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'map' },
+      { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings' },
     ]
   },
 ]
 
 const ROLE_LABELS = {
   general_admin:    { ar: 'المدير التنفيذي التجاري', en: 'Executive Director' },
+  stations_executive_director: { ar: 'المدير التنفيذي للمحطات', en: 'Stations Executive Director' },
   station_admin:    { ar: 'مشرف المحطة', en: 'Supervisor' },
   accountant:       { ar: 'محاسب',        en: 'Accountant' },
   station_employee: { ar: 'موظف',         en: 'Employee' },

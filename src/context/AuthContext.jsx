@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { ADMIN_ROLE_VALUES } from '../utils/constants'
 
 const AuthContext = createContext(null)
 
@@ -177,7 +178,8 @@ export function AuthProvider({ children }) {
   }
 
   // Permission helpers
-  const isGeneralAdmin    = profile?.role === 'general_admin'
+  // stations_executive_director له نفس صلاحيات general_admin بالضبط — فقط مسمى وظيفي مختلف
+  const isGeneralAdmin    = ADMIN_ROLE_VALUES.includes(profile?.role)
   const isShiftSupervisor = profile?.role === 'shift_supervisor'
   const isStationAdmin    = profile?.role === 'station_admin' || isShiftSupervisor
   const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true
