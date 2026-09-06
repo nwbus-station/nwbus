@@ -224,6 +224,16 @@ const ROLE_LABELS = {
   accountant:       { ar: 'محاسب',        en: 'Accountant' },
   station_employee: { ar: 'موظف',         en: 'Employee' },
   shift_supervisor: { ar: 'مشرف وردية',  en: 'Shift Supervisor' },
+  area_supervisor:  { ar: 'مشرف منطقة',  en: 'Area Supervisor' },
+}
+
+// مسمى وظيفي أدق من الدور العام — يُعرض بدلاً منه إن وُجد (نفس المسميات المستخدمة بصفحة التقييم)
+const JOB_TITLES = {
+  area_supervisor:    { ar: 'مشرف منطقة',  en: 'Area Supervisor' },
+  station_supervisor: { ar: 'مشرف محطة',   en: 'Station Supervisor' },
+  shift_supervisor:   { ar: 'مشرف وردية',  en: 'Shift Supervisor' },
+  customer_service:   { ar: 'خدمة عملاء',  en: 'Customer Service' },
+  dispatcher:         { ar: 'مرحّل',        en: 'Dispatcher' },
 }
 
 // ── تبويب تنقّل علوي — نصي صافٍ بخط سفلي للنشط ─────────
@@ -321,7 +331,9 @@ export default function AppLayout() {
     })
   })).filter(g => g.items.length > 0)
 
-  const roleLabel   = ROLE_LABELS[profile?.role]?.[isAr ? 'ar' : 'en'] ?? profile?.role
+  const roleLabel   = (profile?.job_title && JOB_TITLES[profile.job_title]?.[isAr ? 'ar' : 'en'])
+    || ROLE_LABELS[profile?.role]?.[isAr ? 'ar' : 'en']
+    || profile?.role
   const stationName = profile?.station ? (isAr ? profile.station.name_ar : profile.station.name_en) : null
 
   function toggleLang() {
@@ -406,6 +418,18 @@ export default function AppLayout() {
                     <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/><path d="M9 8h.01M12 8h.01M15 8h.01"/>
                   </svg>
                 )}
+              </span>
+            </p>
+            <p style={{
+              margin: '2px 0 0', display: 'flex', alignItems: 'center', gap: 5,
+              justifyContent: isAr ? 'flex-end' : 'flex-start',
+              fontSize: '0.62rem', fontWeight: 600, color: 'var(--accent)',
+              letterSpacing: '0.03em', maxWidth: 150,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {roleLabel}{stationName && <span style={{ color: 'var(--text-3)', fontWeight: 500 }}> · {stationName}</span>}
               </span>
             </p>
           </div>
