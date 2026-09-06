@@ -10,6 +10,80 @@ import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import DatePicker from '../components/shared/DatePicker'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
+import { SHIFTS, computeActiveUntil } from '../utils/ratingShifts'
+
+function RatingActivationAdmin({ userId, isAr }) {
+  const [row, setRow] = useState(null)
+  const [windowNumber, setWindowNumber] = useState('')
+  const [shift, setShift] = useState('A')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const load = useCallback(() => {
+    supabase.from('users')
+      .select('rating_window_number, rating_shift, rating_active, rating_active_until')
+      .eq('id', userId).single()
+      .then(({ data }) => {
+        if (!data) return
+        setRow(data)
+        setWindowNumber(data.rating_window_number || '')
+        setShift(data.rating_shift || 'A')
+      })
+  }, [userId])
+
+  useEffect(() => { load() }, [load])
+
+  async function toggle(nextActive) {
+    setBusy(true); setMsg('')
+    const until = nextActive ? computeActiveUntil(shift, new Date()) : null
+    const { error } = await supabase.from('users').update({
+      rating_window_number: windowNumber.trim() || null,
+      rating_shift: shift,
+      rating_active: nextActive,
+      rating_active_until: until ? until.toISOString() : null,
+    }).eq('id', userId)
+    setBusy(false)
+    if (error) { setMsg(isAr ? 'تعذّر الحفظ' : 'Failed to save'); return }
+    load()
+  }
+
+  if (!row) return null
+  const activeUntil = row.rating_active_until ? new Date(row.rating_active_until) : null
+  const effectivelyActive = !!row.rating_active && (!activeUntil || activeUntil > new Date())
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 mt-2 space-y-2">
+      <p className="text-xs font-semibold text-gray-600">{isAr ? 'تفعيل تقييم العميل (تجاوز إداري)' : 'Customer rating activation (admin override)'}</p>
+      <div className="flex items-center gap-2">
+        <span className={`w-2 h-2 rounded-full ${effectivelyActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+        <span className="text-xs text-gray-500">
+          {effectivelyActive
+            ? (isAr ? `مفعّل${activeUntil ? ` — حتى ${activeUntil.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}` : isAr ? 'غير مفعّل' : 'Not active')
+            : (isAr ? 'غير مفعّل' : 'Not active')}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <input value={windowNumber} onChange={e => setWindowNumber(e.target.value)} dir="ltr" placeholder={isAr ? 'رقم الشباك' : 'Window #'}
+          className="border rounded-lg px-2 py-1.5 text-xs" />
+        <select value={shift} onChange={e => setShift(e.target.value)} className="border rounded-lg px-2 py-1.5 text-xs">
+          {SHIFTS.map(s => <option key={s.value} value={s.value}>{s.ar} ({s.range})</option>)}
+        </select>
+      </div>
+      <div className="flex gap-2">
+        <button type="button" disabled={busy} onClick={() => toggle(true)}
+          className="flex-1 bg-green-600 text-white rounded-lg py-1.5 text-xs font-semibold disabled:opacity-50">
+          {isAr ? 'تفعيل الآن' : 'Activate now'}
+        </button>
+        <button type="button" disabled={busy} onClick={() => toggle(false)}
+          className="flex-1 border border-gray-300 text-gray-600 rounded-lg py-1.5 text-xs font-semibold disabled:opacity-50">
+          {isAr ? 'إيقاف' : 'Deactivate'}
+        </button>
+      </div>
+      {msg && <p className="text-xs text-red-600">{msg}</p>}
+      <p className="text-[10px] text-gray-400">{isAr ? 'التفعيل من هنا يتجاوز حد مرة واحدة باليوم وقيد الوردية الحالية عند الموظف' : 'Admin activation bypasses the employee once-per-day and current-shift limits'}</p>
+    </div>
+  )
+}
 
 async function resetPasswordViaEdge(authId, newPassword) {
   const { data: { session } } = await supabase.auth.getSession()
@@ -668,6 +742,10 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
               </select>
             </div>
           </div>
+
+          {isGeneralAdmin && user?.id && form.can_rate_customers && (
+            <RatingActivationAdmin userId={user.id} isAr={isAr} />
+          )}
 
           {/* Station — single (لغير المشرف) */}
           {!(isGeneralAdmin && isMultiStationRole) && (

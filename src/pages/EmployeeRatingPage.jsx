@@ -2,19 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import QRCode from 'qrcode'
-
-const SHIFTS = [
-  { value: 'A', ar: 'الوردية أ', range: '00:00 - 08:00' },
-  { value: 'B', ar: 'الوردية ب', range: '08:00 - 16:00' },
-  { value: 'C', ar: 'الوردية ج', range: '16:00 - 23:59' },
-]
-
-function currentShift() {
-  const h = new Date().getHours()
-  if (h < 8) return 'A'
-  if (h < 16) return 'B'
-  return 'C'
-}
+import { SHIFTS, currentShift, allowedShiftsNow, computeActiveUntil, formatTime } from '../utils/ratingShifts'
 
 export default function EmployeeRatingPage() {
   const { profile } = useAuth()
@@ -22,7 +10,26 @@ export default function EmployeeRatingPage() {
   const [shift, setShift] = useState(profile?.rating_shift || currentShift())
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [errMsg, setErrMsg] = useState('')
   const [qrDataUrl, setQrDataUrl] = useState('')
+  const [now, setNow] = useState(new Date())
+
+  // نحدّث الوقت كل دقيقة حتى تنعكس نهاية الوردية/فترة السماح بدون الحاجة لتحديث الصفحة
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(id)
+  }, [])
+
+  const allowed = allowedShiftsNow(now)
+  useEffect(() => {
+    if (!allowed.includes(shift)) setShift(allowed[0])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowed.join(',')])
+
+  const activeUntil = profile?.rating_active_until ? new Date(profile.rating_active_until) : null
+  const effectivelyActive = !!profile?.rating_active && (!activeUntil || activeUntil > now)
+  const todayUTC = new Date().toISOString().slice(0, 10)
+  const usedToday = profile?.rating_last_activated_date === todayUTC
 
   const ratingUrl = `${window.location.origin}/rate/${profile?.rating_token}`
 
@@ -33,13 +40,24 @@ export default function EmployeeRatingPage() {
 
   async function activate() {
     if (!windowNumber.trim()) return
+    if (!allowed.includes(shift)) { setErrMsg('هذي الوردية غير متاحة بالوقت الحالي'); return }
+    if (usedToday && !effectivelyActive) { setErrMsg('استخدمت تفعيلك لهذا اليوم — تواصل مع الإدمن لإعادة التفعيل'); return }
+    setErrMsg('')
     setSaving(true)
-    await supabase.from('users').update({
+    const until = computeActiveUntil(shift, new Date())
+    const { error } = await supabase.from('users').update({
       rating_window_number: windowNumber.trim(),
       rating_shift: shift,
       rating_active: true,
+      rating_active_until: until ? until.toISOString() : null,
     }).eq('id', profile.id)
     setSaving(false)
+    if (error) {
+      setErrMsg(error.message?.includes('RATING_ALREADY_ACTIVATED_TODAY')
+        ? 'استخدمت تفعيلك لهذا اليوم — تواصل مع الإدمن لإعادة التفعيل'
+        : 'تعذّر الحفظ، حاول مرة أخرى')
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -75,9 +93,11 @@ export default function EmployeeRatingPage() {
       <h1 className="text-xl font-bold text-gray-800 mb-1">تقييم العميل</h1>
       <p className="text-sm text-gray-500 mb-6">حدّد رقم شباكك ووردية عملك الحالية، وقدّم رمز QR للعميل ليقيّم خدمتك</p>
 
-      <div className={`rounded-xl border px-4 py-3 mb-4 text-sm font-semibold flex items-center gap-2 ${profile?.rating_active ? 'bg-green-50 border-green-200 text-green-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-        <span className={`w-2 h-2 rounded-full ${profile?.rating_active ? 'bg-green-500' : 'bg-amber-500'}`} />
-        {profile?.rating_active ? 'الرمز مفعّل حالياً — العميل يقدر يقيّمك' : 'الرمز غير مفعّل — فعّله لتبدأ استقبال التقييمات'}
+      <div className={`rounded-xl border px-4 py-3 mb-4 text-sm font-semibold flex items-center gap-2 ${effectivelyActive ? 'bg-green-50 border-green-200 text-green-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+        <span className={`w-2 h-2 rounded-full ${effectivelyActive ? 'bg-green-500' : 'bg-amber-500'}`} />
+        {effectivelyActive
+          ? `الرمز مفعّل حالياً${activeUntil ? ` — ينتهي تلقائياً الساعة ${formatTime(activeUntil)}` : ''}`
+          : (profile?.rating_active ? 'انتهى التفعيل تلقائياً بانتهاء الوردية' : 'الرمز غير مفعّل — فعّله لتبدأ استقبال التقييمات')}
       </div>
 
       <div className="bg-white rounded-2xl shadow border border-gray-200 p-5 space-y-4 mb-6">
@@ -90,15 +110,22 @@ export default function EmployeeRatingPage() {
         <div>
           <label className="block text-xs text-gray-500 mb-1">الوردية</label>
           <div className="grid grid-cols-3 gap-2">
-            {SHIFTS.map(s => (
-              <button key={s.value} type="button" onClick={() => setShift(s.value)}
-                className={`rounded-lg border py-2 text-xs font-semibold transition-colors ${shift === s.value ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                {s.ar}
-                <span className="block text-[10px] font-normal opacity-80 mt-0.5">{s.range}</span>
-              </button>
-            ))}
+            {SHIFTS.map(s => {
+              const isAllowed = allowed.includes(s.value)
+              return (
+                <button key={s.value} type="button" disabled={!isAllowed}
+                  onClick={() => setShift(s.value)}
+                  title={isAllowed ? '' : 'غير متاحة بالوقت الحالي'}
+                  className={`rounded-lg border py-2 text-xs font-semibold transition-colors ${shift === s.value ? 'bg-nwbus-primary text-white border-nwbus-primary' : isAllowed ? 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50' : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'}`}>
+                  {s.ar}
+                  <span className="block text-[10px] font-normal opacity-80 mt-0.5">{s.range}</span>
+                </button>
+              )
+            })}
           </div>
+          <p className="text-[11px] text-gray-400 mt-1.5">تقدر تختار وردية عملك الحالية فقط (مع سماح ساعتين قبل بدايتها وبعد نهايتها)</p>
         </div>
+        {errMsg && <p className="text-xs text-red-600 font-semibold">{errMsg}</p>}
         <button onClick={activate} disabled={saving || !windowNumber.trim()}
           className="w-full bg-nwbus-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
           {saving ? 'جارٍ الحفظ…' : saved ? '✓ تم الحفظ' : 'تفعيل'}
