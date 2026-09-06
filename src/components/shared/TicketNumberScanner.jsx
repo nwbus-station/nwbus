@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import jsQR from 'jsqr'
 import {
-  extractTicketNumber, pickTicketFromText,
+  pickTicketFromText,
   applyFocusConstraints, isColoredBackground, buildOCRCanvas, playBeep,
 } from './QRScannerModal'
 
@@ -34,13 +33,11 @@ function isTooOld(date) {
 /**
  * ماسح رقم تذكرة واحد — نسخة مبسّطة وأسرع من ماسح التذاكر المتأخرة،
  * مخصصة لصفحة تقييم العميل العامة (بدون تسجيل دخول).
- * نفس محرك القراءة (jsQR + tesseract.js) لضمان نفس الموثوقية على كل المتصفحات.
- * تحاول أيضاً تقرأ رقم المرجع (W...) وتاريخ التذكرة من نفس الوصل، وترفض أي تذكرة تاريخها قديم.
+ * تعتمد فقط على قراءة النص (tesseract.js) وليس QR — لأن الـQR الرئيسي بالتذكرة لا يحمل
+ * تاريخها، فلو قبلناه بشكل مباشر بيتجاوز فحص "التذكرة القديمة" بالكامل (تم رصد هذا كخلل فعلي).
  */
 export default function TicketNumberScanner({ onScan, onClose }) {
   const videoRef  = useRef(null)
-  const canvasRef = useRef(null)
-  const rafRef    = useRef(null)
   const streamRef = useRef(null)
   const workerRef = useRef(null)
   const busyRef   = useRef(false)
@@ -74,7 +71,6 @@ export default function TicketNumberScanner({ onScan, onClose }) {
       videoRef.current.srcObject = stream
       await videoRef.current.play()
       await applyFocusConstraints(stream)
-      loopQR()
     } catch {
       setCamErr('تعذّر فتح الكاميرا — تحقق من الصلاحيات أو أدخل الرقم يدوياً')
       return
@@ -92,28 +88,9 @@ export default function TicketNumberScanner({ onScan, onClose }) {
   }
 
   function stop() {
-    cancelAnimationFrame(rafRef.current)
     clearTimeout(timerRef.current)
     streamRef.current?.getTracks().forEach(t => t.stop())
     workerRef.current?.terminate().catch(() => {}); workerRef.current = null
-  }
-
-  function loopQR() {
-    if (!activeRef.current) return
-    const video = videoRef.current, canvas = canvasRef.current
-    if (!video || !canvas || video.readyState < 2) {
-      rafRef.current = requestAnimationFrame(loopQR); return
-    }
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight
-    canvas.getContext('2d').drawImage(video, 0, 0)
-    const id = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height)
-    const code = jsQR(id.data, id.width, id.height, { inversionAttempts: 'dontInvert' })
-    if (code?.data) {
-      const t = extractTicketNumber(code.data)
-      // الـQR غالباً يشفّر رقم التذكرة بس، بدون مرجع أو تاريخ — نقبله لحاله لو ما لقينا شي أفضل من الـOCR بعد
-      if (t) { present({ ticketNumber: t, referenceNumber: null, ticketDate: null }); return }
-    }
-    rafRef.current = requestAnimationFrame(loopQR)
   }
 
   function scheduleOCR(delay = 1200) {
@@ -146,13 +123,11 @@ export default function TicketNumberScanner({ onScan, onClose }) {
 
   function present(result) {
     if (isTooOld(result.ticketDate)) {
-      cancelAnimationFrame(rafRef.current)
       clearTimeout(timerRef.current)
       setTooOld(true)
       setReading(false)
       return
     }
-    cancelAnimationFrame(rafRef.current)
     clearTimeout(timerRef.current)
     playBeep('found')
     setFound(result.ticketNumber)
@@ -163,7 +138,7 @@ export default function TicketNumberScanner({ onScan, onClose }) {
   function retry() {
     setTooOld(false)
     setReading(true)
-    loopQR(); scheduleOCR(300)
+    scheduleOCR(300)
   }
 
   return (
@@ -171,7 +146,6 @@ export default function TicketNumberScanner({ onScan, onClose }) {
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <video ref={videoRef} playsInline muted
           style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: found || tooOld ? 0.25 : 1, transition: 'opacity .3s' }} />
-        <canvas ref={canvasRef} style={{ display: 'none' }} />
 
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 'env(safe-area-inset-top,16px) 18px 20px', background: 'linear-gradient(180deg, rgba(15,26,34,0.9), transparent)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ color: '#F5C542', fontWeight: 700, fontSize: '0.9rem' }}>مسح التذكرة</span>
