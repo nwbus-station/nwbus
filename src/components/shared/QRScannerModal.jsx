@@ -79,11 +79,15 @@ export function isColoredBackground(video) {
 
 export function buildOCRCanvas(video, crop = {}) {
   const vw = video.videoWidth, vh = video.videoHeight
-  const scale = 1.5
   // اقتصاص ضيق يطابق الإطار المرئي فقط (35%–65% عمودياً، 8%–92% أفقياً) — قابل للتخصيص عند الحاجة لإطار أوسع
   const { x = 0.08, y = 0.35, w = 0.84, h = 0.30 } = crop
   const sx = Math.floor(vw * x), sy = Math.floor(vh * y)
   const sw = Math.floor(vw * w), sh = Math.floor(vh * h)
+  // نثبّت أقصى عرض للصورة الناتجة بغض النظر عن حجم الاقتصاص، حتى تبقى سرعة الـOCR
+  // ثابتة تقريباً سواء كان الإطار ضيق (سطر واحد) أو واسع (تذكرة كاملة) — إطار واسع بدون
+  // هذا الحد كان يعطي صورة ضخمة تبطّئ tesseract كثيراً وتقلل دقّته
+  const MAX_W = 1100
+  const scale = Math.min(1.6, Math.max(0.6, MAX_W / sw))
   const c = document.createElement('canvas')
   c.width = Math.round(sw * scale)
   c.height = Math.round(sh * scale)

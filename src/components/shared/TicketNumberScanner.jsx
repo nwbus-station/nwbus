@@ -5,9 +5,11 @@ import {
   applyFocusConstraints, isColoredBackground, buildOCRCanvas, playBeep,
 } from './QRScannerModal'
 
-// إطار أوسع يشمل الوصل كامل (رقم التذكرة والمرجع فوق الـQR، التاريخ تحته) —
+// إطار يغطي الجزء العلوي من الوصل فقط: رقم التذكرة والمرجع (فوق الـQR الرئيسي) وحتى
+// التاريخ واسم الراكب (تحته مباشرة) — بدون الجزء السفلي (QR الفاتورة وتاريخ البيع والشروط)
+// لأنه غير مفيد هنا ويكبّر حجم الصورة فيبطّئ القراءة بلا داعي.
 // مختلف عن إطار ماسح التذاكر المتأخرة الضيق المخصص لسطر واحد فقط
-const WIDE_CROP = { x: 0.06, y: 0.04, w: 0.88, h: 0.92 }
+const WIDE_CROP = { x: 0.05, y: 0.03, w: 0.9, h: 0.6 }
 
 function extractReference(text) {
   const m = text.match(/W\s?(\d{5,10})/i)
@@ -83,9 +85,9 @@ export default function TicketNumberScanner({ onScan, onClose }) {
       await w.setParameters({ tessedit_char_whitelist: '0123456789:/W', tessedit_pageseg_mode: '6' })
       if (!activeRef.current) { await w.terminate(); return }
       workerRef.current = w
-      scheduleOCR(250)
+      scheduleOCR(150)
     } catch {
-      scheduleOCR(2500)
+      scheduleOCR(2000)
     }
   }
 
@@ -121,10 +123,10 @@ export default function TicketNumberScanner({ onScan, onClose }) {
   }
 
   async function runOCR() {
-    if (!activeRef.current || busyRef.current || !workerRef.current) { scheduleOCR(1000); return }
+    if (!activeRef.current || busyRef.current || !workerRef.current) { scheduleOCR(600); return }
     const video = videoRef.current
-    if (!video || video.readyState < 2) { scheduleOCR(700); return }
-    if (isColoredBackground(video)) { scheduleOCR(700); return }
+    if (!video || video.readyState < 2) { scheduleOCR(400); return }
+    if (isColoredBackground(video)) { scheduleOCR(400); return }
     busyRef.current = true
     try {
       const proc = buildOCRCanvas(video, WIDE_CROP)
@@ -137,8 +139,8 @@ export default function TicketNumberScanner({ onScan, onClose }) {
           referenceNumber: extractReference(text),
           ticketDate: extractTicketDate(text),
         })
-      } else scheduleOCR(1200)
-    } catch { scheduleOCR(2000) }
+      } else scheduleOCR(400)
+    } catch { scheduleOCR(1200) }
     finally { busyRef.current = false }
   }
 
