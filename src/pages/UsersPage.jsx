@@ -91,6 +91,7 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
   const [assigned, setAssigned] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
 
   useEffect(() => {
     if (!stationId) { setEmployees([]); setLoading(false); return }
@@ -100,6 +101,7 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
         .eq('station_id', stationId).eq('role', 'station_employee').eq('is_active', true),
       supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', userId),
     ]).then(([empRes, assignRes]) => {
+      if (empRes.error || assignRes.error) setErr((empRes.error || assignRes.error).message)
       setEmployees((empRes.data || []).sort((a, b) => (a.full_name_ar || '').localeCompare(b.full_name_ar || '', 'ar')))
       setAssigned(new Set((assignRes.data || []).map(r => r.employee_id)))
       setLoading(false)
@@ -108,13 +110,12 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
 
   async function toggle(empId) {
     const has = assigned.has(empId)
-    setBusy(true)
-    if (has) {
-      await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId).eq('employee_id', empId)
-    } else {
-      await supabase.from('shift_supervisor_assignments').insert({ supervisor_id: userId, employee_id: empId })
-    }
+    setBusy(true); setErr('')
+    const { error } = has
+      ? await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId).eq('employee_id', empId)
+      : await supabase.from('shift_supervisor_assignments').insert({ supervisor_id: userId, employee_id: empId })
     setBusy(false)
+    if (error) { setErr(error.message); return }
     setAssigned(prev => {
       const n = new Set(prev)
       has ? n.delete(empId) : n.add(empId)
@@ -145,6 +146,7 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
           ))}
         </div>
       )}
+      {err && <p className="text-xs text-red-600 mt-2">{err}</p>}
       <p className="text-[10px] text-gray-400 mt-2">{isAr ? 'بدون تحديد، المشرف ما يقدر يقيّم أي موظف' : 'Without selection, this supervisor cannot evaluate any employee'}</p>
     </div>
   )

@@ -823,7 +823,8 @@ export default function EvaluationPage() {
         let list = r.data || []
         // مشرف الوردية يقيّم بس جزء محدد له صراحة من موظفي محطته
         if (isShiftSupervisor) {
-          const { data: assigned } = await supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', profile.id)
+          const { data: assigned, error: assignErr } = await supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', profile.id)
+          if (assignErr) console.error('shift_supervisor_assignments fetch failed:', assignErr)
           const ids = new Set((assigned || []).map(a => a.employee_id))
           list = list.filter(e => ids.has(e.id))
         }
