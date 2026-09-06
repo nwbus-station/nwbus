@@ -98,7 +98,8 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
     setLoading(true)
     Promise.all([
       supabase.from('users').select('id, full_name_ar, job_number')
-        .eq('station_id', stationId).eq('role', 'station_employee').eq('is_active', true),
+        .eq('station_id', stationId).eq('role', 'station_employee').eq('is_active', true)
+        .neq('id', userId),
       supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', userId),
     ]).then(([empRes, assignRes]) => {
       if (empRes.error || assignRes.error) setErr((empRes.error || assignRes.error).message)
