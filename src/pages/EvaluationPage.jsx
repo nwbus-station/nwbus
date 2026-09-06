@@ -720,9 +720,13 @@ export default function EvaluationPage() {
   const canEvalStn = [...ADMIN_ROLE_VALUES,'station_admin','area_supervisor'].includes(profile?.role)
   const canEvalSup = isGeneralAdmin
   const isShiftSupervisor = profile?.role === 'shift_supervisor'
+  // بتقييم الموظفين: مشرف المنطقة له نفس صلاحيات مشرف المحطة بالضبط — يقيّم بنفسه (بند
+  // "مشرف المحطة" ٣٥٪) بدل ما يشوف الأدمن الكامل، والفرق إنه يغطي عدة محطات مو محطة وحدة.
+  // فقط general_admin/stations_executive_director هم اللي يشوفون الثلاثة مصادر مع النتيجة النهائية.
+  const isEvalAdmin = isGeneralAdmin
   // مصدر تقييم المستخدم الحالي عندما يقيّم موظفاً بنفسه (وردية/محطة) — الأدمن والمدير التنفيذي يختارون المصدر يدوياً
   const myEvalSource = profile?.role === 'shift_supervisor' ? 'shift_supervisor'
-    : profile?.role === 'station_admin' ? 'station_admin' : null
+    : (profile?.role === 'station_admin' || profile?.role === 'area_supervisor') ? 'station_admin' : null
 
   const now = new Date()
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1)
@@ -810,8 +814,7 @@ export default function EvaluationPage() {
     // تقييمات الموظفين
     {
       let q = supabase.from('employee_evaluations').select('*, evaluator:evaluator_id(full_name_ar, role)').eq('eval_month', selMonth).eq('eval_year', selYear)
-      if (!isAdmin) q = q.eq('evaluator_id', profile?.id)
-      else if (!isGeneralAdmin && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
+      if (!isEvalAdmin) q = q.eq('evaluator_id', profile?.id)
       promises.push(q.then(r => setEmpEvals(r.data || [])))
     }
 
@@ -968,7 +971,7 @@ export default function EvaluationPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* شريط الفلتر */}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              {isAdmin && (
+              {isEvalAdmin && (
                 <button className="ev-btn" onClick={() => setShowStationOverview(v => !v)}
                   style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>
                   {showStationOverview ? (isAr ? 'إخفاء نظرة عامة' : 'Hide overview') : (isAr ? 'نظرة عامة على المحطات' : 'Stations overview')}
@@ -977,14 +980,14 @@ export default function EvaluationPage() {
               <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
                 <span style={{ width:7, height:7, borderRadius:'50%', background:'#1C2B4A', flexShrink:0 }} />
                 <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>
-                  {isAdmin
+                  {isEvalAdmin
                     ? <>{filteredEmployees.filter(e => computeFinalScore(empEvals.filter(x => x.employee_id === e.id)).complete).length} {isAr ? 'مكتمل التقييم من' : 'Fully evaluated of'} {filteredEmployees.length}</>
                     : <>{filteredEmployees.filter(e => empEvals.find(ev => ev.employee_id === e.id)).length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {filteredEmployees.length}</>}
                 </span>
               </div>
             </div>
 
-            {showStationOverview && isAdmin && (
+            {showStationOverview && isEvalAdmin && (
               <StationOverview employees={employees} empEvals={empEvals} stations={stations} isAr={isAr} />
             )}
 
@@ -1009,8 +1012,8 @@ export default function EvaluationPage() {
                 const evRows = empEvals.filter(x => x.employee_id === emp.id)
                 const borderStyle = i < filteredEmployees.length - 1 ? '1px solid var(--border)' : 'none'
 
-                // مشرف الوردية/مشرف المحطة يشوف بس تقييمه هو، بنفس الشكل السابق
-                if (!isAdmin) {
+                // مشرف الوردية/مشرف المحطة/مشرف المنطقة يشوف بس تقييمه هو، بنفس الشكل السابق
+                if (!isEvalAdmin) {
                   const ev = evRows[0] || null
                   const hasStar = ev?.total_score >= STAR_THRESHOLD
                   return (
@@ -1328,7 +1331,7 @@ export default function EvaluationPage() {
           month={selMonth} year={selYear}
           existing={empModal.existing}
           sourceRole={empModal.sourceRole}
-          isAdmin={isAdmin}
+          isAdmin={isEvalAdmin}
           evaluatorId={profile?.id}
           onClose={() => setEmpModal(null)}
           onSave={() => { setEmpModal(null); load() }}
