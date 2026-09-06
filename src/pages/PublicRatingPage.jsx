@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import TicketNumberScanner from '../components/shared/TicketNumberScanner'
+import { warmUpTicketOCR } from '../utils/ocrWorker'
 
 const STARS = [1, 2, 3, 4, 5]
 // نمنع إعادة الإرسال من نفس الجهاز لفترة قصيرة بس (منع تحديث الصفحة وإعادة الإرسال) —
@@ -38,6 +39,10 @@ export default function PublicRatingPage() {
       setLoading(false)
     })
   }, [token])
+
+  // نجهّز محرك قراءة التذكرة بالخلفية من فتح الصفحة، قبل ما العميل يضغط زر الكاميرا أصلاً —
+  // تهيئة tesseract.js لأول مرة تاخذ ثانية أو أكثر، وهذا يشيلها من وقت انتظار المسح الفعلي
+  useEffect(() => { warmUpTicketOCR() }, [])
 
   async function submit() {
     const cleanTicket = ticketNumber.trim()

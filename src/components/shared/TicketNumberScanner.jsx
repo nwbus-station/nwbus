@@ -3,6 +3,7 @@ import {
   pickTicketFromText,
   applyFocusConstraints, isColoredBackground, buildOCRCanvas, playBeep,
 } from './QRScannerModal'
+import { getTicketOCRWorker } from '../../utils/ocrWorker'
 
 // إطار يغطي الجزء العلوي من الوصل فقط: رقم التذكرة والمرجع (فوق الـQR الرئيسي) وحتى
 // التاريخ واسم الراكب (تحته مباشرة) — بدون الجزء السفلي (QR الفاتورة وتاريخ البيع والشروط)
@@ -76,12 +77,11 @@ export default function TicketNumberScanner({ onScan, onClose }) {
       return
     }
     try {
-      const { createWorker } = await import('tesseract.js')
-      const w = await createWorker('eng', 1, { logger: () => {} })
-      await w.setParameters({ tessedit_char_whitelist: '0123456789:/W', tessedit_pageseg_mode: '6' })
-      if (!activeRef.current) { await w.terminate(); return }
+      // عامل مشترك جاهز غالباً مسبقاً (تم تسخينه من صفحة التقييم) — يشيل تأخير التهيئة عن كل فتح للكاميرا
+      const w = await getTicketOCRWorker()
+      if (!activeRef.current) return
       workerRef.current = w
-      scheduleOCR(150)
+      scheduleOCR(50)
     } catch {
       scheduleOCR(2000)
     }
@@ -90,7 +90,8 @@ export default function TicketNumberScanner({ onScan, onClose }) {
   function stop() {
     clearTimeout(timerRef.current)
     streamRef.current?.getTracks().forEach(t => t.stop())
-    workerRef.current?.terminate().catch(() => {}); workerRef.current = null
+    // العامل مشترك بين كل فتحات الماسح — لا نوقفه هنا، فقط نفك الإشارة المحلية له
+    workerRef.current = null
   }
 
   function scheduleOCR(delay = 1200) {

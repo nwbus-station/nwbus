@@ -86,8 +86,8 @@ export function buildOCRCanvas(video, crop = {}) {
   // نثبّت أقصى عرض للصورة الناتجة بغض النظر عن حجم الاقتصاص، حتى تبقى سرعة الـOCR
   // ثابتة تقريباً سواء كان الإطار ضيق (سطر واحد) أو واسع (تذكرة كاملة) — إطار واسع بدون
   // هذا الحد كان يعطي صورة ضخمة تبطّئ tesseract كثيراً وتقلل دقّته
-  const MAX_W = 1100
-  const scale = Math.min(1.6, Math.max(0.6, MAX_W / sw))
+  const MAX_W = 850
+  const scale = Math.min(1.6, Math.max(0.5, MAX_W / sw))
   const c = document.createElement('canvas')
   c.width = Math.round(sw * scale)
   c.height = Math.round(sh * scale)
