@@ -1106,7 +1106,6 @@ export default function EvaluationPage() {
                 // مشرف الوردية/مشرف المحطة/مشرف المنطقة يشوف بس تقييمه هو، بنفس الشكل السابق
                 if (!isEvalAdmin) {
                   const ev = evRows[0] || null
-                  const hasStar = ev?.total_score >= STAR_THRESHOLD
                   return (
                     <div key={emp.id} style={{
                       display: 'flex', flexDirection: 'row', alignItems: 'center',
@@ -1118,7 +1117,6 @@ export default function EvaluationPage() {
                       <div style={{ flex: 1, minWidth: 0, direction: 'rtl', padding: '12px 0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-1)' }}>{emp.full_name_ar || '—'}</span>
-                          {hasStar && <StarBadge size={13} />}
                         </div>
                         <div style={{ marginTop: 5, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-3)', fontWeight: 500 }}>{getJobTitle(emp, isAr)}</span>
@@ -1246,7 +1244,6 @@ export default function EvaluationPage() {
                 // مشرف المحطة/المنطقة (مو أدمن) يشوف بس تقييمه هو لمشرف الوردية المحدد له
                 if (!isEvalAdmin) {
                   const ev = evRows[0] || null
-                  const hasStar = ev?.total_score >= STAR_THRESHOLD
                   return (
                     <div key={sup.id} style={{
                       display: 'flex', flexDirection: 'row', alignItems: 'center',
@@ -1258,7 +1255,6 @@ export default function EvaluationPage() {
                       <div style={{ flex: 1, minWidth: 0, direction: 'rtl', padding: '12px 0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-1)' }}>{sup.full_name_ar || '—'}</span>
-                          {hasStar && <StarBadge size={13} />}
                         </div>
                         <div style={{ marginTop: 5, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-3)', fontWeight: 500 }}>{roleLabel}</span>
