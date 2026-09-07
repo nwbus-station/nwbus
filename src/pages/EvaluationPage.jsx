@@ -411,12 +411,13 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
     if (error) return setErr(error.message)
 
     // إشعار مستقل فوري لكل مصدر يقيّم — يذكر مين قيّمه وبأي نتيجة، بدون انتظار باقي المصادر
-    await createNotification({
+    const { error: notifyErr1 } = await createNotification({
       userId: employee.id,
       type: 'info',
       title: `قيّمك ${EVAL_SOURCE_LABELS[sourceRole]}`,
       body: `${myProfile?.full_name_ar ? myProfile.full_name_ar + ' — ' : ''}النتيجة: ${(totalScore / 10).toFixed(1)}/10 لشهر ${MONTHS_AR[month - 1]}`,
     })
+    if (notifyErr1) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr1.message}`)
 
     // بعد كل تقييم نتحقق هل اكتملت الثلاثة مصادر — لو اكتملت نرسل إشعار مستقل ثاني بالنتيجة النهائية
     const { data: allRows } = await supabase.from('employee_evaluations')
@@ -425,12 +426,13 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
     const { complete, final } = computeFinalScore(allRows || [])
     if (complete) {
       const isStar = final >= STAR_THRESHOLD
-      await createNotification({
+      const { error: notifyErr2 } = await createNotification({
         userId: employee.id,
         type: isStar ? 'success' : 'info',
         title: isStar ? `تقييمك ${final}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`,
         body: isStar ? `حصلت على النجمة المميزة بنتيجة ${final}/10` : `نتيجتك النهائية: ${final}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
       })
+      if (notifyErr2) alert(`تم حفظ التقييم لكن تعذّر إرسال إشعار النتيجة النهائية: ${notifyErr2.message}`)
       try {
         const now = new Date()
         localStorage.setItem(`nwbus_star_${employee.id}`, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
@@ -540,12 +542,13 @@ function SupervisorEvalModal({ supervisor, month, year, existing, sourceRole, on
     if (error) return setErr(error.message)
 
     // إشعار مستقل فوري لكل مصدر يقيّم — يذكر مين قيّمه وبأي نتيجة، بدون انتظار باقي المصادر
-    await createNotification({
+    const { error: notifyErr1 } = await createNotification({
       userId: supervisor.id,
       type: 'info',
       title: `قيّمك ${SUP_EVAL_LABELS[sourceRole]}`,
       body: `${myProfile?.full_name_ar ? myProfile.full_name_ar + ' — ' : ''}النتيجة: ${(totalScore / 10).toFixed(1)}/10 لشهر ${MONTHS_AR[month - 1]}`,
     })
+    if (notifyErr1) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr1.message}`)
 
     // بعد كل تقييم نتحقق هل اكتملت مصادر التقييم المطلوبة لهذا الدور (مشرف الوردية له ٣ مصادر؛
     // باقي المشرفين مصدر واحد فقط) — لو اكتملت نرسل إشعار مستقل ثاني بالنتيجة النهائية
@@ -555,12 +558,13 @@ function SupervisorEvalModal({ supervisor, month, year, existing, sourceRole, on
     const { complete, final } = computeSupFinalScore(supervisor.role, allRows || [])
     if (complete) {
       const isStar = final >= STAR_THRESHOLD
-      await createNotification({
+      const { error: notifyErr2 } = await createNotification({
         userId: supervisor.id,
         type: isStar ? 'success' : 'info',
         title: isStar ? `تقييمك ${final}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`,
         body: isStar ? `حصلت على النجمة المميزة بنتيجة ${final}/10` : `نتيجتك النهائية: ${final}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
       })
+      if (notifyErr2) alert(`تم حفظ التقييم لكن تعذّر إرسال إشعار النتيجة النهائية: ${notifyErr2.message}`)
       try {
         const now = new Date()
         localStorage.setItem(`nwbus_star_${supervisor.id}`, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
