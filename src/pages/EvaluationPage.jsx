@@ -781,6 +781,7 @@ export default function EvaluationPage() {
   const [tab, setTab] = useState('employees') // employees | stations | my_eval
 
   const [employees,    setEmployees]    = useState([])
+  const [empListErr,   setEmpListErr]   = useState('')
   const [stations,     setStations]     = useState([])
   const [empEvals,     setEmpEvals]     = useState([])
   const [stnEvals,     setStnEvals]     = useState([])
@@ -820,13 +821,17 @@ export default function EvaluationPage() {
         q = q.in('station_id', allowedStationIds)
       }
       promises.push(q.then(async r => {
+        if (r.error) { setEmpListErr(`فشل تحميل الموظفين: ${r.error.message}`); setEmployees([]); return }
         let list = r.data || []
         // مشرف الوردية يقيّم بس جزء محدد له صراحة من موظفي محطته
         if (isShiftSupervisor) {
           const { data: assigned, error: assignErr } = await supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', profile.id)
-          if (assignErr) console.error('shift_supervisor_assignments fetch failed:', assignErr)
+          if (assignErr) { setEmpListErr(`فشل تحميل التخصيصات: ${assignErr.message}`); setEmployees([]); return }
+          setEmpListErr('')
           const ids = new Set((assigned || []).map(a => a.employee_id))
           list = list.filter(e => ids.has(e.id))
+        } else {
+          setEmpListErr('')
         }
         setEmployees(list)
       }))
@@ -1039,6 +1044,11 @@ export default function EvaluationPage() {
         {/* ══ تقييم الموظفين ══ */}
         {tab === 'employees' && canEvalEmp && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {empListErr && (
+              <div style={{ padding: '10px 16px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', fontSize: '0.78rem', fontWeight: 600 }}>
+                {empListErr}
+              </div>
+            )}
             {/* شريط الفلتر */}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               {isEvalAdmin && (
@@ -1077,7 +1087,11 @@ export default function EvaluationPage() {
                   {[1,2,3,4].map(i => <div key={i} style={{ height: 60, background: 'var(--surface)', borderRadius: 8 }} />)}
                 </div>
               ) : filteredEmployees.length === 0 ? (
-                <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>{isAr ? 'لا يوجد موظفون' : 'No employees'}</div>
+                <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>
+                  {isShiftSupervisor
+                    ? (isAr ? 'ما تم تحديد أي موظف لك للتقييم — تواصل مع الإدمن ليحدد لك الموظفين من صفحة تعديل حسابك' : 'No employees have been assigned to you yet — ask an admin to assign them from your user profile')
+                    : (isAr ? 'لا يوجد موظفون' : 'No employees')}
+                </div>
               ) : filteredEmployees.map((emp, i) => {
                 const evRows = empEvals.filter(x => x.employee_id === emp.id)
                 const borderStyle = i < filteredEmployees.length - 1 ? '1px solid var(--border)' : 'none'
