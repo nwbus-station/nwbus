@@ -14,36 +14,40 @@ const EVAL_SOURCE_LABELS_EN = { shift_supervisor: 'Shift Supervisor', station_ad
 const EVAL_SOURCE_SHORT   = { shift_supervisor: 'وردية', station_admin: 'محطة', stations_executive_director: 'مدير' }
 
 // eval_source يُحدَّد صراحة عند الحفظ (مو مشتقاً من دور المُقيِّم) — لأن الأدمن العام قد
-// يملأ أي مصدر ناقص نيابة عن الجهة المسؤولة عنه
+// يملأ أي مصدر ناقص نيابة عن الجهة المسؤولة عنه.
+// النتيجة تظهر فور توفر أي مصدر واحد على الأقل — بدون انتظار اكتمال الثلاثة — وتُحسب
+// موزونة بنسبة المصادر المتوفرة فقط (تُطبَّع على مجموع أوزانها)، وتُعاد حسابها تلقائياً
+// وتتغيّر كل ما ضاف مصدر جديد تقييمه. "complete" يبقى يميّز النتيجة النهائية الكاملة.
 function computeFinalScore(rows) {
   const bySource = {}
   for (const role of EVAL_SOURCE_ORDER) {
     const row = (rows || []).find(r => r.eval_source === role)
     if (row) bySource[role] = row
   }
-  const complete = EVAL_SOURCE_ORDER.every(role => bySource[role])
-  const final = complete
-    ? Math.round(EVAL_SOURCE_ORDER.reduce((sum, role) => sum + bySource[role].total_score * EVAL_SOURCE_WEIGHTS[role], 0) / 100 * 10) / 10
-    : null
+  const ratedRoles = EVAL_SOURCE_ORDER.filter(role => bySource[role])
+  const complete = ratedRoles.length === EVAL_SOURCE_ORDER.length
+  let final = null
+  if (ratedRoles.length > 0) {
+    const weightSum = ratedRoles.reduce((sum, role) => sum + EVAL_SOURCE_WEIGHTS[role], 0)
+    final = Math.round(ratedRoles.reduce((sum, role) => sum + bySource[role].total_score * EVAL_SOURCE_WEIGHTS[role], 0) / weightSum * 10) / 10
+  }
   return { bySource, complete, final }
 }
 
 const MONO = "'IBM Plex Mono', monospace"
 const STAR_THRESHOLD = 98
 
-// ── تقييم مشرف الوردية نفسه: يتقيّم من شخصين — مشرفه المباشر (المحدد له بحقل "المشرف")
-// والمدير التنفيذي للمحطات — بعكس مشرف المحطة/المنطقة اللي يستمر تقييمه من مصدر واحد فقط
-// (الأدمن/المدير) زي ما كان دايماً. نفس نسب جدول تقييم الموظفين بالضبط (نفس الجدول يُستخدم
-// على الكل) — ٣٥٪ لمشرفه المباشر (بند "مشرف المحطة") و٤٠٪ للمدير التنفيذي، وتُطبَّع النسبة
-// النهائية على مجموع الوزنين (٧٥) بما إن بند "مشرف الوردية" ٢٥٪ ما ينطبق هنا أصلاً.
-const SUP_EVAL_WEIGHTS = { assigned_supervisor: EVAL_SOURCE_WEIGHTS.station_admin, stations_executive_director: EVAL_SOURCE_WEIGHTS.stations_executive_director }
-const SUP_EVAL_LABELS    = { assigned_supervisor: 'المشرف المباشر', stations_executive_director: 'المدير التنفيذي' }
-const SUP_EVAL_LABELS_EN = { assigned_supervisor: 'Direct Supervisor', stations_executive_director: 'Executive Director' }
-const SUP_EVAL_SHORT     = { assigned_supervisor: 'مباشر', stations_executive_director: 'مدير' }
+// ── تقييم مشرف الوردية نفسه: يتقيّم من ثلاثة — مشرف وردية آخر يحدده الأدمن (٢٥٪)، مشرفه
+// المباشر (٣٥٪، حقل "المشرف")، والمدير التنفيذي (٤٠٪) — بالضبط نفس نسب جدول تقييم الموظفين.
+// مشرف المحطة/المنطقة يستمر تقييمه من مصدر واحد فقط (الأدمن/المدير) زي ما كان دايماً.
+const SUP_EVAL_WEIGHTS = { peer_shift_supervisor: EVAL_SOURCE_WEIGHTS.shift_supervisor, assigned_supervisor: EVAL_SOURCE_WEIGHTS.station_admin, stations_executive_director: EVAL_SOURCE_WEIGHTS.stations_executive_director }
+const SUP_EVAL_LABELS    = { peer_shift_supervisor: 'مشرف وردية آخر', assigned_supervisor: 'المشرف المباشر', stations_executive_director: 'المدير التنفيذي' }
+const SUP_EVAL_LABELS_EN = { peer_shift_supervisor: 'Peer Shift Supervisor', assigned_supervisor: 'Direct Supervisor', stations_executive_director: 'Executive Director' }
+const SUP_EVAL_SHORT     = { peer_shift_supervisor: 'مشرف وردية', assigned_supervisor: 'مباشر', stations_executive_director: 'مدير' }
 
 function supEvalSources(targetRole) {
   return targetRole === 'shift_supervisor'
-    ? ['assigned_supervisor', 'stations_executive_director']
+    ? ['peer_shift_supervisor', 'assigned_supervisor', 'stations_executive_director']
     : ['stations_executive_director']
 }
 
@@ -54,15 +58,12 @@ function computeSupFinalScore(targetRole, rows) {
     const row = (rows || []).find(r => r.eval_source === s)
     if (row) bySource[s] = row
   }
-  const complete = sources.every(s => bySource[s])
+  const ratedSources = sources.filter(s => bySource[s])
+  const complete = ratedSources.length === sources.length
   let final = null
-  if (complete) {
-    if (sources.length === 1) {
-      final = bySource[sources[0]].total_score
-    } else {
-      const weightSum = sources.reduce((sum, s) => sum + SUP_EVAL_WEIGHTS[s], 0)
-      final = Math.round(sources.reduce((sum, s) => sum + bySource[s].total_score * SUP_EVAL_WEIGHTS[s], 0) / weightSum * 10) / 10
-    }
+  if (ratedSources.length > 0) {
+    const weightSum = ratedSources.reduce((sum, s) => sum + SUP_EVAL_WEIGHTS[s], 0)
+    final = Math.round(ratedSources.reduce((sum, s) => sum + bySource[s].total_score * SUP_EVAL_WEIGHTS[s], 0) / weightSum * 10) / 10
   }
   return { bySource, complete, final, sources }
 }
@@ -72,7 +73,7 @@ function StationOverview({ employees, empEvals, stations, isAr }) {
   const rows = stations.map(stn => {
     const stEmployees = employees.filter(e => e.station_id === stn.id)
     const finals = stEmployees.map(e => computeFinalScore(empEvals.filter(x => x.employee_id === e.id)))
-    const completedFinals = finals.filter(f => f.complete).map(f => f.final)
+    const completedFinals = finals.filter(f => f.final != null).map(f => f.final)
     const raterIds = new Set(
       empEvals.filter(x => stEmployees.some(e => e.id === x.employee_id)).map(x => x.evaluator_id)
     )
@@ -765,7 +766,10 @@ export default function EvaluationPage() {
   const canEvalStn = [...ADMIN_ROLE_VALUES,'station_admin','area_supervisor'].includes(profile?.role)
   // مشرف المحطة/المنطقة يفتح تبويب تقييم المشرفين كمان — بس عشان يقيّم مشرفي الورديات
   // المحددين له صراحة (حقل "المشرف" بحسابهم)، مو باقي المشرفين
-  const canEvalSup = isGeneralAdmin || profile?.role === 'station_admin' || profile?.role === 'area_supervisor'
+  // مشرف وردية يقدر يشوف التبويب كمان — بس عشان يقيّم مشرف وردية ثاني محدد له صراحة كـ"مشرف وردية يقيّمه"
+  const canEvalSup = isGeneralAdmin || ['station_admin','area_supervisor','shift_supervisor'].includes(profile?.role)
+  // مصدر تقييم المستخدم الحالي لما يقيّم مشرف وردية بنفسه (مو أدمن)
+  const myEvalSourceForSup = profile?.role === 'shift_supervisor' ? 'peer_shift_supervisor' : 'assigned_supervisor'
   const isShiftSupervisor = profile?.role === 'shift_supervisor'
   // بتقييم الموظفين: مشرف المنطقة له نفس صلاحيات مشرف المحطة بالضبط — يقيّم بنفسه (بند
   // "مشرف المحطة" ٣٥٪) بدل ما يشوف الأدمن الكامل، والفرق إنه يغطي عدة محطات مو محطة وحدة.
@@ -840,11 +844,14 @@ export default function EvaluationPage() {
     // المشرفون
     if (canEvalSup) {
       let sq = supabase.from('users')
-        .select('id, full_name_ar, username, job_number, role, job_title, station_id, supervisor_id, station:station_id(name_ar)')
+        .select('id, full_name_ar, username, job_number, role, job_title, station_id, supervisor_id, peer_supervisor_id, station:station_id(name_ar)')
         .eq('is_active', true)
       if (isGeneralAdmin) {
         // الأدمن/المدير التنفيذي يشوف كل المشرفين (محطة/منطقة/وردية)
         sq = sq.or('role.in.(station_admin,area_supervisor,shift_supervisor),job_title.in.(area_supervisor,station_supervisor)')
+      } else if (profile?.role === 'shift_supervisor') {
+        // مشرف وردية يشوف بس مشرف الوردية الثاني المحدد له صراحة كـ"مشرف وردية يقيّمه"
+        sq = sq.eq('role', 'shift_supervisor').eq('peer_supervisor_id', profile.id)
       } else {
         // مشرف المحطة/المنطقة يشوف بس مشرفي الورديات المحددين له صراحة كمشرف مباشر
         sq = sq.eq('role', 'shift_supervisor').eq('supervisor_id', profile.id)
@@ -942,7 +949,7 @@ export default function EvaluationPage() {
         const evRows = empEvals.filter(x => x.employee_id === e.id)
         const { bySource, complete, final } = computeFinalScore(evRows)
         const evaluatorNames = EVAL_SOURCE_ORDER.filter(r => bySource[r]).map(r => `${EVAL_SOURCE_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join(' · ')
-        return { name: e.full_name_ar, station: e.station?.name_ar, score: complete ? final : null, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
+        return { name: e.full_name_ar, station: e.station?.name_ar, score: final, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
       })
     const html = buildReportHtml(rows, selMonth, selYear, filterStation, stations, profile?.full_name_ar)
     const w = window.open('', '_blank')
@@ -1189,10 +1196,17 @@ export default function EvaluationPage() {
                       })}
                     </div>
                     <div style={{ width: 150, flexShrink: 0, textAlign: 'center' }}>
-                      {complete ? (
-                        <ScoreBar score={final} isAr={isAr} />
+                      {final != null ? (
+                        <div>
+                          <ScoreBar score={final} isAr={isAr} />
+                          {!complete && (
+                            <p style={{ margin: '2px 0 0', fontSize: '0.65rem', color: 'var(--text-3)' }}>
+                              {isAr ? `جزئية — ${Object.keys(bySource).length}/3 قيّموا` : `Partial — ${Object.keys(bySource).length}/3 rated`}
+                            </p>
+                          )}
+                        </div>
                       ) : (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{Object.keys(bySource).length}/3 {isAr ? 'قيّموا' : 'rated'}</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{isAr ? 'لم يُقيَّم بعد' : 'Not yet rated'}</span>
                       )}
                     </div>
                   </div>
@@ -1264,7 +1278,7 @@ export default function EvaluationPage() {
                         )}
                       </div>
                       <div style={{ marginLeft: 16 }}>
-                        <button className="ev-btn" onClick={() => setSupModal({ supervisor: sup, existing: ev || null, sourceRole: 'assigned_supervisor' })} style={{
+                        <button className="ev-btn" onClick={() => setSupModal({ supervisor: sup, existing: ev || null, sourceRole: myEvalSourceForSup })} style={{
                           background: ev ? 'var(--surface)' : '#1C2B4A',
                           color: ev ? 'var(--text-2)' : '#fff',
                           border: ev ? '1px solid var(--border)' : 'none',
@@ -1371,10 +1385,17 @@ export default function EvaluationPage() {
                       })}
                     </div>
                     <div style={{ width: 150, flexShrink: 0, textAlign: 'center' }}>
-                      {complete ? (
-                        <ScoreBar score={final} isAr={isAr} />
+                      {final != null ? (
+                        <div>
+                          <ScoreBar score={final} isAr={isAr} />
+                          {!complete && (
+                            <p style={{ margin: '2px 0 0', fontSize: '0.65rem', color: 'var(--text-3)' }}>
+                              {isAr ? `جزئية — ${Object.keys(bySource).length}/${sources.length} قيّموا` : `Partial — ${Object.keys(bySource).length}/${sources.length} rated`}
+                            </p>
+                          )}
+                        </div>
                       ) : (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{Object.keys(bySource).length}/{sources.length} {isAr ? 'قيّموا' : 'rated'}</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{isAr ? 'لم يُقيَّم بعد' : 'Not yet rated'}</span>
                       )}
                     </div>
                   </div>
@@ -1473,7 +1494,7 @@ export default function EvaluationPage() {
                 <div style={{ ...card, padding: '20px 24px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                     <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-1)' }}>
-                      {isAr ? 'النتيجة النهائية' : 'Final Result'} — {isAr ? MONTHS_AR[selMonth-1] : MONTHS_EN[selMonth-1]} {selYear}
+                      {complete ? (isAr ? 'النتيجة النهائية' : 'Final Result') : (isAr ? 'النتيجة الحالية (جزئية)' : 'Current Result (partial)')} — {isAr ? MONTHS_AR[selMonth-1] : MONTHS_EN[selMonth-1]} {selYear}
                     </p>
                     {complete && final >= STAR_THRESHOLD && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#F59E0B15', border: '1px solid #F59E0B30', borderRadius: 8 }}>
@@ -1482,9 +1503,18 @@ export default function EvaluationPage() {
                       </div>
                     )}
                   </div>
-                  {complete ? <ScoreBar score={final} /> : (
+                  {final != null ? (
+                    <>
+                      <ScoreBar score={final} />
+                      {!complete && (
+                        <p style={{ margin: '8px 0 0', fontSize: '0.72rem', color: 'var(--text-3)' }}>
+                          {isAr ? `مبنية على ${Object.keys(bySource).length}/${sources.length} مصادر حالياً — بتتغيّر مع اكتمال الباقي` : `Based on ${Object.keys(bySource).length}/${sources.length} sources so far — will update as the rest come in`}
+                        </p>
+                      )}
+                    </>
+                  ) : (
                     <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-3)' }}>
-                      {isAr ? `النتيجة النهائية تظهر بعد اكتمال تقييم كل المصادر (${Object.keys(bySource).length}/${sources.length} حالياً)` : `Final result appears once all sources rate you (${Object.keys(bySource).length}/${sources.length} so far)`}
+                      {isAr ? 'ما تم تقييمك من أي مصدر بعد' : 'No source has rated you yet'}
                     </p>
                   )}
                 </div>
@@ -1730,7 +1760,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
       const evRows = empEvals.filter(x => x.employee_id === e.id)
       const { bySource, complete, final } = computeFinalScore(evRows)
       const evaluatorNames = EVAL_SOURCE_ORDER.filter(r => bySource[r]).map(r => `${EVAL_SOURCE_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join(' · ')
-      return { name: e.full_name_ar, job_number: e.job_number, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: complete ? final : null, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
+      return { name: e.full_name_ar, job_number: e.job_number, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: final, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
     })
     printHtml(buildReportHtml(rows, selMonth, selYear, [...selStations], stations, profile?.full_name_ar))
   }
@@ -1743,7 +1773,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
       const { bySource, complete, final } = computeSupFinalScore(s.role, evRows)
       const roleLabel = s.role === 'area_supervisor' ? 'مشرف المنطقة' : s.role === 'shift_supervisor' ? 'مشرف وردية' : 'مشرف المحطة'
       const evaluatorNames = supEvalSources(s.role).filter(r => bySource[r]).map(r => `${SUP_EVAL_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join(' · ')
-      return { name: s.full_name_ar, job_number: s.job_number, station: s.station?.name_ar, role: roleLabel, score: complete ? final : null, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
+      return { name: s.full_name_ar, job_number: s.job_number, station: s.station?.name_ar, role: roleLabel, score: final, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
     })
     printHtml(buildReportHtml(rows, selMonth, selYear, [], stations, profile?.full_name_ar))
   }
@@ -1850,7 +1880,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
                           <span style={{ fontSize:'0.85rem', color:'var(--text-1)', fontWeight:500 }}>{s.full_name_ar}</span>
                           {s.station?.name_ar && <span style={{ fontSize:'0.72rem', color:'var(--text-3)', marginRight:6 }}>· {s.station.name_ar}</span>}
                         </div>
-                        {complete ? <span style={{ fontSize:'0.72rem', fontWeight:700, color:'#4A6FA5' }}>{final?.toFixed(1)}</span>
+                        {final != null ? <span style={{ fontSize:'0.72rem', fontWeight:700, color:'#4A6FA5' }}>{final.toFixed(1)}</span>
                              : <span style={{ fontSize:'0.7rem', color:'var(--text-3)' }}>غير مقيّم</span>}
                       </label>
                     )

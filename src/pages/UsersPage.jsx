@@ -321,7 +321,7 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
 /* ─── User Modal ────────────────────────────────────────── */
 const NEW_USER_DRAFT_KEY = 'um_new_draft'
 
-function UserModal({ user, stations, supervisors, onClose, onSaved }) {
+function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose, onSaved }) {
   const { profile, isGeneralAdmin, isStationAdmin } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -353,6 +353,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
     role:            user?.role            ?? 'station_employee',
     station_id:      user?.station_id      ?? (isStationAdmin ? profile.station_id : ''),
     supervisor_id:   user?.supervisor_id   ?? '',
+    peer_supervisor_id: user?.peer_supervisor_id ?? '',
     phone:           user?.phone           ?? '',
     national_id:     user?.national_id     ?? '',
     job_title:       user?.job_title        ?? '',
@@ -510,6 +511,7 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
           const extras = {}
           if (form.job_number.trim())        extras.job_number      = form.job_number.trim()
           if (form.supervisor_id)            extras.supervisor_id   = form.supervisor_id
+          if (form.peer_supervisor_id)       extras.peer_supervisor_id = form.peer_supervisor_id
           if (form.allowed_modules !== null) extras.allowed_modules = form.allowed_modules
           if (Object.keys(extras).length) {
             const { error: extrasErr } = await supabase.from('users').update(extras).eq('id', inserted.id)
@@ -555,9 +557,12 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
         if (updErr) throw updErr
         if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor') await syncStations(user.id)
 
-        // خانة "تقييم العميل" أضيفت بعد إنشاء admin_update_user — تحديث مباشر بدل تعديل الدالة
+        // خانة "تقييم العميل" و"مشرف الوردية الآخر" أضيفتا بعد إنشاء admin_update_user — تحديث مباشر بدل تعديل الدالة
         if (isGeneralAdmin) {
-          await supabase.from('users').update({ can_rate_customers: !!form.can_rate_customers }).eq('id', user.id)
+          await supabase.from('users').update({
+            can_rate_customers: !!form.can_rate_customers,
+            peer_supervisor_id: form.peer_supervisor_id || null,
+          }).eq('id', user.id)
         }
 
         await onSaved()
@@ -921,6 +926,21 @@ function UserModal({ user, stations, supervisors, onClose, onSaved }) {
             </div>
           )}
 
+          {/* مشرف وردية آخر يقيّمه — يظهر بس لمشرفي الورديات، بند تقييم منفصل عن "المشرف المباشر" */}
+          {form.role === 'shift_supervisor' && shiftSupervisors.filter(s => s.id !== user?.id).length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {isAr ? 'مشرف وردية آخر يقيّمه' : 'Peer shift supervisor who rates him'}
+              </label>
+              <select className={inputCls} value={form.peer_supervisor_id} onChange={e => set('peer_supervisor_id', e.target.value)}>
+                <option value="">{isAr ? '— بدون —' : '— None —'}</option>
+                {shiftSupervisors.filter(s => s.id !== user?.id).map(s => (
+                  <option key={s.id} value={s.id}>{s.full_name_ar}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* تاريخ المباشرة */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -1032,7 +1052,7 @@ export default function UsersPage() {
     // بدون phone/national_id/login_password — حقول حساسة تُجلب فقط عند الحاجة عبر get_user_sensitive (أدمن فقط)
     let usersQuery = supabase
       .from('users')
-      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, hire_date, is_accountant, is_agent, can_rate_customers, created_at, last_login, station:station_id(name_ar, name_en)')
+      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, peer_supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, hire_date, is_accountant, is_agent, can_rate_customers, created_at, last_login, station:station_id(name_ar, name_en)')
       .order('created_at', { ascending: false })
 
     // Station admin only sees users of their station; area supervisor sees their assigned stations
@@ -1095,6 +1115,7 @@ export default function UsersPage() {
   }
 
   const supervisors = users.filter(u => ['station_admin', 'area_supervisor', 'general_admin', 'stations_executive_director'].includes(u.role))
+  const shiftSupervisors = users.filter(u => u.role === 'shift_supervisor')
 
   const filtered = users.filter(u => {
     const q = search.toLowerCase()
@@ -1301,6 +1322,7 @@ export default function UsersPage() {
           user={modal === 'new' ? null : modal}
           stations={stations}
           supervisors={supervisors}
+          shiftSupervisors={shiftSupervisors}
           onClose={() => setModal(null)}
           onSaved={() => fetchAll(true)}
         />
