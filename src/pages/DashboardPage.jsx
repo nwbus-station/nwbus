@@ -278,6 +278,12 @@ export default function DashboardPage() {
     await supabase.from('notifications').update({ is_read: true }).in('id', ids)
     setNotifs(prev => prev.map(n => ({ ...n, is_read: true })))
   }
+  async function clearAllNotifs() {
+    if (!notifs.length) return
+    if (!window.confirm(isAr ? 'مسح كل الإشعارات؟ هذا الإجراء لا يمكن التراجع عنه.' : 'Clear all notifications? This cannot be undone.')) return
+    await supabase.from('notifications').delete().eq('user_id', profile.id)
+    setNotifs([])
+  }
 
   function timeAgo(ts) {
     const diff = Math.floor((Date.now() - new Date(ts)) / 60000)
@@ -486,16 +492,28 @@ export default function DashboardPage() {
                     }}>{unread}</span>
                   )}
                 </div>
-                {unread > 0 && (
-                  <button onClick={markAllRead} style={{
-                    fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-3)',
-                    background: 'none', border: 'none',
-                    cursor: 'pointer', fontFamily: 'inherit', padding: '2px 0',
-                    textDecoration: 'underline', textUnderlineOffset: 3, opacity: 0.7,
-                  }}>
-                    {isAr ? 'قراءة الكل' : 'Mark all'}
-                  </button>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {unread > 0 && (
+                    <button onClick={markAllRead} style={{
+                      fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-3)',
+                      background: 'none', border: 'none',
+                      cursor: 'pointer', fontFamily: 'inherit', padding: '2px 0',
+                      textDecoration: 'underline', textUnderlineOffset: 3, opacity: 0.7,
+                    }}>
+                      {isAr ? 'قراءة الكل' : 'Mark all'}
+                    </button>
+                  )}
+                  {notifs.length > 0 && (
+                    <button onClick={clearAllNotifs} style={{
+                      fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-3)',
+                      background: 'none', border: 'none',
+                      cursor: 'pointer', fontFamily: 'inherit', padding: '2px 0',
+                      textDecoration: 'underline', textUnderlineOffset: 3, opacity: 0.7,
+                    }}>
+                      {isAr ? 'مسح الكل' : 'Clear all'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* قائمة */}

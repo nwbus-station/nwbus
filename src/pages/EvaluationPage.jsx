@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { escapeHtml } from '../utils/digits'
 import { ADMIN_ROLE_VALUES } from '../utils/constants'
+import { createNotification } from '../utils/notifications'
 
 // ── تقييم الموظفين متعدد المصادر: مشرف الوردية + مشرف المحطة + المدير التنفيذي للمحطات ──
 // كل مصدر له وزنه، والنتيجة النهائية تُحسب فقط بعد اكتمال الثلاثة
@@ -379,6 +380,7 @@ function useEscClose(onClose) {
 }
 
 function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClose, onSave, isAdmin, evaluatorId, isAr }) {
+  const { profile: myProfile } = useAuth()
   const [scores, setScores] = useState(existing?.scores || {})
   const [notes, setNotes]   = useState(existing?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -407,19 +409,27 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
     }
     setSaving(false)
     if (error) return setErr(error.message)
-    // الإشعار للموظف يُرسل فقط لما تكتمل الثلاثة مصادر (وردية + محطة + مدير) وتُحسب نتيجته النهائية —
-    // مو عند كل تقييم جزئي على حدة، حتى لا يوصله رقم غير نهائي مضلّل
+
+    // إشعار مستقل فوري لكل مصدر يقيّم — يذكر مين قيّمه وبأي نتيجة، بدون انتظار باقي المصادر
+    await createNotification({
+      userId: employee.id,
+      type: 'info',
+      title: `قيّمك ${EVAL_SOURCE_LABELS[sourceRole]}`,
+      body: `${myProfile?.full_name_ar ? myProfile.full_name_ar + ' — ' : ''}النتيجة: ${(totalScore / 10).toFixed(1)}/10 لشهر ${MONTHS_AR[month - 1]}`,
+    })
+
+    // بعد كل تقييم نتحقق هل اكتملت الثلاثة مصادر — لو اكتملت نرسل إشعار مستقل ثاني بالنتيجة النهائية
     const { data: allRows } = await supabase.from('employee_evaluations')
       .select('total_score, eval_source')
       .eq('employee_id', employee.id).eq('eval_month', month).eq('eval_year', year)
     const { complete, final } = computeFinalScore(allRows || [])
     if (complete) {
       const isStar = final >= STAR_THRESHOLD
-      await supabase.rpc('replace_eval_notification', {
-        p_user_id: employee.id,
-        p_type: isStar ? 'success' : 'info',
-        p_title: isStar ? `تقييمك ${final}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`,
-        p_body: isStar ? `حصلت على النجمة المميزة بنتيجة ${final}/10` : `نتيجتك النهائية: ${final}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
+      await createNotification({
+        userId: employee.id,
+        type: isStar ? 'success' : 'info',
+        title: isStar ? `تقييمك ${final}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`,
+        body: isStar ? `حصلت على النجمة المميزة بنتيجة ${final}/10` : `نتيجتك النهائية: ${final}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
       })
       try {
         const now = new Date()
@@ -498,6 +508,7 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
 
 // ── مودال تقييم المشرفين ─────────────────────────────────────
 function SupervisorEvalModal({ supervisor, month, year, existing, sourceRole, onClose, onSave, evaluatorId, isAr }) {
+  const { profile: myProfile } = useAuth()
   const [scores, setScores] = useState(existing?.scores || {})
   const [notes, setNotes]   = useState(existing?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -527,19 +538,28 @@ function SupervisorEvalModal({ supervisor, month, year, existing, sourceRole, on
     }
     setSaving(false)
     if (error) return setErr(error.message)
-    // الإشعار يُرسل فقط بعد اكتمال كل مصادر التقييم المطلوبة لهذا الدور (مشرف الوردية له
-    // مصدرين: مشرفه المباشر + المدير التنفيذي؛ باقي المشرفين مصدر واحد فقط) بنفس منطق الموظفين
+
+    // إشعار مستقل فوري لكل مصدر يقيّم — يذكر مين قيّمه وبأي نتيجة، بدون انتظار باقي المصادر
+    await createNotification({
+      userId: supervisor.id,
+      type: 'info',
+      title: `قيّمك ${SUP_EVAL_LABELS[sourceRole]}`,
+      body: `${myProfile?.full_name_ar ? myProfile.full_name_ar + ' — ' : ''}النتيجة: ${(totalScore / 10).toFixed(1)}/10 لشهر ${MONTHS_AR[month - 1]}`,
+    })
+
+    // بعد كل تقييم نتحقق هل اكتملت مصادر التقييم المطلوبة لهذا الدور (مشرف الوردية له ٣ مصادر؛
+    // باقي المشرفين مصدر واحد فقط) — لو اكتملت نرسل إشعار مستقل ثاني بالنتيجة النهائية
     const { data: allRows } = await supabase.from('supervisor_evaluations')
       .select('total_score, eval_source')
       .eq('supervisor_id', supervisor.id).eq('eval_month', month).eq('eval_year', year)
     const { complete, final } = computeSupFinalScore(supervisor.role, allRows || [])
     if (complete) {
       const isStar = final >= STAR_THRESHOLD
-      await supabase.rpc('replace_eval_notification', {
-        p_user_id: supervisor.id,
-        p_type: isStar ? 'success' : 'info',
-        p_title: isStar ? `تقييمك ${final}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`,
-        p_body: isStar ? `حصلت على النجمة المميزة بنتيجة ${final}/10` : `نتيجتك النهائية: ${final}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
+      await createNotification({
+        userId: supervisor.id,
+        type: isStar ? 'success' : 'info',
+        title: isStar ? `تقييمك ${final}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`,
+        body: isStar ? `حصلت على النجمة المميزة بنتيجة ${final}/10` : `نتيجتك النهائية: ${final}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
       })
       try {
         const now = new Date()

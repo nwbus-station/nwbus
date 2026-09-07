@@ -106,6 +106,14 @@ function NotificationBell({ profile }) {
     setNotifs(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
+  // الإشعارات ما تُحذف تلقائياً أبداً — فقط الموظف نفسه يقدر يمسحها من هنا
+  async function clearAll() {
+    if (!notifs.length) return
+    if (!window.confirm('مسح كل الإشعارات؟ هذا الإجراء لا يمكن التراجع عنه.')) return
+    await supabase.from('notifications').delete().eq('user_id', profile.id)
+    setNotifs([])
+  }
+
   function timeAgo(ts) {
     const diff = Math.floor((Date.now() - new Date(ts)) / 60000)
     if (diff < 1) return 'الآن'
@@ -134,11 +142,18 @@ function NotificationBell({ profile }) {
               <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-1)' }}>الإشعارات</span>
               {unread > 0 && <span style={{ fontSize: '0.62rem', fontWeight: 600, padding: '1px 7px', borderRadius: 2, background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid #E0CFA4' }}>{unread} جديد</span>}
             </div>
-            {unread > 0 && (
-              <button onClick={markAllRead} style={{ fontSize: '0.68rem', color: 'var(--info)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                قراءة الكل
-              </button>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {unread > 0 && (
+                <button onClick={markAllRead} style={{ fontSize: '0.68rem', color: 'var(--info)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                  قراءة الكل
+                </button>
+              )}
+              {notifs.length > 0 && (
+                <button onClick={clearAll} style={{ fontSize: '0.68rem', color: 'var(--text-3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                  مسح الكل
+                </button>
+              )}
+            </div>
           </div>
 
           {/* List */}
