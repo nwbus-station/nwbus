@@ -701,6 +701,14 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                 <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'اسم المستخدم' : 'Username'}</p>
                 <p className="font-mono text-sm text-nwbus-primary font-bold">{user.username}</p>
               </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'آخر تسجيل دخول' : 'Last Login'}</p>
+                <p className="text-sm font-semibold text-gray-700">
+                  {user.last_login
+                    ? new Date(user.last_login).toLocaleString(isAr ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })
+                    : (isAr ? 'لم يسجل دخول' : 'Never logged in')}
+                </p>
+              </div>
               {/* تغيير كلمة المرور */}
               <div className="border-t pt-3 space-y-2">
                 <p className="text-xs font-medium text-gray-600">{isAr ? 'تغيير كلمة المرور' : 'Reset Password'}</p>
