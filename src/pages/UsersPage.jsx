@@ -186,10 +186,17 @@ function Section({ title, children }) {
 
 // كلمة مرور عشوائية بالكامل — بدون أي علاقة برقم الهوية أو الاسم (كانت تُبنى منهم سابقاً، وهذا ضعف أمني حقيقي)
 function generatePassword() {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  let pwd = ''
-  for (let i = 0; i < 8; i++) pwd += chars[Math.floor(Math.random() * chars.length)]
-  return pwd
+  const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ'
+  const lower = 'abcdefghjkmnpqrstuvwxyz'
+  const alnum = upper + lower + '23456789'
+  const symbols = '.-@'
+  const rand = s => s[Math.floor(Math.random() * s.length)]
+
+  const head = rand(upper) + rand(lower) + rand(upper)
+  const symbol = rand(symbols)
+  let tail = ''
+  for (let i = 0; i < 4; i++) tail += rand(alnum)
+  return head + symbol + tail
 }
 
 const JOB_TITLES = [
@@ -739,10 +746,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                       )}
                     </button>
                   </div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <p className="text-xs text-blue-500">
-                      {isAr ? 'عشوائية بالكامل — بدون أي علاقة برقم الهوية' : 'Fully random — unrelated to national ID'}
-                    </p>
+                  <div className="flex items-center justify-end mt-0.5">
                     <button type="button" onClick={() => set('password', generatePassword())}
                       className="text-xs text-nwbus-primary underline shrink-0">
                       {isAr ? 'توليد جديد' : 'Regenerate'}
