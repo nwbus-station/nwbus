@@ -175,11 +175,12 @@ function buildUsername(jobNum) {
   return jobNum ? 'NW' + jobNum : ''
 }
 
-function buildPassword(nameEn, nationalId) {
-  const first = (nameEn || '').trim().split(/\s+/)[0] || ''
-  const prefix = first.slice(0, 3) || 'NW'
-  const suffix = (nationalId || '').replace(/\D/g, '').slice(-3)
-  return prefix + suffix + '.'
+// كلمة مرور عشوائية بالكامل — بدون أي علاقة برقم الهوية أو الاسم (كانت تُبنى منهم سابقاً، وهذا ضعف أمني حقيقي)
+function generatePassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  let pwd = ''
+  for (let i = 0; i < 8; i++) pwd += chars[Math.floor(Math.random() * chars.length)]
+  return pwd
 }
 
 const JOB_TITLES = [
@@ -347,7 +348,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
   const [form, setForm] = useState(newUserDraft?.form ?? {
     job_number:      user?.job_number      ?? '',
     username:        user?.username        ?? '',
-    password:        '',
+    password:        user ? '' : generatePassword(),
     full_name_ar:    user?.full_name_ar    ?? '',
     full_name_en:    user?.full_name_en    ?? '',
     role:            user?.role            ?? 'station_employee',
@@ -397,16 +398,13 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     if (!user) set('username', buildUsername(n))
   }
 
-  // auto-fill password when English name or national_id changes (new user only)
   function handleNameEnChange(val) {
     set('full_name_en', val)
-    if (!user) set('password', buildPassword(val, form.national_id))
   }
 
   function handleNationalIdChange(val) {
     const n = toLatinDigits(val).replace(/\D/g, '')
     set('national_id', n)
-    if (!user) set('password', buildPassword(form.full_name_en, n))
   }
 
   // محطات المشرف المتعددة (station_admin) — تُحفظ في user_stations
@@ -613,7 +611,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           <button onClick={closeAndClearDraft} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
         </div>
 
-        <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
+        <form onSubmit={handleSave} autoComplete="off" className="px-6 py-5 space-y-4">
 
           {/* رقم الوظيفي */}
           <div className="bg-amber-50 rounded-xl p-3 border border-amber-200">
@@ -643,7 +641,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
               </p>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المستخدم *' : 'Username *'}</label>
-                <input required className={inputCls + ' font-mono font-bold uppercase'} value={form.username}
+                <input required autoComplete="off" className={inputCls + ' font-mono font-bold uppercase'} value={form.username}
                   onChange={e => set('username', e.target.value.toLowerCase().replace(/\s/g, ''))}
                   placeholder="NW1030986" />
                 <p className="text-xs text-gray-400 mt-0.5 font-mono">{form.username}@nwbus.sa</p>
@@ -654,10 +652,11 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                   <input
                     type={showPass ? 'text' : 'password'}
                     required minLength={6}
+                    autoComplete="new-password"
                     className={inputCls + ' pe-10 font-mono'}
                     value={form.password}
                     onChange={e => set('password', e.target.value)}
-                    placeholder={isAr ? 'تولّد تلقائياً من الاسم والرقم' : 'Auto-generated from name + number'}
+                    placeholder={isAr ? 'كلمة مرور عشوائية آمنة' : 'Random secure password'}
                   />
                   <button type="button" onClick={() => setShowPass(v => !v)}
                     className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400 hover:text-gray-700">
@@ -675,9 +674,15 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-blue-500 mt-0.5">
-                  {isAr ? 'تولّد تلقائياً — يمكن تعديلها' : 'Auto-generated — editable'}
-                </p>
+                <div className="flex items-center justify-between mt-0.5">
+                  <p className="text-xs text-blue-500">
+                    {isAr ? 'عشوائية بالكامل — بدون أي علاقة برقم الهوية' : 'Fully random — unrelated to national ID'}
+                  </p>
+                  <button type="button" onClick={() => set('password', generatePassword())}
+                    className="text-xs text-nwbus-primary underline shrink-0">
+                    {isAr ? 'توليد جديد' : 'Regenerate'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -716,6 +721,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                   <input
                     type={showNewPwd ? 'text' : 'password'}
                     minLength={6}
+                    autoComplete="new-password"
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none font-mono pe-10"
                     value={newPwd}
                     onChange={e => setNewPwd(e.target.value)}
@@ -778,11 +784,6 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
               required={!user}
               onChange={e => handleNationalIdChange(e.target.value)}
               placeholder="1xxxxxxxxx" />
-            {!user && form.full_name_en && form.national_id && (
-              <p className="text-xs text-green-600 mt-0.5 font-mono">
-                {buildPassword(form.full_name_en, form.national_id)}
-              </p>
-            )}
           </div>
 
           {/* Role + Language */}
@@ -1259,6 +1260,7 @@ export default function UsersPage() {
                   isAr ? 'المسمى الوظيفي' : 'Job Title',
                   isAr ? 'الصلاحية' : 'Role',
                   isAr ? 'المحطة' : 'Station',
+                  isAr ? 'المشرف' : 'Supervisor',
                   isAr ? 'الأقسام' : 'Modules',
                   isAr ? 'الحالة' : 'Status',
                   '',
@@ -1288,6 +1290,9 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">
                     {u.station ? (isAr ? u.station.name_ar : u.station.name_en) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500">
+                    {u.supervisor_id ? (users.find(x => x.id === u.supervisor_id)?.full_name_ar ?? '—') : '—'}
                   </td>
                   <td className="px-4 py-3">
                     {u.allowed_modules === null ? (
@@ -1327,6 +1332,7 @@ export default function UsersPage() {
 
       {modal && (
         <UserModal
+          key={modal === 'new' ? 'new' : modal.id}
           user={modal === 'new' ? null : modal}
           stations={stations}
           supervisors={supervisors}
