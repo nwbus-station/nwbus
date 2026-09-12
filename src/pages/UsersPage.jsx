@@ -607,11 +607,12 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
 
         // خانة "تقييم العميل" و"مشرف الوردية الآخر" أضيفتا بعد إنشاء admin_update_user — تحديث مباشر بدل تعديل الدالة
         if (isGeneralAdmin) {
-          await supabase.from('users').update({
+          const { error: extraErr } = await supabase.from('users').update({
             can_rate_customers: !!form.can_rate_customers,
             peer_supervisor_id: form.peer_supervisor_id || null,
             email: form.email.trim() || null,
           }).eq('id', user.id)
+          if (extraErr) throw extraErr
         }
 
         await onSaved()
