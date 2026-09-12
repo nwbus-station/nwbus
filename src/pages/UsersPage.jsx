@@ -1250,86 +1250,95 @@ export default function UsersPage() {
       {loading ? (
         <div className="text-center py-20 text-gray-400">…</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-3xl mb-2"></p>
+        <div className="text-center py-16 text-gray-400 bg-white rounded-2xl border border-gray-100">
           <p>{isAr ? 'لا يوجد أعضاء' : 'No members found'}</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full">
-          <table className="w-full text-sm" style={{ minWidth: 860 }}>
-            <thead className="bg-nwbus-primary text-white text-xs">
-              <tr>
+          <table className="w-full text-sm" style={{ minWidth: 780 }}>
+            <thead>
+              <tr className="border-b border-gray-200">
                 {[
-                  isAr ? 'الرقم الوظيفي' : 'Emp. No.',
                   isAr ? 'الموظف' : 'Employee',
-                  isAr ? 'المسمى الوظيفي' : 'Job Title',
                   isAr ? 'الصلاحية' : 'Role',
-                  isAr ? 'المحطة' : 'Station',
-                  isAr ? 'المشرف' : 'Supervisor',
+                  isAr ? 'المحطة والإشراف' : 'Station & Supervisor',
                   isAr ? 'الأقسام' : 'Modules',
                   isAr ? 'الحالة' : 'Status',
                   '',
                 ].map((h, i) => (
-                  <th key={i} className="px-4 py-3 text-right font-medium whitespace-nowrap">{h}</th>
+                  <th key={i} className="px-4 py-3 text-right text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map(u => (
-                <tr key={u.id} className={`hover:bg-gray-50 transition-colors ${!u.is_active ? 'opacity-40' : ''}`}>
-                  <td className="px-4 py-3 font-mono text-xs font-bold text-nwbus-primary">
-                    {u.job_number || '—'}
+              {filtered.map(u => {
+                const jobTitleLabel = u.job_title ? (JOB_TITLES.find(j => j.value === u.job_title)?.[isAr ? 'ar' : 'en'] ?? u.job_title) : null
+                const supervisorName = u.supervisor_id ? users.find(x => x.id === u.supervisor_id)?.full_name_ar : null
+                return (
+                <tr key={u.id} className={`hover:bg-gray-50/80 transition-colors ${!u.is_active ? 'opacity-40' : ''}`}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-nwbus-primary/10 text-nwbus-primary text-xs font-bold grid place-items-center shrink-0">
+                        {(u.full_name_ar || '؟').trim().charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-800 truncate flex items-center gap-1.5">
+                          {u.full_name_ar}
+                          {u.is_accountant && <span className="text-[10px] bg-yellow-100 text-yellow-700 rounded px-1.5 py-0.5 shrink-0">+ محاسب</span>}
+                        </p>
+                        <p className="text-xs text-gray-400 truncate">
+                          {u.job_number ? <span className="font-mono">{u.job_number}</span> : null}
+                          {u.job_number && jobTitleLabel && ' · '}
+                          {jobTitleLabel}
+                        </p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-gray-800">{u.full_name_ar}
-                      {u.is_accountant && <span className="ms-1 text-[10px] bg-yellow-100 text-yellow-700 rounded px-1.5 py-0.5">+ محاسب</span>}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    {u.job_title ? (JOB_TITLES.find(j => j.value === u.job_title)?.[isAr ? 'ar' : 'en'] ?? u.job_title) : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs rounded-full px-2.5 py-0.5 border font-semibold ${ROLE_COLORS[u.role]}`}>
+                    <span className={`text-xs rounded-full px-2.5 py-0.5 border font-semibold whitespace-nowrap ${ROLE_COLORS[u.role]}`}>
                       {USER_ROLES.find(r => r.value === u.role)?.[isAr ? 'ar' : 'en']}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">
-                    {u.station ? (isAr ? u.station.name_ar : u.station.name_en) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    {u.supervisor_id ? (users.find(x => x.id === u.supervisor_id)?.full_name_ar ?? '—') : '—'}
+                    <p className="text-gray-700">{u.station ? (isAr ? u.station.name_ar : u.station.name_en) : '—'}</p>
+                    {supervisorName && <p className="text-gray-400 mt-0.5">{isAr ? 'يشرف عليه: ' : 'Supervised by: '}{supervisorName}</p>}
                   </td>
                   <td className="px-4 py-3">
                     {u.allowed_modules === null ? (
-                      <span className="text-xs text-green-600 font-medium">جميع الأقسام</span>
+                      <span className="text-xs text-green-600 font-medium">{isAr ? 'جميع الأقسام' : 'All sections'}</span>
                     ) : (
-                      <span className="text-xs text-gray-400">{u.allowed_modules?.length ?? 0} قسم</span>
+                      <span className="text-xs text-gray-400">{u.allowed_modules?.length ?? 0} {isAr ? 'قسم' : 'sections'}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs rounded-full px-2 py-0.5 ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                    <span className={`inline-flex items-center gap-1.5 text-xs rounded-full px-2 py-0.5 ${u.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${u.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
                       {u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطّل' : 'Inactive')}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1.5">
-                      {isGeneralAdmin && (
-                        <button onClick={() => setModal(u)}
-                          className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1 hover:bg-nwbus-primary hover:text-white transition-colors">
-                          {isAr ? 'تعديل' : 'Edit'}
+                    {isGeneralAdmin && (
+                      <div className="flex gap-1 justify-end">
+                        <button onClick={() => setModal(u)} title={isAr ? 'تعديل' : 'Edit'}
+                          className="w-8 h-8 grid place-items-center rounded-lg text-gray-400 hover:bg-nwbus-primary hover:text-white transition-colors">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
                         </button>
-                      )}
-                      {isGeneralAdmin && (
-                        <button onClick={() => deleteUser(u)}
-                          className="text-xs border border-red-300 text-red-500 rounded-lg px-2.5 py-1 hover:bg-red-500 hover:text-white transition-colors">
-                          {isAr ? 'حذف' : 'Delete'}
+                        <button onClick={() => deleteUser(u)} title={isAr ? 'حذف' : 'Delete'}
+                          className="w-8 h-8 grid place-items-center rounded-lg text-gray-400 hover:bg-red-500 hover:text-white transition-colors">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          </svg>
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
           </div>
