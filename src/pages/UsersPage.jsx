@@ -409,13 +409,22 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
 
   // الحقول الحساسة (جوال، هوية، كلمة مرور) ما تعود من قائمة المستخدمين بعد الآن —
   // تُجلب فقط هنا عند فتح تعديل موظف موجود، عبر دالة تتحقق من صلاحية الأدمن بقاعدة البيانات
+  // يحفظ أي حقل عدّله الأدمن يدوياً، عشان جلب البيانات الحساسة (أدناه) ما يطيح فوقه
+  // لو اكتمل بعد ما بدأ الأدمن يكتب — سباق حقيقي كان يمسح رقم الجوال/الهوية/الإيميل بصمت
+  const touchedRef = useRef(new Set())
+
   useEffect(() => {
     if (!user?.id) return
     supabase.rpc('get_user_sensitive', { p_id: user.id }).then(({ data, error: e }) => {
       if (e || !data?.length) return
       const row = data[0]
       setSensitive(row)
-      setForm(f => ({ ...f, phone: row.phone ?? '', national_id: row.national_id ?? '', email: row.email ?? '' }))
+      setForm(f => ({
+        ...f,
+        phone: touchedRef.current.has('phone') ? f.phone : (row.phone ?? ''),
+        national_id: touchedRef.current.has('national_id') ? f.national_id : (row.national_id ?? ''),
+        email: touchedRef.current.has('email') ? f.email : (row.email ?? ''),
+      }))
     })
   }, [user?.id])
   // password reset for edit mode
@@ -438,7 +447,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     setSendingEmail(false)
   }
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const set = (k, v) => { touchedRef.current.add(k); setForm(f => ({ ...f, [k]: v })) }
 
   // auto-fill username when job_number changes (new user only)
   function handleJobNumberChange(val) {
