@@ -175,6 +175,15 @@ function buildUsername(jobNum) {
   return jobNum ? 'NW' + jobNum : ''
 }
 
+function Section({ title, children }) {
+  return (
+    <div className="border border-gray-200 rounded-xl p-4">
+      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">{title}</p>
+      <div className="space-y-3">{children}</div>
+    </div>
+  )
+}
+
 // كلمة مرور عشوائية بالكامل — بدون أي علاقة برقم الهوية أو الاسم (كانت تُبنى منهم سابقاً، وهذا ضعف أمني حقيقي)
 function generatePassword() {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
@@ -602,8 +611,8 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
   return (
     <>
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b flex items-center justify-between"
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col">
+        <div className="px-6 py-4 border-b flex items-center justify-between sticky top-0 z-10"
           style={{ background: '#1C2B36' }}>
           <h2 className="font-bold text-white text-base">
             {user ? (isAr ? 'تعديل موظف' : 'Edit Staff') : (isAr ? 'موظف جديد' : 'New Staff')}
@@ -611,373 +620,371 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           <button onClick={closeAndClearDraft} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
         </div>
 
-        <form onSubmit={handleSave} autoComplete="off" className="px-6 py-5 space-y-4">
-
-          {/* رقم الوظيفي */}
-          <div className="bg-amber-50 rounded-xl p-3 border border-amber-200">
-            <label className="block text-xs font-bold text-amber-800 mb-1.5">
-              {isAr ? 'الرقم الوظيفي' : 'Employee Number'}
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none bg-white font-mono"
-              value={form.job_number}
-              onChange={e => handleJobNumberChange(e.target.value)}
-              placeholder={isAr ? 'مثال: 1030986' : 'e.g. 1030986'}
-            />
-            {!user && form.job_number && (
-              <p className="text-xs text-amber-700 mt-1 font-mono font-bold">
-                {buildUsername(form.job_number)}
-              </p>
-            )}
+        <form id="user-form" onSubmit={handleSave} autoComplete="off" className="px-6 py-5 space-y-4">
+          {/* حقول طعم تمتص تعبئة المتصفح التلقائية بعيداً عن حقول الدخول الفعلية */}
+          <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
+            <input type="text" name="fake-username" tabIndex={-1} autoComplete="off" />
+            <input type="password" name="fake-password" tabIndex={-1} autoComplete="off" />
           </div>
 
-          {/* Username + Password — new user only */}
-          {!user && (
-            <div className="bg-blue-50 rounded-xl p-4 space-y-3">
-              <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">
-                {isAr ? 'بيانات الدخول' : 'Login Credentials'}
-              </p>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المستخدم *' : 'Username *'}</label>
-                <input required autoComplete="off" className={inputCls + ' font-mono font-bold uppercase'} value={form.username}
-                  onChange={e => set('username', e.target.value.toLowerCase().replace(/\s/g, ''))}
-                  placeholder="NW1030986" />
-                <p className="text-xs text-gray-400 mt-0.5 font-mono">{form.username}@nwbus.sa</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'كلمة المرور *' : 'Password *'}</label>
-                <div className="relative">
-                  <input
-                    type={showPass ? 'text' : 'password'}
-                    required minLength={6}
-                    autoComplete="new-password"
-                    className={inputCls + ' pe-10 font-mono'}
-                    value={form.password}
-                    onChange={e => set('password', e.target.value)}
-                    placeholder={isAr ? 'كلمة مرور عشوائية آمنة' : 'Random secure password'}
-                  />
-                  <button type="button" onClick={() => setShowPass(v => !v)}
-                    className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400 hover:text-gray-700">
-                    {showPass ? (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
-                        <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
-                        <line x1="1" y1="1" x2="23" y2="23"/>
-                      </svg>
-                    ) : (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                <div className="flex items-center justify-between mt-0.5">
-                  <p className="text-xs text-blue-500">
-                    {isAr ? 'عشوائية بالكامل — بدون أي علاقة برقم الهوية' : 'Fully random — unrelated to national ID'}
-                  </p>
-                  <button type="button" onClick={() => set('password', generatePassword())}
-                    className="text-xs text-nwbus-primary underline shrink-0">
-                    {isAr ? 'توليد جديد' : 'Regenerate'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* بيانات الدخول + تغيير كلمة المرور — للأدمن عند التعديل */}
-          {user && isGeneralAdmin && (
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                  {isAr ? 'بيانات الدخول' : 'Login Info'}
+          <Section title={isAr ? 'بيانات الموظف' : 'Employee Details'}>
+            <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
+              <label className="block text-xs font-bold text-amber-800 mb-1.5">
+                {isAr ? 'الرقم الوظيفي' : 'Employee Number'}
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none bg-white font-mono"
+                value={form.job_number}
+                onChange={e => handleJobNumberChange(e.target.value)}
+                placeholder={isAr ? 'مثال: 1030986' : 'e.g. 1030986'}
+              />
+              {!user && form.job_number && (
+                <p className="text-xs text-amber-700 mt-1 font-mono font-bold">
+                  {buildUsername(form.job_number)}
                 </p>
-                {sensitive?.login_password && (
-                  <button type="button"
-                    onClick={() => setCredential({ username: user.username, password: sensitive.login_password, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: sensitive.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })}
-                    className="text-xs text-nwbus-primary underline">
-                    {isAr ? 'عرض البطاقة' : 'Show Card'}
-                  </button>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'اسم المستخدم' : 'Username'}</p>
-                <p className="font-mono text-sm text-nwbus-primary font-bold">{user.username}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'آخر تسجيل دخول' : 'Last Login'}</p>
-                <p className="text-sm font-semibold text-gray-700">
-                  {user.last_login
-                    ? new Date(user.last_login).toLocaleString(isAr ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })
-                    : (isAr ? 'لم يسجل دخول' : 'Never logged in')}
-                </p>
-              </div>
-              {/* تغيير كلمة المرور */}
-              <div className="border-t pt-3 space-y-2">
-                <p className="text-xs font-medium text-gray-600">{isAr ? 'تغيير كلمة المرور' : 'Reset Password'}</p>
-                <div className="relative">
-                  <input
-                    type={showNewPwd ? 'text' : 'password'}
-                    minLength={6}
-                    autoComplete="new-password"
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none font-mono pe-10"
-                    value={newPwd}
-                    onChange={e => setNewPwd(e.target.value)}
-                    placeholder={isAr ? 'كلمة مرور جديدة...' : 'New password...'}
-                  />
-                  <button type="button" onClick={() => setShowNewPwd(v => !v)}
-                    className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400 hover:text-gray-600">
-                    {showNewPwd
-                      ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                      : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    }
-                  </button>
-                </div>
-                {pwdMsg && <p className={`text-xs ${pwdMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{pwdMsg}</p>}
-                <button type="button" onClick={handlePasswordReset} disabled={pwdSaving || !newPwd}
-                  className="w-full bg-amber-500 text-white py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-amber-600 transition-colors">
-                  {pwdSaving ? '...' : (isAr ? 'تغيير كلمة المرور' : 'Update Password')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Names */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم (عربي) *' : 'Name (Arabic) *'}</label>
-              <input required className={inputCls} value={form.full_name_ar}
-                onChange={e => set('full_name_ar', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم (إنجليزي)' : 'Name (English)'}</label>
-              <input className={inputCls} value={form.full_name_en}
-                onChange={e => handleNameEnChange(e.target.value)} />
-            </div>
-          </div>
-
-          {/* Phone + Job title */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'رقم الجوال' : 'Mobile'}</label>
-              <input className={inputCls} value={form.phone} inputMode="numeric" dir="ltr"
-                onChange={e => set('phone', toLatinDigits(e.target.value))}
-                placeholder="05xxxxxxxx" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي' : 'Job Title'}</label>
-              <select className={inputCls} value={form.job_title} onChange={e => set('job_title', e.target.value)}>
-                <option value="">{isAr ? '— اختر —' : '— Select —'}</option>
-                {JOB_TITLES.map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* رقم الهوية */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              {isAr ? 'رقم الهوية / الإقامة' : 'National / Iqama ID'}{!user && ' *'}
-            </label>
-            <input className={inputCls + ' font-mono'} value={form.national_id} inputMode="numeric" dir="ltr"
-              required={!user}
-              onChange={e => handleNationalIdChange(e.target.value)}
-              placeholder="1xxxxxxxxx" />
-          </div>
-
-          {/* Role + Language */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الصلاحية *' : 'Role *'}</label>
-              <select required className={inputCls} value={form.role} onChange={e => set('role', e.target.value)}>
-                {allowedRoles.map(r => (
-                  <option key={r.value} value={r.value}>{isAr ? r.ar : r.en}</option>
-                ))}
-              </select>
-              {isGeneralAdmin && form.role !== 'accountant' && form.role !== 'general_admin' && (
-                <label className="flex items-center gap-2 mt-2 text-xs text-gray-600 cursor-pointer">
-                  <input type="checkbox" className="rounded accent-nwbus-primary"
-                    checked={form.is_accountant} onChange={e => set('is_accountant', e.target.checked)} />
-                  {isAr ? 'صلاحيات محاسب أيضاً (بنفس الوقت)' : 'Also grant accountant access'}
-                </label>
               )}
-              {isGeneralAdmin && (
-                <label className="flex items-center gap-2 mt-2 text-xs text-gray-600 cursor-pointer">
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم (عربي) *' : 'Name (Arabic) *'}</label>
+                <input required autoComplete="off" className={inputCls} value={form.full_name_ar}
+                  onChange={e => set('full_name_ar', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم (إنجليزي)' : 'Name (English)'}</label>
+                <input autoComplete="off" className={inputCls} value={form.full_name_en}
+                  onChange={e => handleNameEnChange(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'رقم الجوال' : 'Mobile'}</label>
+                <input autoComplete="off" className={inputCls} value={form.phone} inputMode="numeric" dir="ltr"
+                  onChange={e => set('phone', toLatinDigits(e.target.value))}
+                  placeholder="05xxxxxxxx" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي' : 'Job Title'}</label>
+                <select className={inputCls} value={form.job_title} onChange={e => set('job_title', e.target.value)}>
+                  <option value="">{isAr ? '— اختر —' : '— Select —'}</option>
+                  {JOB_TITLES.map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {isAr ? 'رقم الهوية / الإقامة' : 'National / Iqama ID'}{!user && ' *'}
+              </label>
+              <input autoComplete="off" className={inputCls + ' font-mono'} value={form.national_id} inputMode="numeric" dir="ltr"
+                required={!user}
+                onChange={e => handleNationalIdChange(e.target.value)}
+                placeholder="1xxxxxxxxx" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {isAr ? 'تاريخ المباشرة' : 'Hire Date'}
+              </label>
+              <DatePicker
+                value={form.hire_date}
+                onChange={v => set('hire_date', v)}
+                className={inputCls}
+                isAr={isAr}
+                placeholder={isAr ? 'اختر تاريخ المباشرة' : 'Select hire date'}
+              />
+            </div>
+          </Section>
+
+          <Section title={isAr ? 'الدخول والحماية' : 'Login & Security'}>
+            {/* Username + Password — new user only */}
+            {!user && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المستخدم *' : 'Username *'}</label>
+                  <input required autoComplete="off" className={inputCls + ' font-mono font-bold uppercase'} value={form.username}
+                    onChange={e => set('username', e.target.value.toLowerCase().replace(/\s/g, ''))}
+                    placeholder="NW1030986" />
+                  <p className="text-xs text-gray-400 mt-0.5 font-mono">{form.username}@nwbus.sa</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'كلمة المرور *' : 'Password *'}</label>
+                  <div className="relative">
+                    <input
+                      type={showPass ? 'text' : 'password'}
+                      required minLength={6}
+                      autoComplete="new-password"
+                      className={inputCls + ' pe-10 font-mono'}
+                      value={form.password}
+                      onChange={e => set('password', e.target.value)}
+                      placeholder={isAr ? 'كلمة مرور عشوائية آمنة' : 'Random secure password'}
+                    />
+                    <button type="button" onClick={() => setShowPass(v => !v)}
+                      className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400 hover:text-gray-700">
+                      {showPass ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                          <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                          <line x1="1" y1="1" x2="23" y2="23"/>
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                          <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <p className="text-xs text-blue-500">
+                      {isAr ? 'عشوائية بالكامل — بدون أي علاقة برقم الهوية' : 'Fully random — unrelated to national ID'}
+                    </p>
+                    <button type="button" onClick={() => set('password', generatePassword())}
+                      className="text-xs text-nwbus-primary underline shrink-0">
+                      {isAr ? 'توليد جديد' : 'Regenerate'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* بيانات الدخول + تغيير كلمة المرور — للأدمن عند التعديل */}
+            {user && isGeneralAdmin && (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'اسم المستخدم' : 'Username'}</p>
+                    <p className="font-mono text-sm text-nwbus-primary font-bold">{user.username}</p>
+                  </div>
+                  {sensitive?.login_password && (
+                    <button type="button"
+                      onClick={() => setCredential({ username: user.username, password: sensitive.login_password, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: sensitive.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })}
+                      className="text-xs text-nwbus-primary underline shrink-0">
+                      {isAr ? 'عرض البطاقة' : 'Show Card'}
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'آخر تسجيل دخول' : 'Last Login'}</p>
+                  <p className="text-sm font-semibold text-gray-700">
+                    {user.last_login
+                      ? new Date(user.last_login).toLocaleString(isAr ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })
+                      : (isAr ? 'لم يسجل دخول' : 'Never logged in')}
+                  </p>
+                </div>
+                {/* تغيير كلمة المرور */}
+                <div className="border-t pt-3 space-y-2">
+                  <p className="text-xs font-medium text-gray-600">{isAr ? 'تغيير كلمة المرور' : 'Reset Password'}</p>
+                  <div className="relative">
+                    <input
+                      type={showNewPwd ? 'text' : 'password'}
+                      minLength={6}
+                      autoComplete="new-password"
+                      className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none font-mono pe-10"
+                      value={newPwd}
+                      onChange={e => setNewPwd(e.target.value)}
+                      placeholder={isAr ? 'كلمة مرور جديدة...' : 'New password...'}
+                    />
+                    <button type="button" onClick={() => setShowNewPwd(v => !v)}
+                      className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400 hover:text-gray-600">
+                      {showNewPwd
+                        ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      }
+                    </button>
+                  </div>
+                  {pwdMsg && <p className={`text-xs ${pwdMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{pwdMsg}</p>}
+                  <button type="button" onClick={handlePasswordReset} disabled={pwdSaving || !newPwd}
+                    className="w-full bg-amber-500 text-white py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-amber-600 transition-colors">
+                    {pwdSaving ? '...' : (isAr ? 'تغيير كلمة المرور' : 'Update Password')}
+                  </button>
+                </div>
+              </>
+            )}
+          </Section>
+
+          <Section title={isAr ? 'الصلاحية والدور' : 'Role & Permissions'}>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الصلاحية *' : 'Role *'}</label>
+                <select required className={inputCls} value={form.role} onChange={e => set('role', e.target.value)}>
+                  {allowedRoles.map(r => (
+                    <option key={r.value} value={r.value}>{isAr ? r.ar : r.en}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اللغة' : 'Language'}</label>
+                <select className={inputCls} value={form.language} onChange={e => set('language', e.target.value)}>
+                  <option value="ar">عربي</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+            </div>
+
+            {isGeneralAdmin && (
+              <div className="space-y-1.5">
+                {form.role !== 'accountant' && form.role !== 'general_admin' && (
+                  <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                    <input type="checkbox" className="rounded accent-nwbus-primary"
+                      checked={form.is_accountant} onChange={e => set('is_accountant', e.target.checked)} />
+                    {isAr ? 'صلاحيات محاسب أيضاً (بنفس الوقت)' : 'Also grant accountant access'}
+                  </label>
+                )}
+                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
                   <input type="checkbox" className="rounded accent-nwbus-primary"
                     checked={form.is_agent} onChange={e => set('is_agent', e.target.checked)} />
                   {isAr ? 'حساب وكيل (لا يظهر في التقييم والإجازات)' : 'Agent account (hidden from evaluations & leaves)'}
                 </label>
-              )}
-              {isGeneralAdmin && (
-                <label className="flex items-center gap-2 mt-2 text-xs text-gray-600 cursor-pointer">
+                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
                   <input type="checkbox" className="rounded accent-nwbus-primary"
                     checked={form.can_rate_customers} onChange={e => set('can_rate_customers', e.target.checked)} />
                   {isAr ? 'يُقيَّم من العميل (خدمة عملاء / مرحّل)' : 'Rated by customers (service/agent)'}
                 </label>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اللغة' : 'Language'}</label>
-              <select className={inputCls} value={form.language} onChange={e => set('language', e.target.value)}>
-                <option value="ar">عربي</option>
-                <option value="en">English</option>
-              </select>
-            </div>
-          </div>
-
-          {isGeneralAdmin && user?.id && form.can_rate_customers && (
-            <RatingActivationAdmin userId={user.id} isAr={isAr} />
-          )}
-
-          {isGeneralAdmin && user?.id && form.role === 'shift_supervisor' && (
-            <ShiftSupervisorAssignments userId={user.id} stationId={primaryStation()} isAr={isAr} />
-          )}
-
-          {/* Station — single (لغير المشرف) */}
-          {!(isGeneralAdmin && isMultiStationRole) && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المحطة' : 'Station'}</label>
-              <select className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}
-                disabled={isStationAdmin}>
-                <option value="">{isAr ? '— بدون محطة —' : '— No Station —'}</option>
-                {stations.map(s => (
-                  <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Multi-station — for supervisor (station_admin) or area_supervisor, admin assigns */}
-          {isGeneralAdmin && isMultiStationRole && (
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-gray-600">
-                  {isAr ? 'محطات المشرف (يمكن اختيار أكثر من محطة)' : 'Supervisor Stations (multiple allowed)'}
-                </label>
-                {stationSet.size > 0 && (
-                  <button type="button" onClick={() => { setStationSet(new Set()); setPrimaryStationId(null) }}
-                    className="text-[11px] text-red-400 hover:text-red-600">
-                    {isAr ? 'مسح الكل' : 'Clear all'}
-                  </button>
-                )}
               </div>
-              {stationSet.size > 1 && (
-                <p className="text-[11px] text-amber-600 mb-1.5">
-                  {isAr ? '★ حدد المحطة الأساسية — هي اللي تظهر بالتقييم والإجازات' : '★ Pick the primary station — shown in evaluations & leaves'}
-                </p>
-              )}
-              {/* Search inside station list */}
-              <input
-                type="text"
-                value={stationSearch}
-                onChange={e => setStationSearch(e.target.value)}
-                placeholder={isAr ? 'بحث عن محطة...' : 'Search station...'}
-                className="w-full border rounded-lg px-3 py-1.5 text-xs mb-1.5 focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
-              />
-              <div className="border rounded-lg p-2 max-h-48 overflow-y-auto grid grid-cols-2 gap-1">
-                {stations
-                  .filter(s => {
-                    const q = stationSearch.toLowerCase()
-                    return !q || (s.name_ar ?? '').toLowerCase().includes(q) || (s.name_en ?? '').toLowerCase().includes(q)
-                  })
-                  .map(s => {
-                    const on = stationSet.has(s.id)
-                    const isPrimary = on && primaryStationId === s.id
-                    return (
-                      <div key={s.id} className="flex items-center gap-1">
-                      <button type="button" onClick={() => toggleStation(s.id)}
-                        className={`flex-1 min-w-0 flex items-center gap-2 text-right rounded px-2 py-1.5 text-sm transition
-                          ${on ? 'bg-blue-50 text-nwbus-primary font-medium' : 'hover:bg-gray-50 text-gray-600'}`}>
-                        <span className={`w-4 h-4 rounded grid place-items-center text-[10px] border shrink-0
-                          ${on ? 'bg-nwbus-primary border-nwbus-primary text-white' : 'border-gray-300'}`}>
-                          {on && '✓'}
-                        </span>
-                        <span className="truncate">{isAr ? s.name_ar : s.name_en}</span>
-                      </button>
-                      {on && (
-                        <button type="button" onClick={() => setPrimaryStationId(s.id)}
-                          title={isAr ? 'اجعلها المحطة الأساسية' : 'Set as primary station'}
-                          className={`shrink-0 w-6 h-6 grid place-items-center rounded transition
-                            ${isPrimary ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`}>
-                          {isPrimary ? '★' : '☆'}
+            )}
+
+            {isGeneralAdmin && user?.id && form.can_rate_customers && (
+              <RatingActivationAdmin userId={user.id} isAr={isAr} />
+            )}
+          </Section>
+
+          <Section title={isAr ? 'المحطة والإشراف' : 'Station & Supervision'}>
+            {/* Station — single (لغير المشرف) */}
+            {!(isGeneralAdmin && isMultiStationRole) && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المحطة' : 'Station'}</label>
+                <select className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}
+                  disabled={isStationAdmin}>
+                  <option value="">{isAr ? '— بدون محطة —' : '— No Station —'}</option>
+                  {stations.map(s => (
+                    <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Multi-station — for supervisor (station_admin) or area_supervisor, admin assigns */}
+            {isGeneralAdmin && isMultiStationRole && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-gray-600">
+                    {isAr ? 'محطات المشرف (يمكن اختيار أكثر من محطة)' : 'Supervisor Stations (multiple allowed)'}
+                  </label>
+                  {stationSet.size > 0 && (
+                    <button type="button" onClick={() => { setStationSet(new Set()); setPrimaryStationId(null) }}
+                      className="text-[11px] text-red-400 hover:text-red-600">
+                      {isAr ? 'مسح الكل' : 'Clear all'}
+                    </button>
+                  )}
+                </div>
+                {stationSet.size > 1 && (
+                  <p className="text-[11px] text-amber-600 mb-1.5">
+                    {isAr ? '★ حدد المحطة الأساسية — هي اللي تظهر بالتقييم والإجازات' : '★ Pick the primary station — shown in evaluations & leaves'}
+                  </p>
+                )}
+                {/* Search inside station list */}
+                <input
+                  type="text"
+                  value={stationSearch}
+                  onChange={e => setStationSearch(e.target.value)}
+                  placeholder={isAr ? 'بحث عن محطة...' : 'Search station...'}
+                  className="w-full border rounded-lg px-3 py-1.5 text-xs mb-1.5 focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
+                />
+                <div className="border rounded-lg p-2 max-h-48 overflow-y-auto grid grid-cols-2 gap-1">
+                  {stations
+                    .filter(s => {
+                      const q = stationSearch.toLowerCase()
+                      return !q || (s.name_ar ?? '').toLowerCase().includes(q) || (s.name_en ?? '').toLowerCase().includes(q)
+                    })
+                    .map(s => {
+                      const on = stationSet.has(s.id)
+                      const isPrimary = on && primaryStationId === s.id
+                      return (
+                        <div key={s.id} className="flex items-center gap-1">
+                        <button type="button" onClick={() => toggleStation(s.id)}
+                          className={`flex-1 min-w-0 flex items-center gap-2 text-right rounded px-2 py-1.5 text-sm transition
+                            ${on ? 'bg-blue-50 text-nwbus-primary font-medium' : 'hover:bg-gray-50 text-gray-600'}`}>
+                          <span className={`w-4 h-4 rounded grid place-items-center text-[10px] border shrink-0
+                            ${on ? 'bg-nwbus-primary border-nwbus-primary text-white' : 'border-gray-300'}`}>
+                            {on && '✓'}
+                          </span>
+                          <span className="truncate">{isAr ? s.name_ar : s.name_en}</span>
                         </button>
-                      )}
-                      </div>
-                    )
-                  })}
+                        {on && (
+                          <button type="button" onClick={() => setPrimaryStationId(s.id)}
+                            title={isAr ? 'اجعلها المحطة الأساسية' : 'Set as primary station'}
+                            className={`shrink-0 w-6 h-6 grid place-items-center rounded transition
+                              ${isPrimary ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`}>
+                            {isPrimary ? '★' : '☆'}
+                          </button>
+                        )}
+                        </div>
+                      )
+                    })}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  {isAr ? `المختارة: ${stationSet.size}` : `Selected: ${stationSet.size}`}
+                  {stationSearch && ` — ${isAr ? 'تصفية نشطة' : 'filtered'}`}
+                  {primaryStationId && stationSet.has(primaryStationId) && (
+                    <> · <span className="text-amber-600 font-medium">
+                      ★ {isAr ? 'الأساسية: ' : 'Primary: '}
+                      {(isAr ? stations.find(s => s.id === primaryStationId)?.name_ar : stations.find(s => s.id === primaryStationId)?.name_en) ?? ''}
+                    </span></>
+                  )}
+                </p>
               </div>
-              <p className="text-[11px] text-gray-400 mt-1">
-                {isAr ? `المختارة: ${stationSet.size}` : `Selected: ${stationSet.size}`}
-                {stationSearch && ` — ${isAr ? 'تصفية نشطة' : 'filtered'}`}
-                {primaryStationId && stationSet.has(primaryStationId) && (
-                  <> · <span className="text-amber-600 font-medium">
-                    ★ {isAr ? 'الأساسية: ' : 'Primary: '}
-                    {(isAr ? stations.find(s => s.id === primaryStationId)?.name_ar : stations.find(s => s.id === primaryStationId)?.name_en) ?? ''}
-                  </span></>
-                )}
-              </p>
-            </div>
-          )}
+            )}
 
-          {/* Supervisor — for all roles except general_admin */}
-          {form.role !== 'general_admin' && supervisors.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {isAr ? 'المسؤول المباشر' : 'Direct Supervisor'}
-              </label>
-              <select className={inputCls} value={form.supervisor_id} onChange={e => set('supervisor_id', e.target.value)}>
-                <option value="">{isAr ? '— بدون مشرف —' : '— No Supervisor —'}</option>
-                {supervisors.map(s => (
-                  <option key={s.id} value={s.id}>{s.full_name_ar}</option>
-                ))}
-              </select>
-            </div>
-          )}
+            {/* Supervisor — for all roles except general_admin */}
+            {form.role !== 'general_admin' && supervisors.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {isAr ? 'المسؤول المباشر' : 'Direct Supervisor'}
+                </label>
+                <select className={inputCls} value={form.supervisor_id} onChange={e => set('supervisor_id', e.target.value)}>
+                  <option value="">{isAr ? '— بدون مشرف —' : '— No Supervisor —'}</option>
+                  {supervisors.map(s => (
+                    <option key={s.id} value={s.id}>{s.full_name_ar}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-          {/* مشرف وردية آخر يقيّمه — يظهر بس لمشرفي الورديات، بند تقييم منفصل عن "المشرف المباشر" */}
-          {form.role === 'shift_supervisor' && shiftSupervisors.filter(s => s.id !== user?.id).length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                {isAr ? 'مشرف وردية آخر يقيّمه' : 'Peer shift supervisor who rates him'}
-              </label>
-              <select className={inputCls} value={form.peer_supervisor_id} onChange={e => set('peer_supervisor_id', e.target.value)}>
-                <option value="">{isAr ? '— بدون —' : '— None —'}</option>
-                {shiftSupervisors.filter(s => s.id !== user?.id).map(s => (
-                  <option key={s.id} value={s.id}>{s.full_name_ar}</option>
-                ))}
-              </select>
-            </div>
-          )}
+            {/* مشرف وردية آخر يقيّمه — يظهر بس لمشرفي الورديات، بند تقييم منفصل عن "المشرف المباشر" */}
+            {form.role === 'shift_supervisor' && shiftSupervisors.filter(s => s.id !== user?.id).length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  {isAr ? 'مشرف وردية آخر يقيّمه' : 'Peer shift supervisor who rates him'}
+                </label>
+                <select className={inputCls} value={form.peer_supervisor_id} onChange={e => set('peer_supervisor_id', e.target.value)}>
+                  <option value="">{isAr ? '— بدون —' : '— None —'}</option>
+                  {shiftSupervisors.filter(s => s.id !== user?.id).map(s => (
+                    <option key={s.id} value={s.id}>{s.full_name_ar}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-          {/* تاريخ المباشرة */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              {isAr ? 'تاريخ المباشرة' : 'Hire Date'}
-            </label>
-            <DatePicker
-              value={form.hire_date}
-              onChange={v => set('hire_date', v)}
-              className={inputCls}
-              isAr={isAr}
-              placeholder={isAr ? 'اختر تاريخ المباشرة' : 'Select hire date'}
-            />
-          </div>
+            {isGeneralAdmin && user?.id && form.role === 'shift_supervisor' && (
+              <ShiftSupervisorAssignments userId={user.id} stationId={primaryStation()} isAr={isAr} />
+            )}
+          </Section>
 
-          {/* Module Permissions */}
-          <div className="bg-gray-50 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">
-                {isAr ? 'الأقسام المتاحة' : 'Allowed Sections'}
-              </p>
+          <Section title={isAr ? 'الأقسام المتاحة' : 'Allowed Sections'}>
+            <div className="flex items-center justify-end -mt-1">
               <button type="button" onClick={() => set('allowed_modules', null)}
                 className="text-xs text-nwbus-primary underline">
-                {isAr ? 'الكل' : 'All'}
+                {isAr ? 'تحديد الكل' : 'Select all'}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-1 max-h-52 overflow-y-auto pr-1">
               {MODULES.map(m => (
-                <label key={m.value} className="flex items-center gap-2 text-sm cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                <label key={m.value} className="flex items-center gap-2 text-sm cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors">
                   <input type="checkbox" className="rounded accent-nwbus-primary"
                     checked={selectedMods.includes(m.value)}
                     onChange={() => toggleModule(m.value)} />
@@ -986,36 +993,35 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
               ))}
             </div>
             {form.allowed_modules === null && (
-              <p className="text-xs text-green-600 mt-2">✓ {isAr ? 'صلاحية وصول كاملة لجميع الأقسام' : 'Full access to all sections'}</p>
+              <p className="text-xs text-green-600">✓ {isAr ? 'صلاحية وصول كاملة لجميع الأقسام' : 'Full access to all sections'}</p>
             )}
-          </div>
 
-          {/* Active */}
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" className="rounded accent-nwbus-primary"
-              checked={form.is_active} onChange={e => set('is_active', e.target.checked)} />
-            <span className={form.is_active ? 'text-green-700 font-medium' : 'text-gray-400'}>
-              {form.is_active ? (isAr ? '✓ حساب نشط' : '✓ Active Account') : (isAr ? 'حساب معطّل' : 'Disabled Account')}
-            </span>
-          </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer border-t border-gray-100 pt-3">
+              <input type="checkbox" className="rounded accent-nwbus-primary"
+                checked={form.is_active} onChange={e => set('is_active', e.target.checked)} />
+              <span className={form.is_active ? 'text-green-700 font-medium' : 'text-gray-400'}>
+                {form.is_active ? (isAr ? '✓ حساب نشط' : '✓ Active Account') : (isAr ? 'حساب معطّل' : 'Disabled Account')}
+              </span>
+            </label>
+          </Section>
 
           {error && (
             <div className="text-xs rounded-lg p-3 bg-red-50 text-red-600 border border-red-100">
               ⚠ {error}
             </div>
           )}
-
-          <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={saving}
-              className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-nwbus-dark transition-colors">
-              {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
-            </button>
-            <button type="button" onClick={closeAndClearDraft}
-              className="px-4 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-              {isAr ? 'إلغاء' : 'Cancel'}
-            </button>
-          </div>
         </form>
+
+        <div className="flex gap-3 px-6 py-4 border-t bg-white sticky bottom-0">
+          <button type="submit" form="user-form" disabled={saving}
+            className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-nwbus-dark transition-colors">
+            {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
+          </button>
+          <button type="button" onClick={closeAndClearDraft}
+            className="px-4 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            {isAr ? 'إلغاء' : 'Cancel'}
+          </button>
+        </div>
       </div>
     </div>
 
