@@ -12,3 +12,4 @@ dist/
 *.log
 .vercel
 .env*
+supabase/.temp/
