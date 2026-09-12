@@ -415,7 +415,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
       if (e || !data?.length) return
       const row = data[0]
       setSensitive(row)
-      setForm(f => ({ ...f, phone: row.phone ?? '', national_id: row.national_id ?? '' }))
+      setForm(f => ({ ...f, phone: row.phone ?? '', national_id: row.national_id ?? '', email: row.email ?? '' }))
     })
   }, [user?.id])
   // password reset for edit mode
