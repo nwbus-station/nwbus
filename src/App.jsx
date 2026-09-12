@@ -36,6 +36,7 @@ import SurveyPage       from './pages/SurveyPage'
 import EvaluationPage   from './pages/EvaluationPage'
 import EmployeeRatingPage from './pages/EmployeeRatingPage'
 import PublicRatingPage from './pages/PublicRatingPage'
+import SetPasswordPage  from './pages/SetPasswordPage'
 import CustomerRatingsAdminPage from './pages/CustomerRatingsAdminPage'
 
 // Layout
@@ -104,6 +105,9 @@ export default function App() {
 
       {/* تقييم العميل للموظف — عامة بدون تسجيل دخول */}
       <Route path="/rate/:token" element={<PublicRatingPage />} />
+
+      {/* تفعيل حساب/تعيين كلمة مرور من رابط إيميل — عامة بدون تسجيل دخول */}
+      <Route path="/set-password" element={<SetPasswordPage />} />
 
       <Route path="/" element={
         <RequireAuth>

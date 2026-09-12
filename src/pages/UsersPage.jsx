@@ -171,6 +171,24 @@ async function resetPasswordViaEdge(authId, newPassword) {
   if (!res.ok) throw new Error(body.error || 'Failed to reset password')
 }
 
+async function sendCredentialEmail(employeeId) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  if (!token) throw new Error('No active session')
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-credential-email`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ employee_id: employeeId, redirect_to: `${window.location.origin}/set-password` }),
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error || 'Failed to send email')
+}
+
 function buildUsername(jobNum) {
   return jobNum ? 'NW' + jobNum : ''
 }
@@ -372,6 +390,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     supervisor_id:   user?.supervisor_id   ?? '',
     peer_supervisor_id: user?.peer_supervisor_id ?? '',
     phone:           user?.phone           ?? '',
+    email:           user?.email           ?? '',
     national_id:     user?.national_id     ?? '',
     job_title:       user?.job_title        ?? '',
     hire_date:       user?.hire_date        ?? '',
@@ -404,6 +423,20 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
   const [showNewPwd,  setShowNewPwd]  = useState(false)
   const [pwdSaving,   setPwdSaving]   = useState(false)
   const [pwdMsg,      setPwdMsg]      = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [sendEmailMsg, setSendEmailMsg] = useState('')
+
+  async function handleSendCredentialEmail() {
+    setSendingEmail(true)
+    setSendEmailMsg('')
+    try {
+      await sendCredentialEmail(user.id)
+      setSendEmailMsg(isAr ? '✓ تم إرسال رابط التفعيل' : '✓ Activation link sent')
+    } catch (err) {
+      setSendEmailMsg((isAr ? 'فشل الإرسال: ' : 'Failed: ') + err.message)
+    }
+    setSendingEmail(false)
+  }
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -536,6 +569,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
 
           const { error: nErr } = await supabase.from('users').update({
             phone: form.phone.trim() || null,
+            email: form.email.trim() || null,
             national_id: form.national_id.trim() || null,
             job_title: form.job_title || null,
             hire_date: form.hire_date || null,
@@ -576,6 +610,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           await supabase.from('users').update({
             can_rate_customers: !!form.can_rate_customers,
             peer_supervisor_id: form.peer_supervisor_id || null,
+            email: form.email.trim() || null,
           }).eq('id', user.id)
         }
 
@@ -695,6 +730,18 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
+                {isAr ? 'الإيميل الشخصي' : 'Personal Email'}
+              </label>
+              <input autoComplete="off" type="email" className={inputCls} value={form.email} dir="ltr"
+                onChange={e => set('email', e.target.value.trim())}
+                placeholder="employee@example.com" />
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                {isAr ? 'يُستخدم لإرسال رابط تفعيل الحساب — اختياري' : 'Used to send the account activation link — optional'}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
                 {isAr ? 'تاريخ المباشرة' : 'Hire Date'}
               </label>
               <DatePicker
@@ -806,6 +853,18 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                     className="w-full bg-amber-500 text-white py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-amber-600 transition-colors">
                     {pwdSaving ? '...' : (isAr ? 'تغيير كلمة المرور' : 'Update Password')}
                   </button>
+                </div>
+
+                <div className="border-t pt-3 space-y-2">
+                  <p className="text-xs font-medium text-gray-600">{isAr ? 'تفعيل عبر الإيميل' : 'Email Activation'}</p>
+                  {sendEmailMsg && <p className={`text-xs ${sendEmailMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{sendEmailMsg}</p>}
+                  <button type="button" onClick={handleSendCredentialEmail} disabled={sendingEmail || !form.email.trim()}
+                    className="w-full bg-nwbus-primary text-white py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-nwbus-dark transition-colors">
+                    {sendingEmail ? '...' : (isAr ? 'إرسال رابط تعيين كلمة المرور بالإيميل' : 'Email password-setup link')}
+                  </button>
+                  {!form.email.trim() && (
+                    <p className="text-[11px] text-gray-400">{isAr ? 'أضف الإيميل الشخصي أولاً واحفظ' : 'Add a personal email first and save'}</p>
+                  )}
                 </div>
               </>
             )}

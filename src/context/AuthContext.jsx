@@ -65,8 +65,11 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    // رابط تفعيل حساب/استعادة كلمة مرور من الإيميل — استثناء متعمّد من فحص "تبويب خارجي"،
+    // صفحة SetPasswordPage تتولى تأسيس الجلسة بنفسها من توكن الرابط
+    const isRecoveryLink = window.location.hash.includes('type=recovery')
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && !sessionStorage.getItem(TAB_AUTH_KEY)) {
+      if (session && !sessionStorage.getItem(TAB_AUTH_KEY) && !isRecoveryLink) {
         // ريفريش (F5) → sessionStorage يبقى، لكن كاحتياط إضافي نتحقق من نوع التنقل
         const navType = performance?.getEntriesByType?.('navigation')?.[0]?.type
         const isReload = navType === 'reload'
