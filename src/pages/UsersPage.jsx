@@ -188,15 +188,15 @@ function Section({ title, children }) {
 function generatePassword() {
   const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ'
   const lower = 'abcdefghjkmnpqrstuvwxyz'
-  const alnum = upper + lower + '23456789'
+  const digits = '23456789'
   const symbols = '.-@'
   const rand = s => s[Math.floor(Math.random() * s.length)]
 
-  const head = rand(upper) + rand(lower) + rand(upper)
+  const letters = rand(upper) + rand(lower) + rand(upper) + rand(lower)
   const symbol = rand(symbols)
-  let tail = ''
-  for (let i = 0; i < 4; i++) tail += rand(alnum)
-  return head + symbol + tail
+  let nums = ''
+  for (let i = 0; i < 3; i++) nums += rand(digits)
+  return letters + symbol + nums
 }
 
 const JOB_TITLES = [
