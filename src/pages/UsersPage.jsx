@@ -1143,8 +1143,10 @@ export default function UsersPage() {
   const [jobFilter,     setJobFilter]     = useState('')
   const [moduleFilter,  setModuleFilter]  = useState('')
   const [moduleFilterExclude, setModuleFilterExclude] = useState(false) // true = "ما عندهم القسم"
+  const [supervisorFilter, setSupervisorFilter] = useState('')
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [bulkModule,  setBulkModule]  = useState('')
+  const [bulkSupervisor, setBulkSupervisor] = useState('')
   const [bulkSaving,  setBulkSaving]  = useState(false)
 
   function toggleSelect(id) {
@@ -1165,6 +1167,18 @@ export default function UsersPage() {
     setBulkSaving(false)
     setSelectedIds(new Set())
     setBulkModule('')
+    fetchAll(true)
+  }
+
+  async function handleBulkReassignSupervisor() {
+    if (!bulkSupervisor || selectedIds.size === 0) return
+    setBulkSaving(true)
+    await Promise.all(Array.from(selectedIds).map(id =>
+      supabase.from('users').update({ supervisor_id: bulkSupervisor }).eq('id', id)
+    ))
+    setBulkSaving(false)
+    setSelectedIds(new Set())
+    setBulkSupervisor('')
     fetchAll(true)
   }
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm, onCancel? }
@@ -1258,10 +1272,11 @@ export default function UsersPage() {
     const matchJob     = !jobFilter     || u.job_title  === jobFilter
     const hasModule    = !moduleFilter || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
     const matchModule  = !moduleFilter || (moduleFilterExclude ? !hasModule : hasModule)
-    return matchSearch && matchRole && matchStation && matchStatus && matchJob && matchModule
+    const matchSupervisor = !supervisorFilter || u.supervisor_id === supervisorFilter
+    return matchSearch && matchRole && matchStation && matchStatus && matchJob && matchModule && matchSupervisor
   })
 
-  const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter, moduleFilter].filter(Boolean).length
+  const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter, moduleFilter, supervisorFilter].filter(Boolean).length
 
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
@@ -1370,12 +1385,22 @@ export default function UsersPage() {
             <option value="active">{isAr ? 'نشط فقط' : 'Active only'}</option>
             <option value="inactive">{isAr ? 'معطّل فقط' : 'Inactive only'}</option>
           </select>
+
+          {/* Supervisor — لعرض/تحديد موظفي مشرف معيّن دفعة وحدة */}
+          <select value={supervisorFilter} onChange={e => setSupervisorFilter(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+            style={{ fontFamily: 'inherit' }}>
+            <option value="">{isAr ? 'تصفية حسب المشرف' : 'Filter by supervisor'}</option>
+            {supervisors.map(s => (
+              <option key={s.id} value={s.id}>{s.full_name_ar}</option>
+            ))}
+          </select>
             </>
           )}
 
           {/* Clear all */}
           {activeFilters > 0 && (
-            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter(''); setModuleFilter(''); setModuleFilterExclude(false) }}
+            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter(''); setModuleFilter(''); setModuleFilterExclude(false); setSupervisorFilter('') }}
               className="px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors font-medium">
               {isAr ? `مسح الفلاتر (${activeFilters})` : `Clear (${activeFilters})`}
             </button>
@@ -1399,6 +1424,19 @@ export default function UsersPage() {
           <button onClick={handleBulkAddModule} disabled={!bulkModule || bulkSaving}
             className="bg-nwbus-primary text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-nwbus-dark transition-colors">
             {bulkSaving ? (isAr ? 'جارٍ الإضافة...' : 'Adding...') : (isAr ? 'إضافة القسم للمحدد' : 'Add section to selected')}
+          </button>
+          <span className="text-gray-300">|</span>
+          <select value={bulkSupervisor} onChange={e => setBulkSupervisor(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+            style={{ fontFamily: 'inherit' }}>
+            <option value="">{isAr ? '— نقل إلى مشرف —' : '— Reassign to supervisor —'}</option>
+            {supervisors.map(s => (
+              <option key={s.id} value={s.id}>{s.full_name_ar}</option>
+            ))}
+          </select>
+          <button onClick={handleBulkReassignSupervisor} disabled={!bulkSupervisor || bulkSaving}
+            className="bg-nwbus-primary text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-nwbus-dark transition-colors">
+            {bulkSaving ? (isAr ? 'جارٍ النقل...' : 'Reassigning...') : (isAr ? 'نقل المحدد لمشرف جديد' : 'Reassign selected')}
           </button>
           <button onClick={() => setSelectedIds(new Set())}
             className="text-xs text-gray-500 underline">
