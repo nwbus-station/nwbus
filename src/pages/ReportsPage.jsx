@@ -1468,8 +1468,8 @@ export default function ReportsPage() {
           </section>
           )}
 
-          {/* Sales summary */}
-          {show('sales') && (
+          {/* Sales summary — للأدمن العام فقط */}
+          {isGeneralAdmin && show('sales') && (
           <section>
             <h2 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
               {isAr ? 'ملخص المبيعات' : 'Sales Summary'}
