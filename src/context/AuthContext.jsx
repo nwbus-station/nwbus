@@ -91,8 +91,11 @@ export function AuthProvider({ children }) {
       fetchProfile(session?.user)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
+      // تجديد الرمز عند عودة التطبيق للواجهة (تبديل تطبيقات بالجوال، إلخ) لا يستدعي إعادة جلب
+      // البروفايل ولا شاشة تحميل — كان يسبب "ومضة بيضاء" في كل مرة يرجع فيها المستخدم للصفحة
+      if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return
       if (session?.user) {
         fetchProfile(session.user)
       } else {
