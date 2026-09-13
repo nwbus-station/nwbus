@@ -1358,7 +1358,7 @@ export default function UsersPage() {
             <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-white border cursor-pointer text-gray-700">
               <input type="checkbox" className="rounded accent-nwbus-primary"
                 checked={moduleFilterExclude} onChange={e => setModuleFilterExclude(e.target.checked)} />
-              {isAr ? 'اللي ما عندهم القسم' : "Who don't have it"}
+              {isAr ? 'لا يوجد صلاحية القسم' : "Who don't have it"}
             </label>
           )}
 
