@@ -1142,6 +1142,7 @@ export default function UsersPage() {
   const [statusFilter,  setStatusFilter]  = useState('')   // '' | 'active' | 'inactive'
   const [jobFilter,     setJobFilter]     = useState('')
   const [moduleFilter,  setModuleFilter]  = useState('')
+  const [moduleFilterExclude, setModuleFilterExclude] = useState(false) // true = "ما عندهم القسم"
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm, onCancel? }
 
   const fetchAll = useCallback(async (bust = false) => {
@@ -1231,7 +1232,8 @@ export default function UsersPage() {
     const matchStation = !stationFilter || u.station_id === stationFilter
     const matchStatus  = !statusFilter  || (statusFilter === 'active' ? u.is_active : !u.is_active)
     const matchJob     = !jobFilter     || u.job_title  === jobFilter
-    const matchModule  = !moduleFilter  || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
+    const hasModule    = !moduleFilter || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
+    const matchModule  = !moduleFilter || (moduleFilterExclude ? !hasModule : hasModule)
     return matchSearch && matchRole && matchStation && matchStatus && matchJob && matchModule
   })
 
@@ -1326,6 +1328,14 @@ export default function UsersPage() {
             ))}
           </select>
 
+          {moduleFilter && (
+            <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-white border cursor-pointer text-gray-700">
+              <input type="checkbox" className="rounded accent-nwbus-primary"
+                checked={moduleFilterExclude} onChange={e => setModuleFilterExclude(e.target.checked)} />
+              {isAr ? 'اللي ما عندهم القسم' : "Who don't have it"}
+            </label>
+          )}
+
           {/* Status */}
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
@@ -1337,7 +1347,7 @@ export default function UsersPage() {
 
           {/* Clear all */}
           {activeFilters > 0 && (
-            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter(''); setModuleFilter('') }}
+            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter(''); setModuleFilter(''); setModuleFilterExclude(false) }}
               className="px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors font-medium">
               {isAr ? `مسح الفلاتر (${activeFilters})` : `Clear (${activeFilters})`}
             </button>
