@@ -571,10 +571,10 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           if (form.allowed_modules !== null) extras.allowed_modules = form.allowed_modules
           if (Object.keys(extras).length) {
             const { error: extrasErr } = await supabase.from('users').update(extras).eq('id', inserted.id)
-            if (extrasErr && !extrasErr.message?.includes('column') && !extrasErr.message?.includes('does not exist')) throw extrasErr
+            if (extrasErr) throw extrasErr
           }
-          // حفظ كلمة المرور للأدمن — صامت إن لم يكن العمود موجوداً بعد
-          await supabase.from('users').update({ login_password: form.password }).eq('id', inserted.id)
+          const { error: pwErr } = await supabase.from('users').update({ login_password: form.password }).eq('id', inserted.id)
+          if (pwErr) throw pwErr
 
           const { error: nErr } = await supabase.from('users').update({
             phone: form.phone.trim() || null,
@@ -584,7 +584,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
             hire_date: form.hire_date || null,
             ...(isGeneralAdmin ? { is_accountant: !!form.is_accountant, is_agent: !!form.is_agent, can_rate_customers: !!form.can_rate_customers } : {}),
           }).eq('id', inserted.id)
-          if (nErr && !nErr.message?.includes('column') && !nErr.message?.includes('does not exist')) throw nErr
+          if (nErr) throw nErr
         }
 
         // نجح الحفظ — امسح المسودة واعرض بطاقة بيانات الدخول
