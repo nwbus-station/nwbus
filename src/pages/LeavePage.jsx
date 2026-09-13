@@ -1171,10 +1171,11 @@ function StepBadge({ label, status, by, isAr = true }) {
    الصفحة الرئيسية
 ══════════════════════════════════════════ */
 const TABS_CFG = [
-  { id: 'new',     ar: 'طلب إجازة',       en: 'New Request',    icon: '' },
-  { id: 'mine',    ar: 'طلباتي',           en: 'My Requests',   icon: '' },
-  { id: 'pending', ar: 'بانتظار موافقتي', en: 'Pending Approval', icon: '', supervisorOnly: true },
-  { id: 'all',     ar: 'جميع الطلبات',    en: 'All Requests',  icon: '',  supervisorOnly: true },
+  { id: 'new',      ar: 'طلب إجازة',       en: 'New Request',    icon: '' },
+  { id: 'mine',     ar: 'طلباتي',           en: 'My Requests',   icon: '' },
+  { id: 'pending',  ar: 'بانتظار موافقتي', en: 'Pending Approval', icon: '', supervisorOnly: true },
+  { id: 'all',      ar: 'جميع الطلبات',    en: 'All Requests',  icon: '',  supervisorOnly: true },
+  { id: 'balances', ar: 'أرصدة الإجازات',  en: 'Leave Balances', icon: '', supervisorOnly: true },
 ]
 
 export default function LeavePage() {
@@ -1191,6 +1192,9 @@ export default function LeavePage() {
   const [loading, setLoading] = useState(false)
   const [saved, setSaved]   = useState(false)
   const [filterStatus, setFilterStatus] = useState('all')
+  const [balances, setBalances] = useState([])
+  const [loadingBalances, setLoadingBalances] = useState(false)
+  const [balanceSearch, setBalanceSearch] = useState('')
 
   const visibleTabs = TABS_CFG.filter(t => {
     if (t.adminOnly && !isAdmin) return false
@@ -1222,7 +1226,41 @@ export default function LeavePage() {
     setLoading(false)
   }
 
-  useEffect(() => { if (tab !== 'new') load() }, [tab])
+  useEffect(() => { if (tab !== 'new' && tab !== 'balances') load() }, [tab])
+
+  async function loadBalances() {
+    setLoadingBalances(true)
+    let uq = supabase.from('users')
+      .select('id, full_name_ar, hire_date, station_id, station:station_id(name_ar, name_en)')
+      .eq('is_active', true).order('full_name_ar')
+    if (!isGeneralAdmin) {
+      if (isAreaSupervisor && allowedStationIds?.length) uq = uq.in('station_id', allowedStationIds)
+      else uq = uq.eq('station_id', profile.station_id)
+    }
+    const { data: emps } = await uq
+    const empList = (emps ?? []).filter(e => e.hire_date)
+    const empIds = empList.map(e => e.id)
+    let usedMap = {}
+    if (empIds.length) {
+      const { data: usedRows } = await supabase.from('leaves')
+        .select('employee_id, days_count')
+        .eq('leave_type', 'annual').eq('status', 'approved')
+        .in('employee_id', empIds)
+      usedMap = (usedRows ?? []).reduce((m, r) => {
+        m[r.employee_id] = (m[r.employee_id] ?? 0) + (r.days_count ?? 0)
+        return m
+      }, {})
+    }
+    setBalances(empList.map(e => {
+      const entitlement = annualEntitlement(e.hire_date)
+      const accrued = accruedBalance(e.hire_date, entitlement)
+      const used = usedMap[e.id] ?? 0
+      return { ...e, entitlement, accrued, used, remaining: Math.max(0, accrued - used) }
+    }))
+    setLoadingBalances(false)
+  }
+
+  useEffect(() => { if (tab === 'balances') loadBalances() }, [tab])
 
   useEffect(() => {
     if (tab === 'new') return
@@ -1329,7 +1367,7 @@ export default function LeavePage() {
         ))}
       </div>
 
-      <div style={{ maxWidth: tab === 'new' ? 860 : 720, margin: '0 auto', padding: '24px 20px' }}>
+      <div style={{ maxWidth: tab === 'new' ? 860 : tab === 'balances' ? 960 : 720, margin: '0 auto', padding: '24px 20px' }}>
 
         {/* طلب جديد */}
         {tab === 'new' && (
@@ -1349,8 +1387,60 @@ export default function LeavePage() {
           </div>
         )}
 
+        {/* أرصدة الإجازات */}
+        {tab === 'balances' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <input
+              value={balanceSearch} onChange={e => setBalanceSearch(e.target.value)}
+              placeholder={isAr ? 'بحث بالاسم...' : 'Search by name...'}
+              style={{ ...inp, maxWidth: 280 }}
+            />
+            <div style={{ background: 'var(--card)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'auto' }}>
+              {loadingBalances ? (
+                <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-3)' }}>…</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', minWidth: 640 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      {(isAr
+                        ? ['الموظف', 'المحطة', 'تاريخ المباشرة', 'سنوات الخدمة', 'الرصيد المستحق', 'المستخدم', 'المتبقي']
+                        : ['Employee', 'Station', 'Hire Date', 'Years', 'Accrued', 'Used', 'Remaining']
+                      ).map((h, i) => (
+                        <th key={i} style={{ padding: '10px 14px', textAlign: isAr ? 'right' : 'left', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {balances
+                      .filter(b => !balanceSearch || b.full_name_ar?.toLowerCase().includes(balanceSearch.toLowerCase()))
+                      .map(b => (
+                      <tr key={b.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-1)' }}>{b.full_name_ar}</td>
+                        <td style={{ padding: '10px 14px', color: 'var(--text-2)' }}>{isAr ? b.station?.name_ar : b.station?.name_en}</td>
+                        <td style={{ padding: '10px 14px', color: 'var(--text-2)' }}>{b.hire_date}</td>
+                        <td style={{ padding: '10px 14px', color: 'var(--text-2)', textAlign: 'center' }}>{yearsOfService(b.hire_date)}</td>
+                        <td style={{ padding: '10px 14px', color: 'var(--text-2)', textAlign: 'center' }}>{b.accrued.toFixed(1)}</td>
+                        <td style={{ padding: '10px 14px', color: 'var(--text-2)', textAlign: 'center' }}>{b.used}</td>
+                        <td style={{ padding: '10px 14px', fontWeight: 800, textAlign: 'center', color: b.remaining > 0 ? '#166534' : '#dc2626' }}>{b.remaining.toFixed(1)}</td>
+                      </tr>
+                    ))}
+                    {balances.length === 0 && (
+                      <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'لا يوجد موظفون' : 'No employees'}</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', margin: 0 }}>
+              {isAr
+                ? 'الرصيد المستحق يُحسب تراكمياً منذ تاريخ المباشرة (21 يوم/سنة لمن أقل من 5 سنوات خدمة، 30 يوم/سنة لـ 5 سنوات فأكثر) مطروحاً منه الإجازات السنوية المعتمدة — تقديري وليس رسمياً.'
+                : 'Accrued balance is calculated cumulatively since the hire date (21 days/year under 5 years of service, 30 days/year at 5+) minus approved annual leave taken — an estimate, not an official figure.'}
+            </p>
+          </div>
+        )}
+
         {/* قائمة الطلبات */}
-        {tab !== 'new' && (
+        {tab !== 'new' && tab !== 'balances' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {/* فلتر الحالة */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
