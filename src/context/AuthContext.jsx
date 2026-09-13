@@ -18,6 +18,7 @@ export function AuthProvider({ children }) {
   const [profileError,      setProfileError]      = useState(null)  // debug error message
   const [allowedStationIds, setAllowedStationIds] = useState(null)  // null = all, array = restricted
   const profileIdRef = useRef(null)
+  const authUserIdRef = useRef(null) // auth.users id لآخر مستخدم تم جلب بروفايله فعلياً
 
   // Fetch the full user profile from the users table
   async function fetchProfile(authUser) {
@@ -77,6 +78,7 @@ export function AuthProvider({ children }) {
           // ريفريش حقيقي — أعد تعيين المفتاح واسمح بالدخول
           sessionStorage.setItem(TAB_AUTH_KEY, '1')
           setSession(session)
+          authUserIdRef.current = session?.user?.id ?? null
           fetchProfile(session?.user)
           return
         }
@@ -88,14 +90,16 @@ export function AuthProvider({ children }) {
         return
       }
       setSession(session)
+      authUserIdRef.current = session?.user?.id ?? null
       fetchProfile(session?.user)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      // تجديد الرمز عند عودة التطبيق للواجهة (تبديل تطبيقات بالجوال، إلخ) لا يستدعي إعادة جلب
-      // البروفايل ولا شاشة تحميل — كان يسبب "ومضة بيضاء" في كل مرة يرجع فيها المستخدم للصفحة
-      if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return
+      // نفس المستخدم مسجّل بالفعل؟ أي حدث هنا (تجديد رمز، رجوع التركيز للتطبيق بعد تصغيره...) لا يحتاج
+      // إعادة جلب البروفايل ولا شاشة تحميل — كان يسبب "ومضة بيضاء" كل مرة يرجع فيها المستخدم للتطبيق
+      if (session?.user && session.user.id === authUserIdRef.current) return
+      authUserIdRef.current = session?.user?.id ?? null
       if (session?.user) {
         fetchProfile(session.user)
       } else {
