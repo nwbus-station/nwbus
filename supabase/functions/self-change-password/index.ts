@@ -47,8 +47,8 @@ serve(async (req) => {
     const { error: updateErr } = await admin.auth.admin.updateUserById(user.id, { password: new_password })
     if (updateErr) throw updateErr
 
-    // كلمة المرور صارت من اختيار الموظف نفسه — تُمسح النسخة اللي كان الأدمن يقدر يشوفها
-    await admin.from('users').update({ login_password: null }).eq('id', callerProfile.id)
+    // بطلب صريح: تبقى نسخة ظاهرة للأدمن حتى لو الموظف غيّرها بنفسه
+    await admin.from('users').update({ login_password: new_password }).eq('id', callerProfile.id)
 
     return json({ success: true })
   } catch (err) {
