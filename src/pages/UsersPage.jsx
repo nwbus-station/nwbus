@@ -1132,6 +1132,7 @@ export default function UsersPage() {
 
   const usersCacheKey = `users_all_${profile?.station_id ?? 'admin'}`
   const [users,    setUsers]    = useState(() => getCached(usersCacheKey)?.users ?? [])
+  const hasLoadedRef = useRef(users.length > 0)
   const [stations, setStations] = useState(() => getCached(usersCacheKey)?.stations ?? [])
   const [loading,  setLoading]  = useState(() => !getCached(usersCacheKey))
   const [modal,    setModal]    = useState(null)
@@ -1140,13 +1141,16 @@ export default function UsersPage() {
   const [stationFilter, setStationFilter] = useState('')
   const [statusFilter,  setStatusFilter]  = useState('')   // '' | 'active' | 'inactive'
   const [jobFilter,     setJobFilter]     = useState('')
+  const [moduleFilter,  setModuleFilter]  = useState('')
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm, onCancel? }
 
   const fetchAll = useCallback(async (bust = false) => {
     const cacheKey = `users_all_${profile?.station_id ?? 'admin'}`
     if (bust) clearCached(cacheKey)
     const cached = getCached(cacheKey)
-    if (cached) { setUsers(cached.users); setStations(cached.stations); setLoading(false) } else { setLoading(true) }
+    if (cached) { setUsers(cached.users); setStations(cached.stations); setLoading(false); hasLoadedRef.current = true }
+    // ما نطلّع شاشة التحميل لو أصلاً عندنا قائمة معروضة (تحديث بالخلفية بعد الحفظ) — كانت تطيح الجدول وترجع سكرول الصفحة لأعلى
+    else if (!hasLoadedRef.current) setLoading(true)
     // بدون phone/national_id/login_password — حقول حساسة تُجلب فقط عند الحاجة عبر get_user_sensitive (أدمن فقط)
     let usersQuery = supabase
       .from('users')
@@ -1169,6 +1173,7 @@ export default function UsersPage() {
       setCached(cacheKey, { users: u, stations: filteredStations })
       setUsers(u)
       setStations(filteredStations)
+      hasLoadedRef.current = true
     }
     setLoading(false)
   }, [isGeneralAdmin, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.station_id])
@@ -1226,10 +1231,11 @@ export default function UsersPage() {
     const matchStation = !stationFilter || u.station_id === stationFilter
     const matchStatus  = !statusFilter  || (statusFilter === 'active' ? u.is_active : !u.is_active)
     const matchJob     = !jobFilter     || u.job_title  === jobFilter
-    return matchSearch && matchRole && matchStation && matchStatus && matchJob
+    const matchModule  = !moduleFilter  || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
+    return matchSearch && matchRole && matchStation && matchStatus && matchJob && matchModule
   })
 
-  const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter].filter(Boolean).length
+  const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter, moduleFilter].filter(Boolean).length
 
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
@@ -1310,6 +1316,16 @@ export default function UsersPage() {
             ))}
           </select>
 
+          {/* Module access */}
+          <select value={moduleFilter} onChange={e => setModuleFilter(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+            style={{ fontFamily: 'inherit' }}>
+            <option value="">{isAr ? 'كل الأقسام (تصفية)' : 'Filter by section'}</option>
+            {MODULES.map(m => (
+              <option key={m.value} value={m.value}>{isAr ? m.ar : m.en}</option>
+            ))}
+          </select>
+
           {/* Status */}
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
@@ -1321,7 +1337,7 @@ export default function UsersPage() {
 
           {/* Clear all */}
           {activeFilters > 0 && (
-            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter('') }}
+            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter(''); setModuleFilter('') }}
               className="px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors font-medium">
               {isAr ? `مسح الفلاتر (${activeFilters})` : `Clear (${activeFilters})`}
             </button>
