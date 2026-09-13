@@ -203,6 +203,20 @@ function Section({ title, children }) {
   )
 }
 
+function ToggleRow({ checked, onChange, children }) {
+  return (
+    <button type="button" onClick={() => onChange(!checked)}
+      className={`w-full flex items-center gap-2.5 text-start text-xs px-3 py-2.5 rounded-lg border-2 transition-colors ${
+        checked ? 'border-nwbus-primary bg-nwbus-primary/5 text-nwbus-dark font-semibold' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+      }`}>
+      <span className={`w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center ${checked ? 'bg-nwbus-primary border-nwbus-primary' : 'border-gray-300'}`}>
+        {checked && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} className="w-2.5 h-2.5"><path d="M5 13l4 4L19 7"/></svg>}
+      </span>
+      {children}
+    </button>
+  )
+}
+
 // كلمة مرور عشوائية بالكامل — بدون أي علاقة برقم الهوية أو الاسم (كانت تُبنى منهم سابقاً، وهذا ضعف أمني حقيقي)
 function generatePassword() {
   const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ'
@@ -813,6 +827,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
             </div>
           </Section>
 
+          <div className="flex flex-col gap-5">
           <Section title={isAr ? 'الدخول والحماية' : 'Login & Security'}>
             {/* Username + Password — new user only */}
             {!user && (
@@ -932,9 +947,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
               </>
             )}
           </Section>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
           <Section title={isAr ? 'الصلاحية والدور' : 'Role & Permissions'}>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -955,24 +968,18 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
             </div>
 
             {isGeneralAdmin && (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {form.role !== 'accountant' && form.role !== 'general_admin' && (
-                  <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-                    <input type="checkbox" className="rounded accent-nwbus-primary"
-                      checked={form.is_accountant} onChange={e => set('is_accountant', e.target.checked)} />
+                  <ToggleRow checked={form.is_accountant} onChange={v => set('is_accountant', v)}>
                     {isAr ? 'صلاحيات محاسب أيضاً (بنفس الوقت)' : 'Also grant accountant access'}
-                  </label>
+                  </ToggleRow>
                 )}
-                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-                  <input type="checkbox" className="rounded accent-nwbus-primary"
-                    checked={form.is_agent} onChange={e => set('is_agent', e.target.checked)} />
+                <ToggleRow checked={form.is_agent} onChange={v => set('is_agent', v)}>
                   {isAr ? 'حساب وكيل (لا يظهر في التقييم والإجازات)' : 'Agent account (hidden from evaluations & leaves)'}
-                </label>
-                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-                  <input type="checkbox" className="rounded accent-nwbus-primary"
-                    checked={form.can_rate_customers} onChange={e => set('can_rate_customers', e.target.checked)} />
+                </ToggleRow>
+                <ToggleRow checked={form.can_rate_customers} onChange={v => set('can_rate_customers', v)}>
                   {isAr ? 'يُقيَّم من العميل (خدمة عملاء / مرحّل)' : 'Rated by customers (service/agent)'}
-                </label>
+                </ToggleRow>
               </div>
             )}
 
@@ -1103,6 +1110,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
             )}
           </Section>
           </div>
+          </div>
 
           <Section title={isAr ? 'الأقسام المتاحة' : 'Allowed Sections'}>
             <div className="flex items-center justify-between -mt-1">
@@ -1120,15 +1128,9 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
               {MODULES.map(m => {
                 const on = selectedMods.includes(m.value)
                 return (
-                  <button key={m.value} type="button" onClick={() => toggleModule(m.value)}
-                    className={`flex items-center gap-2 text-sm text-start px-3 py-2.5 rounded-lg border-2 transition-colors ${
-                      on ? 'border-nwbus-primary bg-nwbus-primary/5 text-nwbus-dark font-semibold' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                    }`}>
-                    <span className={`w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center ${on ? 'bg-nwbus-primary border-nwbus-primary' : 'border-gray-300'}`}>
-                      {on && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} className="w-2.5 h-2.5"><path d="M5 13l4 4L19 7"/></svg>}
-                    </span>
-                    {isAr ? m.ar : m.en}
-                  </button>
+                  <ToggleRow key={m.value} checked={on} onChange={() => toggleModule(m.value)}>
+                    <span className="text-sm">{isAr ? m.ar : m.en}</span>
+                  </ToggleRow>
                 )
               })}
             </div>
