@@ -190,6 +190,108 @@ const Icon = ({ d, size = 16 }) => (
   </svg>
 )
 
+async function selfChangePasswordViaEdge(currentPassword, newPassword) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  if (!token) throw new Error('No active session')
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/self-change-password`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  })
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error || 'Failed to change password')
+}
+
+function ChangePasswordModal({ isAr, onClose }) {
+  const [current,  setCurrent]  = useState('')
+  const [next,     setNext]     = useState('')
+  const [confirm,  setConfirm]  = useState('')
+  const [show,     setShow]     = useState(false)
+  const [saving,   setSaving]   = useState(false)
+  const [error,    setError]    = useState('')
+  const [done,     setDone]     = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    if (next.length < 6) { setError(isAr ? 'كلمة المرور الجديدة 6 أحرف على الأقل' : 'New password must be at least 6 characters'); return }
+    if (next !== confirm) { setError(isAr ? 'كلمتا المرور الجديدتان غير متطابقتين' : 'New passwords do not match'); return }
+    setSaving(true)
+    try {
+      await selfChangePasswordViaEdge(current, next)
+      setDone(true)
+      setTimeout(onClose, 1500)
+    } catch (err) {
+      setError(err.message === 'Current password is incorrect'
+        ? (isAr ? 'كلمة المرور الحالية غير صحيحة' : 'Current password is incorrect')
+        : err.message)
+    }
+    setSaving(false)
+  }
+
+  const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none font-mono"
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="px-6 py-4 border-b flex items-center justify-between" style={{ background: '#1C2B36' }}>
+          <h2 className="font-bold text-white text-base">{isAr ? 'تغيير كلمة المرور' : 'Change Password'}</h2>
+          <button onClick={onClose} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        {done ? (
+          <p className="px-6 py-10 text-center text-green-600 text-sm font-semibold">
+            {isAr ? '✓ تم تغيير كلمة المرور' : '✓ Password changed'}
+          </p>
+        ) : (
+          <form onSubmit={handleSubmit} autoComplete="off" className="px-6 py-5 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'كلمة المرور الحالية' : 'Current Password'}</label>
+              <input type="password" required autoComplete="off" className={inputCls}
+                value={current} onChange={e => setCurrent(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'كلمة المرور الجديدة' : 'New Password'}</label>
+              <div className="relative">
+                <input type={show ? 'text' : 'password'} required minLength={6} autoComplete="new-password" className={inputCls + ' pe-10'}
+                  value={next} onChange={e => setNext(e.target.value)} />
+                <button type="button" onClick={() => setShow(v => !v)}
+                  className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400 hover:text-gray-700">
+                  {show ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'تأكيد كلمة المرور الجديدة' : 'Confirm New Password'}</label>
+              <input type={show ? 'text' : 'password'} required autoComplete="new-password" className={inputCls}
+                value={confirm} onChange={e => setConfirm(e.target.value)} />
+            </div>
+
+            {error && (
+              <div className="text-xs rounded-lg p-3 bg-red-50 text-red-600 border border-red-100">⚠ {error}</div>
+            )}
+
+            <button type="submit" disabled={saving}
+              className="w-full bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-nwbus-dark transition-colors">
+              {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'تغيير كلمة المرور' : 'Change Password')}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const ICONS = {
   home:    ['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10'],
   bus:     ['M8 6v6','M15 6v6','M2 12h19.6','M18 18h2l1-3H3l1 3h2','M7 18a2 2 0 100 4 2 2 0 000-4z','M17 18a2 2 0 100 4 2 2 0 000-4z','M2 6h20v12H2z'],
@@ -200,6 +302,7 @@ const ICONS = {
   station: ['M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z','M12 7a3 3 0 100 6 3 3 0 000-6z'],
   map:     ['M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z','M8 2v16','M16 6v16'],
   logout:  ['M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4','M16 17l5-5-5-5','M21 12H9'],
+  key:     ['M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z'],
   settings:['M12 15a3 3 0 100-6 3 3 0 000 6z','M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z'],
   globe:   ['M12 2a10 10 0 100 20A10 10 0 0012 2z','M2 12h20','M12 2a15.3 15.3 0 010 20'],
   star:    ['M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'],
@@ -300,6 +403,8 @@ export default function AppLayout() {
     applyTheme(dark)
     localStorage.setItem('nwbus_theme', dark ? 'dark' : 'light')
   }, [dark])
+
+  const [showChangePwd, setShowChangePwd] = useState(false)
 
   const mods = profile?.allowed_modules
 
@@ -448,6 +553,12 @@ export default function AppLayout() {
               </span>
             </p>
           </div>
+          <button onClick={() => setShowChangePwd(true)} title={isAr ? 'تغيير كلمة المرور' : 'Change Password'}
+            style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: '50%', justifyContent: 'center', flexShrink: 0 }}
+            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = 'var(--text-1)' }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.color = 'var(--text-2)' }}>
+            <Icon d={ICONS.key} size={13} />
+          </button>
           <button onClick={handleLogout} title={isAr ? 'تسجيل الخروج' : 'Sign Out'}
             style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: '50%', justifyContent: 'center', flexShrink: 0 }}
             onMouseEnter={e => { e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.color = '#DC2626' }}
@@ -456,6 +567,10 @@ export default function AppLayout() {
           </button>
         </div>
       </header>
+
+      {showChangePwd && (
+        <ChangePasswordModal isAr={isAr} onClose={() => setShowChangePwd(false)} />
+      )}
 
       {/* ══ شريط التبويبات ══════════════════════════════ */}
       <nav className="no-print top-nav" style={{
