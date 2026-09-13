@@ -649,6 +649,12 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     setPwdMsg('')
     try {
       await resetPasswordViaEdge(user.auth_id, newPwd)
+      await supabase.from('notifications').insert({
+        user_id: user.id,
+        type: 'info',
+        title: isAr ? 'تم تغيير كلمة المرور' : 'Password changed',
+        body: isAr ? 'قامت الإدارة بتغيير كلمة مرور حسابك.' : 'An administrator changed your account password.',
+      })
       setPwdMsg(isAr ? '✓ تم تغيير كلمة المرور' : '✓ Password updated')
       setCredential({ username: user.username, password: newPwd, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: sensitive?.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })
       setNewPwd('')

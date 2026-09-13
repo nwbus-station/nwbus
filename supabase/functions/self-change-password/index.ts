@@ -47,8 +47,16 @@ serve(async (req) => {
     const { error: updateErr } = await admin.auth.admin.updateUserById(user.id, { password: new_password })
     if (updateErr) throw updateErr
 
-    // بطلب صريح: تبقى نسخة ظاهرة للأدمن حتى لو الموظف غيّرها بنفسه
-    await admin.from('users').update({ login_password: new_password }).eq('id', callerProfile.id)
+    // كلمة المرور صارت من اختيار الموظف نفسه — تُمسح النسخة اللي كان الأدمن يقدر يشوفها
+    await admin.from('users').update({ login_password: null }).eq('id', callerProfile.id)
+
+    // إشعار للموظف نفسه يؤكد إن كلمة مروره تغيّرت
+    await admin.from('notifications').insert({
+      user_id: callerProfile.id,
+      type: 'info',
+      title: 'تم تغيير كلمة المرور',
+      body: 'تم تغيير كلمة مرور حسابك بنجاح. إذا لم تكن أنت من قام بهذا، تواصل مع الإدارة فوراً.',
+    })
 
     return json({ success: true })
   } catch (err) {
