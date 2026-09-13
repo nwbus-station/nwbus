@@ -1105,27 +1105,35 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           </div>
 
           <Section title={isAr ? 'الأقسام المتاحة' : 'Allowed Sections'}>
-            <div className="flex items-center justify-end -mt-1">
+            <div className="flex items-center justify-between -mt-1">
+              <span className="text-xs text-gray-400">
+                {form.allowed_modules === null
+                  ? (isAr ? '✓ صلاحية وصول كاملة لجميع الأقسام' : '✓ Full access to all sections')
+                  : (isAr ? `${selectedMods.length} من ${MODULES.length} مُحدّد` : `${selectedMods.length} of ${MODULES.length} selected`)}
+              </span>
               <button type="button" onClick={() => set('allowed_modules', null)}
-                className="text-xs text-nwbus-primary underline">
+                className="text-xs text-nwbus-primary font-semibold hover:underline">
                 {isAr ? 'تحديد الكل' : 'Select all'}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-1 max-h-52 overflow-y-auto pr-1">
-              {MODULES.map(m => (
-                <label key={m.value} className="flex items-center gap-2 text-sm cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors">
-                  <input type="checkbox" className="rounded accent-nwbus-primary"
-                    checked={selectedMods.includes(m.value)}
-                    onChange={() => toggleModule(m.value)} />
-                  <span className="text-gray-700">{isAr ? m.ar : m.en}</span>
-                </label>
-              ))}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {MODULES.map(m => {
+                const on = selectedMods.includes(m.value)
+                return (
+                  <button key={m.value} type="button" onClick={() => toggleModule(m.value)}
+                    className={`flex items-center gap-2 text-sm text-start px-3 py-2.5 rounded-lg border-2 transition-colors ${
+                      on ? 'border-nwbus-primary bg-nwbus-primary/5 text-nwbus-dark font-semibold' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    }`}>
+                    <span className={`w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center ${on ? 'bg-nwbus-primary border-nwbus-primary' : 'border-gray-300'}`}>
+                      {on && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} className="w-2.5 h-2.5"><path d="M5 13l4 4L19 7"/></svg>}
+                    </span>
+                    {isAr ? m.ar : m.en}
+                  </button>
+                )
+              })}
             </div>
-            {form.allowed_modules === null && (
-              <p className="text-xs text-green-600">✓ {isAr ? 'صلاحية وصول كاملة لجميع الأقسام' : 'Full access to all sections'}</p>
-            )}
 
-            <label className="flex items-center gap-2 text-sm cursor-pointer border-t border-gray-100 pt-3">
+            <label className="flex items-center gap-2 text-sm cursor-pointer border-t border-gray-200 pt-3 mt-1">
               <input type="checkbox" className="rounded accent-nwbus-primary"
                 checked={form.is_active} onChange={e => set('is_active', e.target.checked)} />
               <span className={form.is_active ? 'text-green-700 font-medium' : 'text-gray-400'}>
