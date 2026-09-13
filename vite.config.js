@@ -38,9 +38,9 @@ export default defineConfig({
             options: { cacheName: 'google-fonts-cache', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } },
           },
           {
+            // بدون كاش نهائياً — بيانات الحسابات والصلاحيات والعمليات يجب أن تكون فريش دايماً
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: { cacheName: 'supabase-cache', expiration: { maxEntries: 50, maxAgeSeconds: 60 * 5 } },
+            handler: 'NetworkOnly',
           },
         ],
       },
