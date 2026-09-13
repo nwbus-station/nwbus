@@ -196,8 +196,8 @@ function buildUsername(jobNum) {
 
 function Section({ title, children }) {
   return (
-    <div className="border border-gray-200 rounded-xl p-4">
-      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">{title}</p>
+    <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/60 h-full">
+      <p className="text-[11px] font-bold text-nwbus-primary uppercase tracking-wider mb-3 pb-2 border-b border-gray-200">{title}</p>
       <div className="space-y-3">{children}</div>
     </div>
   )
@@ -681,22 +681,30 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
   return (
     <>
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col">
-        <div className="px-6 py-4 border-b flex items-center justify-between sticky top-0 z-10"
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col">
+        <div className="px-7 py-5 border-b flex items-center justify-between sticky top-0 z-10"
           style={{ background: '#1C2B36' }}>
-          <h2 className="font-bold text-white text-base">
-            {user ? (isAr ? 'تعديل موظف' : 'Edit Staff') : (isAr ? 'موظف جديد' : 'New Staff')}
-          </h2>
+          <div>
+            <h2 className="font-bold text-white text-lg">
+              {user ? (isAr ? 'تعديل موظف' : 'Edit Staff') : (isAr ? 'موظف جديد' : 'New Staff')}
+            </h2>
+            <p className="text-white/50 text-xs mt-0.5">
+              {user
+                ? (isAr ? `تعديل بيانات ${user.full_name_ar}` : `Editing ${user.full_name_ar}`)
+                : (isAr ? 'أدخل بيانات الموظف الجديد' : 'Enter the new employee’s details')}
+            </p>
+          </div>
           <button onClick={closeAndClearDraft} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
         </div>
 
-        <form id="user-form" onSubmit={handleSave} autoComplete="off" className="px-6 py-5 space-y-4">
+        <form id="user-form" onSubmit={handleSave} autoComplete="off" className="px-7 py-6 space-y-5">
           {/* حقول طعم تمتص تعبئة المتصفح التلقائية بعيداً عن حقول الدخول الفعلية */}
           <div aria-hidden="true" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
             <input type="text" name="fake-username" tabIndex={-1} autoComplete="off" />
             <input type="password" name="fake-password" tabIndex={-1} autoComplete="off" />
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
           <Section title={isAr ? 'بيانات الموظف' : 'Employee Details'}>
             <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
               <label className="block text-xs font-bold text-amber-800 mb-1.5">
@@ -924,7 +932,9 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
               </>
             )}
           </Section>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
           <Section title={isAr ? 'الصلاحية والدور' : 'Role & Permissions'}>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1092,6 +1102,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
               <ShiftSupervisorAssignments userId={user.id} stationId={primaryStation()} isAr={isAr} />
             )}
           </Section>
+          </div>
 
           <Section title={isAr ? 'الأقسام المتاحة' : 'Allowed Sections'}>
             <div className="flex items-center justify-end -mt-1">
@@ -1130,13 +1141,13 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           )}
         </form>
 
-        <div className="flex gap-3 px-6 py-4 border-t bg-white sticky bottom-0">
+        <div className="flex gap-3 px-7 py-4 border-t bg-white sticky bottom-0">
           <button type="submit" form="user-form" disabled={saving}
-            className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-nwbus-dark transition-colors">
+            className="flex-1 bg-nwbus-primary text-white py-3 rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-nwbus-dark transition-colors shadow-sm">
             {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
           </button>
           <button type="button" onClick={closeAndClearDraft}
-            className="px-4 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            className="px-6 py-3 border rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50">
             {isAr ? 'إلغاء' : 'Cancel'}
           </button>
         </div>
