@@ -821,12 +821,16 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                     <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'اسم المستخدم' : 'Username'}</p>
                     <p className="font-mono text-sm text-nwbus-primary font-bold">{user.username}</p>
                   </div>
-                  {sensitive?.login_password && (
+                  {sensitive?.login_password ? (
                     <button type="button"
                       onClick={() => setCredential({ username: user.username, password: sensitive.login_password, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: sensitive.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })}
                       className="text-xs text-nwbus-primary underline shrink-0">
                       {isAr ? 'عرض البطاقة' : 'Show Card'}
                     </button>
+                  ) : sensitive && (
+                    <span className="text-[11px] text-green-600 font-medium shrink-0">
+                      {isAr ? '✓ غيّرها الموظف بنفسه' : '✓ Changed by employee'}
+                    </span>
                   )}
                 </div>
                 <div>
