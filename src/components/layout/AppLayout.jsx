@@ -406,6 +406,14 @@ export default function AppLayout() {
 
   const [showChangePwd, setShowChangePwd] = useState(false)
 
+  // تنبيه لطيف بعد فترة قصيرة من فتح الجلسة — لأي حساب لسا يستخدم كلمة المرور اللي حطها الأدمن ولا غيّرها بنفسه
+  const [showPwdNudge, setShowPwdNudge] = useState(false)
+  useEffect(() => {
+    if (!profile?.login_password) { setShowPwdNudge(false); return }
+    const t = setTimeout(() => setShowPwdNudge(true), 4000)
+    return () => clearTimeout(t)
+  }, [profile?.id, profile?.login_password])
+
   const mods = profile?.allowed_modules
 
   // نجمة التميز — تبقى ثابتة طوال شهر التقييم
@@ -570,6 +578,35 @@ export default function AppLayout() {
 
       {showChangePwd && (
         <ChangePasswordModal isAr={isAr} onClose={() => setShowChangePwd(false)} />
+      )}
+
+      {showPwdNudge && !showChangePwd && (
+        <div className="no-print" dir={isAr ? 'rtl' : 'ltr'} style={{
+          position: 'fixed', bottom: 20, insetInlineEnd: 20, zIndex: 60,
+          background: '#1C2B36', color: '#fff', borderRadius: 12,
+          padding: '14px 16px', maxWidth: 320, boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+          display: 'flex', gap: 12, alignItems: 'flex-start',
+        }}>
+          <Icon d={ICONS.key} size={18} />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700 }}>
+              {isAr ? 'غيّر كلمة مرورك' : 'Change your password'}
+            </p>
+            <p style={{ margin: '4px 0 10px', fontSize: '0.74rem', color: '#A8B2BA' }}>
+              {isAr ? 'حسابك لسا على كلمة المرور اللي حددها الأدمن — ننصحك تغيّرها لكلمة تعرفها انت بس.' : 'Your account still uses the password set by an admin — we recommend changing it to one only you know.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setShowPwdNudge(false); setShowChangePwd(true) }}
+                style={{ background: '#fff', color: '#1C2B36', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer' }}>
+                {isAr ? 'غيّرها الآن' : 'Change now'}
+              </button>
+              <button onClick={() => setShowPwdNudge(false)}
+                style={{ background: 'transparent', color: '#A8B2BA', border: 'none', fontSize: '0.76rem', cursor: 'pointer' }}>
+                {isAr ? 'لاحقاً' : 'Later'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ══ شريط التبويبات ══════════════════════════════ */}
