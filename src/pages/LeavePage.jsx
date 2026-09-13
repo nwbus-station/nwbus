@@ -8,7 +8,7 @@ import DatePicker from '../components/shared/DatePicker'
 import { notifyMany } from '../utils/notifications'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { ADMIN_ROLE_VALUES } from '../utils/constants'
-import { yearsOfService, annualEntitlement, accruedBalance } from '../utils/leaveBalance'
+import { yearsOfService, annualEntitlement, accruedBalance, leaveRemaining } from '../utils/leaveBalance'
 
 /* ─── ثوابت ─── */
 const LEAVE_TYPES = [
@@ -1215,31 +1215,36 @@ export default function LeavePage() {
   async function loadBalances() {
     setLoadingBalances(true)
     let uq = supabase.from('users')
-      .select('id, full_name_ar, hire_date, station_id, station:station_id(name_ar, name_en)')
+      .select('id, full_name_ar, hire_date, station_id, leave_balance_override, leave_balance_override_date, station:station_id(name_ar, name_en)')
       .eq('is_active', true).order('full_name_ar')
     if (!isGeneralAdmin) {
       if (isAreaSupervisor && allowedStationIds?.length) uq = uq.in('station_id', allowedStationIds)
       else uq = uq.eq('station_id', profile.station_id)
     }
     const { data: emps } = await uq
-    const empList = (emps ?? []).filter(e => e.hire_date)
+    const empList = (emps ?? []).filter(e => e.hire_date || e.leave_balance_override != null)
     const empIds = empList.map(e => e.id)
-    let usedMap = {}
+    let byEmployee = {}
     if (empIds.length) {
-      const { data: usedRows } = await supabase.from('leaves')
-        .select('employee_id, days_count')
+      const { data: leaveRows } = await supabase.from('leaves')
+        .select('employee_id, start_date, days_count')
         .eq('leave_type', 'annual').eq('status', 'approved')
         .in('employee_id', empIds)
-      usedMap = (usedRows ?? []).reduce((m, r) => {
-        m[r.employee_id] = (m[r.employee_id] ?? 0) + (r.days_count ?? 0)
+      byEmployee = (leaveRows ?? []).reduce((m, r) => {
+        (m[r.employee_id] ??= []).push(r)
         return m
       }, {})
     }
     setBalances(empList.map(e => {
+      const rows = byEmployee[e.id] ?? []
       const entitlement = annualEntitlement(e.hire_date)
-      const accrued = accruedBalance(e.hire_date, entitlement)
-      const used = usedMap[e.id] ?? 0
-      return { ...e, entitlement, accrued, used, remaining: Math.max(0, accrued - used) }
+      return {
+        ...e,
+        entitlement,
+        accrued: accruedBalance(e.hire_date, entitlement),
+        used: rows.reduce((s, r) => s + (r.days_count ?? 0), 0),
+        remaining: leaveRemaining(e, rows),
+      }
     }))
     setLoadingBalances(false)
   }
@@ -1405,7 +1410,12 @@ export default function LeavePage() {
                         <td style={{ padding: '10px 14px', color: 'var(--text-2)', textAlign: 'center' }}>{yearsOfService(b.hire_date)}</td>
                         <td style={{ padding: '10px 14px', color: 'var(--text-2)', textAlign: 'center' }}>{b.accrued.toFixed(1)}</td>
                         <td style={{ padding: '10px 14px', color: 'var(--text-2)', textAlign: 'center' }}>{b.used}</td>
-                        <td style={{ padding: '10px 14px', fontWeight: 800, textAlign: 'center', color: b.remaining > 0 ? '#166534' : '#dc2626' }}>{b.remaining.toFixed(1)}</td>
+                        <td style={{ padding: '10px 14px', fontWeight: 800, textAlign: 'center', color: b.remaining > 0 ? '#166534' : '#dc2626' }}>
+                          {b.remaining.toFixed(2)}
+                          {b.leave_balance_override != null && (
+                            <span style={{ marginInlineStart: 5, fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-3)' }}>({isAr ? 'يدوي' : 'manual'})</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                     {balances.length === 0 && (

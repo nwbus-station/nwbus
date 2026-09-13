@@ -11,7 +11,7 @@ import { useEscapeKey } from '../hooks/useEscapeKey'
 import DatePicker from '../components/shared/DatePicker'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { SHIFTS, computeActiveUntil } from '../utils/ratingShifts'
-import { annualEntitlement, accruedBalance } from '../utils/leaveBalance'
+import { leaveRemaining } from '../utils/leaveBalance'
 
 function RatingActivationAdmin({ userId, isAr }) {
   const [row, setRow] = useState(null)
@@ -395,6 +395,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     national_id:     user?.national_id     ?? '',
     job_title:       user?.job_title        ?? '',
     hire_date:       user?.hire_date        ?? '',
+    leave_balance_override: user?.leave_balance_override ?? '',
     is_accountant:   user?.is_accountant   ?? false,
     is_agent:        user?.is_agent        ?? false,
     can_rate_customers: user?.can_rate_customers ?? false,
@@ -577,13 +578,18 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           const { error: pwErr } = await supabase.from('users').update({ login_password: form.password }).eq('id', inserted.id)
           if (pwErr) throw pwErr
 
+          const newOverride = form.leave_balance_override === '' ? null : Number(form.leave_balance_override)
           const { error: nErr } = await supabase.from('users').update({
             phone: form.phone.trim() || null,
             email: form.email.trim() || null,
             national_id: form.national_id.trim() || null,
             job_title: form.job_title || null,
             hire_date: form.hire_date || null,
-            ...(isGeneralAdmin ? { is_accountant: !!form.is_accountant, is_agent: !!form.is_agent, can_rate_customers: !!form.can_rate_customers } : {}),
+            ...(isGeneralAdmin ? {
+              is_accountant: !!form.is_accountant, is_agent: !!form.is_agent, can_rate_customers: !!form.can_rate_customers,
+              leave_balance_override: newOverride,
+              leave_balance_override_date: newOverride != null ? new Date().toISOString().slice(0, 10) : null,
+            } : {}),
           }).eq('id', inserted.id)
           if (nErr) throw nErr
         }
@@ -617,10 +623,15 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
 
         // خانة "تقييم العميل" و"مشرف الوردية الآخر" أضيفتا بعد إنشاء admin_update_user — تحديث مباشر بدل تعديل الدالة
         if (isGeneralAdmin) {
+          const newOverride = form.leave_balance_override === '' ? null : Number(form.leave_balance_override)
+          const prevOverride = user?.leave_balance_override == null ? null : Number(user.leave_balance_override)
+          const overrideChanged = newOverride !== prevOverride
           const { error: extraErr } = await supabase.from('users').update({
             can_rate_customers: !!form.can_rate_customers,
             peer_supervisor_id: form.peer_supervisor_id || null,
             email: form.email.trim() || null,
+            leave_balance_override: newOverride,
+            ...(overrideChanged ? { leave_balance_override_date: newOverride != null ? new Date().toISOString().slice(0, 10) : null } : {}),
           }).eq('id', user.id)
           if (extraErr) throw extraErr
         }
@@ -768,13 +779,28 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                 isAr={isAr}
                 placeholder={isAr ? 'اختر تاريخ المباشرة' : 'Select hire date'}
               />
-              {isGeneralAdmin && user && user.leaveRemaining != null && (
-                <p className="text-[11px] text-gray-500 mt-1.5">
-                  {isAr ? 'رصيد الإجازة المتبقي (تقديري): ' : 'Estimated remaining leave balance: '}
-                  <span className={`font-bold ${user.leaveRemaining > 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    {user.leaveRemaining.toFixed(1)} {isAr ? 'يوم' : 'days'}
-                  </span>
-                </p>
+              {isGeneralAdmin && (
+                <div className="mt-2 p-2.5 rounded-lg bg-gray-50 border border-gray-200">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {isAr ? 'الرصيد الفعلي المتبقي (تعديل يدوي)' : 'Actual remaining balance (manual)'}
+                  </label>
+                  <input type="number" step="0.25" className={inputCls} value={form.leave_balance_override}
+                    onChange={e => set('leave_balance_override', e.target.value)}
+                    placeholder={isAr ? 'مثال: 3.75' : 'e.g. 3.75'} />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {isAr
+                      ? 'اتركها فاضية للحساب التلقائي من تاريخ المباشرة. عبّيها يدوياً للموظفين اللي كانوا بالشركة قبل النظام — الإجازات الجديدة تُخصم منها تلقائياً بعد كذا.'
+                      : "Leave empty for automatic calculation from hire date. Set manually for employees who predate the system — new leave requests will deduct from it automatically going forward."}
+                  </p>
+                  {user && user.leaveRemaining != null && (
+                    <p className="text-[11px] text-gray-500 mt-1.5">
+                      {isAr ? 'الرصيد الحالي المحسوب: ' : 'Current computed balance: '}
+                      <span className={`font-bold ${user.leaveRemaining > 0 ? 'text-green-700' : 'text-red-600'}`}>
+                        {user.leaveRemaining.toFixed(2)} {isAr ? 'يوم' : 'days'}
+                      </span>
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </Section>
@@ -1206,7 +1232,7 @@ export default function UsersPage() {
     // بدون phone/national_id/login_password — حقول حساسة تُجلب فقط عند الحاجة عبر get_user_sensitive (أدمن فقط)
     let usersQuery = supabase
       .from('users')
-      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, peer_supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, hire_date, is_accountant, is_agent, can_rate_customers, created_at, last_login, station:station_id(name_ar, name_en)')
+      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, peer_supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, hire_date, is_accountant, is_agent, can_rate_customers, leave_balance_override, leave_balance_override_date, created_at, last_login, station:station_id(name_ar, name_en)')
       .order('created_at', { ascending: false })
 
     // Station admin only sees users of their station; area supervisor sees their assigned stations
@@ -1223,19 +1249,16 @@ export default function UsersPage() {
     const filteredStations = (s ?? []).filter(st => !isRestStation(st))
     if (u && isGeneralAdmin) {
       const ids = u.map(x => x.id)
-      const { data: usedRows } = ids.length ? await supabase.from('leaves')
-        .select('employee_id, days_count')
+      const { data: leaveRows } = ids.length ? await supabase.from('leaves')
+        .select('employee_id, start_date, days_count')
         .eq('leave_type', 'annual').eq('status', 'approved')
         .in('employee_id', ids) : { data: [] }
-      const usedMap = (usedRows ?? []).reduce((m, r) => {
-        m[r.employee_id] = (m[r.employee_id] ?? 0) + (r.days_count ?? 0)
+      const byEmployee = (leaveRows ?? []).reduce((m, r) => {
+        (m[r.employee_id] ??= []).push(r)
         return m
       }, {})
       u.forEach(x => {
-        const entitlement = annualEntitlement(x.hire_date)
-        const accrued = accruedBalance(x.hire_date, entitlement)
-        const used = usedMap[x.id] ?? 0
-        x.leaveRemaining = x.hire_date ? Math.max(0, accrued - used) : null
+        x.leaveRemaining = leaveRemaining(x, byEmployee[x.id] ?? [])
       })
     }
     if (u) {
