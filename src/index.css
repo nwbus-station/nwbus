@@ -700,6 +700,27 @@ html.dark .border-gray-100 {
   .header-live-board { display: none !important; }
 }
 
+/* شارة "آخر تحديث" — ثابتة دايماً بدون داعي للتمرير لأسفل الصفحة */
+.app-version-badge {
+  position: fixed;
+  bottom: 8px;
+  z-index: 30;
+  font-size: 0.65rem;
+  color: var(--text-3);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  opacity: 0.75;
+  pointer-events: none;
+  white-space: nowrap;
+}
+html[dir="rtl"] .app-version-badge { left: 8px; }
+html[dir="ltr"] .app-version-badge { right: 8px; }
+@media (max-width: 767px) {
+  .app-version-badge { bottom: calc(64px + env(safe-area-inset-bottom)); }
+}
+
 /* bottom nav — hidden on desktop */
 nav.bottom-nav {
   display: none;

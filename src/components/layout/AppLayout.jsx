@@ -630,12 +630,14 @@ export default function AppLayout() {
       {/* ══ المحتوى ══════════════════════════════════════ */}
       <main style={{ flex: 1, minWidth: 0 }}>
         <Outlet />
-        <div className="no-print" style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-3, #99a3ab)', padding: '16px 0 24px' }}>
-          {isAr ? 'آخر تحديث للبرنامج: ' : 'Last app update: '}
-          {new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-          {' · '}v{__APP_VERSION__}
-        </div>
       </main>
+
+      {/* شارة ثابتة دايماً — تصير مرئية بدون تمرير، على أي صفحة */}
+      <div className="no-print app-version-badge">
+        {isAr ? 'آخر تحديث: ' : 'Updated: '}
+        {new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+        {' · '}v{__APP_VERSION__}
+      </div>
 
       {/* ── Bottom nav (mobile only) ── */}
       <nav className="bottom-nav">
