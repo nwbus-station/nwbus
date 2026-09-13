@@ -1143,6 +1143,30 @@ export default function UsersPage() {
   const [jobFilter,     setJobFilter]     = useState('')
   const [moduleFilter,  setModuleFilter]  = useState('')
   const [moduleFilterExclude, setModuleFilterExclude] = useState(false) // true = "ما عندهم القسم"
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkModule,  setBulkModule]  = useState('')
+  const [bulkSaving,  setBulkSaving]  = useState(false)
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function handleBulkAddModule() {
+    if (!bulkModule || selectedIds.size === 0) return
+    setBulkSaving(true)
+    const targets = users.filter(u => selectedIds.has(u.id) && u.allowed_modules !== null && !u.allowed_modules.includes(bulkModule))
+    await Promise.all(targets.map(u =>
+      supabase.from('users').update({ allowed_modules: [...u.allowed_modules, bulkModule] }).eq('id', u.id)
+    ))
+    setBulkSaving(false)
+    setSelectedIds(new Set())
+    setBulkModule('')
+    fetchAll(true)
+  }
   const [confirmDlg, setConfirmDlg] = useState(null) // { message, onConfirm, onCancel? }
 
   const fetchAll = useCallback(async (bust = false) => {
@@ -1355,6 +1379,29 @@ export default function UsersPage() {
         </div>
       </div>
 
+      {isGeneralAdmin && selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex-wrap">
+          <span className="text-xs font-semibold text-nwbus-primary shrink-0">
+            {isAr ? `محدد: ${selectedIds.size}` : `Selected: ${selectedIds.size}`}
+          </span>
+          <select value={bulkModule} onChange={e => setBulkModule(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+            style={{ fontFamily: 'inherit' }}>
+            <option value="">{isAr ? '— اختر قسم —' : '— Select section —'}</option>
+            {MODULES.map(m => (
+              <option key={m.value} value={m.value}>{isAr ? m.ar : m.en}</option>
+            ))}
+          </select>
+          <button onClick={handleBulkAddModule} disabled={!bulkModule || bulkSaving}
+            className="bg-nwbus-primary text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-nwbus-dark transition-colors">
+            {bulkSaving ? (isAr ? 'جارٍ الإضافة...' : 'Adding...') : (isAr ? 'إضافة القسم للمحدد' : 'Add section to selected')}
+          </button>
+          <button onClick={() => setSelectedIds(new Set())}
+            className="text-xs text-gray-500 underline">
+            {isAr ? 'إلغاء التحديد' : 'Clear selection'}
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-20 text-gray-400">…</div>
@@ -1368,6 +1415,11 @@ export default function UsersPage() {
           <table className="w-full text-sm" style={{ minWidth: 780 }}>
             <thead>
               <tr className="border-b border-gray-200">
+                <th className="px-4 py-3 w-8">
+                  <input type="checkbox" className="rounded accent-nwbus-primary"
+                    checked={filtered.length > 0 && filtered.every(u => selectedIds.has(u.id))}
+                    onChange={e => setSelectedIds(e.target.checked ? new Set(filtered.map(u => u.id)) : new Set())} />
+                </th>
                 {[
                   isAr ? 'الموظف' : 'Employee',
                   isAr ? 'الصلاحية' : 'Role',
@@ -1386,6 +1438,10 @@ export default function UsersPage() {
                 const supervisorName = u.supervisor_id ? users.find(x => x.id === u.supervisor_id)?.full_name_ar : null
                 return (
                 <tr key={u.id} className={`hover:bg-gray-50/80 transition-colors ${!u.is_active ? 'opacity-40' : ''}`}>
+                  <td className="px-4 py-3">
+                    <input type="checkbox" className="rounded accent-nwbus-primary"
+                      checked={selectedIds.has(u.id)} onChange={() => toggleSelect(u.id)} />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-nwbus-primary/10 text-nwbus-primary text-xs font-bold grid place-items-center shrink-0">
