@@ -1135,7 +1135,10 @@ export default function UsersPage() {
   const hasLoadedRef = useRef(users.length > 0)
   const [stations, setStations] = useState(() => getCached(usersCacheKey)?.stations ?? [])
   const [loading,  setLoading]  = useState(() => !getCached(usersCacheKey))
-  const [modal,    setModal]    = useState(null)
+  // لو فيه مسودة "موظف جديد" محفوظة (المستخدم غادر الصفحة قبل الحفظ) نفتح النافذة تلقائياً بدل ما ينتظر ضغط "جديد"
+  const [modal,    setModal]    = useState(() => {
+    try { return sessionStorage.getItem(NEW_USER_DRAFT_KEY) ? 'new' : null } catch { return null }
+  })
   const [search,       setSearch]       = useState('')
   const [roleFilter,   setRoleFilter]   = useState('')
   const [stationFilter, setStationFilter] = useState('')
