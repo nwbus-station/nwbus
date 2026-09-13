@@ -1332,6 +1332,8 @@ export default function UsersPage() {
             </select>
           )}
 
+          {isGeneralAdmin && (
+            <>
           {/* Job Title */}
           <select value={jobFilter} onChange={e => setJobFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
@@ -1368,6 +1370,8 @@ export default function UsersPage() {
             <option value="active">{isAr ? 'نشط فقط' : 'Active only'}</option>
             <option value="inactive">{isAr ? 'معطّل فقط' : 'Inactive only'}</option>
           </select>
+            </>
+          )}
 
           {/* Clear all */}
           {activeFilters > 0 && (
@@ -1415,11 +1419,13 @@ export default function UsersPage() {
           <table className="w-full text-sm" style={{ minWidth: 780 }}>
             <thead>
               <tr className="border-b border-gray-200">
+                {isGeneralAdmin && (
                 <th className="px-4 py-3 w-8">
                   <input type="checkbox" className="rounded accent-nwbus-primary"
                     checked={filtered.length > 0 && filtered.every(u => selectedIds.has(u.id))}
                     onChange={e => setSelectedIds(e.target.checked ? new Set(filtered.map(u => u.id)) : new Set())} />
                 </th>
+                )}
                 {[
                   isAr ? 'الموظف' : 'Employee',
                   isAr ? 'الصلاحية' : 'Role',
@@ -1438,10 +1444,12 @@ export default function UsersPage() {
                 const supervisorName = u.supervisor_id ? users.find(x => x.id === u.supervisor_id)?.full_name_ar : null
                 return (
                 <tr key={u.id} className={`hover:bg-gray-50/80 transition-colors ${!u.is_active ? 'opacity-40' : ''}`}>
+                  {isGeneralAdmin && (
                   <td className="px-4 py-3">
                     <input type="checkbox" className="rounded accent-nwbus-primary"
                       checked={selectedIds.has(u.id)} onChange={() => toggleSelect(u.id)} />
                   </td>
+                  )}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-nwbus-primary/10 text-nwbus-primary text-xs font-bold grid place-items-center shrink-0">
