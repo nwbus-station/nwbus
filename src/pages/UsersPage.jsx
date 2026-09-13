@@ -11,6 +11,7 @@ import { useEscapeKey } from '../hooks/useEscapeKey'
 import DatePicker from '../components/shared/DatePicker'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { SHIFTS, computeActiveUntil } from '../utils/ratingShifts'
+import { annualEntitlement, accruedBalance } from '../utils/leaveBalance'
 
 function RatingActivationAdmin({ userId, isAr }) {
   const [row, setRow] = useState(null)
@@ -767,6 +768,14 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                 isAr={isAr}
                 placeholder={isAr ? 'اختر تاريخ المباشرة' : 'Select hire date'}
               />
+              {isGeneralAdmin && user && user.leaveRemaining != null && (
+                <p className="text-[11px] text-gray-500 mt-1.5">
+                  {isAr ? 'رصيد الإجازة المتبقي (تقديري): ' : 'Estimated remaining leave balance: '}
+                  <span className={`font-bold ${user.leaveRemaining > 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    {user.leaveRemaining.toFixed(1)} {isAr ? 'يوم' : 'days'}
+                  </span>
+                </p>
+              )}
             </div>
           </Section>
 
@@ -1147,6 +1156,7 @@ export default function UsersPage() {
   const [moduleFilter,  setModuleFilter]  = useState('')
   const [moduleFilterExclude, setModuleFilterExclude] = useState(false) // true = "ما عندهم القسم"
   const [supervisorFilter, setSupervisorFilter] = useState('')
+  const [leaveFilter, setLeaveFilter] = useState('') // '' | 'zero' | 'low' | 'ok'
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [bulkModule,  setBulkModule]  = useState('')
   const [bulkSupervisor, setBulkSupervisor] = useState('')
@@ -1211,6 +1221,23 @@ export default function UsersPage() {
       supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar'),
     ])
     const filteredStations = (s ?? []).filter(st => !isRestStation(st))
+    if (u && isGeneralAdmin) {
+      const ids = u.map(x => x.id)
+      const { data: usedRows } = ids.length ? await supabase.from('leaves')
+        .select('employee_id, days_count')
+        .eq('leave_type', 'annual').eq('status', 'approved')
+        .in('employee_id', ids) : { data: [] }
+      const usedMap = (usedRows ?? []).reduce((m, r) => {
+        m[r.employee_id] = (m[r.employee_id] ?? 0) + (r.days_count ?? 0)
+        return m
+      }, {})
+      u.forEach(x => {
+        const entitlement = annualEntitlement(x.hire_date)
+        const accrued = accruedBalance(x.hire_date, entitlement)
+        const used = usedMap[x.id] ?? 0
+        x.leaveRemaining = x.hire_date ? Math.max(0, accrued - used) : null
+      })
+    }
     if (u) {
       setCached(cacheKey, { users: u, stations: filteredStations })
       setUsers(u)
@@ -1276,10 +1303,15 @@ export default function UsersPage() {
     const hasModule    = !moduleFilter || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
     const matchModule  = !moduleFilter || (moduleFilterExclude ? !hasModule : hasModule)
     const matchSupervisor = !supervisorFilter || u.supervisor_id === supervisorFilter
-    return matchSearch && matchRole && matchStation && matchStatus && matchJob && matchModule && matchSupervisor
+    const matchLeave = !leaveFilter || (
+      leaveFilter === 'zero' ? (u.leaveRemaining ?? 0) <= 0 :
+      leaveFilter === 'low'  ? (u.leaveRemaining ?? 0) > 0 && u.leaveRemaining < 7 :
+      leaveFilter === 'ok'   ? (u.leaveRemaining ?? 0) >= 7 : true
+    )
+    return matchSearch && matchRole && matchStation && matchStatus && matchJob && matchModule && matchSupervisor && matchLeave
   })
 
-  const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter, moduleFilter, supervisorFilter].filter(Boolean).length
+  const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter, moduleFilter, supervisorFilter, leaveFilter].filter(Boolean).length
 
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
@@ -1398,12 +1430,22 @@ export default function UsersPage() {
               <option key={s.id} value={s.id}>{s.full_name_ar}</option>
             ))}
           </select>
+
+          {/* Leave balance */}
+          <select value={leaveFilter} onChange={e => setLeaveFilter(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+            style={{ fontFamily: 'inherit' }}>
+            <option value="">{isAr ? 'رصيد الإجازة (تصفية)' : 'Filter by leave balance'}</option>
+            <option value="zero">{isAr ? 'رصيد منتهي' : 'Zero balance'}</option>
+            <option value="low">{isAr ? 'رصيد منخفض (أقل من 7 أيام)' : 'Low (under 7 days)'}</option>
+            <option value="ok">{isAr ? 'رصيد متوفر (7 أيام فأكثر)' : 'Available (7+ days)'}</option>
+          </select>
             </>
           )}
 
           {/* Clear all */}
           {activeFilters > 0 && (
-            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter(''); setModuleFilter(''); setModuleFilterExclude(false); setSupervisorFilter('') }}
+            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter(''); setModuleFilter(''); setModuleFilterExclude(false); setSupervisorFilter(''); setLeaveFilter('') }}
               className="px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors font-medium">
               {isAr ? `مسح الفلاتر (${activeFilters})` : `Clear (${activeFilters})`}
             </button>

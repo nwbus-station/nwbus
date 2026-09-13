@@ -8,6 +8,7 @@ import DatePicker from '../components/shared/DatePicker'
 import { notifyMany } from '../utils/notifications'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { ADMIN_ROLE_VALUES } from '../utils/constants'
+import { yearsOfService, annualEntitlement, accruedBalance } from '../utils/leaveBalance'
 
 /* ─── ثوابت ─── */
 const LEAVE_TYPES = [
@@ -64,15 +65,6 @@ function addDays(dateStr, n) {
   const d = new Date(dateStr)
   d.setDate(d.getDate() + n)
   return d.toISOString().slice(0, 10)
-}
-
-function yearsOfService(hireDateStr) {
-  if (!hireDateStr) return 0
-  return Math.floor((Date.now() - new Date(hireDateStr)) / (365.25 * 86400000))
-}
-
-function annualEntitlement(hireDateStr) {
-  return yearsOfService(hireDateStr) >= 5 ? 30 : 21
 }
 
 // الأنواع التي تتطلب مرفق إثبات
@@ -139,14 +131,6 @@ async function uploadProof(file, employeeId) {
 function proofWindowOpen(createdAt, leaveType) {
   if (PROOF_NO_DEADLINE.includes(leaveType)) return true
   return (Date.now() - new Date(createdAt)) / 86400000 <= PROOF_DAYS
-}
-
-// الرصيد المتراكم تصاعدياً من تاريخ المباشرة (يزيد يومياً)
-function accruedBalance(hireDateStr, entitlement) {
-  if (!hireDateStr) return 0
-  const daysSince = (Date.now() - new Date(hireDateStr)) / 86400000
-  if (daysSince < 0) return 0
-  return (entitlement / 365) * daysSince
 }
 
 const inp = {
@@ -1175,7 +1159,7 @@ const TABS_CFG = [
   { id: 'mine',     ar: 'طلباتي',           en: 'My Requests',   icon: '' },
   { id: 'pending',  ar: 'بانتظار موافقتي', en: 'Pending Approval', icon: '', supervisorOnly: true },
   { id: 'all',      ar: 'جميع الطلبات',    en: 'All Requests',  icon: '',  supervisorOnly: true },
-  { id: 'balances', ar: 'أرصدة الإجازات',  en: 'Leave Balances', icon: '', supervisorOnly: true },
+  { id: 'balances', ar: 'أرصدة الإجازات',  en: 'Leave Balances', icon: '', adminOnly: true },
 ]
 
 export default function LeavePage() {
@@ -1197,7 +1181,7 @@ export default function LeavePage() {
   const [balanceSearch, setBalanceSearch] = useState('')
 
   const visibleTabs = TABS_CFG.filter(t => {
-    if (t.adminOnly && !isAdmin) return false
+    if (t.adminOnly && !isGeneralAdmin) return false
     if (t.supervisorOnly && !canSupervise) return false
     return true
   })
