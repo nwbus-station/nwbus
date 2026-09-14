@@ -451,13 +451,14 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
       .map(role => `${EVAL_SOURCE_LABELS[role]} ${bySource[role].evaluator?.full_name_ar ?? ''} — ${(bySource[role].total_score / 10).toFixed(1)}/10 بنسبة ${effectiveWeights[role]}٪`)
       .join('\n')
     const isStar = complete && final >= STAR_THRESHOLD
+    const monthLabel = `${MONTHS_AR[month - 1]} ${year}`
     const { error: notifyErr } = await createNotification({
       userId: employee.id,
       type: isStar ? 'success' : 'info',
       title: complete
-        ? (isStar ? `تقييمك ${(final / 10).toFixed(1)}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`)
-        : `قيّمك ${EVAL_SOURCE_LABELS[sourceRole]} لشهر ${MONTHS_AR[month - 1]}`,
-      body: `${lines}\n\nالنتيجة ${complete ? 'النهائية' : 'الحالية'}: ${(final / 10).toFixed(1)}/10`,
+        ? (isStar ? `تقييمك ${(final / 10).toFixed(1)}/10 ⭐ — ممتاز! (${monthLabel})` : `صدر تقييمك النهائي لشهر ${monthLabel}`)
+        : `قيّمك ${EVAL_SOURCE_LABELS[sourceRole]} لشهر ${monthLabel}`,
+      body: `شهر ${monthLabel}\n\n${lines}\n\nالنتيجة ${complete ? 'النهائية' : 'الحالية'}: ${(final / 10).toFixed(1)}/10`,
     })
     if (notifyErr) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr.message}`)
     if (complete) {
