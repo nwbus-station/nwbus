@@ -581,7 +581,7 @@ export default function DashboardPage() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: n.is_read ? 500 : 700, color: n.is_read ? 'var(--text-2)' : 'var(--text-1)', lineHeight: 1.45 }}>{n.title}</p>
-                        {n.body && <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', lineHeight: 1.4 }}>{n.body}</p>}
+                        {n.body && <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)', lineHeight: 1.5, whiteSpace: 'pre-line' }}>{n.body}</p>}
                         <p style={{ margin: '5px 0 0', fontSize: '0.6rem', color: 'var(--text-3)', fontFamily: MONO, display: 'inline-block', background: 'var(--surface)', padding: '1px 6px', borderRadius: 3 }}>{timeAgo(n.created_at)}</p>
                       </div>
                     </div>

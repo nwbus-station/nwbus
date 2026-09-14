@@ -135,7 +135,7 @@ function NotificationBell({ profile }) {
       </button>
 
       {open && (
-        <div style={{ position: 'absolute', top: 40, left: 0, width: 320, background: 'var(--card)', borderRadius: 4, boxShadow: '0 0 0 1px var(--border-2), 0 12px 32px rgba(26,33,41,0.16)', zIndex: 100, overflow: 'hidden' }} dir="rtl">
+        <div style={{ position: 'absolute', top: 40, left: 0, width: 400, maxWidth: '90vw', background: 'var(--card)', borderRadius: 4, boxShadow: '0 0 0 1px var(--border-2), 0 12px 32px rgba(26,33,41,0.16)', zIndex: 100, overflow: 'hidden' }} dir="rtl">
           {/* Header */}
           <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -170,7 +170,7 @@ function NotificationBell({ profile }) {
                   <div style={{ width: 7, height: 7, borderRadius: 1, background: n.is_read ? 'var(--border-2)' : s.dot, marginTop: 6, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: n.is_read ? 500 : 700, color: 'var(--text-1)', lineHeight: 1.4 }}>{n.title}</p>
-                    {n.body && <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: 'var(--text-3)', lineHeight: 1.4 }}>{n.body}</p>}
+                    {n.body && <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: 'var(--text-3)', lineHeight: 1.5, whiteSpace: 'pre-line' }}>{n.body}</p>}
                     <p style={{ margin: '4px 0 0', fontSize: '0.64rem', color: 'var(--text-3)', fontFamily: MONO }}>{timeAgo(n.created_at)}</p>
                   </div>
                 </div>

@@ -16,9 +16,11 @@ const EVAL_SOURCE_SHORT   = { shift_supervisor: 'وردية', station_admin: 'م
 
 // eval_source يُحدَّد صراحة عند الحفظ (مو مشتقاً من دور المُقيِّم) — لأن الأدمن العام قد
 // يملأ أي مصدر ناقص نيابة عن الجهة المسؤولة عنه.
-// النتيجة تظهر فور توفر أي مصدر واحد على الأقل — بدون انتظار اكتمال الثلاثة — وتُحسب
-// موزونة بنسبة المصادر المتوفرة فقط (تُطبَّع على مجموع أوزانها)، وتُعاد حسابها تلقائياً
-// وتتغيّر كل ما ضاف مصدر جديد تقييمه. "complete" يبقى يميّز النتيجة النهائية الكاملة.
+// النتيجة تظهر فور توفر أي مصدر واحد على الأقل — بدون انتظار اكتمال الثلاثة — وتُعاد حسابها
+// تلقائياً وتتغيّر كل ما ضاف مصدر جديد تقييمه. "complete" يبقى يميّز النتيجة النهائية الكاملة.
+// توزيع الوزن الناقص: كل مصدر غايب يضيف وزنه لأعلى مصدر متوفر رتبة (مو توزيع تناسبي على الكل) —
+// مثال: لو غاب مشرف الوردية (٢٥٪)، ياخذها المدير التنفيذي (يصير ٦٥٪) وتبقى نسبة مشرف المحطة ٣٥٪ ثابتة.
+// لو مصدر واحد بس قيّم، ياخذ الـ100٪ كاملة أياً كان.
 function computeFinalScore(rows) {
   const bySource = {}
   for (const role of EVAL_SOURCE_ORDER) {
@@ -27,12 +29,18 @@ function computeFinalScore(rows) {
   }
   const ratedRoles = EVAL_SOURCE_ORDER.filter(role => bySource[role])
   const complete = ratedRoles.length === EVAL_SOURCE_ORDER.length
+  const effectiveWeights = {}
   let final = null
   if (ratedRoles.length > 0) {
-    const weightSum = ratedRoles.reduce((sum, role) => sum + EVAL_SOURCE_WEIGHTS[role], 0)
-    final = Math.round(ratedRoles.reduce((sum, role) => sum + bySource[role].total_score * EVAL_SOURCE_WEIGHTS[role], 0) / weightSum * 10) / 10
+    const missingWeight = EVAL_SOURCE_ORDER.filter(role => !bySource[role])
+      .reduce((sum, role) => sum + EVAL_SOURCE_WEIGHTS[role], 0)
+    const highestPresent = ratedRoles[ratedRoles.length - 1]
+    for (const role of ratedRoles) {
+      effectiveWeights[role] = EVAL_SOURCE_WEIGHTS[role] + (role === highestPresent ? missingWeight : 0)
+    }
+    final = Math.round(ratedRoles.reduce((sum, role) => sum + bySource[role].total_score * effectiveWeights[role], 0) / 100 * 10) / 10
   }
-  return { bySource, complete, final }
+  return { bySource, complete, final, effectiveWeights }
 }
 
 const MONO = "'IBM Plex Mono', monospace"
@@ -382,7 +390,6 @@ function useEscClose(onClose) {
 }
 
 function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClose, onSave, isAdmin, evaluatorId, isAr }) {
-  const { profile: myProfile } = useAuth()
   const [scores, setScores] = useState(existing?.scores || {})
   const [notes, setNotes]   = useState(existing?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -433,29 +440,27 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
     setSaving(false)
     if (error) return setErr(error.message)
 
-    // إشعار مستقل فوري لكل مصدر يقيّم — يذكر مين قيّمه وبأي نتيجة، بدون انتظار باقي المصادر
-    const { error: notifyErr1 } = await createNotification({
-      userId: employee.id,
-      type: 'info',
-      title: `قيّمك ${EVAL_SOURCE_LABELS[sourceRole]}`,
-      body: `${myProfile?.full_name_ar ? myProfile.full_name_ar + ' — ' : ''}النتيجة: ${(totalScore / 10).toFixed(1)}/10 لشهر ${MONTHS_AR[month - 1]}`,
-    })
-    if (notifyErr1) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr1.message}`)
-
-    // بعد كل تقييم نتحقق هل اكتملت الثلاثة مصادر — لو اكتملت نرسل إشعار مستقل ثاني بالنتيجة النهائية
+    // إشعار واحد شامل بعد كل تقييم — يسرد كل مصدر قيّم لحد الآن باسمه ونسبته ونتيجته، والنتيجة
+    // الإجمالية المتحدّثة (تتغيّر تلقائياً كل ما انضاف مصدر جديد، حتى قبل اكتمال الثلاثة)
     const { data: allRows } = await supabase.from('employee_evaluations')
-      .select('total_score, eval_source')
+      .select('total_score, eval_source, evaluator:evaluator_id(full_name_ar)')
       .eq('employee_id', employee.id).eq('eval_month', month).eq('eval_year', year)
-    const { complete, final } = computeFinalScore(allRows || [])
+    const { bySource, complete, final, effectiveWeights } = computeFinalScore(allRows || [])
+    const lines = EVAL_SOURCE_ORDER
+      .filter(role => bySource[role])
+      .map(role => `${EVAL_SOURCE_LABELS[role]} ${bySource[role].evaluator?.full_name_ar ?? ''} — ${(bySource[role].total_score / 10).toFixed(1)}/10 بنسبة ${effectiveWeights[role]}٪`)
+      .join('\n')
+    const isStar = complete && final >= STAR_THRESHOLD
+    const { error: notifyErr } = await createNotification({
+      userId: employee.id,
+      type: isStar ? 'success' : 'info',
+      title: complete
+        ? (isStar ? `تقييمك ${(final / 10).toFixed(1)}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`)
+        : `قيّمك ${EVAL_SOURCE_LABELS[sourceRole]} لشهر ${MONTHS_AR[month - 1]}`,
+      body: `${lines}\n\nالنتيجة ${complete ? 'النهائية' : 'الحالية'}: ${(final / 10).toFixed(1)}/10`,
+    })
+    if (notifyErr) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr.message}`)
     if (complete) {
-      const isStar = final >= STAR_THRESHOLD
-      const { error: notifyErr2 } = await createNotification({
-        userId: employee.id,
-        type: isStar ? 'success' : 'info',
-        title: isStar ? `تقييمك ${final}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`,
-        body: isStar ? `حصلت على النجمة المميزة بنتيجة ${final}/10` : `نتيجتك النهائية: ${final}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
-      })
-      if (notifyErr2) alert(`تم حفظ التقييم لكن تعذّر إرسال إشعار النتيجة النهائية: ${notifyErr2.message}`)
       try {
         const now = new Date()
         localStorage.setItem(`nwbus_star_${employee.id}`, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
