@@ -74,9 +74,20 @@ function computeSupFinalScore(targetRole, rows) {
   let final = null
   const effectiveWeights = {}
   if (ratedSources.length > 0) {
-    const weightSum = ratedSources.reduce((sum, s) => sum + SUP_EVAL_WEIGHTS[s], 0)
-    final = Math.round(ratedSources.reduce((sum, s) => sum + bySource[s].total_score * SUP_EVAL_WEIGHTS[s], 0) / weightSum * 10) / 10
-    for (const s of ratedSources) effectiveWeights[s] = Math.round(SUP_EVAL_WEIGHTS[s] / weightSum * 100)
+    if (targetRole === 'shift_supervisor') {
+      // وزن "مشرف وردية آخر" (٢٥٪) أُلغي نهائياً من هذا النظام — يُحسب دايماً كوزن ناقص
+      // يروح لأعلى مصدر متوفر رتبة (المدير التنفيذي)، بدل ما يتوزّع تناسبياً — نفس منطق
+      // تقييم الموظفين بالضبط (مشرف مباشر يبقى ٣٥٪ ثابتة، المدير التنفيذي ياخذ الباقي)
+      const missingWeight = sources.filter(s => !bySource[s]).reduce((sum, s) => sum + SUP_EVAL_WEIGHTS[s], 0) + 25
+      const highestPresent = ratedSources[ratedSources.length - 1]
+      for (const s of ratedSources) effectiveWeights[s] = SUP_EVAL_WEIGHTS[s] + (s === highestPresent ? missingWeight : 0)
+      final = Math.round(ratedSources.reduce((sum, s) => sum + bySource[s].total_score * effectiveWeights[s], 0) / 100 * 10) / 10
+    } else {
+      // مشرف المحطة/المنطقة: مصدر واحد بس (المدير التنفيذي) — ياخذ ١٠٠٪ دايماً
+      const weightSum = ratedSources.reduce((sum, s) => sum + SUP_EVAL_WEIGHTS[s], 0)
+      for (const s of ratedSources) effectiveWeights[s] = Math.round(SUP_EVAL_WEIGHTS[s] / weightSum * 100)
+      final = Math.round(ratedSources.reduce((sum, s) => sum + bySource[s].total_score * SUP_EVAL_WEIGHTS[s], 0) / weightSum * 10) / 10
+    }
   }
   return { bySource, complete, final, sources, effectiveWeights }
 }
