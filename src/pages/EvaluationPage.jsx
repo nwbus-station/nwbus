@@ -1743,6 +1743,25 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
   }
 
   const [selStations,  setSelStations]  = useState(new Set(stations.map(s => s.id)))
+  const [stnSelSaving, setStnSelSaving] = useState(false)
+  // نطبّق التحديد المحفوظ (لو موجود) كافتراضي بدل تحديد كل المحطات، مرة وحدة بس لما يتوفر —
+  // عشان "تحديد ثابت" يبقى نفسه كل ما فتحت الطباعة، بدل ما تعيده من الصفر كل مرة
+  const appliedSavedStationsRef = useRef(false)
+  useEffect(() => {
+    if (!appliedSavedStationsRef.current && savedGroups.stations.size > 0) {
+      setSelStations(new Set(savedGroups.stations))
+      appliedSavedStationsRef.current = true
+    }
+  }, [savedGroups.stations])
+
+  async function saveStationSelection() {
+    setStnSelSaving(true)
+    await supabase.from('saved_station_groups').delete().eq('group_name', 'stations')
+    if (selStations.size > 0)
+      await supabase.from('saved_station_groups').insert([...selStations].map(id => ({ group_name: 'stations', station_id: id })))
+    setSavedGroups(prev => ({ ...prev, stations: new Set(selStations) }))
+    setStnSelSaving(false)
+  }
   const [selSupSet,    setSelSupSet]    = useState(new Set())  // empty = all supervisors
   const [selEmpSet,    setSelEmpSet]    = useState(new Set())  // empty = all
   const [rangeStart,   setRangeStart]   = useState({ month: selMonth, year: selYear })
@@ -1972,12 +1991,24 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
           {/* تحديد المحطات */}
           {(type === 'employees' || type === 'stations') && (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap: 8 }}>
                 <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>اختر المحطات</p>
-                <button onClick={toggleAll} style={{ fontFamily:'inherit', fontSize:'0.72rem', color:'#4A6FA5', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0 }}>
-                  {selStations.size === stations.length ? 'إلغاء الكل' : 'تحديد الكل'}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button onClick={saveStationSelection} disabled={stnSelSaving}
+                    title="يحفظ هذا التحديد كافتراضي دائم — يظهر تلقائياً كل مرة تفتح الطباعة"
+                    style={{ fontFamily:'inherit', fontSize:'0.72rem', color:'#166534', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0, display:'flex', alignItems:'center', gap:4 }}>
+                    {stnSelSaving ? '...جارٍ الحفظ' : '💾 حفظ كتحديد ثابت'}
+                  </button>
+                  <button onClick={toggleAll} style={{ fontFamily:'inherit', fontSize:'0.72rem', color:'#4A6FA5', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0 }}>
+                    {selStations.size === stations.length ? 'إلغاء الكل' : 'تحديد الكل'}
+                  </button>
+                </div>
               </div>
+              {savedGroups.stations.size > 0 && (
+                <p style={{ margin:0, fontSize:'0.66rem', color:'#166534' }}>
+                  ✓ محمّل تحديد ثابت محفوظ ({savedGroups.stations.size} محطة) — عدّل واضغط "حفظ كتحديد ثابت" لتحديثه
+                </p>
+              )}
               <input className="nw-inp" value={stnSearch} onChange={e => setStnSearch(e.target.value)}
                 placeholder="بحث باسم المحطة..." style={{ ...INP }} />
               <div style={{ display:'flex', flexDirection:'column', maxHeight:190, overflowY:'auto', overflowX:'hidden', borderRadius:12, border:'1px solid var(--border)' }}>
