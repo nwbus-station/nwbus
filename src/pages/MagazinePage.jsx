@@ -615,10 +615,10 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     }
   }
 
-  // تغيير نمط النص يعيد توليد العنوان/النص فوراً إن كان فيه موظف واحد محدد فقط —
-  // تحديث واحد متزامن بدل الاعتماد على useEffect منفصل. عند تعديل منشور قديم، الشخص
-  // قد ما يكون موجود بقائمة "المتميزين حالياً" (لو انتهت فترة تميّزه) فما نلقاه بـ
-  // candidates — نرجع لاسمه المحفوظ بالمنشور نفسه كحل بديل بدل ما يفشل التحديث بصمت
+  // تغيير نمط النص يستبدل العنوان/النص فوراً بالنمط الجديد — إجراء صريح من الأدمن
+  // (اختيار نمط) فما فيه داعي لأي شرط "بس إذا ما عدّلته يدوياً"، نطبّقه مباشرة دايماً.
+  // عند تعديل منشور قديم، الشخص قد ما يكون موجود بقائمة "المتميزين حالياً" (لو انتهت
+  // فترة تميّزه) فما نلقاه بـ candidates — نرجع لاسمه المحفوظ بالمنشور نفسه كحل بديل
   function selectTextStyle(styleKey) {
     if (form.employee_ids.length === 1) {
       const targetId = form.employee_ids[0]
@@ -628,12 +628,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
       const style = SPOTLIGHT_STYLES.find(s => s.key === styleKey) ?? SPOTLIGHT_STYLES[0]
       if (c) {
         const { title, body } = style.gen(c)
-        setForm(f => ({
-          ...f,
-          text_style: styleKey,
-          title_ar: (!f.title_ar.trim() || f.title_ar === autoTextRef.current.title) ? title : f.title_ar,
-          body_ar: (!f.body_ar.trim() || f.body_ar === autoTextRef.current.body) ? body : f.body_ar,
-        }))
+        setForm(f => ({ ...f, text_style: styleKey, title_ar: title, body_ar: body }))
         autoTextRef.current = { title, body }
         return
       }
