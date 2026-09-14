@@ -403,10 +403,28 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
       eval_source: sourceRole,
       scores, notes, total_score: totalScore,
     }
-    // upsert بدل إدراج/تحديث يدوي — يتجنب خطأ "duplicate key" لو صار تقييم موجود فعلاً
-    // بالقاعدة ولم يُكتشف محلياً (بيانات قديمة بالكاش، نقرتين متتاليتين، إلخ)
-    const { error } = await supabase.from('employee_evaluations')
-      .upsert(payload, { onConflict: 'employee_id,eval_source,eval_month,eval_year' })
+    // upsert يصطدم بسياسات RLS منفصلة للإدراج والتعديل (تتطلب تحقق الاثنين معاً) — نرجع
+    // لإدراج/تحديث صريح، لكن لو الإدراج فشل لأن الصف موجود أصلاً (بيانات قديمة بالكاش أو
+    // نقرتين متتاليتين) نجيب الصف الموجود ونعيد المحاولة كتحديث بدل ما نطلع خطأ للمستخدم
+    let error
+    if (existing) {
+      ;({ error } = await supabase.from('employee_evaluations').update(payload).eq('id', existing.id))
+    } else {
+      let insErr
+      ;({ error: insErr } = await supabase.from('employee_evaluations').insert(payload))
+      if (insErr && /duplicate key|unique constraint/i.test(insErr.message)) {
+        const { data: found } = await supabase.from('employee_evaluations').select('id')
+          .eq('employee_id', employee.id).eq('eval_source', sourceRole)
+          .eq('eval_month', month).eq('eval_year', year).maybeSingle()
+        if (found) {
+          ;({ error } = await supabase.from('employee_evaluations').update(payload).eq('id', found.id))
+        } else {
+          error = insErr
+        }
+      } else {
+        error = insErr
+      }
+    }
     setSaving(false)
     if (error) return setErr(error.message)
 
