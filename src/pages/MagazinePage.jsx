@@ -7,24 +7,28 @@ const MONO = "'IBM Plex Mono', monospace"
 const STAR_THRESHOLD = 98
 const ORDINALS_AR = ['', 'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر']
 
+// لمسة إضاءة خفيفة موحّدة فوق أي خلفية تدرّج — بريق أعلى-يسار وتعميق ظل أسفل-يمين،
+// يعطي إحساس "لوحة فاخرة" بدل التدرّج المسطّح
+const SHEEN = 'radial-gradient(1000px circle at 12% -15%, rgba(255,255,255,0.14), transparent 50%), radial-gradient(800px circle at 110% 120%, rgba(0,0,0,0.35), transparent 55%)'
+
 const TEMPLATES = {
-  spotlight:    { ar: 'موظف متميز',   en: 'Employee Spotlight', bg: 'linear-gradient(135deg,#B45309,#78350F)', badge: '⭐' },
-  announcement: { ar: 'إعلان',        en: 'Announcement',       bg: 'linear-gradient(135deg,#1C2B4A,#101B2E)', badge: '📢' },
-  celebration:  { ar: 'تهنئة',        en: 'Celebration',        bg: 'linear-gradient(135deg,#5B5BD6,#9333EA)', badge: '🎉' },
-  circular:     { ar: 'تعميم إداري',  en: 'Official Circular',  bg: 'linear-gradient(135deg,#374151,#111827)', badge: '📋' },
+  spotlight:    { ar: 'موظف متميز',   en: 'Employee Spotlight', bg: 'linear-gradient(135deg,#8A6116 0%,#3B2A0F 55%,#17110A 100%)', accent: 'linear-gradient(90deg,#C99A32,#F1DDA0)', badge: '⭐' },
+  announcement: { ar: 'إعلان',        en: 'Announcement',       bg: 'linear-gradient(135deg,#0F1F38 0%,#16233F 55%,#060B14 100%)', accent: 'linear-gradient(90deg,#3E63A8,#9FBBE6)', badge: '📢' },
+  celebration:  { ar: 'تهنئة',        en: 'Celebration',        bg: 'linear-gradient(135deg,#3B2159 0%,#241536 55%,#100A1A 100%)', accent: 'linear-gradient(90deg,#8B5CF6,#D8CCFB)', badge: '🎉' },
+  circular:     { ar: 'تعميم إداري',  en: 'Official Circular',  bg: 'linear-gradient(135deg,#2B323C 0%,#1A1F26 55%,#0C0F13 100%)', accent: 'linear-gradient(90deg,#94A3B8,#E9EEF4)', badge: '📋' },
 }
 const TEMPLATE_ORDER = ['spotlight', 'announcement', 'celebration', 'circular']
 
 // خلفيات جاهزة إضافية — تدرّجات مصمّمة بدل ما تحتاج ترفع صورة كل مرة
 const PRESET_BACKGROUNDS = [
-  { key: 'navy',      ar: 'كحلي رسمي',    en: 'Corporate Navy', css: 'linear-gradient(135deg,#0F1C33,#1C2B4A 60%,#2A3D63)' },
-  { key: 'gold',      ar: 'ذهبي فاخر',    en: 'Elegant Gold',   css: 'linear-gradient(135deg,#78350F,#B45309 55%,#D97706)' },
-  { key: 'emerald',   ar: 'زمردي',        en: 'Emerald',        css: 'linear-gradient(135deg,#064E3B,#059669 60%,#10B981)' },
-  { key: 'violet',    ar: 'بنفسجي احتفالي', en: 'Festive Violet', css: 'linear-gradient(135deg,#4C1D95,#7C3AED 55%,#A78BFA)' },
-  { key: 'crimson',   ar: 'عنّابي',        en: 'Crimson',        css: 'linear-gradient(135deg,#450A0A,#B91C1C 60%,#EF4444)' },
-  { key: 'slate',     ar: 'رمادي إداري',   en: 'Formal Slate',   css: 'linear-gradient(135deg,#1E293B,#334155 60%,#475569)' },
-  { key: 'teal',      ar: 'فيروزي',        en: 'Teal',           css: 'linear-gradient(135deg,#134E4A,#0D9488 60%,#2DD4BF)' },
-  { key: 'sunset',    ar: 'غروب',          en: 'Sunset',         css: 'linear-gradient(135deg,#7C2D12,#C2410C 50%,#F59E0B)' },
+  { key: 'navy',      ar: 'كحلي رسمي',    en: 'Corporate Navy', css: 'linear-gradient(135deg,#0C1B32 0%,#152544 55%,#050A14 100%)' },
+  { key: 'gold',      ar: 'ذهبي فاخر',    en: 'Elegant Gold',   css: 'linear-gradient(135deg,#6B4210 0%,#8A5A12 55%,#241505 100%)' },
+  { key: 'emerald',   ar: 'زمردي',        en: 'Emerald',        css: 'linear-gradient(135deg,#093528 0%,#0F4D3A 55%,#041712 100%)' },
+  { key: 'violet',    ar: 'بنفسجي فاخر',   en: 'Deep Violet',    css: 'linear-gradient(135deg,#2F1C52 0%,#452A72 55%,#140B28 100%)' },
+  { key: 'crimson',   ar: 'عنّابي',        en: 'Crimson',        css: 'linear-gradient(135deg,#3A0D10 0%,#5C1319 55%,#170506 100%)' },
+  { key: 'slate',     ar: 'رمادي إداري',   en: 'Formal Slate',   css: 'linear-gradient(135deg,#1B232E 0%,#28323F 55%,#0A0E13 100%)' },
+  { key: 'teal',      ar: 'فيروزي',        en: 'Teal',           css: 'linear-gradient(135deg,#083A37 0%,#0C534E 55%,#031715 100%)' },
+  { key: 'sunset',    ar: 'كهرماني',       en: 'Amber',          css: 'linear-gradient(135deg,#5A2A0C 0%,#7A3C12 55%,#241004 100%)' },
 ]
 
 const FONTS = {
@@ -36,13 +40,18 @@ const FONTS = {
   mono:    { ar: 'مضغوط',      en: 'Compact',         family: MONO },
 }
 
+// القوالب اللي يمكن ترفق لها ملف PDF كمحتوى رئيسي بدل النص (كل شي إلا "موظف متميز")
+const PDF_TEMPLATES = ['announcement', 'celebration', 'circular']
+
 function bgFor(post) {
   if (post?.background_image_url) return { image: post.background_image_url }
+  let gradient
   if (post?.background_preset) {
     const p = PRESET_BACKGROUNDS.find(b => b.key === post.background_preset)
-    if (p) return { css: p.css }
+    gradient = p?.css
   }
-  return { css: (TEMPLATES[post?.template] ?? TEMPLATES.announcement).bg }
+  gradient ??= (TEMPLATES[post?.template] ?? TEMPLATES.announcement).bg
+  return { css: `${SHEEN}, ${gradient}` }
 }
 
 function ordinalMonthAr(n) { return `الشهر ${ORDINALS_AR[n] || n} على التوالي` }
@@ -262,6 +271,7 @@ export default function MagazinePage() {
               }}
             >
               <div style={{ position: 'absolute', inset: 0, background: bg.image ? 'linear-gradient(0deg, rgba(0,0,0,0.8), rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.35))' : 'linear-gradient(0deg, rgba(0,0,0,0.35), transparent 45%)' }} />
+              <div style={{ position: 'absolute', top: 0, insetInline: 0, height: 4, background: tpl.accent, zIndex: 2 }} />
               {/* مناطق اللمس/الضغط — يمين ويسار */}
               <button aria-label="prev" onClick={() => go(isAr ? 1 : -1)} style={{ position: 'absolute', inset: '0 50% 0 0', background: 'none', border: 'none', cursor: index > 0 || isAr ? 'pointer' : 'default', zIndex: 1 }} />
               <button aria-label="next" onClick={() => go(isAr ? -1 : 1)} style={{ position: 'absolute', inset: '0 0 0 50%', background: 'none', border: 'none', cursor: 'pointer', zIndex: 1 }} />
@@ -289,11 +299,11 @@ export default function MagazinePage() {
                     ))}
                   </div>
                 )}
-                {post.template === 'circular' && post.circular_pdf_url && (
-                  <a href={post.circular_pdf_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                {PDF_TEMPLATES.includes(post.template) && post.pdf_url && (
+                  <a href={post.pdf_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 14, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 10, padding: '10px 16px', color: '#fff', textDecoration: 'none', fontSize: '0.82rem', fontWeight: 700 }}>
                     <span>📄</span>
-                    <span>{isAr ? 'فتح ملف التعميم (PDF)' : 'Open circular PDF'}</span>
+                    <span>{isAr ? 'فتح الملف المرفق (PDF)' : 'Open attached PDF'}</span>
                   </a>
                 )}
                 {(isAr ? post.body_ar : (post.body_en || post.body_ar)) && (
@@ -398,7 +408,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     background_image_url: post?.background_image_url ?? '', background_preset: post?.background_preset ?? 'navy',
     employee_ids: post?.employee_ids ?? [], is_published: post?.is_published ?? true,
     closing_ar: post?.closing_ar ?? '', signer_name: post?.signer_name ?? '',
-    circular_pdf_url: post?.circular_pdf_url ?? '',
+    pdf_url: post?.pdf_url ?? '',
   })
   const [uploadingPdf, setUploadingPdf] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -509,7 +519,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     setUploadingPdf(true); setErr('')
     try {
       const url = await uploadMagazinePdf(file)
-      set('circular_pdf_url', url)
+      set('pdf_url', url)
     } catch (e2) {
       setErr(e2.message)
     }
@@ -537,8 +547,8 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
       onSaved()
       return
     }
-    const circularHasPdf = form.template === 'circular' && !!form.circular_pdf_url
-    if (!form.title_ar.trim() || (!circularHasPdf && !form.body_ar.trim())) {
+    const hasPdf = PDF_TEMPLATES.includes(form.template) && !!form.pdf_url
+    if (!form.title_ar.trim() || (!hasPdf && !form.body_ar.trim())) {
       setErr(isAr ? 'العنوان مطلوب دائماً، والنص مطلوب إلا إذا رفعت ملف PDF' : 'Title is always required; body is required unless a PDF is attached')
       return
     }
@@ -554,7 +564,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
 
   const isBulkSpotlight = !post && form.template === 'spotlight' && form.employee_ids.length > 1
   const previewBg = form.background_image_url ? `url(${form.background_image_url}) center/cover`
-    : (PRESET_BACKGROUNDS.find(b => b.key === form.background_preset)?.css ?? TEMPLATES[form.template].bg)
+    : `${SHEEN}, ${PRESET_BACKGROUNDS.find(b => b.key === form.background_preset)?.css ?? TEMPLATES[form.template].bg}`
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
@@ -623,13 +633,13 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                 : `${form.employee_ids.length} separate posts will be created — each person gets their own page with an automatically personalized congratulation.`}
             </div>
           </SectionCard>
-        ) : form.template === 'circular' ? (
-          <SectionCard title={isAr ? 'عنوان الموضوع' : 'Subject title'}>
+        ) : PDF_TEMPLATES.includes(form.template) ? (
+          <SectionCard title={form.template === 'circular' ? (isAr ? 'عنوان الموضوع' : 'Subject title') : (isAr ? 'العنوان' : 'Title')}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label={isAr ? 'عنوان الموضوع (عربي) *' : 'Subject title (Arabic) *'}>
+              <Field label={form.template === 'circular' ? (isAr ? 'عنوان الموضوع (عربي) *' : 'Subject title (Arabic) *') : (isAr ? 'العنوان (عربي) *' : 'Title (Arabic) *')}>
                 <input style={inp} value={form.title_ar} onChange={e => set('title_ar', e.target.value)} />
               </Field>
-              <Field label={isAr ? 'عنوان الموضوع (إنجليزي)' : 'Subject title (English)'}>
+              <Field label={form.template === 'circular' ? (isAr ? 'عنوان الموضوع (إنجليزي)' : 'Subject title (English)') : (isAr ? 'العنوان (إنجليزي)' : 'Title (English)')}>
                 <input style={inp} value={form.title_en} onChange={e => set('title_en', e.target.value)} dir="ltr" />
               </Field>
             </div>
@@ -681,15 +691,15 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
           </div>
         </SectionCard>
 
-        {form.template === 'circular' && (
-          <SectionCard title={isAr ? 'محتوى التعميم' : 'Circular content'}>
-            <Field label={isAr ? 'ارفع التعميم كملف PDF (يُعرض كمحتوى رئيسي)' : 'Upload the circular as a PDF (shown as the main content)'}>
+        {PDF_TEMPLATES.includes(form.template) && (
+          <SectionCard title={isAr ? 'محتوى المنشور' : 'Post content'}>
+            <Field label={isAr ? 'ارفع ملف PDF (يُعرض كمحتوى رئيسي)' : 'Upload a PDF (shown as the main content)'}>
               <input type="file" accept="application/pdf" onChange={handlePdf} style={{ fontSize: '0.72rem' }} />
               {uploadingPdf && <p style={{ margin: '4px 0 0', fontSize: '0.66rem', color: '#9CA3AF' }}>{isAr ? 'جارٍ الرفع...' : 'Uploading...'}</p>}
-              {form.circular_pdf_url && !uploadingPdf && (
+              {form.pdf_url && !uploadingPdf && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-                  <a href={form.circular_pdf_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.72rem', color: '#5B5BD6', fontWeight: 700 }}>{isAr ? '📄 عرض الملف المرفوع' : '📄 View uploaded file'}</a>
-                  <button type="button" onClick={() => set('circular_pdf_url', '')} style={{ fontSize: '0.66rem', color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer' }}>{isAr ? '✕ إزالة' : '✕ Remove'}</button>
+                  <a href={form.pdf_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.72rem', color: '#5B5BD6', fontWeight: 700 }}>{isAr ? '📄 عرض الملف المرفوع' : '📄 View uploaded file'}</a>
+                  <button type="button" onClick={() => set('pdf_url', '')} style={{ fontSize: '0.66rem', color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer' }}>{isAr ? '✕ إزالة' : '✕ Remove'}</button>
                 </div>
               )}
             </Field>
@@ -698,20 +708,24 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
               {isAr ? 'الحقول التالية اختيارية وتُعرض تحت ملف الـ PDF إن رفعته (أو بديلاً عنه إن ما رفعت ملف):' : 'The fields below are optional and appear under the PDF if uploaded (or as a substitute if you skip the PDF):'}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label={isAr ? `الموضوع (عربي)${form.circular_pdf_url ? '' : ' *'}` : `Body (Arabic)${form.circular_pdf_url ? '' : ' *'}`}>
+              <Field label={isAr ? `النص (عربي)${form.pdf_url ? '' : ' *'}` : `Body (Arabic)${form.pdf_url ? '' : ' *'}`}>
                 <textarea style={{ ...inp, minHeight: 90, resize: 'vertical' }} value={form.body_ar} onChange={e => set('body_ar', e.target.value)} />
               </Field>
-              <Field label={isAr ? 'الموضوع (إنجليزي)' : 'Body (English)'}>
+              <Field label={isAr ? 'النص (إنجليزي)' : 'Body (English)'}>
                 <textarea style={{ ...inp, minHeight: 90, resize: 'vertical' }} value={form.body_en} onChange={e => set('body_en', e.target.value)} dir="ltr" />
               </Field>
             </div>
-            <Field label={isAr ? 'الخاتمة' : 'Closing'}>
-              <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={form.closing_ar} onChange={e => set('closing_ar', e.target.value)}
-                placeholder={isAr ? 'مثال: وتفضلوا بقبول فائق الاحترام والتقدير' : ''} />
-            </Field>
-            <Field label={isAr ? 'الاسم (اختياري — إن تُرك فارغاً لا يظهر)' : 'Signer name (optional — hidden if empty)'}>
-              <input style={inp} value={form.signer_name} onChange={e => set('signer_name', e.target.value)} />
-            </Field>
+            {form.template === 'circular' && (
+              <>
+                <Field label={isAr ? 'الخاتمة' : 'Closing'}>
+                  <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={form.closing_ar} onChange={e => set('closing_ar', e.target.value)}
+                    placeholder={isAr ? 'مثال: وتفضلوا بقبول فائق الاحترام والتقدير' : ''} />
+                </Field>
+                <Field label={isAr ? 'الاسم (اختياري — إن تُرك فارغاً لا يظهر)' : 'Signer name (optional — hidden if empty)'}>
+                  <input style={inp} value={form.signer_name} onChange={e => set('signer_name', e.target.value)} />
+                </Field>
+              </>
+            )}
           </SectionCard>
         )}
 
@@ -760,6 +774,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
         ) : (
           <div style={{ borderRadius: 16, overflow: 'hidden', minHeight: 340, background: previewBg, boxShadow: '0 16px 40px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative' }}>
             <div style={{ position: 'absolute', inset: 0, background: form.background_image_url ? 'linear-gradient(0deg, rgba(0,0,0,0.8), rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.35))' : 'linear-gradient(0deg, rgba(0,0,0,0.35), transparent 45%)' }} />
+            <div style={{ position: 'absolute', top: 0, insetInline: 0, height: 4, background: TEMPLATES[form.template].accent }} />
             <div style={{ position: 'relative', padding: '22px 20px 18px' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.16)', padding: '3px 10px', borderRadius: 999, fontSize: '0.64rem', fontWeight: 700, color: '#fff', marginBottom: 10 }}>
                 <span>{TEMPLATES[form.template].badge}</span><span>{isAr ? TEMPLATES[form.template].ar : TEMPLATES[form.template].en}</span>
@@ -778,12 +793,12 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                   ))}
                 </div>
               )}
-              {form.template === 'circular' && form.circular_pdf_url && (
+              {PDF_TEMPLATES.includes(form.template) && form.pdf_url && (
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8, padding: '6px 12px', color: '#fff', fontSize: '0.72rem', fontWeight: 700 }}>
                   📄 {isAr ? 'ملف PDF مرفق' : 'PDF attached'}
                 </div>
               )}
-              {(form.body_ar || !(form.template === 'circular' && form.circular_pdf_url)) && (
+              {(form.body_ar || !(PDF_TEMPLATES.includes(form.template) && form.pdf_url)) && (
                 <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, whiteSpace: 'pre-line', fontFamily: FONTS[form.font].family }}>
                   {form.body_ar || (isAr ? 'نص المنشور يظهر هنا...' : 'Post body appears here...')}
                 </p>
