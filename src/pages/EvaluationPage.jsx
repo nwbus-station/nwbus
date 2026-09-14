@@ -1031,7 +1031,6 @@ export default function EvaluationPage() {
     const w = window.open('', '_blank')
     w.document.write(html)
     w.document.close()
-    w.print()
   }
 
   const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }
@@ -1823,18 +1822,12 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
     setLoading(false)
   }
 
+  // يفتح تبويب جديد للمعاينة بدل الطباعة التلقائية الفورية — المستخدم يراجع أول ثم يضغط
+  // زر "طباعة / حفظ PDF" الموجود بأعلى الصفحة نفسها لما يكون جاهز
   function printHtml(html) {
-    const iframe = document.createElement('iframe')
-    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none'
-    document.body.appendChild(iframe)
-    iframe.contentDocument.open()
-    iframe.contentDocument.write(html)
-    iframe.contentDocument.close()
-    iframe.contentWindow.focus()
-    setTimeout(() => {
-      iframe.contentWindow.print()
-      setTimeout(() => document.body.removeChild(iframe), 1000)
-    }, 300)
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
   }
 
   function printEmployees() {
@@ -2183,8 +2176,8 @@ function reportCss() {
   .cover-title{font-size:23px;font-weight:800;color:#fff;line-height:1.25;margin-bottom:5px}
   .cover-sub{font-size:12.5px;color:rgba(255,255,255,0.55);font-weight:500}
   .cover-left{display:flex;flex-direction:column;align-items:flex-end;gap:4px;position:relative}
-  .nw-wordmark-chip{display:inline-block}
-  .nw-wordmark-chip span{font-size:15px;font-weight:800;letter-spacing:0.01em}
+  .nw-logo{font-size:13px;font-weight:800;color:rgba(255,255,255,0.9);letter-spacing:0.02em}
+  .nw-logo-line{width:36px;height:2px;background:rgba(255,255,255,0.3);margin:6px 0;border-radius:2px}
   .cover-date{font-size:10.5px;color:rgba(255,255,255,0.4);letter-spacing:0.05em;margin-top:8px}
 
   /* ── إحصاءات ── */
@@ -2308,7 +2301,8 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[month-1]} ${year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#60A5FA">WEST</span><span style="color:#fff">BUS</span></div>
+      <div class="nw-logo">NORTHWESTBUS</div>
+      <div class="nw-logo-line"></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -2383,7 +2377,8 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[month-1]} ${year}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#60A5FA">WEST</span><span style="color:#fff">BUS</span></div>
+      <div class="nw-logo">NORTHWESTBUS</div>
+      <div class="nw-logo-line"></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -2426,7 +2421,8 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${empName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#60A5FA">WEST</span><span style="color:#fff">BUS</span></div>
+      <div class="nw-logo">NORTHWESTBUS</div>
+      <div class="nw-logo-line"></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -2472,7 +2468,8 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#60A5FA">WEST</span><span style="color:#fff">BUS</span></div>
+      <div class="nw-logo">NORTHWESTBUS</div>
+      <div class="nw-logo-line"></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
