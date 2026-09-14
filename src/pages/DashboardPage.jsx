@@ -73,6 +73,15 @@ const SURVEY_DASH_CSS = `
 }
 `
 
+const MAGAZINE_DASH_CSS = `
+@media (max-width: 640px) {
+  .magazine-grid { grid-template-columns: 1fr !important; }
+  .magazine-card { min-height: 132px !important; }
+  .magazine-card-title { font-size: 1.05rem !important; }
+  .magazine-card-body { font-size: 0.82rem !important; }
+}
+`
+
 function SurveyWidget({ city, isAdmin, isAr, onLaunch, onNavigate }) {
   const [hover, setHover] = useState(false)
   const cityInfo = SURVEY_STATIONS.find(s => s.city === city)
@@ -204,17 +213,18 @@ function MagazineTypeCard({ posts, isAr, onNavigate }) {
   return (
     <button onClick={() => onNavigate(post)}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      className="magazine-card"
       style={{
         width: '100%', textAlign: isAr ? 'right' : 'left', cursor: 'pointer', fontFamily: 'inherit',
-        border: 'none', borderRadius: 10, overflow: 'hidden', position: 'relative', minHeight: 100,
+        border: 'none', borderRadius: 10, overflow: 'hidden', position: 'relative', minHeight: 128,
         background: bg.image ? `url(${bg.image}) center/cover` : bg.css,
         boxShadow: hover ? '0 10px 28px rgba(0,0,0,0.28)' : '0 4px 14px rgba(0,0,0,0.18)',
         transition: 'box-shadow 0.15s, transform 0.15s, background 0.25s',
         transform: hover ? 'translateY(-1px)' : 'none',
       }}>
-      <div style={{ position: 'absolute', inset: 0, background: bg.image ? 'linear-gradient(0deg, rgba(0,0,0,0.75), rgba(0,0,0,0.2) 60%)' : 'linear-gradient(0deg, rgba(0,0,0,0.3), transparent 55%)' }} />
+      <div style={{ position: 'absolute', inset: 0, background: bg.image ? 'linear-gradient(0deg, rgba(0,0,0,0.8), rgba(0,0,0,0.25) 60%)' : 'linear-gradient(0deg, rgba(0,0,0,0.4), transparent 55%)' }} />
       <div style={{ position: 'absolute', top: 0, insetInline: 0, height: 3, background: tpl.accent }} />
-      <div style={{ position: 'relative', padding: '14px 18px 16px', display: 'flex', flexDirection: 'column', gap: 6, opacity: fade ? 1 : 0, transition: 'opacity 0.22s' }}>
+      <div style={{ position: 'relative', padding: '16px 18px 30px', display: 'flex', flexDirection: 'column', gap: 7, opacity: fade ? 1 : 0, transition: 'opacity 0.22s' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.16)', padding: '3px 10px', borderRadius: 999, fontSize: '0.63rem', fontWeight: 700, color: '#fff' }}>
             <span>{tpl.badge}</span><span>{isAr ? tpl.ar : tpl.en}</span>
@@ -223,9 +233,19 @@ function MagazineTypeCard({ posts, isAr, onNavigate }) {
             <Svg paths={ICONS.arrow} size={14} />
           </span>
         </div>
-        <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: '#fff', lineHeight: 1.35 }}>{title}</p>
+        <p className="magazine-card-title" style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#fff', lineHeight: 1.35 }}>{title}</p>
+        {post.employees?.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {post.employees.map((e, i) => (
+              <span key={i} style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>
+                {e.full_name_ar}
+                {e.station && <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}> · {isAr ? e.station.name_ar : (e.station.name_en || e.station.name_ar)}</span>}
+              </span>
+            ))}
+          </div>
+        )}
         {body && (
-          <p style={{ margin: 0, fontSize: '0.72rem', color: 'rgba(255,255,255,0.75)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          <p className="magazine-card-body" style={{ margin: 0, fontSize: '0.76rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
             {body}
           </p>
         )}
@@ -248,7 +268,7 @@ function MagazineFeed({ posts, isAr, onNavigate }) {
   const byTemplate = MAGAZINE_TEMPLATE_ORDER.map(key => posts.filter(p => p.template === key)).filter(g => g.length)
   if (!byTemplate.length) return null
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(byTemplate.length, 2)}, 1fr)`, gap: 10 }}>
+    <div className="magazine-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(byTemplate.length, 2)}, 1fr)`, gap: 10 }}>
       {byTemplate.map(group => <MagazineTypeCard key={group[0].template} posts={group} isAr={isAr} onNavigate={onNavigate} />)}
     </div>
   )
@@ -299,7 +319,14 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadMagazinePosts() {
       const { data } = await supabase.from('magazine_posts').select('*').eq('is_published', true).order('created_at', { ascending: false }).limit(15)
-      setRawMagazinePosts(data || [])
+      const rows = data || []
+      const allIds = [...new Set(rows.flatMap(p => p.employee_ids || []))]
+      let peopleMap = {}
+      if (allIds.length) {
+        const { data: people } = await supabase.from('users').select('id, full_name_ar, station:station_id(name_ar, name_en)').in('id', allIds)
+        peopleMap = Object.fromEntries((people || []).map(p => [p.id, p]))
+      }
+      setRawMagazinePosts(rows.map(p => ({ ...p, employees: (p.employee_ids || []).map(id => peopleMap[id]).filter(Boolean) })))
     }
     loadMagazinePosts()
   }, [])
@@ -414,6 +441,7 @@ export default function DashboardPage() {
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }}>
 
       <style>{SURVEY_DASH_CSS}</style>
+      <style>{MAGAZINE_DASH_CSS}</style>
       {surveyOpen && surveyCity && <SurveyOverlay city={surveyCity} onClose={() => setSurveyOpen(false)} />}
 
       {/* ── شريط الترحيب ── */}
