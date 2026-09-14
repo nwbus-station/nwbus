@@ -1254,17 +1254,27 @@ export default function EvaluationPage() {
                         </>}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
                       {EVAL_SOURCE_ORDER.map(role => {
                         const r = bySource[role]
                         const s = r?.total_score
                         const color = s == null ? 'var(--text-3)' : s >= 85 ? '#059669' : s >= 70 ? '#3B82F6' : s >= 50 ? '#F59E0B' : '#EF4444'
                         return (
                           <button key={role} onClick={() => setEmpModal({ employee: emp, existing: r || null, sourceRole: role })}
-                            title={isAr ? EVAL_SOURCE_LABELS[role] : EVAL_SOURCE_LABELS_EN[role]}
-                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '5px 9px', borderRadius: 8, border: '1px solid var(--border)', background: r ? 'var(--surface)' : 'transparent', cursor: 'pointer', minWidth: 52, fontFamily: 'inherit' }}>
-                            <span style={{ fontSize: '0.62rem', color: 'var(--text-3)', fontWeight: 600 }}>{EVAL_SOURCE_SHORT[role]}</span>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 800, fontFamily: MONO, color }}>{s != null ? (s / 10).toFixed(1) : '—'}</span>
+                            style={{
+                              display: 'flex', flexDirection: 'column', gap: 3, padding: '7px 12px', borderRadius: 10,
+                              border: `1.5px solid ${r ? color + '40' : 'var(--border)'}`, background: r ? color + '0d' : 'var(--surface)',
+                              cursor: 'pointer', minWidth: 122, fontFamily: 'inherit', textAlign: 'start',
+                            }}>
+                            <span style={{ fontSize: '0.62rem', color: 'var(--text-3)', fontWeight: 700, letterSpacing: '0.01em' }}>
+                              {isAr ? EVAL_SOURCE_LABELS[role] : EVAL_SOURCE_LABELS_EN[role]}
+                            </span>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 108 }}>
+                              {r?.evaluator?.full_name_ar ?? (isAr ? 'لم يُقيَّم بعد' : 'Not rated yet')}
+                            </span>
+                            {s != null && (
+                              <span style={{ fontSize: '0.88rem', fontWeight: 800, fontFamily: MONO, color }}>{s}%</span>
+                            )}
                           </button>
                         )
                       })}
