@@ -9,8 +9,11 @@ export function initPwaUpdate() {
   updateSWFn = registerSW({
     onNeedRefresh() { listeners.forEach(cb => cb()) },
     onRegisteredSW(_url, registration) {
-      // فحص دوري لوجود نسخة جديدة — التبويبات المفتوحة لفترة طويلة ما تكتشف التحديث إلا بفحص صريح
-      if (registration) setInterval(() => registration.update(), 10 * 60 * 1000)
+      if (!registration) return
+      // فحص فوري عند كل تحميل (مو بس كل ١٠ دقايق) — عشان تحديث الصفحة العادي يكتشف
+      // النسخة الجديدة مباشرة بدل ما ينتظر الفحص الدوري
+      registration.update()
+      setInterval(() => registration.update(), 10 * 60 * 1000)
     },
   })
 }
