@@ -590,15 +590,15 @@ export default function AppLayout() {
           <Icon d={ICONS.key} size={18} />
           <div style={{ flex: 1 }}>
             <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700 }}>
-              {isAr ? 'غيّر كلمة مرورك' : 'Change your password'}
+              {isAr ? 'تعيين كلمة مرور جديدة' : 'Set a new password'}
             </p>
             <p style={{ margin: '4px 0 10px', fontSize: '0.74rem', color: '#A8B2BA' }}>
-              {isAr ? 'حسابك لسا على كلمة المرور اللي حددها الأدمن — ننصحك تغيّرها لكلمة تعرفها انت بس.' : 'Your account still uses the password set by an admin — we recommend changing it to one only you know.'}
+              {isAr ? 'كلمة المرور الحالية معيّنة من الإدارة. يُنصح بتعيين كلمة خاصة بك.' : 'Your current password was set by an admin. Please set one of your own.'}
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => { setShowPwdNudge(false); setShowChangePwd(true) }}
                 style={{ background: '#fff', color: '#1C2B36', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer' }}>
-                {isAr ? 'غيّرها الآن' : 'Change now'}
+                {isAr ? 'تعيين الآن' : 'Set now'}
               </button>
               <button onClick={() => setShowPwdNudge(false)}
                 style={{ background: 'transparent', color: '#A8B2BA', border: 'none', fontSize: '0.76rem', cursor: 'pointer' }}>
