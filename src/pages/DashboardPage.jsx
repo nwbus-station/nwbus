@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { getCached, setCached } from '../lib/pageCache'
 import { SurveyOverlay, detectSurveyCity, SURVEY_STATIONS } from './SurveyPage'
-import { TEMPLATES as MAGAZINE_TEMPLATES, bgFor as magazineBgFor, isPostLive } from './MagazinePage'
+import { TEMPLATES as MAGAZINE_TEMPLATES, TEMPLATE_ORDER as MAGAZINE_TEMPLATE_ORDER, bgFor as magazineBgFor, isPostLive } from './MagazinePage'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -176,11 +176,26 @@ function SurveyWidget({ city, isAdmin, isAr, onLaunch, onNavigate }) {
   )
 }
 
-// بطاقة مستقلة لمنشور واحد بمجلة NW — نفس الأسلوب لكل الأنواع (موظف متميز، إعلان،
-// تهنئة، تعميم). الضغط عليها يفتح المجلة على هذا المنشور بالذات، أبداً الملف مباشرة
-// (حتى لو كان مرفق له PDF)
-function MagazinePostCard({ post, isAr, onNavigate }) {
+// بطاقة مستقلة لنوع منشور واحد (موظف متميز / إعلان / تهنئة / تعميم) — تتبدّل تلقائياً
+// كل ثانيتين بين منشورات نفس النوع فقط إن وُجد أكثر من واحد. الضغط عليها يفتح المجلة
+// على نفس المنشور المعروض، أبداً الملف مباشرة (حتى لو كان مرفق له PDF)
+function MagazineTypeCard({ posts, isAr, onNavigate }) {
   const [hover, setHover] = useState(false)
+  const [idx, setIdx] = useState(0)
+  const [fade, setFade] = useState(true)
+
+  useEffect(() => {
+    setIdx(0)
+    if (posts.length < 2) return
+    const t = setInterval(() => {
+      setFade(false)
+      setTimeout(() => { setIdx(i => (i + 1) % posts.length); setFade(true) }, 220)
+    }, 2000)
+    return () => clearInterval(t)
+  }, [posts.length])
+
+  if (!posts.length) return null
+  const post = posts[idx]
   const tpl = MAGAZINE_TEMPLATES[post.template] ?? MAGAZINE_TEMPLATES.announcement
   const bg = magazineBgFor(post)
   const title = isAr ? post.title_ar : (post.title_en || post.title_ar)
@@ -194,15 +209,15 @@ function MagazinePostCard({ post, isAr, onNavigate }) {
         border: 'none', borderRadius: 10, overflow: 'hidden', position: 'relative', minHeight: 100,
         background: bg.image ? `url(${bg.image}) center/cover` : bg.css,
         boxShadow: hover ? '0 10px 28px rgba(0,0,0,0.28)' : '0 4px 14px rgba(0,0,0,0.18)',
-        transition: 'box-shadow 0.15s, transform 0.15s',
+        transition: 'box-shadow 0.15s, transform 0.15s, background 0.25s',
         transform: hover ? 'translateY(-1px)' : 'none',
       }}>
       <div style={{ position: 'absolute', inset: 0, background: bg.image ? 'linear-gradient(0deg, rgba(0,0,0,0.75), rgba(0,0,0,0.2) 60%)' : 'linear-gradient(0deg, rgba(0,0,0,0.3), transparent 55%)' }} />
       <div style={{ position: 'absolute', top: 0, insetInline: 0, height: 3, background: tpl.accent }} />
-      <div style={{ position: 'relative', padding: '14px 18px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ position: 'relative', padding: '14px 18px 16px', display: 'flex', flexDirection: 'column', gap: 6, opacity: fade ? 1 : 0, transition: 'opacity 0.22s' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.16)', padding: '3px 10px', borderRadius: 999, fontSize: '0.63rem', fontWeight: 700, color: '#fff' }}>
-            <span>{tpl.badge}</span><span>{isAr ? 'مجلة NW' : 'NW Magazine'} · {isAr ? tpl.ar : tpl.en}</span>
+            <span>{tpl.badge}</span><span>{isAr ? tpl.ar : tpl.en}</span>
           </span>
           <span style={{ color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}>
             <Svg paths={ICONS.arrow} size={14} />
@@ -215,17 +230,26 @@ function MagazinePostCard({ post, isAr, onNavigate }) {
           </p>
         )}
       </div>
+      {posts.length > 1 && (
+        <div style={{ position: 'absolute', bottom: 8, insetInlineEnd: 14, display: 'flex', gap: 4, zIndex: 2 }}>
+          {posts.map((_, i) => (
+            <span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i === idx ? '#fff' : 'rgba(255,255,255,0.35)', transition: 'background 0.2s' }} />
+          ))}
+        </div>
+      )}
     </button>
   )
 }
 
-// قائمة مستطيلات ثابتة (بدون تبديل تلقائي) — كل منشور حي (منشور، ووصل وقت بدايته
-// وما انتهى) يأخذ مستطيله المستقل، ويختفي وحده تلقائياً أول ما ينتهي وقته
+// شبكة ثابتة من ٤ بطاقات بحد أقصى — وحدة لكل نوع منشور (موظف متميز، إعلان، تهنئة،
+// تعميم). كل بطاقة تدور بين منشورات نوعها هي فقط، وتختفي كلياً إن ما فيه منشور حي
+// من نوعها
 function MagazineFeed({ posts, isAr, onNavigate }) {
-  if (!posts.length) return null
+  const byTemplate = MAGAZINE_TEMPLATE_ORDER.map(key => posts.filter(p => p.template === key)).filter(g => g.length)
+  if (!byTemplate.length) return null
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {posts.map(p => <MagazinePostCard key={p.id} post={p} isAr={isAr} onNavigate={onNavigate} />)}
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(byTemplate.length, 2)}, 1fr)`, gap: 10 }}>
+      {byTemplate.map(group => <MagazineTypeCard key={group[0].template} posts={group} isAr={isAr} onNavigate={onNavigate} />)}
     </div>
   )
 }
@@ -286,7 +310,7 @@ export default function DashboardPage() {
     const t = setInterval(() => setScheduleTick(Date.now()), 30000)
     return () => clearInterval(t)
   }, [])
-  const magazinePosts = rawMagazinePosts.filter(p => isPostLive(p, scheduleTick)).slice(0, 5)
+  const magazinePosts = rawMagazinePosts.filter(p => isPostLive(p, scheduleTick))
   const mods        = profile?.allowed_modules
 
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })

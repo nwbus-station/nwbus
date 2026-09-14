@@ -18,7 +18,7 @@ export const TEMPLATES = {
   celebration:  { ar: 'تهنئة',        en: 'Celebration',        bg: 'linear-gradient(135deg,#3B2159 0%,#241536 55%,#100A1A 100%)', accent: 'linear-gradient(90deg,#8B5CF6,#D8CCFB)', badge: '🎉' },
   circular:     { ar: 'تعميم إداري',  en: 'Official Circular',  bg: 'linear-gradient(135deg,#2B323C 0%,#1A1F26 55%,#0C0F13 100%)', accent: 'linear-gradient(90deg,#94A3B8,#E9EEF4)', badge: '📋' },
 }
-const TEMPLATE_ORDER = ['spotlight', 'announcement', 'celebration', 'circular']
+export const TEMPLATE_ORDER = ['spotlight', 'announcement', 'celebration', 'circular']
 
 // خلفيات جاهزة إضافية — تدرّجات مصمّمة بدل ما تحتاج ترفع صورة كل مرة
 const PRESET_BACKGROUNDS = [
