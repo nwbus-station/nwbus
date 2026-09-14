@@ -68,6 +68,14 @@ async function uploadMagazineImage(file) {
   return data.publicUrl
 }
 
+async function uploadMagazinePdf(file) {
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`
+  const { error } = await supabase.storage.from('magazine-files').upload(path, file)
+  if (error) throw error
+  const { data } = supabase.storage.from('magazine-files').getPublicUrl(path)
+  return data.publicUrl
+}
+
 const inp = {
   width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #E5E7EB',
   fontSize: '0.85rem', fontFamily: 'inherit', color: '#111827', background: '#fff', boxSizing: 'border-box', outline: 'none',
@@ -281,9 +289,18 @@ export default function MagazinePage() {
                     ))}
                   </div>
                 )}
-                <p style={{ margin: '12px 0 0', fontSize: '0.92rem', color: 'rgba(255,255,255,0.88)', lineHeight: 1.75, whiteSpace: 'pre-line', fontFamily: font.family }}>
-                  {isAr ? post.body_ar : (post.body_en || post.body_ar)}
-                </p>
+                {post.template === 'circular' && post.circular_pdf_url && (
+                  <a href={post.circular_pdf_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 14, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 10, padding: '10px 16px', color: '#fff', textDecoration: 'none', fontSize: '0.82rem', fontWeight: 700 }}>
+                    <span>📄</span>
+                    <span>{isAr ? 'فتح ملف التعميم (PDF)' : 'Open circular PDF'}</span>
+                  </a>
+                )}
+                {(isAr ? post.body_ar : (post.body_en || post.body_ar)) && (
+                  <p style={{ margin: '12px 0 0', fontSize: '0.92rem', color: 'rgba(255,255,255,0.88)', lineHeight: 1.75, whiteSpace: 'pre-line', fontFamily: font.family }}>
+                    {isAr ? post.body_ar : (post.body_en || post.body_ar)}
+                  </p>
+                )}
                 {post.template === 'circular' && post.closing_ar && (
                   <p style={{ margin: '14px 0 0', fontSize: '0.9rem', color: 'rgba(255,255,255,0.88)', lineHeight: 1.75, whiteSpace: 'pre-line', fontFamily: font.family }}>
                     {post.closing_ar}
@@ -381,7 +398,9 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     background_image_url: post?.background_image_url ?? '', background_preset: post?.background_preset ?? 'navy',
     employee_ids: post?.employee_ids ?? [], is_published: post?.is_published ?? true,
     closing_ar: post?.closing_ar ?? '', signer_name: post?.signer_name ?? '',
+    circular_pdf_url: post?.circular_pdf_url ?? '',
   })
+  const [uploadingPdf, setUploadingPdf] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -484,6 +503,19 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     setUploading(false)
   }
 
+  async function handlePdf(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPdf(true); setErr('')
+    try {
+      const url = await uploadMagazinePdf(file)
+      set('circular_pdf_url', url)
+    } catch (e2) {
+      setErr(e2.message)
+    }
+    setUploadingPdf(false)
+  }
+
   async function handleSave() {
     // أكثر من موظف بقالب "موظف متميز" (منشور جديد) — كل واحد ياخذ صفحة/منشور مستقل
     // بنص مخصص له، بدل ما يتكدسوا كلهم بمنشور واحد
@@ -505,7 +537,11 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
       onSaved()
       return
     }
-    if (!form.title_ar.trim() || !form.body_ar.trim()) { setErr(isAr ? 'العنوان والنص بالعربي مطلوبين' : 'Arabic title and body are required'); return }
+    const circularHasPdf = form.template === 'circular' && !!form.circular_pdf_url
+    if (!form.title_ar.trim() || (!circularHasPdf && !form.body_ar.trim())) {
+      setErr(isAr ? 'العنوان مطلوب دائماً، والنص مطلوب إلا إذا رفعت ملف PDF' : 'Title is always required; body is required unless a PDF is attached')
+      return
+    }
     setSaving(true); setErr('')
     const payload = { ...form, created_by: profile?.id }
     const { error } = post
@@ -587,35 +623,35 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                 : `${form.employee_ids.length} separate posts will be created — each person gets their own page with an automatically personalized congratulation.`}
             </div>
           </SectionCard>
+        ) : form.template === 'circular' ? (
+          <SectionCard title={isAr ? 'عنوان الموضوع' : 'Subject title'}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label={isAr ? 'عنوان الموضوع (عربي) *' : 'Subject title (Arabic) *'}>
+                <input style={inp} value={form.title_ar} onChange={e => set('title_ar', e.target.value)} />
+              </Field>
+              <Field label={isAr ? 'عنوان الموضوع (إنجليزي)' : 'Subject title (English)'}>
+                <input style={inp} value={form.title_en} onChange={e => set('title_en', e.target.value)} dir="ltr" />
+              </Field>
+            </div>
+          </SectionCard>
         ) : (
           <SectionCard title={isAr ? 'المحتوى' : 'Content'}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label={form.template === 'circular' ? (isAr ? 'عنوان الموضوع (عربي) *' : 'Subject title (Arabic) *') : (isAr ? 'العنوان (عربي) *' : 'Title (Arabic) *')}>
+              <Field label={isAr ? 'العنوان (عربي) *' : 'Title (Arabic) *'}>
                 <input style={inp} value={form.title_ar} onChange={e => set('title_ar', e.target.value)} />
               </Field>
-              <Field label={form.template === 'circular' ? (isAr ? 'عنوان الموضوع (إنجليزي)' : 'Subject title (English)') : (isAr ? 'العنوان (إنجليزي)' : 'Title (English)')}>
+              <Field label={isAr ? 'العنوان (إنجليزي)' : 'Title (English)'}>
                 <input style={inp} value={form.title_en} onChange={e => set('title_en', e.target.value)} dir="ltr" />
               </Field>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label={form.template === 'circular' ? (isAr ? 'الموضوع (عربي) *' : 'Body (Arabic) *') : (isAr ? 'النص (عربي) *' : 'Body (Arabic) *')}>
+              <Field label={isAr ? 'النص (عربي) *' : 'Body (Arabic) *'}>
                 <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={form.body_ar} onChange={e => set('body_ar', e.target.value)} />
               </Field>
-              <Field label={form.template === 'circular' ? (isAr ? 'الموضوع (إنجليزي)' : 'Body (English)') : (isAr ? 'النص (إنجليزي)' : 'Body (English)')}>
+              <Field label={isAr ? 'النص (إنجليزي)' : 'Body (English)'}>
                 <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={form.body_en} onChange={e => set('body_en', e.target.value)} dir="ltr" />
               </Field>
             </div>
-            {form.template === 'circular' && (
-              <>
-                <Field label={isAr ? 'الخاتمة' : 'Closing'}>
-                  <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={form.closing_ar} onChange={e => set('closing_ar', e.target.value)}
-                    placeholder={isAr ? 'مثال: وتفضلوا بقبول فائق الاحترام والتقدير' : ''} />
-                </Field>
-                <Field label={isAr ? 'الاسم (اختياري — إن تُرك فارغاً لا يظهر)' : 'Signer name (optional — hidden if empty)'}>
-                  <input style={inp} value={form.signer_name} onChange={e => set('signer_name', e.target.value)} />
-                </Field>
-              </>
-            )}
           </SectionCard>
         )}
 
@@ -644,6 +680,40 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
             </Field>
           </div>
         </SectionCard>
+
+        {form.template === 'circular' && (
+          <SectionCard title={isAr ? 'محتوى التعميم' : 'Circular content'}>
+            <Field label={isAr ? 'ارفع التعميم كملف PDF (يُعرض كمحتوى رئيسي)' : 'Upload the circular as a PDF (shown as the main content)'}>
+              <input type="file" accept="application/pdf" onChange={handlePdf} style={{ fontSize: '0.72rem' }} />
+              {uploadingPdf && <p style={{ margin: '4px 0 0', fontSize: '0.66rem', color: '#9CA3AF' }}>{isAr ? 'جارٍ الرفع...' : 'Uploading...'}</p>}
+              {form.circular_pdf_url && !uploadingPdf && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+                  <a href={form.circular_pdf_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.72rem', color: '#5B5BD6', fontWeight: 700 }}>{isAr ? '📄 عرض الملف المرفوع' : '📄 View uploaded file'}</a>
+                  <button type="button" onClick={() => set('circular_pdf_url', '')} style={{ fontSize: '0.66rem', color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer' }}>{isAr ? '✕ إزالة' : '✕ Remove'}</button>
+                </div>
+              )}
+            </Field>
+
+            <p style={{ margin: 0, fontSize: '0.7rem', color: '#9CA3AF' }}>
+              {isAr ? 'الحقول التالية اختيارية وتُعرض تحت ملف الـ PDF إن رفعته (أو بديلاً عنه إن ما رفعت ملف):' : 'The fields below are optional and appear under the PDF if uploaded (or as a substitute if you skip the PDF):'}
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label={isAr ? `الموضوع (عربي)${form.circular_pdf_url ? '' : ' *'}` : `Body (Arabic)${form.circular_pdf_url ? '' : ' *'}`}>
+                <textarea style={{ ...inp, minHeight: 90, resize: 'vertical' }} value={form.body_ar} onChange={e => set('body_ar', e.target.value)} />
+              </Field>
+              <Field label={isAr ? 'الموضوع (إنجليزي)' : 'Body (English)'}>
+                <textarea style={{ ...inp, minHeight: 90, resize: 'vertical' }} value={form.body_en} onChange={e => set('body_en', e.target.value)} dir="ltr" />
+              </Field>
+            </div>
+            <Field label={isAr ? 'الخاتمة' : 'Closing'}>
+              <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={form.closing_ar} onChange={e => set('closing_ar', e.target.value)}
+                placeholder={isAr ? 'مثال: وتفضلوا بقبول فائق الاحترام والتقدير' : ''} />
+            </Field>
+            <Field label={isAr ? 'الاسم (اختياري — إن تُرك فارغاً لا يظهر)' : 'Signer name (optional — hidden if empty)'}>
+              <input style={inp} value={form.signer_name} onChange={e => set('signer_name', e.target.value)} />
+            </Field>
+          </SectionCard>
+        )}
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: '#374151', cursor: 'pointer' }}>
           <input type="checkbox" checked={form.is_published} onChange={e => set('is_published', e.target.checked)} />
@@ -708,9 +778,16 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                   ))}
                 </div>
               )}
-              <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, whiteSpace: 'pre-line', fontFamily: FONTS[form.font].family }}>
-                {form.body_ar || (isAr ? 'نص المنشور يظهر هنا...' : 'Post body appears here...')}
-              </p>
+              {form.template === 'circular' && form.circular_pdf_url && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 8, padding: '6px 12px', color: '#fff', fontSize: '0.72rem', fontWeight: 700 }}>
+                  📄 {isAr ? 'ملف PDF مرفق' : 'PDF attached'}
+                </div>
+              )}
+              {(form.body_ar || !(form.template === 'circular' && form.circular_pdf_url)) && (
+                <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, whiteSpace: 'pre-line', fontFamily: FONTS[form.font].family }}>
+                  {form.body_ar || (isAr ? 'نص المنشور يظهر هنا...' : 'Post body appears here...')}
+                </p>
+              )}
               {form.template === 'circular' && form.closing_ar && (
                 <p style={{ margin: '12px 0 0', fontSize: '0.78rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, whiteSpace: 'pre-line', fontFamily: FONTS[form.font].family }}>
                   {form.closing_ar}
