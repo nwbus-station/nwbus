@@ -38,6 +38,7 @@ import EmployeeRatingPage from './pages/EmployeeRatingPage'
 import PublicRatingPage from './pages/PublicRatingPage'
 import SetPasswordPage  from './pages/SetPasswordPage'
 import CustomerRatingsAdminPage from './pages/CustomerRatingsAdminPage'
+import MagazinePage     from './pages/MagazinePage'
 
 // Layout
 import AppLayout        from './components/layout/AppLayout'
@@ -151,6 +152,7 @@ export default function App() {
           </RequireAuth>
         } />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="magazine" element={<MagazinePage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -54,6 +54,7 @@ const ICONS = {
   bell:    ['M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9','M13.73 21a2 2 0 01-3.46 0'],
   leave:   ['M8 2v4','M16 2v4','M3 10h18','M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z'],
   arrow:   'M5 12h14M12 5l7 7-7 7',
+  magazine: ['M4 19.5A2.5 2.5 0 016.5 17H20','M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z','M9 7h7','M9 11h7','M9 15h4'],
 }
 
 function StarIcon({ size = 16 }) {
@@ -297,7 +298,7 @@ export default function DashboardPage() {
   const quickLinks = [
     ...(!mods || mods.includes('transportation') ? [{ to: '/transportation', ar: 'الترحيل',    en: 'Transportation', icon: 'bus',     desc_ar: 'تتبع الرحلات والمغادرات', desc_en: 'Trips & departures' }] : []),
     ...(isAdmin || profile?.role === 'accountant' ? [{ to: '/reports',       ar: 'التقارير',    en: 'Reports',        icon: 'report',  desc_ar: 'تقارير تشغيلية شاملة',    desc_en: 'Operational reports' }] : []),
-    ...(!mods || mods.includes('lost_found')       ? [{ to: '/lost-found',    ar: 'الموجودات',  en: 'Lost & Found',  icon: 'bag',     desc_ar: 'تسجيل وتسليم الموجودات', desc_en: 'Register & hand over items' }] : []),
+    { to: '/magazine', ar: 'مجلة NW', en: 'NW Magazine', icon: 'magazine', desc_ar: 'إعلانات وموظفون متميزون', desc_en: 'Announcements & spotlights' },
   ]
 
   /* ── المعلومات ── */
