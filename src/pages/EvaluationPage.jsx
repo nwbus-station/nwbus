@@ -2183,8 +2183,8 @@ function reportCss() {
   .cover-title{font-size:23px;font-weight:800;color:#fff;line-height:1.25;margin-bottom:5px}
   .cover-sub{font-size:12.5px;color:rgba(255,255,255,0.55);font-weight:500}
   .cover-left{display:flex;flex-direction:column;align-items:flex-end;gap:4px;position:relative}
-  .nw-wordmark-chip{display:inline-block;background:#fff;padding:7px 14px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
-  .nw-wordmark-chip span{font-size:13px;font-weight:800;letter-spacing:0.01em}
+  .nw-wordmark-chip{display:inline-block}
+  .nw-wordmark-chip span{font-size:15px;font-weight:800;letter-spacing:0.01em}
   .cover-date{font-size:10.5px;color:rgba(255,255,255,0.4);letter-spacing:0.05em;margin-top:8px}
 
   /* ── إحصاءات ── */
@@ -2308,7 +2308,7 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[month-1]} ${year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#2563EB">WEST</span><span style="color:#111827">BUS</span></div>
+      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#60A5FA">WEST</span><span style="color:#fff">BUS</span></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -2383,7 +2383,7 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[month-1]} ${year}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#2563EB">WEST</span><span style="color:#111827">BUS</span></div>
+      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#60A5FA">WEST</span><span style="color:#fff">BUS</span></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -2426,7 +2426,7 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${empName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#2563EB">WEST</span><span style="color:#111827">BUS</span></div>
+      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#60A5FA">WEST</span><span style="color:#fff">BUS</span></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -2472,7 +2472,7 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#2563EB">WEST</span><span style="color:#111827">BUS</span></div>
+      <div class="nw-wordmark-chip"><span style="color:#F59E0B">NORTH</span><span style="color:#60A5FA">WEST</span><span style="color:#fff">BUS</span></div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
