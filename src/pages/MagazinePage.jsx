@@ -342,40 +342,47 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     loadCandidates()
   }, [form.template])
 
-  function regenerateSpotlightText(ids) {
-    const picked = candidates.filter(c => ids.includes(c.id))
-    if (picked.length === 0) return
-    // اسم أول موظف يُختار يبقى بالعنوان دايماً، وإذا انضاف غيره يُذكرون بعدد لا بالاسم
-    // (الأسماء بالتفصيل مع المحطة تظهر بقائمة مستقلة تحت العنوان، مو بالعنوان نفسه)
-    const title = picked.length === 1
-      ? `تكريم موظف الشهر: ${picked[0].name}`
-      : `تكريم موظفينا المتميزين: ${picked[0].name} و${picked.length - 1} ${picked.length - 1 === 1 ? 'آخر' : 'آخرين'}`
-    const hasStreak = picked.some(c => c.streak >= 2)
-    const streakNote = hasStreak
-      ? ` ونخص بالتهنئة ${picked.filter(c => c.streak >= 2).map(c => `${c.name} (${ordinalMonthAr(c.streak)})`).join('، ')}.`
-      : ''
-    const body = picked.length === 1
-      ? `نبارك للزميل ${picked[0].name} حصوله على تقييم متميز هذا الشهر، تقديراً لجهوده والتزامه المتواصل.${hasStreak ? ` هذا هو ${ordinalMonthAr(picked[0].streak)} له.` : ''} نتمنى له دوام التوفيق والتميز.`
-      : `نبارك لزملائنا حصولهم على تقييم متميز هذا الشهر، تقديراً لجهودهم والتزامهم المتواصل.${streakNote} نتمنى لهم دوام التوفيق والتميز.`
-    setForm(f => ({
-      ...f,
-      title_ar: (!f.title_ar.trim() || f.title_ar === autoTextRef.current.title) ? title : f.title_ar,
-      body_ar: (!f.body_ar.trim() || f.body_ar === autoTextRef.current.body) ? body : f.body_ar,
-    }))
-    autoTextRef.current = { title, body }
+  function personalizedText(c) {
+    const hasStreak = c.streak >= 2
+    return {
+      title: `تكريم موظف الشهر: ${c.name}`,
+      body: `نبارك للزميل ${c.name} حصوله على تقييم متميز هذا الشهر، تقديراً لجهوده والتزامه المتواصل.${hasStreak ? ` هذا هو ${ordinalMonthAr(c.streak)} له.` : ''} نتمنى له دوام التوفيق والتميز.`,
+    }
+  }
+
+  // موظف واحد: يعبّي العنوان/النص القابلين للتعديل مباشرة (منشور واحد).
+  // أكثر من موظف: كل واحد ياخذ منشوره المستقل بنص مخصص له تلقائياً عند الحفظ —
+  // ما نعبّي حقول نص مشتركة لأنها ما راح تُستخدم
+  function afterSelectionChange(ids) {
+    if (ids.length === 1) {
+      const { title, body } = personalizedText(candidates.find(c => c.id === ids[0]))
+      setForm(f => ({
+        ...f,
+        title_ar: (!f.title_ar.trim() || f.title_ar === autoTextRef.current.title) ? title : f.title_ar,
+        body_ar: (!f.body_ar.trim() || f.body_ar === autoTextRef.current.body) ? body : f.body_ar,
+      }))
+      autoTextRef.current = { title, body }
+    } else {
+      setForm(f => ({
+        ...f,
+        title_ar: f.title_ar === autoTextRef.current.title ? '' : f.title_ar,
+        body_ar: f.body_ar === autoTextRef.current.body ? '' : f.body_ar,
+      }))
+      autoTextRef.current = { title: '', body: '' }
+    }
   }
 
   function toggleCandidate(cand) {
     const has = form.employee_ids.includes(cand.id)
     const next = has ? form.employee_ids.filter(id => id !== cand.id) : [...form.employee_ids, cand.id]
     set('employee_ids', next)
-    regenerateSpotlightText(next)
+    afterSelectionChange(next)
   }
 
   function selectAllCandidates() {
     const next = form.employee_ids.length === candidates.length ? [] : candidates.map(c => c.id)
     set('employee_ids', next)
-    regenerateSpotlightText(next)
+    afterSelectionChange(next)
   }
 
   // تغيير القالب بعيداً عن "موظف متميز" يمسح البيانات المولّدة تلقائياً بدل ما يحتاج يمسحها يدوياً
@@ -402,6 +409,26 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
   }
 
   async function handleSave() {
+    // أكثر من موظف بقالب "موظف متميز" (منشور جديد) — كل واحد ياخذ صفحة/منشور مستقل
+    // بنص مخصص له، بدل ما يتكدسوا كلهم بمنشور واحد
+    if (!post && form.template === 'spotlight' && form.employee_ids.length > 1) {
+      setSaving(true); setErr('')
+      const picked = candidates.filter(c => form.employee_ids.includes(c.id))
+      const payloads = picked.map(c => {
+        const { title, body } = personalizedText(c)
+        return {
+          title_ar: title, title_en: '', body_ar: body, body_en: '',
+          template: 'spotlight', font: form.font,
+          background_image_url: form.background_image_url, background_preset: form.background_preset,
+          employee_ids: [c.id], is_published: form.is_published, created_by: profile?.id,
+        }
+      })
+      const { error } = await supabase.from('magazine_posts').insert(payloads)
+      setSaving(false)
+      if (error) { setErr(error.message); return }
+      onSaved()
+      return
+    }
     if (!form.title_ar.trim() || !form.body_ar.trim()) { setErr(isAr ? 'العنوان والنص بالعربي مطلوبين' : 'Arabic title and body are required'); return }
     setSaving(true); setErr('')
     const payload = { ...form, created_by: profile?.id }
@@ -413,6 +440,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     onSaved()
   }
 
+  const isBulkSpotlight = !post && form.template === 'spotlight' && form.employee_ids.length > 1
   const previewBg = form.background_image_url ? `url(${form.background_image_url}) center/cover`
     : (PRESET_BACKGROUNDS.find(b => b.key === form.background_preset)?.css ?? TEMPLATES[form.template].bg)
 
@@ -475,24 +503,34 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
           )}
         </SectionCard>
 
-        <SectionCard title={isAr ? 'المحتوى' : 'Content'}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label={isAr ? 'العنوان (عربي) *' : 'Title (Arabic) *'}>
-              <input style={inp} value={form.title_ar} onChange={e => set('title_ar', e.target.value)} />
-            </Field>
-            <Field label={isAr ? 'العنوان (إنجليزي)' : 'Title (English)'}>
-              <input style={inp} value={form.title_en} onChange={e => set('title_en', e.target.value)} dir="ltr" />
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label={isAr ? 'النص (عربي) *' : 'Body (Arabic) *'}>
-              <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={form.body_ar} onChange={e => set('body_ar', e.target.value)} />
-            </Field>
-            <Field label={isAr ? 'النص (إنجليزي)' : 'Body (English)'}>
-              <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={form.body_en} onChange={e => set('body_en', e.target.value)} dir="ltr" />
-            </Field>
-          </div>
-        </SectionCard>
+        {isBulkSpotlight ? (
+          <SectionCard title={isAr ? 'المحتوى' : 'Content'}>
+            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 14px', fontSize: '0.78rem', color: '#92400E' }}>
+              {isAr
+                ? `سيُنشأ ${form.employee_ids.length} منشورات مستقلة — كل موظف/مشرف يأخذ صفحته الخاصة بنص تهنئة مخصص له تلقائياً (يذكر عدد أشهره المتتالية إن وُجد).`
+                : `${form.employee_ids.length} separate posts will be created — each person gets their own page with an automatically personalized congratulation.`}
+            </div>
+          </SectionCard>
+        ) : (
+          <SectionCard title={isAr ? 'المحتوى' : 'Content'}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label={isAr ? 'العنوان (عربي) *' : 'Title (Arabic) *'}>
+                <input style={inp} value={form.title_ar} onChange={e => set('title_ar', e.target.value)} />
+              </Field>
+              <Field label={isAr ? 'العنوان (إنجليزي)' : 'Title (English)'}>
+                <input style={inp} value={form.title_en} onChange={e => set('title_en', e.target.value)} dir="ltr" />
+              </Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label={isAr ? 'النص (عربي) *' : 'Body (Arabic) *'}>
+                <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={form.body_ar} onChange={e => set('body_ar', e.target.value)} />
+              </Field>
+              <Field label={isAr ? 'النص (إنجليزي)' : 'Body (English)'}>
+                <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={form.body_en} onChange={e => set('body_en', e.target.value)} dir="ltr" />
+              </Field>
+            </div>
+          </SectionCard>
+        )}
 
         <SectionCard title={isAr ? 'المظهر' : 'Appearance'}>
           <Field label={isAr ? 'خلفية جاهزة' : 'Preset background'}>
@@ -530,7 +568,11 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={handleSave} disabled={saving || uploading}
             style={{ background: '#5B5BD6', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>
-            {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
+            {saving
+              ? (isAr ? 'جارٍ الحفظ...' : 'Saving...')
+              : isBulkSpotlight
+                ? (isAr ? `إنشاء ${form.employee_ids.length} منشورات` : `Create ${form.employee_ids.length} posts`)
+                : (isAr ? 'حفظ' : 'Save')}
           </button>
           <button onClick={onCancel} style={{ background: '#F3F4F6', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             {isAr ? 'إلغاء' : 'Cancel'}
@@ -540,32 +582,51 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
 
       {/* معاينة حية */}
       <div style={{ position: 'sticky', top: 16 }}>
-        <p style={{ margin: '0 0 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>{isAr ? 'معاينة' : 'Preview'}</p>
-        <div style={{ borderRadius: 16, overflow: 'hidden', minHeight: 340, background: previewBg, boxShadow: '0 16px 40px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative' }}>
-          <div style={{ position: 'absolute', inset: 0, background: form.background_image_url ? 'linear-gradient(0deg, rgba(0,0,0,0.8), rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.35))' : 'linear-gradient(0deg, rgba(0,0,0,0.35), transparent 45%)' }} />
-          <div style={{ position: 'relative', padding: '22px 20px 18px' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.16)', padding: '3px 10px', borderRadius: 999, fontSize: '0.64rem', fontWeight: 700, color: '#fff', marginBottom: 10 }}>
-              <span>{TEMPLATES[form.template].badge}</span><span>{isAr ? TEMPLATES[form.template].ar : TEMPLATES[form.template].en}</span>
-            </div>
-            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#fff', lineHeight: 1.3, fontFamily: FONTS[form.font].family }}>
-              {form.title_ar || (isAr ? 'عنوان المنشور' : 'Post title')}
-            </h3>
-            {form.employee_ids.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-                {candidates.filter(c => form.employee_ids.includes(c.id)).map(c => (
-                  <div key={c.id} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#F59E0B', flexShrink: 0 }} />
-                    <span style={{ fontSize: '0.76rem', fontWeight: 700, color: '#fff' }}>{c.name}</span>
-                    {c.station && <span style={{ fontSize: '0.66rem', color: 'rgba(255,255,255,0.55)' }}>{c.station}</span>}
+        <p style={{ margin: '0 0 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' }}>
+          {isBulkSpotlight ? (isAr ? `معاينة (${form.employee_ids.length} صفحات)` : `Preview (${form.employee_ids.length} pages)`) : (isAr ? 'معاينة' : 'Preview')}
+        </p>
+        {isBulkSpotlight ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {candidates.filter(c => form.employee_ids.includes(c.id)).map(c => {
+              const { title, body } = personalizedText(c)
+              return (
+                <div key={c.id} style={{ borderRadius: 14, overflow: 'hidden', background: previewBg, boxShadow: '0 10px 24px rgba(0,0,0,0.35)', position: 'relative' }}>
+                  <div style={{ position: 'absolute', inset: 0, background: form.background_image_url ? 'linear-gradient(0deg, rgba(0,0,0,0.8), rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.35))' : 'linear-gradient(0deg, rgba(0,0,0,0.35), transparent 45%)' }} />
+                  <div style={{ position: 'relative', padding: '16px 16px 14px' }}>
+                    <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#fff' }}>{title}</h4>
+                    <p style={{ margin: '6px 0 0', fontSize: '0.72rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>{body}</p>
                   </div>
-                ))}
-              </div>
-            )}
-            <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, whiteSpace: 'pre-line', fontFamily: FONTS[form.font].family }}>
-              {form.body_ar || (isAr ? 'نص المنشور يظهر هنا...' : 'Post body appears here...')}
-            </p>
+                </div>
+              )
+            })}
           </div>
-        </div>
+        ) : (
+          <div style={{ borderRadius: 16, overflow: 'hidden', minHeight: 340, background: previewBg, boxShadow: '0 16px 40px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative' }}>
+            <div style={{ position: 'absolute', inset: 0, background: form.background_image_url ? 'linear-gradient(0deg, rgba(0,0,0,0.8), rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.35))' : 'linear-gradient(0deg, rgba(0,0,0,0.35), transparent 45%)' }} />
+            <div style={{ position: 'relative', padding: '22px 20px 18px' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.16)', padding: '3px 10px', borderRadius: 999, fontSize: '0.64rem', fontWeight: 700, color: '#fff', marginBottom: 10 }}>
+                <span>{TEMPLATES[form.template].badge}</span><span>{isAr ? TEMPLATES[form.template].ar : TEMPLATES[form.template].en}</span>
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#fff', lineHeight: 1.3, fontFamily: FONTS[form.font].family }}>
+                {form.title_ar || (isAr ? 'عنوان المنشور' : 'Post title')}
+              </h3>
+              {form.employee_ids.length === 1 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                  {candidates.filter(c => form.employee_ids.includes(c.id)).map(c => (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                      <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#F59E0B', flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.76rem', fontWeight: 700, color: '#fff' }}>{c.name}</span>
+                      {c.station && <span style={{ fontSize: '0.66rem', color: 'rgba(255,255,255,0.55)' }}>{c.station}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, whiteSpace: 'pre-line', fontFamily: FONTS[form.font].family }}>
+                {form.body_ar || (isAr ? 'نص المنشور يظهر هنا...' : 'Post body appears here...')}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
