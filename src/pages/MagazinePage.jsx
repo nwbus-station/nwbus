@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 const MONO = "'IBM Plex Mono', monospace"
@@ -66,6 +67,22 @@ function consecutiveStreak(sortedDescRows) {
     expM--; if (expM < 1) { expM = 12; expY-- }
   }
   return streak
+}
+
+// يحوّل timestamptz المخزّن إلى صيغة input[type=datetime-local] (بتوقيت الجهاز المحلي)
+function toLocalInputValue(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// هل المنشور "حيّ" الآن — منشور، ووصل وقت بدايته (إن وُجد)، وما انتهى وقته (إن وُجد)
+export function isPostLive(p, now = Date.now()) {
+  if (!p.is_published) return false
+  if (p.starts_at && new Date(p.starts_at).getTime() > now) return false
+  if (p.ends_at && new Date(p.ends_at).getTime() < now) return false
+  return true
 }
 
 async function uploadMagazineImage(file) {
@@ -168,21 +185,34 @@ export default function MagazinePage() {
   const [index, setIndex] = useState(0)
   const [anim, setAnim] = useState('') // 'next' | 'prev' | ''
   const [showSidebar, setShowSidebar] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
 
   async function load() {
     setLoading(true)
     let q = supabase.from('magazine_posts').select('*').order('created_at', { ascending: false })
     if (!canEdit) q = q.eq('is_published', true)
     const { data } = await q
-    const rows = data || []
+    // غير الأدمن يشوف بس المنشورات اللي وصل وقت بدايتها وما انتهت — الأدمن يشوف كل شي
+    // (مسودات ومجدولة ومنتهية) عشان يقدر يديرها
+    const rows = canEdit ? (data || []) : (data || []).filter(p => isPostLive(p))
     const allIds = [...new Set(rows.flatMap(p => p.employee_ids || []))]
     let peopleMap = {}
     if (allIds.length) {
       const { data: people } = await supabase.from('users').select('id, full_name_ar, station:station_id(name_ar, name_en)').in('id', allIds)
       peopleMap = Object.fromEntries((people || []).map(p => [p.id, p]))
     }
-    setPosts(rows.map(p => ({ ...p, employees: (p.employee_ids || []).map(id => peopleMap[id]).filter(Boolean) })))
-    setIndex(0)
+    const finalRows = rows.map(p => ({ ...p, employees: (p.employee_ids || []).map(id => peopleMap[id]).filter(Boolean) }))
+    setPosts(finalRows)
+    // إذا وصلنا من بطاقة "مجلة NW" بالرئيسية بمنشور معيّن، نروح له مباشرة بدل أول واحد
+    const targetId = location.state?.postId
+    if (targetId) {
+      const foundIdx = finalRows.findIndex(p => p.id === targetId)
+      setIndex(foundIdx >= 0 ? foundIdx : 0)
+      navigate(location.pathname, { replace: true, state: {} })
+    } else {
+      setIndex(0)
+    }
     setLoading(false)
   }
   useEffect(() => { load() }, [canEdit])
@@ -325,9 +355,13 @@ export default function MagazinePage() {
                   <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.55)', fontFamily: MONO }}>
                     {new Date(post.created_at).toLocaleString(isAr ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
                   </span>
-                  {!post.is_published && (
+                  {!post.is_published ? (
                     <span style={{ fontSize: '0.65rem', color: '#FCA5A5', fontWeight: 700 }}>{isAr ? 'مسودة' : 'Draft'}</span>
-                  )}
+                  ) : post.starts_at && new Date(post.starts_at) > new Date() ? (
+                    <span style={{ fontSize: '0.65rem', color: '#93C5FD', fontWeight: 700 }}>{isAr ? '🕓 مجدول' : '🕓 Scheduled'}</span>
+                  ) : post.ends_at && new Date(post.ends_at) < new Date() ? (
+                    <span style={{ fontSize: '0.65rem', color: '#FCA5A5', fontWeight: 700 }}>{isAr ? '⏳ منتهي' : '⏳ Expired'}</span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -380,7 +414,12 @@ function ManagePanel({ posts, isAr, onChanged }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#111827' }}>{p.title_ar}</p>
               <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#9CA3AF' }}>
-                {new Date(p.created_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-US')} · {p.is_published ? (isAr ? 'منشور' : 'Published') : (isAr ? 'مسودة' : 'Draft')}
+                {new Date(p.created_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-US')} · {
+                  !p.is_published ? (isAr ? 'مسودة' : 'Draft')
+                    : p.starts_at && new Date(p.starts_at) > new Date() ? (isAr ? '🕓 مجدول' : '🕓 Scheduled')
+                    : p.ends_at && new Date(p.ends_at) < new Date() ? (isAr ? '⏳ منتهي' : '⏳ Expired')
+                    : (isAr ? 'منشور' : 'Published')
+                }
               </p>
             </div>
             <button onClick={() => setEditing(p)} style={{ background: '#F3F4F6', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>{isAr ? 'تعديل' : 'Edit'}</button>
@@ -409,6 +448,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     employee_ids: post?.employee_ids ?? [], is_published: post?.is_published ?? true,
     closing_ar: post?.closing_ar ?? '', signer_name: post?.signer_name ?? '',
     pdf_url: post?.pdf_url ?? '',
+    starts_at: toLocalInputValue(post?.starts_at), ends_at: toLocalInputValue(post?.ends_at),
   })
   const [uploadingPdf, setUploadingPdf] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -527,23 +567,36 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
   }
 
   async function handleSave() {
-    // أكثر من موظف بقالب "موظف متميز" (منشور جديد) — كل واحد ياخذ صفحة/منشور مستقل
-    // بنص مخصص له، بدل ما يتكدسوا كلهم بمنشور واحد
-    if (!post && form.template === 'spotlight' && form.employee_ids.length > 1) {
+    // أكثر من موظف بقالب "موظف متميز" — كل واحد ياخذ صفحة/منشور مستقل بنص مخصص له،
+    // بدل ما يتكدسوا كلهم بمنشور واحد. ينطبق على منشور جديد وعلى تعديل منشور موجود
+    // (أول شخص مختار ياخذ نفس المنشور المعدَّل، والباقي يأخذون منشورات جديدة)
+    if (form.template === 'spotlight' && form.employee_ids.length > 1) {
       setSaving(true); setErr('')
       const picked = candidates.filter(c => form.employee_ids.includes(c.id))
-      const payloads = picked.map(c => {
+      const payloadFor = c => {
         const { title, body } = personalizedText(c)
         return {
           title_ar: title, title_en: '', body_ar: body, body_en: '',
           template: 'spotlight', font: form.font,
           background_image_url: form.background_image_url, background_preset: form.background_preset,
+          starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
+          ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
           employee_ids: [c.id], is_published: form.is_published, created_by: profile?.id,
         }
-      })
-      const { error } = await supabase.from('magazine_posts').insert(payloads)
+      }
+      if (post) {
+        const [first, ...rest] = picked
+        const { error: updErr } = await supabase.from('magazine_posts').update(payloadFor(first)).eq('id', post.id)
+        if (updErr) { setSaving(false); setErr(updErr.message); return }
+        if (rest.length) {
+          const { error: insErr } = await supabase.from('magazine_posts').insert(rest.map(payloadFor))
+          if (insErr) { setSaving(false); setErr(insErr.message); return }
+        }
+      } else {
+        const { error } = await supabase.from('magazine_posts').insert(picked.map(payloadFor))
+        if (error) { setSaving(false); setErr(error.message); return }
+      }
       setSaving(false)
-      if (error) { setErr(error.message); return }
       onSaved()
       return
     }
@@ -552,8 +605,17 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
       setErr(isAr ? 'العنوان مطلوب دائماً، والنص مطلوب إلا إذا رفعت ملف PDF' : 'Title is always required; body is required unless a PDF is attached')
       return
     }
+    if (form.starts_at && form.ends_at && new Date(form.ends_at) <= new Date(form.starts_at)) {
+      setErr(isAr ? 'وقت النهاية لازم يكون بعد وقت البداية' : 'End time must be after start time')
+      return
+    }
     setSaving(true); setErr('')
-    const payload = { ...form, created_by: profile?.id }
+    const payload = {
+      ...form,
+      starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
+      ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+      created_by: profile?.id,
+    }
     const { error } = post
       ? await supabase.from('magazine_posts').update(payload).eq('id', post.id)
       : await supabase.from('magazine_posts').insert(payload)
@@ -562,7 +624,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     onSaved()
   }
 
-  const isBulkSpotlight = !post && form.template === 'spotlight' && form.employee_ids.length > 1
+  const isBulkSpotlight = form.template === 'spotlight' && form.employee_ids.length > 1
   const previewBg = form.background_image_url ? `url(${form.background_image_url}) center/cover`
     : `${SHEEN}, ${PRESET_BACKGROUNDS.find(b => b.key === form.background_preset)?.css ?? TEMPLATES[form.template].bg}`
 
@@ -628,9 +690,13 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
         {isBulkSpotlight ? (
           <SectionCard title={isAr ? 'المحتوى' : 'Content'}>
             <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 14px', fontSize: '0.78rem', color: '#92400E' }}>
-              {isAr
-                ? `سيُنشأ ${form.employee_ids.length} منشورات مستقلة — كل موظف/مشرف يأخذ صفحته الخاصة بنص تهنئة مخصص له تلقائياً (يذكر عدد أشهره المتتالية إن وُجد).`
-                : `${form.employee_ids.length} separate posts will be created — each person gets their own page with an automatically personalized congratulation.`}
+              {post
+                ? (isAr
+                  ? `سيمثّل هذا المنشور أول شخص محدد، وسيُنشأ ${form.employee_ids.length - 1} منشورات مستقلة إضافية للباقي — كل واحد صفحته الخاصة بنص تهنئة مخصص له تلقائياً.`
+                  : `This post will represent the first selected person, and ${form.employee_ids.length - 1} more independent posts will be created for the rest — each with their own automatically personalized page.`)
+                : (isAr
+                  ? `سيُنشأ ${form.employee_ids.length} منشورات مستقلة — كل موظف/مشرف يأخذ صفحته الخاصة بنص تهنئة مخصص له تلقائياً (يذكر عدد أشهره المتتالية إن وُجد).`
+                  : `${form.employee_ids.length} separate posts will be created — each person gets their own page with an automatically personalized congratulation.`)}
             </div>
           </SectionCard>
         ) : PDF_TEMPLATES.includes(form.template) ? (
@@ -728,6 +794,20 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
             )}
           </SectionCard>
         )}
+
+        <SectionCard title={isAr ? 'جدولة العرض' : 'Display schedule'}>
+          <p style={{ margin: 0, fontSize: '0.7rem', color: '#9CA3AF' }}>
+            {isAr ? 'اختياري — اتركهما فارغين لعرض المنشور فوراً وبدون تاريخ انتهاء' : 'Optional — leave both empty to show the post immediately with no expiry'}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label={isAr ? 'يبدأ في' : 'Starts at'}>
+              <input type="datetime-local" style={inp} value={form.starts_at} onChange={e => set('starts_at', e.target.value)} />
+            </Field>
+            <Field label={isAr ? 'ينتهي في' : 'Ends at'}>
+              <input type="datetime-local" style={inp} value={form.ends_at} onChange={e => set('ends_at', e.target.value)} />
+            </Field>
+          </div>
+        </SectionCard>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: '#374151', cursor: 'pointer' }}>
           <input type="checkbox" checked={form.is_published} onChange={e => set('is_published', e.target.checked)} />
