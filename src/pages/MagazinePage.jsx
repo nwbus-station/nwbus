@@ -616,10 +616,15 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
   }
 
   // تغيير نمط النص يعيد توليد العنوان/النص فوراً إن كان فيه موظف واحد محدد فقط —
-  // تحديث واحد متزامن بدل الاعتماد على useEffect منفصل
+  // تحديث واحد متزامن بدل الاعتماد على useEffect منفصل. عند تعديل منشور قديم، الشخص
+  // قد ما يكون موجود بقائمة "المتميزين حالياً" (لو انتهت فترة تميّزه) فما نلقاه بـ
+  // candidates — نرجع لاسمه المحفوظ بالمنشور نفسه كحل بديل بدل ما يفشل التحديث بصمت
   function selectTextStyle(styleKey) {
     if (form.employee_ids.length === 1) {
-      const c = candidates.find(cc => cc.id === form.employee_ids[0])
+      const targetId = form.employee_ids[0]
+      const fromCandidates = candidates.find(cc => cc.id === targetId)
+      const fromPost = post?.employees?.find(e => e.id === targetId)
+      const c = fromCandidates ?? (fromPost ? { id: targetId, name: fromPost.full_name_ar, streak: 0 } : null)
       const style = SPOTLIGHT_STYLES.find(s => s.key === styleKey) ?? SPOTLIGHT_STYLES[0]
       if (c) {
         const { title, body } = style.gen(c)
