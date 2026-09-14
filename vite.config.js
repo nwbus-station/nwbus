@@ -17,6 +17,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false, // نسجّل الـ SW يدوياً بـ src/lib/pwaUpdate.js عشان نقدر نعرض تنبيه تحديث بدل تحديث صامت
       includeAssets: ['bus-icon.svg'],
       manifest: {
         name: 'NW Station',

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useAppSettings } from '../../context/AppSettingsContext'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
+import { onPwaUpdateAvailable, applyPwaUpdate } from '../../lib/pwaUpdate'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -308,6 +309,7 @@ const ICONS = {
   star:    ['M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'],
   monitor: ['M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3'],
   leave:   ['M8 2v4','M16 2v4','M3 10h18','M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z','M8 14h.01','M12 14h.01','M16 14h.01','M8 18h.01','M12 18h.01'],
+  refresh: ['M21 2v6h-6','M3 22v-6h6','M3.51 9a9 9 0 0114.85-3.36L21 8','M21 16l-2.64 2.36A9 9 0 013.51 15'],
 }
 
 const NAV_GROUPS = [
@@ -413,6 +415,11 @@ export default function AppLayout() {
     const t = setTimeout(() => setShowPwdNudge(true), 4000)
     return () => clearTimeout(t)
   }, [profile?.id, profile?.login_password])
+
+  // تنبيه "فيه تحديث جديد" — يظهر لأي موظف مفتوح عنده التطبيق لما ينزل نشر جديد، بدل ما
+  // يحتاج يسوي تحديث كامل يدوي أو ننتظره يسأل الأدمن
+  const [showUpdateNudge, setShowUpdateNudge] = useState(false)
+  useEffect(() => onPwaUpdateAvailable(() => setShowUpdateNudge(true)), [])
 
   const mods = profile?.allowed_modules
 
@@ -601,6 +608,35 @@ export default function AppLayout() {
                 {isAr ? 'تعيين الآن' : 'Set now'}
               </button>
               <button onClick={() => setShowPwdNudge(false)}
+                style={{ background: 'transparent', color: '#A8B2BA', border: 'none', fontSize: '0.76rem', cursor: 'pointer' }}>
+                {isAr ? 'لاحقاً' : 'Later'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUpdateNudge && (
+        <div className="no-print" dir={isAr ? 'rtl' : 'ltr'} style={{
+          position: 'fixed', bottom: 20, insetInlineEnd: showPwdNudge && !showChangePwd ? 356 : 20, zIndex: 60,
+          background: '#1C2B36', color: '#fff', borderRadius: 12,
+          padding: '14px 16px', maxWidth: 300, boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+          display: 'flex', gap: 12, alignItems: 'flex-start',
+        }}>
+          <Icon d={ICONS.refresh} size={18} />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700 }}>
+              {isAr ? 'تحديث جديد متوفر' : 'New update available'}
+            </p>
+            <p style={{ margin: '4px 0 10px', fontSize: '0.74rem', color: '#A8B2BA' }}>
+              {isAr ? 'نزل إصدار جديد من البرنامج. حدّث الآن عشان تحصل على آخر الإصلاحات.' : 'A new version has been deployed. Update now to get the latest fixes.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={applyPwaUpdate}
+                style={{ background: '#fff', color: '#1C2B36', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer' }}>
+                {isAr ? 'تحديث الآن' : 'Update now'}
+              </button>
+              <button onClick={() => setShowUpdateNudge(false)}
                 style={{ background: 'transparent', color: '#A8B2BA', border: 'none', fontSize: '0.76rem', cursor: 'pointer' }}>
                 {isAr ? 'لاحقاً' : 'Later'}
               </button>

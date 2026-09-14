@@ -7,6 +7,9 @@ import { AppSettingsProvider } from './context/AppSettingsContext'
 import App from './App'
 import './i18n'
 import './index.css'
+import { initPwaUpdate } from './lib/pwaUpdate'
+
+initPwaUpdate()
 
 /* مراقبة الأخطاء (Sentry) — تعمل فقط إذا ضُبط المفتاح في .env
    أي خطأ عند أي موظف يُلتقط تلقائياً بتفاصيله الكاملة */

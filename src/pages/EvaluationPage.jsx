@@ -1756,9 +1756,13 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
 
   async function saveStationSelection() {
     setStnSelSaving(true)
-    await supabase.from('saved_station_groups').delete().eq('group_name', 'stations')
-    if (selStations.size > 0)
-      await supabase.from('saved_station_groups').insert([...selStations].map(id => ({ group_name: 'stations', station_id: id })))
+    const { error: delErr } = await supabase.from('saved_station_groups').delete().eq('group_name', 'stations')
+    if (delErr) { setStnSelSaving(false); alert('فشل حفظ التحديد: ' + delErr.message); return }
+    if (selStations.size > 0) {
+      const { error: insErr } = await supabase.from('saved_station_groups')
+        .insert([...selStations].map(id => ({ group_name: 'stations', station_id: id })))
+      if (insErr) { setStnSelSaving(false); alert('فشل حفظ التحديد: ' + insErr.message); return }
+    }
     setSavedGroups(prev => ({ ...prev, stations: new Set(selStations) }))
     setStnSelSaving(false)
   }
