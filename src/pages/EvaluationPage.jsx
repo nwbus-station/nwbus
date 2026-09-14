@@ -403,12 +403,10 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
       eval_source: sourceRole,
       scores, notes, total_score: totalScore,
     }
-    let error, data
-    if (existing) {
-      ;({ error } = await supabase.from('employee_evaluations').update(payload).eq('id', existing.id))
-    } else {
-      ;({ error, data } = await supabase.from('employee_evaluations').insert(payload).select().maybeSingle())
-    }
+    // upsert بدل إدراج/تحديث يدوي — يتجنب خطأ "duplicate key" لو صار تقييم موجود فعلاً
+    // بالقاعدة ولم يُكتشف محلياً (بيانات قديمة بالكاش، نقرتين متتاليتين، إلخ)
+    const { error } = await supabase.from('employee_evaluations')
+      .upsert(payload, { onConflict: 'employee_id,eval_source,eval_month,eval_year' })
     setSaving(false)
     if (error) return setErr(error.message)
 
