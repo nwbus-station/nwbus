@@ -38,17 +38,19 @@ function computeFinalScore(rows) {
 const MONO = "'IBM Plex Mono', monospace"
 const STAR_THRESHOLD = 98
 
-// ── تقييم مشرف الوردية نفسه: يتقيّم من ثلاثة — مشرف وردية آخر يحدده الأدمن (٢٥٪)، مشرفه
-// المباشر (٣٥٪، حقل "المشرف")، والمدير التنفيذي (٤٠٪) — بالضبط نفس نسب جدول تقييم الموظفين.
+// ── تقييم مشرف الوردية نفسه: يتقيّم من مصدرين — مشرفه المباشر (٣٥٪، حقل "المشرف")،
+// والمدير التنفيذي (٤٠٪) — بالضبط نفس نسب جدول تقييم الموظفين.
+// (أُلغي مصدر "مشرف وردية آخر" — كانت القائمة تضم مشرفين من محطات مختلفة تماماً بلا علاقة
+// ببعض، فما كان له معنى عملي.)
 // مشرف المحطة/المنطقة يستمر تقييمه من مصدر واحد فقط (الأدمن/المدير) زي ما كان دايماً.
-const SUP_EVAL_WEIGHTS = { peer_shift_supervisor: EVAL_SOURCE_WEIGHTS.shift_supervisor, assigned_supervisor: EVAL_SOURCE_WEIGHTS.station_admin, stations_executive_director: EVAL_SOURCE_WEIGHTS.stations_executive_director }
-const SUP_EVAL_LABELS    = { peer_shift_supervisor: 'مشرف وردية آخر', assigned_supervisor: 'المشرف المباشر', stations_executive_director: 'المدير التنفيذي' }
-const SUP_EVAL_LABELS_EN = { peer_shift_supervisor: 'Peer Shift Supervisor', assigned_supervisor: 'Direct Supervisor', stations_executive_director: 'Executive Director' }
-const SUP_EVAL_SHORT     = { peer_shift_supervisor: 'مشرف وردية', assigned_supervisor: 'مباشر', stations_executive_director: 'مدير' }
+const SUP_EVAL_WEIGHTS = { assigned_supervisor: EVAL_SOURCE_WEIGHTS.station_admin, stations_executive_director: EVAL_SOURCE_WEIGHTS.stations_executive_director }
+const SUP_EVAL_LABELS    = { assigned_supervisor: 'المشرف المباشر', stations_executive_director: 'المدير التنفيذي' }
+const SUP_EVAL_LABELS_EN = { assigned_supervisor: 'Direct Supervisor', stations_executive_director: 'Executive Director' }
+const SUP_EVAL_SHORT     = { assigned_supervisor: 'مباشر', stations_executive_director: 'مدير' }
 
 function supEvalSources(targetRole) {
   return targetRole === 'shift_supervisor'
-    ? ['peer_shift_supervisor', 'assigned_supervisor', 'stations_executive_director']
+    ? ['assigned_supervisor', 'stations_executive_director']
     : ['stations_executive_director']
 }
 
@@ -790,10 +792,10 @@ export default function EvaluationPage() {
   const canEvalStn = [...ADMIN_ROLE_VALUES,'station_admin','area_supervisor'].includes(profile?.role)
   // مشرف المحطة/المنطقة يفتح تبويب تقييم المشرفين كمان — بس عشان يقيّم مشرفي الورديات
   // المحددين له صراحة (حقل "المشرف" بحسابهم)، مو باقي المشرفين
-  // مشرف وردية يقدر يشوف التبويب كمان — بس عشان يقيّم مشرف وردية ثاني محدد له صراحة كـ"مشرف وردية يقيّمه"
-  const canEvalSup = isGeneralAdmin || ['station_admin','area_supervisor','shift_supervisor'].includes(profile?.role)
+  // (مشرف الوردية نفسه ما عاد يقيّم أحد هنا — أُلغي مصدر "مشرف وردية آخر")
+  const canEvalSup = isGeneralAdmin || ['station_admin','area_supervisor'].includes(profile?.role)
   // مصدر تقييم المستخدم الحالي لما يقيّم مشرف وردية بنفسه (مو أدمن)
-  const myEvalSourceForSup = profile?.role === 'shift_supervisor' ? 'peer_shift_supervisor' : 'assigned_supervisor'
+  const myEvalSourceForSup = 'assigned_supervisor'
   const isShiftSupervisor = profile?.role === 'shift_supervisor'
   // بتقييم الموظفين: مشرف المنطقة له نفس صلاحيات مشرف المحطة بالضبط — يقيّم بنفسه (بند
   // "مشرف المحطة" ٣٥٪) بدل ما يشوف الأدمن الكامل، والفرق إنه يغطي عدة محطات مو محطة وحدة.
@@ -868,14 +870,11 @@ export default function EvaluationPage() {
     // المشرفون
     if (canEvalSup) {
       let sq = supabase.from('users')
-        .select('id, full_name_ar, username, job_number, role, job_title, station_id, supervisor_id, peer_supervisor_id, station:station_id(name_ar)')
+        .select('id, full_name_ar, username, job_number, role, job_title, station_id, supervisor_id, station:station_id(name_ar)')
         .eq('is_active', true)
       if (isGeneralAdmin) {
         // الأدمن/المدير التنفيذي يشوف كل المشرفين (محطة/منطقة/وردية)
         sq = sq.or('role.in.(station_admin,area_supervisor,shift_supervisor),job_title.in.(area_supervisor,station_supervisor)')
-      } else if (profile?.role === 'shift_supervisor') {
-        // مشرف وردية يشوف بس مشرف الوردية الثاني المحدد له صراحة كـ"مشرف وردية يقيّمه"
-        sq = sq.eq('role', 'shift_supervisor').eq('peer_supervisor_id', profile.id)
       } else {
         // مشرف المحطة/المنطقة يشوف بس مشرفي الورديات المحددين له صراحة كمشرف مباشر
         sq = sq.eq('role', 'shift_supervisor').eq('supervisor_id', profile.id)

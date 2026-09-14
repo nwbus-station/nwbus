@@ -403,7 +403,6 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     role:            user?.role            ?? 'station_employee',
     station_id:      user?.station_id      ?? (isStationAdmin ? profile.station_id : ''),
     supervisor_id:   user?.supervisor_id   ?? '',
-    peer_supervisor_id: user?.peer_supervisor_id ?? '',
     phone:           user?.phone           ?? '',
     email:           user?.email           ?? '',
     national_id:     user?.national_id     ?? '',
@@ -596,7 +595,6 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           const extras = {}
           if (form.job_number.trim())        extras.job_number      = form.job_number.trim()
           if (form.supervisor_id)            extras.supervisor_id   = form.supervisor_id
-          if (form.peer_supervisor_id)       extras.peer_supervisor_id = form.peer_supervisor_id
           if (form.allowed_modules !== null) extras.allowed_modules = form.allowed_modules
           if (Object.keys(extras).length) {
             const { error: extrasErr } = await supabase.from('users').update(extras).eq('id', inserted.id)
@@ -655,7 +653,6 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           const overrideChanged = newOverride !== prevOverride
           const { error: extraErr } = await supabase.from('users').update({
             can_rate_customers: !!form.can_rate_customers,
-            peer_supervisor_id: form.peer_supervisor_id || null,
             email: form.email.trim() || null,
             leave_balance_override: newOverride,
             ...(overrideChanged ? { leave_balance_override_date: newOverride != null ? new Date().toISOString().slice(0, 10) : null } : {}),
@@ -1114,20 +1111,6 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
               </div>
             )}
 
-            {/* مشرف وردية آخر يقيّمه — يظهر بس لمشرفي الورديات، بند تقييم منفصل عن "المشرف المباشر" */}
-            {form.role === 'shift_supervisor' && shiftSupervisors.filter(s => s.id !== user?.id).length > 0 && (
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  {isAr ? 'مشرف وردية آخر يقيّمه' : 'Peer shift supervisor who rates him'}
-                </label>
-                <select className={inputCls} value={form.peer_supervisor_id} onChange={e => set('peer_supervisor_id', e.target.value)}>
-                  <option value="">{isAr ? '— بدون —' : '— None —'}</option>
-                  {shiftSupervisors.filter(s => s.id !== user?.id).map(s => (
-                    <option key={s.id} value={s.id}>{s.full_name_ar}</option>
-                  ))}
-                </select>
-              </div>
-            )}
 
             {isGeneralAdmin && user?.id && form.role === 'shift_supervisor' && (
               <ShiftSupervisorAssignments userId={user.id} stationId={primaryStation()} isAr={isAr} />
