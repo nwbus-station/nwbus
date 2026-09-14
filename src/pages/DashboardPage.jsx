@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { getCached, setCached } from '../lib/pageCache'
 import { SurveyOverlay, detectSurveyCity, SURVEY_STATIONS } from './SurveyPage'
+import { TEMPLATES as MAGAZINE_TEMPLATES, bgFor as magazineBgFor } from './MagazinePage'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -175,6 +176,49 @@ function SurveyWidget({ city, isAdmin, isAr, onLaunch, onNavigate }) {
   )
 }
 
+// بطاقة تُظهر آخر منشور بمجلة NW مباشرة بالصفحة الرئيسية بدل ما تكون مخفية خلف
+// بطاقة وصول سريع فقط — تشجّع الموظفين يطّلعون عليها
+function MagazineWidget({ post, isAr, onNavigate }) {
+  const [hover, setHover] = useState(false)
+  if (!post) return null
+  const tpl = MAGAZINE_TEMPLATES[post.template] ?? MAGAZINE_TEMPLATES.announcement
+  const bg = magazineBgFor(post)
+  const title = isAr ? post.title_ar : (post.title_en || post.title_ar)
+  const body = isAr ? post.body_ar : (post.body_en || post.body_ar)
+
+  return (
+    <button onClick={onNavigate}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        width: '100%', textAlign: isAr ? 'right' : 'left', cursor: 'pointer', fontFamily: 'inherit',
+        border: 'none', borderRadius: 10, overflow: 'hidden', position: 'relative', minHeight: 108,
+        background: bg.image ? `url(${bg.image}) center/cover` : bg.css,
+        boxShadow: hover ? '0 10px 28px rgba(0,0,0,0.28)' : '0 4px 14px rgba(0,0,0,0.18)',
+        transition: 'box-shadow 0.15s, transform 0.15s',
+        transform: hover ? 'translateY(-1px)' : 'none',
+      }}>
+      <div style={{ position: 'absolute', inset: 0, background: bg.image ? 'linear-gradient(0deg, rgba(0,0,0,0.75), rgba(0,0,0,0.2) 60%)' : 'linear-gradient(0deg, rgba(0,0,0,0.3), transparent 55%)' }} />
+      <div style={{ position: 'absolute', top: 0, insetInline: 0, height: 3, background: tpl.accent }} />
+      <div style={{ position: 'relative', padding: '14px 18px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.16)', padding: '3px 10px', borderRadius: 999, fontSize: '0.63rem', fontWeight: 700, color: '#fff' }}>
+            <span>{tpl.badge}</span><span>{isAr ? 'مجلة NW' : 'NW Magazine'} · {isAr ? tpl.ar : tpl.en}</span>
+          </span>
+          <span style={{ color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}>
+            <Svg paths={ICONS.arrow} size={14} />
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: '#fff', lineHeight: 1.35 }}>{title}</p>
+        {body && (
+          <p style={{ margin: 0, fontSize: '0.72rem', color: 'rgba(255,255,255,0.75)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {body}
+          </p>
+        )}
+      </div>
+    </button>
+  )
+}
+
 export default function DashboardPage() {
   const { profile, isAdmin, isGeneralAdmin, allowedStationIds } = useAuth()
   const { i18n } = useTranslation()
@@ -214,6 +258,16 @@ export default function DashboardPage() {
   }, [profile?.id])
   const [surveyCity, setSurveyCity] = useState(null)
   useEffect(() => { setSurveyCity(detectSurveyCity(profile?.station)) }, [profile?.station])
+
+  /* ── آخر منشور بمجلة NW ── */
+  const [latestPost, setLatestPost] = useState(null)
+  useEffect(() => {
+    async function loadLatestPost() {
+      const { data } = await supabase.from('magazine_posts').select('*').eq('is_published', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      setLatestPost(data ?? null)
+    }
+    loadLatestPost()
+  }, [])
   const mods        = profile?.allowed_modules
 
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
@@ -440,6 +494,9 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+
+              {/* آخر منشور بمجلة NW */}
+              <MagazineWidget post={latestPost} isAr={isAr} onNavigate={() => navigate('/magazine')} />
 
               {/* بطاقة التقييم */}
               <SurveyWidget

@@ -11,7 +11,7 @@ const ORDINALS_AR = ['', 'الأول', 'الثاني', 'الثالث', 'الرا
 // يعطي إحساس "لوحة فاخرة" بدل التدرّج المسطّح
 const SHEEN = 'radial-gradient(1000px circle at 12% -15%, rgba(255,255,255,0.14), transparent 50%), radial-gradient(800px circle at 110% 120%, rgba(0,0,0,0.35), transparent 55%)'
 
-const TEMPLATES = {
+export const TEMPLATES = {
   spotlight:    { ar: 'موظف متميز',   en: 'Employee Spotlight', bg: 'linear-gradient(135deg,#8A6116 0%,#3B2A0F 55%,#17110A 100%)', accent: 'linear-gradient(90deg,#C99A32,#F1DDA0)', badge: '⭐' },
   announcement: { ar: 'إعلان',        en: 'Announcement',       bg: 'linear-gradient(135deg,#0F1F38 0%,#16233F 55%,#060B14 100%)', accent: 'linear-gradient(90deg,#3E63A8,#9FBBE6)', badge: '📢' },
   celebration:  { ar: 'تهنئة',        en: 'Celebration',        bg: 'linear-gradient(135deg,#3B2159 0%,#241536 55%,#100A1A 100%)', accent: 'linear-gradient(90deg,#8B5CF6,#D8CCFB)', badge: '🎉' },
@@ -43,7 +43,7 @@ const FONTS = {
 // القوالب اللي يمكن ترفق لها ملف PDF كمحتوى رئيسي بدل النص (كل شي إلا "موظف متميز")
 const PDF_TEMPLATES = ['announcement', 'celebration', 'circular']
 
-function bgFor(post) {
+export function bgFor(post) {
   if (post?.background_image_url) return { image: post.background_image_url }
   let gradient
   if (post?.background_preset) {
