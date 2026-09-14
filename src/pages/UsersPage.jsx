@@ -422,6 +422,19 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
   const [showPass,  setShowPass]  = useState(false)
   const [credential, setCredential] = useState(null) // { username, password, nameAr }
   const [sensitive, setSensitive] = useState(null) // { phone, national_id, login_password } — أدمن فقط، تُجلب عند فتح التعديل
+  const [jobNumberCheck, setJobNumberCheck] = useState(null) // { status: 'checking'|'taken'|'free', name? } — موظف جديد فقط
+
+  // تحقق فوري (مع تأخير بسيط) هل الرقم الوظيفي مستخدم من قبل — قبل ما يكمل الأدمن باقي النموذج
+  useEffect(() => {
+    if (user || !form.job_number.trim()) { setJobNumberCheck(null); return }
+    setJobNumberCheck({ status: 'checking' })
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('users').select('full_name_ar')
+        .eq('username', buildUsername(form.job_number)).maybeSingle()
+      setJobNumberCheck(data ? { status: 'taken', name: data.full_name_ar } : { status: 'free' })
+    }, 400)
+    return () => clearTimeout(t)
+  }, [form.job_number, user])
 
   // الحقول الحساسة (جوال، هوية، كلمة مرور) ما تعود من قائمة المستخدمين بعد الآن —
   // تُجلب فقط هنا عند فتح تعديل موظف موجود، عبر دالة تتحقق من صلاحية الأدمن بقاعدة البيانات
@@ -736,6 +749,17 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
                 <p className="text-xs text-amber-700 mt-1 font-mono font-bold">
                   {buildUsername(form.job_number)}
                 </p>
+              )}
+              {jobNumberCheck?.status === 'checking' && (
+                <p className="text-xs text-gray-400 mt-1">{isAr ? 'جارٍ التحقق...' : 'Checking...'}</p>
+              )}
+              {jobNumberCheck?.status === 'taken' && (
+                <p className="text-xs text-red-600 font-semibold mt-1">
+                  ⚠ {isAr ? `مستخدم بالفعل — ${jobNumberCheck.name}` : `Already used — ${jobNumberCheck.name}`}
+                </p>
+              )}
+              {jobNumberCheck?.status === 'free' && (
+                <p className="text-xs text-green-700 font-semibold mt-1">✓ {isAr ? 'متاح' : 'Available'}</p>
               )}
             </div>
 
