@@ -12,6 +12,13 @@ const ORDINALS_AR = ['', 'الأول', 'الثاني', 'الثالث', 'الرا
 // يعطي إحساس "لوحة فاخرة" بدل التدرّج المسطّح
 const SHEEN = 'radial-gradient(1000px circle at 12% -15%, rgba(255,255,255,0.14), transparent 50%), radial-gradient(800px circle at 110% 120%, rgba(0,0,0,0.35), transparent 55%)'
 
+// تأثيرات خلفية اختيارية — قابلة للتوسعة لاحقاً بإضافة مفاتيح جديدة هنا فقط
+export const BG_EFFECTS = {
+  shadow: { ar: 'بظل احترافي', en: 'With shadow', css: SHEEN },
+  flat:   { ar: 'بدون ظل (مسطح)', en: 'Flat', css: '' },
+}
+const BG_EFFECT_ORDER = ['shadow', 'flat']
+
 export const TEMPLATES = {
   spotlight:    { ar: 'موظف متميز',   en: 'Employee Spotlight', bg: 'linear-gradient(135deg,#8A6116 0%,#3B2A0F 55%,#17110A 100%)', accent: 'linear-gradient(90deg,#C99A32,#F1DDA0)', badge: '⭐' },
   announcement: { ar: 'إعلان',        en: 'Announcement',       bg: 'linear-gradient(135deg,#0F1F38 0%,#16233F 55%,#060B14 100%)', accent: 'linear-gradient(90deg,#3E63A8,#9FBBE6)', badge: '📢' },
@@ -52,10 +59,50 @@ export function bgFor(post) {
     gradient = p?.css
   }
   gradient ??= (TEMPLATES[post?.template] ?? TEMPLATES.announcement).bg
-  return { css: `${SHEEN}, ${gradient}` }
+  const effect = BG_EFFECTS[post?.bg_effect]?.css ?? SHEEN
+  return { css: effect ? `${effect}, ${gradient}` : gradient }
+}
+
+// اسم القالب المعروض — يسمح بتسمية مخصصة (مثلاً "تعزية" بدل "تهنئة") بدون إضافة قالب جديد
+export function templateLabel(post, isAr) {
+  const tpl = TEMPLATES[post?.template] ?? TEMPLATES.announcement
+  if (isAr && post?.label_ar) return post.label_ar
+  return isAr ? tpl.ar : tpl.en
 }
 
 function ordinalMonthAr(n) { return `الشهر ${ORDINALS_AR[n] || n} على التوالي` }
+
+// أنماط نص جاهزة لتكريم "موظف متميز" — الأدمن يختار الأسلوب اللي يناسب بدل نص واحد ثابت
+const SPOTLIGHT_STYLES = [
+  {
+    key: 'classic', ar: 'كلاسيكي', en: 'Classic',
+    gen: c => ({
+      title: `تكريم موظف الشهر: ${c.name}`,
+      body: `نبارك للزميل ${c.name} حصوله على تقييم متميز هذا الشهر، تقديراً لجهوده والتزامه المتواصل.${c.streak >= 2 ? ` هذا هو ${ordinalMonthAr(c.streak)} له.` : ''} نتمنى له دوام التوفيق والتميز.`,
+    }),
+  },
+  {
+    key: 'formal', ar: 'رسمي', en: 'Formal',
+    gen: c => ({
+      title: `تقدير وتكريم: ${c.name}`,
+      body: `تتقدّم إدارة نورث وست باص بخالص الشكر والتقدير للزميل ${c.name} لتميّزه في الأداء وحصوله على أعلى تقييم هذا الشهر.${c.streak >= 2 ? ` وهذا إنجازه ${ordinalMonthAr(c.streak)}.` : ''} نتطلع لاستمرار هذا التميز.`,
+    }),
+  },
+  {
+    key: 'warm', ar: 'حماسي', en: 'Enthusiastic',
+    gen: c => ({
+      title: `نجم الشهر ⭐ ${c.name}`,
+      body: `فخورون جداً بالزميل ${c.name}! أداء استثنائي وتفانٍ واضح جعله يتصدّر تقييم هذا الشهر.${c.streak >= 2 ? ` وهذه ${ordinalMonthAr(c.streak)} على التوالي — إنجاز رائع!` : ''} استمر بهذا التألق يا بطل!`,
+    }),
+  },
+  {
+    key: 'motivational', ar: 'تحفيزي', en: 'Motivational',
+    gen: c => ({
+      title: `قدوة الشهر: ${c.name}`,
+      body: `تميّز الزميل ${c.name} هذا الشهر بتقييم استثنائي يعكس التزامه وحرصه على تقديم الأفضل دائماً.${c.streak >= 2 ? ` وهو يحافظ على هذا المستوى منذ ${ordinalMonthAr(c.streak)}.` : ''} قدوة نفخر بها في نورث وست باص.`,
+    }),
+  },
+]
 
 // عدد الأشهر المتتالية (منتهية بآخر شهر مُقيَّم) اللي حصل فيها الشخص ٩٨٪ فأكثر
 function consecutiveStreak(sortedDescRows) {
@@ -112,6 +159,41 @@ function Field({ label, children }) {
     <div>
       <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#4B5563', marginBottom: 6 }}>{label}</label>
       {children}
+    </div>
+  )
+}
+
+function pad2(n) { return String(n).padStart(2, '0') }
+function todayDateStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+// منتقي تاريخ ووقت مخصّص (بدل input[type=datetime-local] الأصلي) — يتفادى تشوّه
+// النص اللي يصير للحقل الأصلي جوا صفحة RTL، ويضمن نظام ٢٤ ساعة دائماً بدل ما يعتمد
+// على لغة/منطقة المتصفح
+function DateTimeField({ value, onChange }) {
+  const [datePart, timePart] = value ? value.split('T') : ['', '']
+  const hh = pad2((timePart || '00:00').split(':')[0] || 0)
+  let mm = Math.round(Number((timePart || '00:00').split(':')[1] || 0) / 5) * 5
+  if (mm >= 60) mm = 0
+  mm = pad2(mm)
+
+  function emit(nextDate, nextH, nextM) {
+    if (!nextDate) { onChange(''); return }
+    onChange(`${nextDate}T${nextH}:${nextM}`)
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      <input type="date" dir="ltr" value={datePart} onChange={e => emit(e.target.value, hh, mm)} style={{ ...inp, flex: 1.6 }} />
+      <select dir="ltr" value={hh} onChange={e => emit(datePart || todayDateStr(), e.target.value, mm)} style={{ ...inp, flex: 1, padding: '9px 4px', textAlign: 'center' }}>
+        {Array.from({ length: 24 }, (_, i) => pad2(i)).map(h => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <span style={{ alignSelf: 'center', color: '#9CA3AF', fontWeight: 700 }}>:</span>
+      <select dir="ltr" value={mm} onChange={e => emit(datePart || todayDateStr(), hh, e.target.value)} style={{ ...inp, flex: 1, padding: '9px 4px', textAlign: 'center' }}>
+        {['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
     </div>
   )
 }
@@ -309,7 +391,7 @@ export default function MagazinePage() {
               <div style={{ position: 'relative', zIndex: 2, padding: '28px 26px 24px' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(4px)', padding: '4px 12px', borderRadius: 999, fontSize: '0.7rem', fontWeight: 700, color: '#fff', marginBottom: 14, border: '1px solid rgba(255,255,255,0.2)' }}>
                   <span>{tpl.badge}</span>
-                  <span>{isAr ? tpl.ar : tpl.en}</span>
+                  <span>{templateLabel(post, isAr)}</span>
                 </div>
                 <h2 style={{ margin: 0, fontSize: '1.55rem', fontWeight: 800, color: '#fff', lineHeight: 1.3, fontFamily: font.family, textShadow: '0 2px 12px rgba(0,0,0,0.3)' }}>
                   {isAr ? post.title_ar : (post.title_en || post.title_ar)}
@@ -449,6 +531,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     closing_ar: post?.closing_ar ?? '', signer_name: post?.signer_name ?? '',
     pdf_url: post?.pdf_url ?? '',
     starts_at: toLocalInputValue(post?.starts_at), ends_at: toLocalInputValue(post?.ends_at),
+    label_ar: post?.label_ar ?? '', bg_effect: post?.bg_effect ?? 'shadow', text_style: 'classic',
   })
   const [uploadingPdf, setUploadingPdf] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -488,11 +571,8 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
   }, [form.template])
 
   function personalizedText(c) {
-    const hasStreak = c.streak >= 2
-    return {
-      title: `تكريم موظف الشهر: ${c.name}`,
-      body: `نبارك للزميل ${c.name} حصوله على تقييم متميز هذا الشهر، تقديراً لجهوده والتزامه المتواصل.${hasStreak ? ` هذا هو ${ordinalMonthAr(c.streak)} له.` : ''} نتمنى له دوام التوفيق والتميز.`,
-    }
+    const style = SPOTLIGHT_STYLES.find(s => s.key === form.text_style) ?? SPOTLIGHT_STYLES[0]
+    return style.gen(c)
   }
 
   // موظف واحد: يعبّي العنوان/النص القابلين للتعديل مباشرة (منشور واحد).
@@ -516,6 +596,11 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
       autoTextRef.current = { title: '', body: '' }
     }
   }
+
+  // تغيير نمط النص يعيد توليد العنوان/النص تلقائياً إن كان فيه موظف واحد محدد فقط
+  useEffect(() => {
+    if (form.employee_ids.length === 1) afterSelectionChange(form.employee_ids)
+  }, [form.text_style])
 
   function toggleCandidate(cand) {
     const has = form.employee_ids.includes(cand.id)
@@ -579,6 +664,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
           title_ar: title, title_en: '', body_ar: body, body_en: '',
           template: 'spotlight', font: form.font,
           background_image_url: form.background_image_url, background_preset: form.background_preset,
+          bg_effect: form.bg_effect, label_ar: form.label_ar,
           starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
           ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
           employee_ids: [c.id], is_published: form.is_published, created_by: profile?.id,
@@ -610,8 +696,9 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
       return
     }
     setSaving(true); setErr('')
+    const { text_style, ...formToSave } = form
     const payload = {
-      ...form,
+      ...formToSave,
       starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : null,
       ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
       created_by: profile?.id,
@@ -625,8 +712,10 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
   }
 
   const isBulkSpotlight = form.template === 'spotlight' && form.employee_ids.length > 1
+  const previewGradient = PRESET_BACKGROUNDS.find(b => b.key === form.background_preset)?.css ?? TEMPLATES[form.template].bg
+  const previewEffect = BG_EFFECTS[form.bg_effect]?.css ?? SHEEN
   const previewBg = form.background_image_url ? `url(${form.background_image_url}) center/cover`
-    : `${SHEEN}, ${PRESET_BACKGROUNDS.find(b => b.key === form.background_preset)?.css ?? TEMPLATES[form.template].bg}`
+    : (previewEffect ? `${previewEffect}, ${previewGradient}` : previewGradient)
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
@@ -683,8 +772,30 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                   })}
                 </div>
               )}
+              <div style={{ marginTop: 10 }}>
+                <p style={{ margin: '0 0 6px', fontSize: '0.72rem', fontWeight: 700, color: '#4B5563' }}>
+                  {isAr ? 'نمط نص التكريم' : 'Congratulation text style'}
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {SPOTLIGHT_STYLES.map(s => (
+                    <button key={s.key} type="button" onClick={() => set('text_style', s.key)}
+                      style={{
+                        padding: '5px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600,
+                        border: `1.5px solid ${form.text_style === s.key ? '#5B5BD6' : '#E5E7EB'}`,
+                        background: form.text_style === s.key ? '#EEF0FF' : '#fff', color: '#374151',
+                      }}>
+                      {isAr ? s.ar : s.en}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
+
+          <Field label={isAr ? 'تسمية مخصصة للقالب (اختياري)' : 'Custom template label (optional)'}>
+            <input style={inp} value={form.label_ar} onChange={e => set('label_ar', e.target.value)}
+              placeholder={isAr ? `مثلاً "تعزية" بدل "${TEMPLATES[form.template].ar}"` : `e.g. a name other than "${TEMPLATES[form.template].en}"`} />
+          </Field>
         </SectionCard>
 
         {isBulkSpotlight ? (
@@ -738,6 +849,20 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                 <button key={b.key} type="button" onClick={() => { set('background_preset', b.key); set('background_image_url', '') }}
                   title={isAr ? b.ar : b.en}
                   style={{ height: 38, borderRadius: 8, background: b.css, border: `2px solid ${!form.background_image_url && form.background_preset === b.key ? '#111827' : 'transparent'}`, cursor: 'pointer' }} />
+              ))}
+            </div>
+          </Field>
+          <Field label={isAr ? 'تأثير الخلفية' : 'Background effect'}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {BG_EFFECT_ORDER.map(key => (
+                <button key={key} type="button" onClick={() => set('bg_effect', key)}
+                  style={{
+                    flex: 1, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600,
+                    border: `1.5px solid ${form.bg_effect === key ? '#5B5BD6' : '#E5E7EB'}`,
+                    background: form.bg_effect === key ? '#EEF0FF' : '#fff', color: '#374151',
+                  }}>
+                  {isAr ? BG_EFFECTS[key].ar : BG_EFFECTS[key].en}
+                </button>
               ))}
             </div>
           </Field>
@@ -800,11 +925,11 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
             {isAr ? 'اختياري — اتركهما فارغين لعرض المنشور فوراً وبدون تاريخ انتهاء' : 'Optional — leave both empty to show the post immediately with no expiry'}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label={isAr ? 'يبدأ في' : 'Starts at'}>
-              <input type="datetime-local" style={inp} value={form.starts_at} onChange={e => set('starts_at', e.target.value)} />
+            <Field label={isAr ? 'يبدأ في (٢٤ ساعة)' : 'Starts at (24h)'}>
+              <DateTimeField value={form.starts_at} onChange={v => set('starts_at', v)} />
             </Field>
-            <Field label={isAr ? 'ينتهي في' : 'Ends at'}>
-              <input type="datetime-local" style={inp} value={form.ends_at} onChange={e => set('ends_at', e.target.value)} />
+            <Field label={isAr ? 'ينتهي في (٢٤ ساعة)' : 'Ends at (24h)'}>
+              <DateTimeField value={form.ends_at} onChange={v => set('ends_at', v)} />
             </Field>
           </div>
         </SectionCard>
@@ -857,7 +982,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
             <div style={{ position: 'absolute', top: 0, insetInline: 0, height: 4, background: TEMPLATES[form.template].accent }} />
             <div style={{ position: 'relative', padding: '22px 20px 18px' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.16)', padding: '3px 10px', borderRadius: 999, fontSize: '0.64rem', fontWeight: 700, color: '#fff', marginBottom: 10 }}>
-                <span>{TEMPLATES[form.template].badge}</span><span>{isAr ? TEMPLATES[form.template].ar : TEMPLATES[form.template].en}</span>
+                <span>{TEMPLATES[form.template].badge}</span><span>{templateLabel(form, isAr)}</span>
               </div>
               <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#fff', lineHeight: 1.3, fontFamily: FONTS[form.font].family }}>
                 {form.title_ar || (isAr ? 'عنوان المنشور' : 'Post title')}

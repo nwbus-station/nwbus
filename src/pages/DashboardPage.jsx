@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { getCached, setCached } from '../lib/pageCache'
 import { SurveyOverlay, detectSurveyCity, SURVEY_STATIONS } from './SurveyPage'
-import { TEMPLATES as MAGAZINE_TEMPLATES, TEMPLATE_ORDER as MAGAZINE_TEMPLATE_ORDER, bgFor as magazineBgFor, isPostLive } from './MagazinePage'
+import { TEMPLATES as MAGAZINE_TEMPLATES, TEMPLATE_ORDER as MAGAZINE_TEMPLATE_ORDER, bgFor as magazineBgFor, isPostLive, templateLabel as magazineTemplateLabel } from './MagazinePage'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -227,7 +227,7 @@ function MagazineTypeCard({ posts, isAr, onNavigate }) {
       <div style={{ position: 'relative', padding: '16px 18px 30px', display: 'flex', flexDirection: 'column', gap: 7, opacity: fade ? 1 : 0, transition: 'opacity 0.22s' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.16)', padding: '3px 10px', borderRadius: 999, fontSize: '0.63rem', fontWeight: 700, color: '#fff' }}>
-            <span>{tpl.badge}</span><span>{isAr ? tpl.ar : tpl.en}</span>
+            <span>{tpl.badge}</span><span>{magazineTemplateLabel(post, isAr)}</span>
           </span>
           <span style={{ color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}>
             <Svg paths={ICONS.arrow} size={14} />
