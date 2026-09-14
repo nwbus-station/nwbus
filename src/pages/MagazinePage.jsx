@@ -46,7 +46,9 @@ export default function MagazinePage() {
   const { profile, isGeneralAdmin } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const canEdit = isGeneralAdmin || profile?.allowed_modules === null || (profile?.allowed_modules ?? []).includes('magazine')
+  // حصري للأدمن العام حالياً — لاحقاً ممكن نفتحها لحسابات ثانية عبر قسم "مجلة NW"
+  // (نفس فكرة MODULES.magazine الموجودة، بس معطّلة مؤقتاً)
+  const canEdit = isGeneralAdmin
 
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
