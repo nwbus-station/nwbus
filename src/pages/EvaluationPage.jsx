@@ -72,11 +72,13 @@ function computeSupFinalScore(targetRole, rows) {
   const ratedSources = sources.filter(s => bySource[s])
   const complete = ratedSources.length === sources.length
   let final = null
+  const effectiveWeights = {}
   if (ratedSources.length > 0) {
     const weightSum = ratedSources.reduce((sum, s) => sum + SUP_EVAL_WEIGHTS[s], 0)
     final = Math.round(ratedSources.reduce((sum, s) => sum + bySource[s].total_score * SUP_EVAL_WEIGHTS[s], 0) / weightSum * 10) / 10
+    for (const s of ratedSources) effectiveWeights[s] = Math.round(SUP_EVAL_WEIGHTS[s] / weightSum * 100)
   }
-  return { bySource, complete, final, sources }
+  return { bySource, complete, final, sources, effectiveWeights }
 }
 
 // ── سجل: نظرة عامة على كل محطة (عدد الموظفين/المقيّمين، متوسط النتيجة، نسبة ممتاز+جيد جداً) ──
@@ -539,7 +541,6 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
 
 // ── مودال تقييم المشرفين ─────────────────────────────────────
 function SupervisorEvalModal({ supervisor, month, year, existing, sourceRole, onClose, onSave, evaluatorId, isAr }) {
-  const { profile: myProfile } = useAuth()
   const [scores, setScores] = useState(existing?.scores || {})
   const [notes, setNotes]   = useState(existing?.notes || '')
   const [saving, setSaving] = useState(false)
@@ -565,35 +566,49 @@ function SupervisorEvalModal({ supervisor, month, year, existing, sourceRole, on
     if (existing) {
       ;({ error } = await supabase.from('supervisor_evaluations').update(payload).eq('id', existing.id))
     } else {
-      ;({ error } = await supabase.from('supervisor_evaluations').insert(payload))
+      let insErr
+      ;({ error: insErr } = await supabase.from('supervisor_evaluations').insert(payload))
+      if (insErr && /duplicate key|unique constraint/i.test(insErr.message)) {
+        const { data: found } = await supabase.from('supervisor_evaluations').select('id')
+          .eq('supervisor_id', supervisor.id).eq('eval_source', sourceRole)
+          .eq('eval_month', month).eq('eval_year', year).maybeSingle()
+        if (found) {
+          ;({ error } = await supabase.from('supervisor_evaluations').update(payload).eq('id', found.id))
+        } else {
+          setSaving(false)
+          return setErr(isAr
+            ? 'هذا المشرف عنده تقييم مسجّل بالفعل لنفس الشهر من نفس نوع المصدر (على الأغلب من مقيّم آخر) — تواصل مع الإدارة لتصحيح ذلك.'
+            : 'This supervisor already has an evaluation for this month from this same source type (likely submitted by a different evaluator) — please contact an admin to resolve this.')
+        }
+      } else {
+        error = insErr
+      }
     }
     setSaving(false)
     if (error) return setErr(error.message)
 
-    // إشعار مستقل فوري لكل مصدر يقيّم — يذكر مين قيّمه وبأي نتيجة، بدون انتظار باقي المصادر
-    const { error: notifyErr1 } = await createNotification({
-      userId: supervisor.id,
-      type: 'info',
-      title: `قيّمك ${SUP_EVAL_LABELS[sourceRole]}`,
-      body: `${myProfile?.full_name_ar ? myProfile.full_name_ar + ' — ' : ''}النتيجة: ${(totalScore / 10).toFixed(1)}/10 لشهر ${MONTHS_AR[month - 1]}`,
-    })
-    if (notifyErr1) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr1.message}`)
-
-    // بعد كل تقييم نتحقق هل اكتملت مصادر التقييم المطلوبة لهذا الدور (مشرف الوردية له ٣ مصادر؛
-    // باقي المشرفين مصدر واحد فقط) — لو اكتملت نرسل إشعار مستقل ثاني بالنتيجة النهائية
+    // إشعار واحد شامل بعد كل تقييم — يسرد كل مصدر قيّم لحد الآن باسمه ونسبته ونتيجته، والنتيجة
+    // الإجمالية المتحدّثة (تتغيّر تلقائياً كل ما انضاف مصدر جديد، حتى قبل اكتمال المصادر)
     const { data: allRows } = await supabase.from('supervisor_evaluations')
-      .select('total_score, eval_source')
+      .select('total_score, eval_source, evaluator:evaluator_id(full_name_ar)')
       .eq('supervisor_id', supervisor.id).eq('eval_month', month).eq('eval_year', year)
-    const { complete, final } = computeSupFinalScore(supervisor.role, allRows || [])
+    const { bySource, complete, final, sources, effectiveWeights } = computeSupFinalScore(supervisor.role, allRows || [])
+    const lines = sources
+      .filter(s => bySource[s])
+      .map(s => `${SUP_EVAL_LABELS[s]} ${bySource[s].evaluator?.full_name_ar ?? ''} — ${(bySource[s].total_score / 10).toFixed(1)}/10 بنسبة ${effectiveWeights[s]}٪`)
+      .join('\n')
+    const isStar = complete && final >= STAR_THRESHOLD
+    const monthLabel = `${MONTHS_AR[month - 1]} ${year}`
+    const { error: notifyErr } = await createNotification({
+      userId: supervisor.id,
+      type: isStar ? 'success' : 'info',
+      title: complete
+        ? (isStar ? `تقييمك ${(final / 10).toFixed(1)}/10 ⭐ — ممتاز! (${monthLabel})` : `صدر تقييمك النهائي لشهر ${monthLabel}`)
+        : `قيّمك ${SUP_EVAL_LABELS[sourceRole]} لشهر ${monthLabel}`,
+      body: `شهر ${monthLabel}\n\n${lines}\n\nالنتيجة ${complete ? 'النهائية' : 'الحالية'}: ${(final / 10).toFixed(1)}/10`,
+    })
+    if (notifyErr) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr.message}`)
     if (complete) {
-      const isStar = final >= STAR_THRESHOLD
-      const { error: notifyErr2 } = await createNotification({
-        userId: supervisor.id,
-        type: isStar ? 'success' : 'info',
-        title: isStar ? `تقييمك ${final}/10 ⭐ — ممتاز!` : `صدر تقييمك النهائي لشهر ${MONTHS_AR[month - 1]}`,
-        body: isStar ? `حصلت على النجمة المميزة بنتيجة ${final}/10` : `نتيجتك النهائية: ${final}/10 — يمكنك مراجعة التفاصيل في قسم "تقييمي"`,
-      })
-      if (notifyErr2) alert(`تم حفظ التقييم لكن تعذّر إرسال إشعار النتيجة النهائية: ${notifyErr2.message}`)
       try {
         const now = new Date()
         localStorage.setItem(`nwbus_star_${supervisor.id}`, JSON.stringify({ month: now.getMonth() + 1, year: now.getFullYear(), star: isStar }))
