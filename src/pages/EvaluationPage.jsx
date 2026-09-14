@@ -1228,7 +1228,7 @@ export default function EvaluationPage() {
                 }
 
                 // الأدمن/المدير التنفيذي/مشرف المنطقة — يشوف الثلاثة مصادر + النتيجة النهائية
-                const { bySource, complete, final } = computeFinalScore(evRows)
+                const { bySource, complete, final, effectiveWeights } = computeFinalScore(evRows)
                 const hasStar = complete && final >= STAR_THRESHOLD
                 return (
                   <div key={emp.id} style={{
@@ -1268,6 +1268,7 @@ export default function EvaluationPage() {
                             }}>
                             <span style={{ fontSize: '0.62rem', color: 'var(--text-3)', fontWeight: 700, letterSpacing: '0.01em' }}>
                               {isAr ? EVAL_SOURCE_LABELS[role] : EVAL_SOURCE_LABELS_EN[role]}
+                              {' · '}{effectiveWeights[role] ?? EVAL_SOURCE_WEIGHTS[role]}%
                             </span>
                             <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 108 }}>
                               {r?.evaluator?.full_name_ar ?? (isAr ? 'لم يُقيَّم بعد' : 'Not rated yet')}
@@ -2165,33 +2166,45 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
 function reportCss() {
   return `
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#1a1a1a;direction:rtl;font-size:13px}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#F4F5F8;color:#1a1a1a;direction:rtl;font-size:13px}
   .wrap{max-width:960px;margin:0 auto;padding:28px 32px}
 
+  /* ── شريط الطباعة (لا يظهر بالطباعة) ── */
+  .print-bar{display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 32px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,0.05)}
+  .print-bar-brand{font-size:12.5px;font-weight:700;color:#1C2B4A;letter-spacing:0.04em}
+  .print-btn{display:inline-flex;align-items:center;gap:7px;background:#1C2B4A;color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(28,43,74,0.25)}
+  .print-btn:hover{background:#101B2E}
+
   /* ── رأس الصفحة ── */
-  .cover{background:#1C2B4A;padding:28px 36px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between}
-  .cover-right{}
+  .cover{background:linear-gradient(135deg,#1C2B4A,#141F38);padding:32px 36px;margin:24px 0;border-radius:14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 8px 24px rgba(28,43,74,0.18);position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;inset:0;background:linear-gradient(120deg,rgba(91,91,214,0.18),transparent 60%)}
+  .cover-right{position:relative}
   .logo-mark{display:none}
-  .cover-title{font-size:22px;font-weight:700;color:#fff;line-height:1.25;margin-bottom:4px}
-  .cover-sub{font-size:12px;color:rgba(255,255,255,0.5);font-weight:400}
-  .cover-left{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
-  .nw-logo{font-size:10px;font-weight:700;color:rgba(255,255,255,0.85);letter-spacing:0.22em;text-transform:uppercase}
-  .nw-logo-line{width:32px;height:1px;background:rgba(255,255,255,0.2);margin:5px 0}
-  .cover-date{font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:0.05em}
+  .cover-title{font-size:23px;font-weight:800;color:#fff;line-height:1.25;margin-bottom:5px}
+  .cover-sub{font-size:12.5px;color:rgba(255,255,255,0.55);font-weight:500}
+  .cover-left{display:flex;flex-direction:column;align-items:flex-end;gap:4px;position:relative}
+  .nw-logo{font-size:10.5px;font-weight:800;color:rgba(255,255,255,0.9);letter-spacing:0.24em;text-transform:uppercase}
+  .nw-logo-line{width:36px;height:2px;background:#5B5BD6;margin:6px 0;border-radius:2px}
+  .cover-date{font-size:10.5px;color:rgba(255,255,255,0.4);letter-spacing:0.05em}
 
   /* ── إحصاءات ── */
-  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e5e7eb;border:1px solid #e5e7eb;margin-bottom:20px}
-  .stat{background:#fff;padding:18px 24px}
-  .stat-val{font-size:30px;font-weight:800;line-height:1;margin-bottom:5px;color:#1C2B4A}
-  .stat-lbl{font-size:11px;color:#9ca3af;font-weight:400;letter-spacing:0.03em}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+  .stat{background:#fff;padding:20px 24px;border-radius:12px;border:1px solid #eceef2;border-inline-start:4px solid #1C2B4A;box-shadow:0 2px 8px rgba(17,24,39,0.04)}
+  .stat.purple{border-inline-start-color:#5B5BD6}
+  .stat.green{border-inline-start-color:#059669}
+  .stat.gold{border-inline-start-color:#B45309}
+  .stat-val{font-size:32px;font-weight:800;line-height:1;margin-bottom:6px;color:#1C2B4A}
+  .stat-lbl{font-size:11px;color:#9ca3af;font-weight:600;letter-spacing:0.03em}
 
   /* ── الجدول ── */
-  .table-wrap{border:1px solid #e5e7eb;margin-bottom:20px}
-  .table-head{background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
-  .table-head-title{font-size:11px;font-weight:600;color:#6b7280;letter-spacing:0.08em;text-transform:uppercase}
-  table{width:100%;border-collapse:collapse}
-  th{background:#f9fafb;color:#6b7280;padding:10px 16px;font-size:10px;font-weight:600;text-align:right;border-bottom:1px solid #e5e7eb;letter-spacing:0.06em;text-transform:uppercase}
-  td{padding:11px 16px;font-size:12.5px;border-bottom:1px solid #f3f4f6;vertical-align:middle;color:#374151}
+  .table-wrap{border:1px solid #eceef2;margin-bottom:20px;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(17,24,39,0.04)}
+  .table-head{background:#F9FAFB;border-bottom:1px solid #e5e7eb;padding:12px 18px;display:flex;align-items:center;gap:8px}
+  .table-head-dot{width:8px;height:8px;border-radius:50%;background:#5B5BD6}
+  .table-head-title{font-size:11px;font-weight:700;color:#4B5563;letter-spacing:0.06em;text-transform:uppercase}
+  table{width:100%;border-collapse:collapse;background:#fff}
+  th{background:#F9FAFB;color:#6b7280;padding:11px 16px;font-size:10px;font-weight:700;text-align:right;border-bottom:1px solid #e5e7eb;letter-spacing:0.06em;text-transform:uppercase}
+  td{padding:12px 16px;font-size:12.5px;border-bottom:1px solid #f3f4f6;vertical-align:middle;color:#374151}
+  tbody tr:nth-child(even){background:#FAFBFC}
   tr:last-child td{border-bottom:none}
 
   /* ── شريط النتيجة ── */
@@ -2223,11 +2236,23 @@ function reportCss() {
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
     body{background:#fff;font-size:13px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-    .wrap{padding:16px}
+    .no-print,.print-bar{display:none!important}
+    .wrap{padding:16px;max-width:100%}
+    .cover,.stat,.table-wrap{box-shadow:none}
     .cover{page-break-inside:avoid}
     table{page-break-inside:auto}
     tr{page-break-inside:avoid;page-break-after:auto}
   }`
+}
+
+function printBarHtml() {
+  return `<div class="print-bar no-print">
+    <span class="print-bar-brand">NORTH WEST BUS — معاينة قبل الطباعة</span>
+    <button class="print-btn" onclick="window.print()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+      طباعة / حفظ PDF
+    </button>
+  </div>`
 }
 
 function footerHtml(printedBy) {
@@ -2273,6 +2298,7 @@ function buildReportHtml(rows, month, year, selStationIds, stations, printedBy) 
   return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
 <title>تقرير التقييم — ${MN[month-1]} ${year}</title>
 <style>${reportCss()}</style></head><body>
+${printBarHtml()}
 <div class="wrap">
   <div class="cover">
     <div class="cover-right">
@@ -2348,6 +2374,7 @@ function buildStationReportHtml(rows, month, year, printedBy) {
   return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
 <title>تقرير تقييم المحطات — ${MN[month-1]} ${year}</title>
 <style>${reportCss()}</style></head><body>
+${printBarHtml()}
 <div class="wrap">
   <div class="cover">
     <div class="cover-right">
@@ -2391,6 +2418,7 @@ function buildRangeReportHtml(data, rangeStart, rangeEnd, selEmpSet, employees, 
   return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
 <title>تقرير فترة التقييم</title>
 <style>${reportCss()}</style></head><body>
+${printBarHtml()}
 <div class="wrap">
   <div class="cover">
     <div class="cover-right">
@@ -2437,6 +2465,7 @@ function buildStnRangeReportHtml(data, rangeStart, rangeEnd, selStnRange, statio
   return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
 <title>تقرير فترة تقييم ${reportLabel}</title>
 <style>${reportCss()}</style></head><body>
+${printBarHtml()}
 <div class="wrap">
   <div class="cover">
     <div class="cover-right">
