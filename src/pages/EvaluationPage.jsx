@@ -1024,7 +1024,7 @@ export default function EvaluationPage() {
       .map(e => {
         const evRows = empEvals.filter(x => x.employee_id === e.id)
         const { bySource, complete, final } = computeFinalScore(evRows)
-        const evaluatorNames = EVAL_SOURCE_ORDER.filter(r => bySource[r]).map(r => `${EVAL_SOURCE_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join(' · ')
+        const evaluatorNames = EVAL_SOURCE_ORDER.filter(r => bySource[r]).map(r => `${EVAL_SOURCE_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join('\n')
         return { name: e.full_name_ar, station: e.station?.name_ar, score: final, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
       })
     const html = buildReportHtml(rows, selMonth, selYear, filterStation, stations, profile?.full_name_ar)
@@ -1842,7 +1842,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
     const rows = filtered.map(e => {
       const evRows = empEvals.filter(x => x.employee_id === e.id)
       const { bySource, complete, final } = computeFinalScore(evRows)
-      const evaluatorNames = EVAL_SOURCE_ORDER.filter(r => bySource[r]).map(r => `${EVAL_SOURCE_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join(' · ')
+      const evaluatorNames = EVAL_SOURCE_ORDER.filter(r => bySource[r]).map(r => `${EVAL_SOURCE_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join('\n')
       return { name: e.full_name_ar, job_number: e.job_number, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: final, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
     })
     printHtml(buildReportHtml(rows, selMonth, selYear, [...selStations], stations, profile?.full_name_ar))
@@ -2183,9 +2183,10 @@ function reportCss() {
   .cover-title{font-size:23px;font-weight:800;color:#fff;line-height:1.25;margin-bottom:5px}
   .cover-sub{font-size:12.5px;color:rgba(255,255,255,0.55);font-weight:500}
   .cover-left{display:flex;flex-direction:column;align-items:flex-end;gap:4px;position:relative}
-  .nw-logo{font-size:10.5px;font-weight:800;color:rgba(255,255,255,0.9);letter-spacing:0.24em;text-transform:uppercase}
-  .nw-logo-line{width:36px;height:2px;background:#5B5BD6;margin:6px 0;border-radius:2px}
-  .cover-date{font-size:10.5px;color:rgba(255,255,255,0.4);letter-spacing:0.05em}
+  .nw-badge-row{display:flex;align-items:center;gap:9px}
+  .nw-badge{width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.28);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;color:#fff}
+  .nw-wordmark{font-size:10px;font-weight:800;color:rgba(255,255,255,0.9);letter-spacing:0.1em;line-height:1.4;text-transform:uppercase}
+  .cover-date{font-size:10.5px;color:rgba(255,255,255,0.4);letter-spacing:0.05em;margin-top:8px}
 
   /* ── إحصاءات ── */
   .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
@@ -2226,6 +2227,7 @@ function reportCss() {
   .emp-sub{font-size:10.5px;color:#9CA3AF;font-family:monospace;margin-top:2px}
   .row-num{font-size:11px;color:#d1d5db;font-weight:600}
   .station-text{font-size:12px;color:#6B7280}
+  .eval-list{display:block;white-space:pre-line;line-height:1.7;font-size:11px;color:#6B7280}
   .role-text{font-size:11px;color:#9CA3AF}
 
   /* ── تذييل ── */
@@ -2307,8 +2309,10 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[month-1]} ${year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NORTH WEST BUS</div>
-      <div class="nw-logo-line"></div>
+      <div class="nw-badge-row">
+        <div class="nw-badge">NW</div>
+        <div class="nw-wordmark">NORTH WEST<br>BUS</div>
+      </div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -2355,7 +2359,7 @@ ${printBarHtml()}
         <td><span class="role-text">${escapeHtml(r.role) || '—'}</span></td>
         <td>${scoreBarHtml(r.score)}</td>
         <td>${scoreBadge(r.score)}</td>
-        <td><span class="station-text">${escapeHtml(r.evaluator) || '—'}</span></td>
+        <td><span class="eval-list">${escapeHtml(r.evaluator) || '—'}</span></td>
       </tr>`).join('')}
       </tbody>
     </table>
@@ -2383,8 +2387,10 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[month-1]} ${year}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NORTH WEST BUS</div>
-      <div class="nw-logo-line"></div>
+      <div class="nw-badge-row">
+        <div class="nw-badge">NW</div>
+        <div class="nw-wordmark">NORTH WEST<br>BUS</div>
+      </div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -2401,7 +2407,7 @@ ${printBarHtml()}
       <td><div class="emp-name">${escapeHtml(r.name)||'—'}${r.has_star?' <span style="color:#F59E0B">★</span>':''}</div></td>
       <td>${scoreBarHtml(r.score)}</td>
       <td>${scoreBadge(r.score)}</td>
-      <td><span class="station-text">${escapeHtml(r.evaluator) || '—'}</span></td>
+      <td><span class="eval-list">${escapeHtml(r.evaluator) || '—'}</span></td>
     </tr>`).join('')}
     </tbody></table>
   </div>
@@ -2427,8 +2433,10 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${empName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NORTH WEST BUS</div>
-      <div class="nw-logo-line"></div>
+      <div class="nw-badge-row">
+        <div class="nw-badge">NW</div>
+        <div class="nw-wordmark">NORTH WEST<br>BUS</div>
+      </div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
@@ -2474,8 +2482,10 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NORTH WEST BUS</div>
-      <div class="nw-logo-line"></div>
+      <div class="nw-badge-row">
+        <div class="nw-badge">NW</div>
+        <div class="nw-wordmark">NORTH WEST<br>BUS</div>
+      </div>
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA')}</div>
     </div>
   </div>
