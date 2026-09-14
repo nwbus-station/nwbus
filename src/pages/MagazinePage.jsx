@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 
 const MONO = "'IBM Plex Mono', monospace"
 const STAR_THRESHOLD = 98
+const ORDINALS_AR = ['', 'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر', 'الحادي عشر', 'الثاني عشر']
 
 const TEMPLATES = {
   spotlight:    { ar: 'موظف متميز',   en: 'Employee Spotlight', bg: 'linear-gradient(135deg,#B45309,#78350F)', badge: '⭐' },
@@ -39,6 +40,20 @@ function bgFor(post) {
     if (p) return { css: p.css }
   }
   return { css: (TEMPLATES[post?.template] ?? TEMPLATES.announcement).bg }
+}
+
+function ordinalMonthAr(n) { return `الشهر ${ORDINALS_AR[n] || n} على التوالي` }
+
+// عدد الأشهر المتتالية (منتهية بآخر شهر مُقيَّم) اللي حصل فيها الشخص ٩٨٪ فأكثر
+function consecutiveStreak(sortedDescRows) {
+  let streak = 0
+  let expY = sortedDescRows[0]?.eval_year, expM = sortedDescRows[0]?.eval_month
+  for (const r of sortedDescRows) {
+    if (r.eval_year !== expY || r.eval_month !== expM || r.total_score < STAR_THRESHOLD) break
+    streak++
+    expM--; if (expM < 1) { expM = 12; expY-- }
+  }
+  return streak
 }
 
 async function uploadMagazineImage(file) {
@@ -88,12 +103,17 @@ export default function MagazinePage() {
 
   async function load() {
     setLoading(true)
-    let q = supabase.from('magazine_posts')
-      .select('*, employee:employee_id(full_name_ar, station:station_id(name_ar, name_en))')
-      .order('created_at', { ascending: false })
+    let q = supabase.from('magazine_posts').select('*').order('created_at', { ascending: false })
     if (!canEdit) q = q.eq('is_published', true)
     const { data } = await q
-    setPosts(data || [])
+    const rows = data || []
+    const allIds = [...new Set(rows.flatMap(p => p.employee_ids || []))]
+    let peopleMap = {}
+    if (allIds.length) {
+      const { data: people } = await supabase.from('users').select('id, full_name_ar, station:station_id(name_ar, name_en)').in('id', allIds)
+      peopleMap = Object.fromEntries((people || []).map(p => [p.id, p]))
+    }
+    setPosts(rows.map(p => ({ ...p, employees: (p.employee_ids || []).map(id => peopleMap[id]).filter(Boolean) })))
     setIndex(0)
     setLoading(false)
   }
@@ -123,7 +143,6 @@ export default function MagazinePage() {
   const tpl = TEMPLATES[post?.template] ?? TEMPLATES.announcement
   const font = FONTS[post?.font] ?? FONTS.default
   const bg = post ? bgFor(post) : null
-  const stationLabel = post?.employee?.station ? (isAr ? post.employee.station.name_ar : (post.employee.station.name_en || post.employee.station.name_ar)) : null
 
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 108px)', background: '#0B1220', padding: '28px 16px' }}>
@@ -182,9 +201,9 @@ export default function MagazinePage() {
                 <h2 style={{ margin: 0, fontSize: '1.55rem', fontWeight: 800, color: '#fff', lineHeight: 1.3, fontFamily: font.family, textShadow: '0 2px 12px rgba(0,0,0,0.3)' }}>
                   {isAr ? post.title_ar : (post.title_en || post.title_ar)}
                 </h2>
-                {post.employee?.full_name_ar && (
-                  <p style={{ margin: '6px 0 0', fontSize: '0.78rem', fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
-                    {post.employee.full_name_ar}{stationLabel ? ` · ${stationLabel}` : ''}
+                {post.employees?.length > 0 && (
+                  <p style={{ margin: '6px 0 0', fontSize: '0.78rem', fontWeight: 700, color: 'rgba(255,255,255,0.85)', lineHeight: 1.6 }}>
+                    {post.employees.map(e => `${e.full_name_ar}${e.station ? ` · ${isAr ? e.station.name_ar : (e.station.name_en || e.station.name_ar)}` : ''}`).join(isAr ? '  —  ' : '  —  ')}
                   </p>
                 )}
                 <p style={{ margin: '12px 0 0', fontSize: '0.92rem', color: 'rgba(255,255,255,0.88)', lineHeight: 1.75, whiteSpace: 'pre-line', fontFamily: font.family }}>
@@ -275,39 +294,81 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     body_ar: post?.body_ar ?? '', body_en: post?.body_en ?? '',
     template: post?.template ?? 'announcement', font: post?.font ?? 'default',
     background_image_url: post?.background_image_url ?? '', background_preset: post?.background_preset ?? 'navy',
-    employee_id: post?.employee_id ?? null, is_published: post?.is_published ?? true,
+    employee_ids: post?.employee_ids ?? [], is_published: post?.is_published ?? true,
   })
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
-  const [topEmployees, setTopEmployees] = useState([])
+  const [candidates, setCandidates] = useState([])
+  const autoTextRef = useRef({ title: '', body: '' })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  // الموظفون المتميزون — أي موظف حصل تقييم ٩٨٪ فأكثر من أي مصدر، الأحدث أول
+  // موظفون ومشرفون متميزون — أي شخص وصل ٩٨٪+ بآخر تقييم له (وردية/محطة/موظفين)، مع عدد
+  // الأشهر المتتالية اللي حافظ فيها على هذا المستوى
   useEffect(() => {
     if (form.template !== 'spotlight') return
-    supabase.from('employee_evaluations')
-      .select('employee_id, total_score, created_at, employee:employee_id(full_name_ar, station:station_id(name_ar))')
-      .gte('total_score', STAR_THRESHOLD)
-      .order('created_at', { ascending: false })
-      .limit(50)
-      .then(({ data }) => {
-        const seen = new Set()
-        const uniq = (data || []).filter(r => {
-          if (!r.employee || seen.has(r.employee_id)) return false
-          seen.add(r.employee_id)
-          return true
-        })
-        setTopEmployees(uniq)
+    async function loadCandidates() {
+      const [{ data: empRows }, { data: supRows }] = await Promise.all([
+        supabase.from('employee_evaluations')
+          .select('employee_id, total_score, eval_month, eval_year, employee:employee_id(full_name_ar, station:station_id(name_ar))'),
+        supabase.from('supervisor_evaluations')
+          .select('supervisor_id, total_score, eval_month, eval_year, supervisor:supervisor_id(full_name_ar, station:station_id(name_ar))'),
+      ])
+      const byPerson = {}
+      ;(empRows || []).forEach(r => {
+        if (!r.employee) return
+        ;(byPerson[r.employee_id] ??= { id: r.employee_id, name: r.employee.full_name_ar, station: r.employee.station?.name_ar, rows: [] }).rows.push(r)
       })
+      ;(supRows || []).forEach(r => {
+        if (!r.supervisor) return
+        ;(byPerson[r.supervisor_id] ??= { id: r.supervisor_id, name: r.supervisor.full_name_ar, station: r.supervisor.station?.name_ar, rows: [] }).rows.push(r)
+      })
+      const list = Object.values(byPerson).map(p => {
+        const sorted = [...p.rows].sort((a, b) => b.eval_year - a.eval_year || b.eval_month - a.eval_month)
+        return { id: p.id, name: p.name, station: p.station, streak: consecutiveStreak(sorted) }
+      }).filter(p => p.streak > 0).sort((a, b) => b.streak - a.streak)
+      setCandidates(list)
+    }
+    loadCandidates()
   }, [form.template])
 
-  function pickEmployee(emp) {
-    set('employee_id', emp.employee_id)
-    const stationName = emp.employee?.station?.name_ar
-    if (!form.title_ar.trim()) set('title_ar', isAr ? `تكريم موظف الشهر: ${emp.employee.full_name_ar}` : `Employee of the Month: ${emp.employee.full_name_ar}`)
-    if (!form.body_ar.trim()) set('body_ar',
-      `نبارك للزميل ${emp.employee.full_name_ar}${stationName ? ` (${stationName})` : ''} حصوله على تقييم متميز هذا الشهر، تقديراً لجهوده والتزامه المتواصل. نتمنى له دوام التوفيق والتميز.`)
+  function regenerateSpotlightText(ids) {
+    const picked = candidates.filter(c => ids.includes(c.id))
+    if (picked.length === 0) return
+    const namesLine = picked.map(c => `${c.name}${c.station ? ` (${c.station})` : ''}${c.streak >= 2 ? ` — ${ordinalMonthAr(c.streak)}` : ''}`).join('، ')
+    const title = picked.length === 1
+      ? `تكريم موظف الشهر: ${picked[0].name}`
+      : 'موظفونا المتميزون هذا الشهر'
+    const body = `نبارك لزملائنا: ${namesLine}، تقديراً لتميّزهم والتزامهم المتواصل. نتمنى لهم دوام التوفيق والتميز.`
+    setForm(f => ({
+      ...f,
+      title_ar: (!f.title_ar.trim() || f.title_ar === autoTextRef.current.title) ? title : f.title_ar,
+      body_ar: (!f.body_ar.trim() || f.body_ar === autoTextRef.current.body) ? body : f.body_ar,
+    }))
+    autoTextRef.current = { title, body }
+  }
+
+  function toggleCandidate(cand) {
+    const has = form.employee_ids.includes(cand.id)
+    const next = has ? form.employee_ids.filter(id => id !== cand.id) : [...form.employee_ids, cand.id]
+    set('employee_ids', next)
+    regenerateSpotlightText(next)
+  }
+
+  function selectAllCandidates() {
+    const next = form.employee_ids.length === candidates.length ? [] : candidates.map(c => c.id)
+    set('employee_ids', next)
+    regenerateSpotlightText(next)
+  }
+
+  // تغيير القالب بعيداً عن "موظف متميز" يمسح البيانات المولّدة تلقائياً بدل ما يحتاج يمسحها يدوياً
+  function changeTemplate(key) {
+    if (key !== 'spotlight' && form.template === 'spotlight' && form.employee_ids.length > 0) {
+      setForm(f => ({ ...f, template: key, employee_ids: [], title_ar: '', title_en: '', body_ar: '', body_en: '' }))
+      autoTextRef.current = { title: '', body: '' }
+    } else {
+      set('template', key)
+    }
   }
 
   async function handleImage(e) {
@@ -348,7 +409,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
         <SectionCard title={isAr ? 'القالب' : 'Template'}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
             {TEMPLATE_ORDER.map(key => (
-              <button key={key} type="button" onClick={() => set('template', key)}
+              <button key={key} type="button" onClick={() => changeTemplate(key)}
                 style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '10px 6px', borderRadius: 10,
                   border: `2px solid ${form.template === key ? '#5B5BD6' : 'transparent'}`, cursor: 'pointer', fontFamily: 'inherit',
@@ -361,24 +422,36 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
 
           {form.template === 'spotlight' && (
             <div>
-              <p style={{ margin: '0 0 6px', fontSize: '0.72rem', fontWeight: 700, color: '#4B5563' }}>
-                {isAr ? 'اختر من الموظفين المتميزين (تقييم ٩٨٪+)' : 'Pick from top-rated employees (98%+)'}
-              </p>
-              {topEmployees.length === 0 ? (
-                <p style={{ margin: 0, fontSize: '0.72rem', color: '#9CA3AF' }}>{isAr ? 'لا يوجد موظفون بهذا المستوى حالياً' : 'No employees at this level yet'}</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: '#4B5563' }}>
+                  {isAr ? 'المتميزون حالياً (موظفون ومشرفون، ٩٨٪+)' : 'Currently outstanding (staff & supervisors, 98%+)'}
+                </p>
+                {candidates.length > 0 && (
+                  <button type="button" onClick={selectAllCandidates} style={{ fontSize: '0.68rem', color: '#5B5BD6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>
+                    {form.employee_ids.length === candidates.length ? (isAr ? 'إلغاء الكل' : 'Clear all') : (isAr ? 'تحديد الكل' : 'Select all')}
+                  </button>
+                )}
+              </div>
+              {candidates.length === 0 ? (
+                <p style={{ margin: 0, fontSize: '0.72rem', color: '#9CA3AF' }}>{isAr ? 'لا يوجد أحد بهذا المستوى حالياً' : 'No one at this level right now'}</p>
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {topEmployees.map(e => (
-                    <button key={e.employee_id} type="button" onClick={() => pickEmployee(e)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 999,
-                        border: `1.5px solid ${form.employee_id === e.employee_id ? '#B45309' : '#E5E7EB'}`,
-                        background: form.employee_id === e.employee_id ? '#FFFBEB' : '#fff',
-                        cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, color: '#374151',
-                      }}>
-                      ⭐ {e.employee.full_name_ar}{e.employee?.station?.name_ar ? <span style={{ color: '#9CA3AF', fontWeight: 500 }}> · {e.employee.station.name_ar}</span> : null}
-                    </button>
-                  ))}
+                  {candidates.map(c => {
+                    const on = form.employee_ids.includes(c.id)
+                    return (
+                      <button key={c.id} type="button" onClick={() => toggleCandidate(c)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 999,
+                          border: `1.5px solid ${on ? '#B45309' : '#E5E7EB'}`,
+                          background: on ? '#FFFBEB' : '#fff',
+                          cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, color: '#374151',
+                        }}>
+                        {on ? '✓' : '⭐'} {c.name}
+                        {c.station ? <span style={{ color: '#9CA3AF', fontWeight: 500 }}> · {c.station}</span> : null}
+                        {c.streak >= 2 && <span style={{ color: '#B45309', fontWeight: 700 }}> · ×{c.streak}</span>}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
