@@ -419,7 +419,12 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
         if (found) {
           ;({ error } = await supabase.from('employee_evaluations').update(payload).eq('id', found.id))
         } else {
-          error = insErr
+          // الصف المتعارض موجود لكن سياسات RLS تمنعنا نشوفه (تقييم قدّمه مُقيِّم ثاني بنفس
+          // الدور لنفس الموظف والشهر — كل مقيّم يشوف بس تقييماته هو) — رسالة واضحة بدل خطأ قاعدة البيانات الخام
+          setSaving(false)
+          return setErr(isAr
+            ? 'هذا الموظف عنده تقييم مسجّل بالفعل لنفس الشهر من نفس نوع المصدر (على الأغلب من مقيّم آخر) — تواصل مع الإدارة لتصحيح ذلك.'
+            : 'This employee already has an evaluation for this month from this same source type (likely submitted by a different evaluator) — please contact an admin to resolve this.')
         }
       } else {
         error = insErr
