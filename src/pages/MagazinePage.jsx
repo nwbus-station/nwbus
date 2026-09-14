@@ -28,9 +28,12 @@ const PRESET_BACKGROUNDS = [
 ]
 
 const FONTS = {
-  default: { ar: 'افتراضي', en: 'Default', family: 'inherit' },
-  serif:   { ar: 'كلاسيكي', en: 'Classic', family: "Georgia, 'Traditional Arabic', serif" },
-  mono:    { ar: 'مضغوط',   en: 'Compact', family: MONO },
+  default: { ar: 'افتراضي',    en: 'Default',        family: 'inherit' },
+  tajawal: { ar: 'عصري',       en: 'Modern',          family: "'Tajawal', sans-serif" },
+  amiri:   { ar: 'رسمي أنيق',  en: 'Elegant Formal',  family: "'Amiri', serif" },
+  lalezar: { ar: 'احتفالي',    en: 'Festive',         family: "'Lalezar', cursive" },
+  serif:   { ar: 'كلاسيكي',    en: 'Classic',         family: "Georgia, 'Traditional Arabic', serif" },
+  mono:    { ar: 'مضغوط',      en: 'Compact',         family: MONO },
 }
 
 function bgFor(post) {
@@ -88,6 +91,53 @@ function SectionCard({ title, children }) {
   )
 }
 
+// شريط جانبي (يغطي الشاشة) لتصفح كل الصفحات بصور مصغّرة — يوضّح الصفحة الحالية ويقفل بزر خروج
+function PageSidebar({ posts, activeIndex, onSelect, onClose, isAr }) {
+  return (
+    <div dir={isAr ? 'rtl' : 'ltr'} style={{ position: 'fixed', inset: 0, background: 'rgba(6,10,20,0.96)', zIndex: 80, overflowY: 'auto', padding: '24px 20px' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <h2 style={{ margin: 0, color: '#fff', fontSize: '1.05rem', fontWeight: 800 }}>{isAr ? `كل الصفحات (${posts.length})` : `All pages (${posts.length})`}</h2>
+          <button onClick={onClose} aria-label="close"
+            style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', borderRadius: 8, width: 36, height: 36, cursor: 'pointer', fontSize: '1.05rem', lineHeight: 1 }}>
+            ✕
+          </button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
+          {posts.map((p, i) => {
+            const tpl = TEMPLATES[p.template] ?? TEMPLATES.announcement
+            const bg = bgFor(p)
+            const active = i === activeIndex
+            return (
+              <button key={p.id} onClick={() => onSelect(i)}
+                style={{
+                  textAlign: 'start', borderRadius: 12, overflow: 'hidden', cursor: 'pointer', padding: 0,
+                  border: active ? '3px solid #F59E0B' : '3px solid transparent',
+                  background: bg.image ? `url(${bg.image}) center/cover` : bg.css,
+                  minHeight: 130, position: 'relative', fontFamily: 'inherit',
+                  boxShadow: active ? '0 0 0 2px rgba(245,158,11,0.3), 0 8px 20px rgba(0,0,0,0.4)' : '0 4px 14px rgba(0,0,0,0.3)',
+                }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(0,0,0,0.8), transparent 55%)' }} />
+                <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '10px 12px' }}>
+                  <span style={{ fontSize: '0.62rem', marginBottom: 4 }}>{tpl.badge}</span>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fff', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {isAr ? p.title_ar : (p.title_en || p.title_ar)}
+                  </span>
+                  {active && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.6rem', color: '#F59E0B', fontWeight: 800, marginTop: 6 }}>
+                      ● {isAr ? 'الصفحة الحالية' : 'Current page'}
+                    </span>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function MagazinePage() {
   const { isGeneralAdmin } = useAuth()
   const { i18n } = useTranslation()
@@ -100,6 +150,7 @@ export default function MagazinePage() {
   const [mode, setMode] = useState('view') // view | manage
   const [index, setIndex] = useState(0)
   const [anim, setAnim] = useState('') // 'next' | 'prev' | ''
+  const [showSidebar, setShowSidebar] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -157,13 +208,27 @@ export default function MagazinePage() {
               {isAr ? 'إعلانات، تعاميم، وموظفون متميزون' : 'Announcements, circulars & spotlights'}
             </p>
           </div>
-          {canEdit && (
-            <button onClick={() => setMode(m => m === 'view' ? 'manage' : 'view')}
-              style={{ background: mode === 'manage' ? '#fff' : 'rgba(255,255,255,0.1)', color: mode === 'manage' ? '#111827' : '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '8px 16px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-              {mode === 'manage' ? (isAr ? '✓ عرض القارئ' : '✓ Reader view') : (isAr ? '⚙ إدارة المحتوى' : '⚙ Manage content')}
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            {mode === 'view' && posts.length > 0 && (
+              <button onClick={() => setShowSidebar(true)}
+                style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '8px 14px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                {isAr ? '▤ كل الصفحات' : '▤ All pages'}
+              </button>
+            )}
+            {canEdit && (
+              <button onClick={() => setMode(m => m === 'view' ? 'manage' : 'view')}
+                style={{ background: mode === 'manage' ? '#fff' : 'rgba(255,255,255,0.1)', color: mode === 'manage' ? '#111827' : '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '8px 16px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                {mode === 'manage' ? (isAr ? '✓ عرض القارئ' : '✓ Reader view') : (isAr ? '⚙ إدارة المحتوى' : '⚙ Manage content')}
+              </button>
+            )}
+          </div>
         </div>
+
+        {showSidebar && (
+          <PageSidebar posts={posts} activeIndex={index} isAr={isAr}
+            onSelect={(i) => { setIndex(i); setShowSidebar(false) }}
+            onClose={() => setShowSidebar(false)} />
+        )}
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60, color: 'rgba(255,255,255,0.4)' }}>…</div>
@@ -219,6 +284,16 @@ export default function MagazinePage() {
                 <p style={{ margin: '12px 0 0', fontSize: '0.92rem', color: 'rgba(255,255,255,0.88)', lineHeight: 1.75, whiteSpace: 'pre-line', fontFamily: font.family }}>
                   {isAr ? post.body_ar : (post.body_en || post.body_ar)}
                 </p>
+                {post.template === 'circular' && post.closing_ar && (
+                  <p style={{ margin: '14px 0 0', fontSize: '0.9rem', color: 'rgba(255,255,255,0.88)', lineHeight: 1.75, whiteSpace: 'pre-line', fontFamily: font.family }}>
+                    {post.closing_ar}
+                  </p>
+                )}
+                {post.template === 'circular' && post.signer_name && (
+                  <p style={{ margin: '18px 0 0', fontSize: '0.85rem', color: '#fff', fontWeight: 700 }}>
+                    {post.signer_name}
+                  </p>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
                   <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.55)', fontFamily: MONO }}>
                     {new Date(post.created_at).toLocaleString(isAr ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
@@ -305,6 +380,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     template: post?.template ?? 'announcement', font: post?.font ?? 'default',
     background_image_url: post?.background_image_url ?? '', background_preset: post?.background_preset ?? 'navy',
     employee_ids: post?.employee_ids ?? [], is_published: post?.is_published ?? true,
+    closing_ar: post?.closing_ar ?? '', signer_name: post?.signer_name ?? '',
   })
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -514,21 +590,32 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
         ) : (
           <SectionCard title={isAr ? 'المحتوى' : 'Content'}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label={isAr ? 'العنوان (عربي) *' : 'Title (Arabic) *'}>
+              <Field label={form.template === 'circular' ? (isAr ? 'عنوان الموضوع (عربي) *' : 'Subject title (Arabic) *') : (isAr ? 'العنوان (عربي) *' : 'Title (Arabic) *')}>
                 <input style={inp} value={form.title_ar} onChange={e => set('title_ar', e.target.value)} />
               </Field>
-              <Field label={isAr ? 'العنوان (إنجليزي)' : 'Title (English)'}>
+              <Field label={form.template === 'circular' ? (isAr ? 'عنوان الموضوع (إنجليزي)' : 'Subject title (English)') : (isAr ? 'العنوان (إنجليزي)' : 'Title (English)')}>
                 <input style={inp} value={form.title_en} onChange={e => set('title_en', e.target.value)} dir="ltr" />
               </Field>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label={isAr ? 'النص (عربي) *' : 'Body (Arabic) *'}>
+              <Field label={form.template === 'circular' ? (isAr ? 'الموضوع (عربي) *' : 'Body (Arabic) *') : (isAr ? 'النص (عربي) *' : 'Body (Arabic) *')}>
                 <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={form.body_ar} onChange={e => set('body_ar', e.target.value)} />
               </Field>
-              <Field label={isAr ? 'النص (إنجليزي)' : 'Body (English)'}>
+              <Field label={form.template === 'circular' ? (isAr ? 'الموضوع (إنجليزي)' : 'Body (English)') : (isAr ? 'النص (إنجليزي)' : 'Body (English)')}>
                 <textarea style={{ ...inp, minHeight: 100, resize: 'vertical' }} value={form.body_en} onChange={e => set('body_en', e.target.value)} dir="ltr" />
               </Field>
             </div>
+            {form.template === 'circular' && (
+              <>
+                <Field label={isAr ? 'الخاتمة' : 'Closing'}>
+                  <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={form.closing_ar} onChange={e => set('closing_ar', e.target.value)}
+                    placeholder={isAr ? 'مثال: وتفضلوا بقبول فائق الاحترام والتقدير' : ''} />
+                </Field>
+                <Field label={isAr ? 'الاسم (اختياري — إن تُرك فارغاً لا يظهر)' : 'Signer name (optional — hidden if empty)'}>
+                  <input style={inp} value={form.signer_name} onChange={e => set('signer_name', e.target.value)} />
+                </Field>
+              </>
+            )}
           </SectionCard>
         )}
 
@@ -624,6 +711,16 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
               <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, whiteSpace: 'pre-line', fontFamily: FONTS[form.font].family }}>
                 {form.body_ar || (isAr ? 'نص المنشور يظهر هنا...' : 'Post body appears here...')}
               </p>
+              {form.template === 'circular' && form.closing_ar && (
+                <p style={{ margin: '12px 0 0', fontSize: '0.78rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, whiteSpace: 'pre-line', fontFamily: FONTS[form.font].family }}>
+                  {form.closing_ar}
+                </p>
+              )}
+              {form.template === 'circular' && form.signer_name && (
+                <p style={{ margin: '14px 0 0', fontSize: '0.75rem', color: '#fff', fontWeight: 700 }}>
+                  {form.signer_name}
+                </p>
+              )}
             </div>
           </div>
         )}
