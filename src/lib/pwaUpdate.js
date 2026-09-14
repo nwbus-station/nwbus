@@ -14,6 +14,11 @@ export function initPwaUpdate() {
       // النسخة الجديدة مباشرة بدل ما ينتظر الفحص الدوري
       registration.update()
       setInterval(() => registration.update(), 10 * 60 * 1000)
+      // بالجوال، التطبيق غالباً ينتقل بالخلفية/الواجهة بدل إعادة تحميل حقيقية — نفحص
+      // كل ما رجع المستخدم للتطبيق عشان ما ننتظر الفحص الدوري
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') registration.update()
+      })
     },
   })
 }

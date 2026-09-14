@@ -40,6 +40,11 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // بدونها، أي نسخة جديدة من الـ Service Worker تظل "بانتظار" لحد ما يقفل المستخدم
+        // كل تبويباته المفتوحة (نادراً ما يصير فعلياً) قبل ما تفعّل — وهذا السبب الحقيقي
+        // وراء صعوبة وصول التحديثات حتى بعد أيام، حتى بإغلاق المتصفح جزئياً أو بالجوال
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         navigateFallback: '/index.html',
         runtimeCaching: [
