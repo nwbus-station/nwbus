@@ -146,7 +146,7 @@ export default function MagazinePage() {
 
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 108px)', background: '#0B1220', padding: '28px 16px' }}>
-      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      <div style={{ maxWidth: mode === 'manage' ? 1200 : 720, margin: '0 auto', transition: 'max-width 0.2s' }}>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <div>
@@ -202,9 +202,19 @@ export default function MagazinePage() {
                   {isAr ? post.title_ar : (post.title_en || post.title_ar)}
                 </h2>
                 {post.employees?.length > 0 && (
-                  <p style={{ margin: '6px 0 0', fontSize: '0.78rem', fontWeight: 700, color: 'rgba(255,255,255,0.85)', lineHeight: 1.6 }}>
-                    {post.employees.map(e => `${e.full_name_ar}${e.station ? ` · ${isAr ? e.station.name_ar : (e.station.name_en || e.station.name_ar)}` : ''}`).join(isAr ? '  —  ' : '  —  ')}
-                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 10 }}>
+                    {post.employees.map((e, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: tpl.badge ? '#F59E0B' : '#fff', flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>{e.full_name_ar}</span>
+                        {e.station && (
+                          <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>
+                            {isAr ? e.station.name_ar : (e.station.name_en || e.station.name_ar)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
                 <p style={{ margin: '12px 0 0', fontSize: '0.92rem', color: 'rgba(255,255,255,0.88)', lineHeight: 1.75, whiteSpace: 'pre-line', fontFamily: font.family }}>
                   {isAr ? post.body_ar : (post.body_en || post.body_ar)}
@@ -335,11 +345,18 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
   function regenerateSpotlightText(ids) {
     const picked = candidates.filter(c => ids.includes(c.id))
     if (picked.length === 0) return
-    const namesLine = picked.map(c => `${c.name}${c.station ? ` (${c.station})` : ''}${c.streak >= 2 ? ` — ${ordinalMonthAr(c.streak)}` : ''}`).join('، ')
+    // اسم أول موظف يُختار يبقى بالعنوان دايماً، وإذا انضاف غيره يُذكرون بعدد لا بالاسم
+    // (الأسماء بالتفصيل مع المحطة تظهر بقائمة مستقلة تحت العنوان، مو بالعنوان نفسه)
     const title = picked.length === 1
       ? `تكريم موظف الشهر: ${picked[0].name}`
-      : 'موظفونا المتميزون هذا الشهر'
-    const body = `نبارك لزملائنا: ${namesLine}، تقديراً لتميّزهم والتزامهم المتواصل. نتمنى لهم دوام التوفيق والتميز.`
+      : `تكريم موظفينا المتميزين: ${picked[0].name} و${picked.length - 1} ${picked.length - 1 === 1 ? 'آخر' : 'آخرين'}`
+    const hasStreak = picked.some(c => c.streak >= 2)
+    const streakNote = hasStreak
+      ? ` ونخص بالتهنئة ${picked.filter(c => c.streak >= 2).map(c => `${c.name} (${ordinalMonthAr(c.streak)})`).join('، ')}.`
+      : ''
+    const body = picked.length === 1
+      ? `نبارك للزميل ${picked[0].name} حصوله على تقييم متميز هذا الشهر، تقديراً لجهوده والتزامه المتواصل.${hasStreak ? ` هذا هو ${ordinalMonthAr(picked[0].streak)} له.` : ''} نتمنى له دوام التوفيق والتميز.`
+      : `نبارك لزملائنا حصولهم على تقييم متميز هذا الشهر، تقديراً لجهودهم والتزامهم المتواصل.${streakNote} نتمنى لهم دوام التوفيق والتميز.`
     setForm(f => ({
       ...f,
       title_ar: (!f.title_ar.trim() || f.title_ar === autoTextRef.current.title) ? title : f.title_ar,
@@ -533,6 +550,17 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
             <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#fff', lineHeight: 1.3, fontFamily: FONTS[form.font].family }}>
               {form.title_ar || (isAr ? 'عنوان المنشور' : 'Post title')}
             </h3>
+            {form.employee_ids.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                {candidates.filter(c => form.employee_ids.includes(c.id)).map(c => (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#F59E0B', flexShrink: 0 }} />
+                    <span style={{ fontSize: '0.76rem', fontWeight: 700, color: '#fff' }}>{c.name}</span>
+                    {c.station && <span style={{ fontSize: '0.66rem', color: 'rgba(255,255,255,0.55)' }}>{c.station}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
             <p style={{ margin: '10px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6, whiteSpace: 'pre-line', fontFamily: FONTS[form.font].family }}>
               {form.body_ar || (isAr ? 'نص المنشور يظهر هنا...' : 'Post body appears here...')}
             </p>
