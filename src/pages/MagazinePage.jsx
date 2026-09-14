@@ -164,34 +164,52 @@ function Field({ label, children }) {
 }
 
 function pad2(n) { return String(n).padStart(2, '0') }
-function todayDateStr() {
-  const d = new Date()
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-}
 
-// منتقي تاريخ ووقت مخصّص (بدل input[type=datetime-local] الأصلي) — يتفادى تشوّه
-// النص اللي يصير للحقل الأصلي جوا صفحة RTL، ويضمن نظام ٢٤ ساعة دائماً بدل ما يعتمد
-// على لغة/منطقة المتصفح
-function DateTimeField({ value, onChange }) {
+const AR_MONTHS = ['يناير', 'فبراير', 'مارس', 'إبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+const EN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+// منتقي تاريخ ووقت مبني بالكامل من قوائم اختيار (يوم/شهر/سنة/ساعة/دقيقة) بدل
+// input[type=date|datetime-local] الأصلي — الحقل الأصلي يعرض عناصره الداخلية بصيغة
+// نظام تشغيل/متصفح المستخدم، وعلى بعض الأنظمة العربية تظهر مشوّهة؛ القوائم المخصصة
+// نصها ثابت نتحكم فيه بالكامل، وتضمن نظام ٢٤ ساعة دائماً
+function DateTimeField({ value, onChange, isAr }) {
   const [datePart, timePart] = value ? value.split('T') : ['', '']
+  const [y, mo, d] = datePart ? datePart.split('-').map(Number) : [null, null, null]
   const hh = pad2((timePart || '00:00').split(':')[0] || 0)
   let mm = Math.round(Number((timePart || '00:00').split(':')[1] || 0) / 5) * 5
   if (mm >= 60) mm = 0
   mm = pad2(mm)
 
-  function emit(nextDate, nextH, nextM) {
-    if (!nextDate) { onChange(''); return }
-    onChange(`${nextDate}T${nextH}:${nextM}`)
+  const thisYear = new Date().getFullYear()
+  const years = Array.from({ length: 7 }, (_, i) => thisYear - 1 + i)
+  const days = Array.from({ length: 31 }, (_, i) => i + 1)
+  const months = isAr ? AR_MONTHS : EN_MONTHS
+
+  function emit(nextY, nextMo, nextD, nextH, nextM) {
+    if (!nextY || !nextMo || !nextD) { onChange(''); return }
+    onChange(`${nextY}-${pad2(nextMo)}-${pad2(nextD)}T${nextH}:${nextM}`)
   }
 
+  const selStyle = { ...inp, padding: '9px 4px', textAlign: 'center' }
   return (
-    <div style={{ display: 'flex', gap: 6 }}>
-      <input type="date" dir="ltr" value={datePart} onChange={e => emit(e.target.value, hh, mm)} style={{ ...inp, flex: 1.6 }} />
-      <select dir="ltr" value={hh} onChange={e => emit(datePart || todayDateStr(), e.target.value, mm)} style={{ ...inp, flex: 1, padding: '9px 4px', textAlign: 'center' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      <select dir="ltr" value={d ?? ''} onChange={e => emit(y, mo, Number(e.target.value), hh, mm)} style={{ ...selStyle, flex: '0 1 56px' }}>
+        <option value="" disabled>{isAr ? 'يوم' : 'Day'}</option>
+        {days.map(v => <option key={v} value={v}>{v}</option>)}
+      </select>
+      <select dir="ltr" value={mo ?? ''} onChange={e => emit(y, Number(e.target.value), d, hh, mm)} style={{ ...selStyle, flex: '1 1 90px', textAlign: 'start' }}>
+        <option value="" disabled>{isAr ? 'شهر' : 'Month'}</option>
+        {months.map((mLabel, i) => <option key={mLabel} value={i + 1}>{mLabel}</option>)}
+      </select>
+      <select dir="ltr" value={y ?? ''} onChange={e => emit(Number(e.target.value), mo, d, hh, mm)} style={{ ...selStyle, flex: '0 1 74px' }}>
+        <option value="" disabled>{isAr ? 'سنة' : 'Year'}</option>
+        {years.map(v => <option key={v} value={v}>{v}</option>)}
+      </select>
+      <select dir="ltr" value={hh} onChange={e => emit(y || new Date().getFullYear(), mo || new Date().getMonth() + 1, d || new Date().getDate(), e.target.value, mm)} style={{ ...selStyle, flex: '0 1 56px' }}>
         {Array.from({ length: 24 }, (_, i) => pad2(i)).map(h => <option key={h} value={h}>{h}</option>)}
       </select>
       <span style={{ alignSelf: 'center', color: '#9CA3AF', fontWeight: 700 }}>:</span>
-      <select dir="ltr" value={mm} onChange={e => emit(datePart || todayDateStr(), hh, e.target.value)} style={{ ...inp, flex: 1, padding: '9px 4px', textAlign: 'center' }}>
+      <select dir="ltr" value={mm} onChange={e => emit(y || new Date().getFullYear(), mo || new Date().getMonth() + 1, d || new Date().getDate(), hh, e.target.value)} style={{ ...selStyle, flex: '0 1 56px' }}>
         {['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].map(m => <option key={m} value={m}>{m}</option>)}
       </select>
     </div>
@@ -597,10 +615,26 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     }
   }
 
-  // تغيير نمط النص يعيد توليد العنوان/النص تلقائياً إن كان فيه موظف واحد محدد فقط
-  useEffect(() => {
-    if (form.employee_ids.length === 1) afterSelectionChange(form.employee_ids)
-  }, [form.text_style])
+  // تغيير نمط النص يعيد توليد العنوان/النص فوراً إن كان فيه موظف واحد محدد فقط —
+  // تحديث واحد متزامن بدل الاعتماد على useEffect منفصل
+  function selectTextStyle(styleKey) {
+    if (form.employee_ids.length === 1) {
+      const c = candidates.find(cc => cc.id === form.employee_ids[0])
+      const style = SPOTLIGHT_STYLES.find(s => s.key === styleKey) ?? SPOTLIGHT_STYLES[0]
+      if (c) {
+        const { title, body } = style.gen(c)
+        setForm(f => ({
+          ...f,
+          text_style: styleKey,
+          title_ar: (!f.title_ar.trim() || f.title_ar === autoTextRef.current.title) ? title : f.title_ar,
+          body_ar: (!f.body_ar.trim() || f.body_ar === autoTextRef.current.body) ? body : f.body_ar,
+        }))
+        autoTextRef.current = { title, body }
+        return
+      }
+    }
+    set('text_style', styleKey)
+  }
 
   function toggleCandidate(cand) {
     const has = form.employee_ids.includes(cand.id)
@@ -778,7 +812,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {SPOTLIGHT_STYLES.map(s => (
-                    <button key={s.key} type="button" onClick={() => set('text_style', s.key)}
+                    <button key={s.key} type="button" onClick={() => selectTextStyle(s.key)}
                       style={{
                         padding: '5px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600,
                         border: `1.5px solid ${form.text_style === s.key ? '#5B5BD6' : '#E5E7EB'}`,
@@ -793,8 +827,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
           )}
 
           <Field label={isAr ? 'تسمية مخصصة للقالب (اختياري)' : 'Custom template label (optional)'}>
-            <input style={inp} value={form.label_ar} onChange={e => set('label_ar', e.target.value)}
-              placeholder={isAr ? `مثلاً "تعزية" بدل "${TEMPLATES[form.template].ar}"` : `e.g. a name other than "${TEMPLATES[form.template].en}"`} />
+            <input style={inp} value={form.label_ar} onChange={e => set('label_ar', e.target.value)} />
           </Field>
         </SectionCard>
 
@@ -926,10 +959,10 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label={isAr ? 'يبدأ في (٢٤ ساعة)' : 'Starts at (24h)'}>
-              <DateTimeField value={form.starts_at} onChange={v => set('starts_at', v)} />
+              <DateTimeField value={form.starts_at} onChange={v => set('starts_at', v)} isAr={isAr} />
             </Field>
             <Field label={isAr ? 'ينتهي في (٢٤ ساعة)' : 'Ends at (24h)'}>
-              <DateTimeField value={form.ends_at} onChange={v => set('ends_at', v)} />
+              <DateTimeField value={form.ends_at} onChange={v => set('ends_at', v)} isAr={isAr} />
             </Field>
           </div>
         </SectionCard>
