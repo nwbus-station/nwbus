@@ -1742,29 +1742,30 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
     setGroupSaving(false)
   }
 
-  const [selStations,  setSelStations]  = useState(new Set(stations.map(s => s.id)))
-  const [stnSelSaving, setStnSelSaving] = useState(false)
-  // نطبّق التحديد المحفوظ (لو موجود) كافتراضي بدل تحديد كل المحطات، مرة وحدة بس لما يتوفر —
-  // عشان "تحديد ثابت" يبقى نفسه كل ما فتحت الطباعة، بدل ما تعيده من الصفر كل مرة
-  const appliedSavedStationsRef = useRef(false)
-  useEffect(() => {
-    if (!appliedSavedStationsRef.current && savedGroups.stations.size > 0) {
-      setSelStations(new Set(savedGroups.stations))
-      appliedSavedStationsRef.current = true
-    }
-  }, [savedGroups.stations])
+  // التحديد الثابت يُحفظ بمتصفح هذا الجهاز مباشرة (localStorage) — أسرع وأوثق من رحلة
+  // ذهاب/إياب لقاعدة البيانات، وما له علاقة بصلاحيات RLS اللي كانت تسبب مشاكل صامتة
+  const PRINT_STATIONS_KEY = 'nwbus_print_stations_selection'
+  const [selStations, setSelStations] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PRINT_STATIONS_KEY) || 'null')
+      if (Array.isArray(saved) && saved.length > 0) return new Set(saved)
+    } catch {}
+    return new Set(stations.map(s => s.id))
+  })
+  const [stnSelSaved, setStnSelSaved] = useState(false)
+  const hasSavedSelection = (() => {
+    try { return JSON.parse(localStorage.getItem(PRINT_STATIONS_KEY) || 'null')?.length > 0 } catch { return false }
+  })()
 
-  async function saveStationSelection() {
-    setStnSelSaving(true)
-    const { error: delErr } = await supabase.from('saved_station_groups').delete().eq('group_name', 'stations')
-    if (delErr) { setStnSelSaving(false); alert('فشل حفظ التحديد: ' + delErr.message); return }
-    if (selStations.size > 0) {
-      const { error: insErr } = await supabase.from('saved_station_groups')
-        .insert([...selStations].map(id => ({ group_name: 'stations', station_id: id })))
-      if (insErr) { setStnSelSaving(false); alert('فشل حفظ التحديد: ' + insErr.message); return }
+  function saveStationSelection() {
+    try {
+      localStorage.setItem(PRINT_STATIONS_KEY, JSON.stringify([...selStations]))
+    } catch (e) {
+      alert('فشل حفظ التحديد: ' + e.message)
+      return
     }
-    setSavedGroups(prev => ({ ...prev, stations: new Set(selStations) }))
-    setStnSelSaving(false)
+    setStnSelSaved(true)
+    setTimeout(() => setStnSelSaved(false), 2000)
   }
   const [selSupSet,    setSelSupSet]    = useState(new Set())  // empty = all supervisors
   const [selEmpSet,    setSelEmpSet]    = useState(new Set())  // empty = all
@@ -1998,19 +1999,19 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap: 8 }}>
                 <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>اختر المحطات</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button onClick={saveStationSelection} disabled={stnSelSaving}
-                    title="يحفظ هذا التحديد كافتراضي دائم — يظهر تلقائياً كل مرة تفتح الطباعة"
+                  <button onClick={saveStationSelection}
+                    title="يحفظ هذا التحديد كافتراضي دائم بهذا الجهاز — يظهر تلقائياً كل مرة تفتح الطباعة"
                     style={{ fontFamily:'inherit', fontSize:'0.72rem', color:'#166534', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0, display:'flex', alignItems:'center', gap:4 }}>
-                    {stnSelSaving ? '...جارٍ الحفظ' : '💾 حفظ كتحديد ثابت'}
+                    {stnSelSaved ? '✓ تم الحفظ' : '💾 حفظ كتحديد ثابت'}
                   </button>
                   <button onClick={toggleAll} style={{ fontFamily:'inherit', fontSize:'0.72rem', color:'#4A6FA5', background:'none', border:'none', cursor:'pointer', fontWeight:600, padding:0 }}>
                     {selStations.size === stations.length ? 'إلغاء الكل' : 'تحديد الكل'}
                   </button>
                 </div>
               </div>
-              {savedGroups.stations.size > 0 && (
+              {hasSavedSelection && (
                 <p style={{ margin:0, fontSize:'0.66rem', color:'#166534' }}>
-                  ✓ محمّل تحديد ثابت محفوظ ({savedGroups.stations.size} محطة) — عدّل واضغط "حفظ كتحديد ثابت" لتحديثه
+                  ✓ محمّل تحديد ثابت محفوظ بهذا الجهاز — عدّل واضغط "حفظ كتحديد ثابت" لتحديثه
                 </p>
               )}
               <input className="nw-inp" value={stnSearch} onChange={e => setStnSearch(e.target.value)}
