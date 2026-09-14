@@ -430,7 +430,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     setJobNumberCheck({ status: 'checking' })
     const t = setTimeout(async () => {
       const { data } = await supabase.from('users').select('full_name_ar')
-        .eq('username', buildUsername(form.job_number)).maybeSingle()
+        .eq('username', buildUsername(form.job_number).toLowerCase()).maybeSingle()
       setJobNumberCheck(data ? { status: 'taken', name: data.full_name_ar } : { status: 'free' })
     }, 400)
     return () => clearTimeout(t)
