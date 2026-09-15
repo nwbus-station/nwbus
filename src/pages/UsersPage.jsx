@@ -1461,9 +1461,20 @@ export default function UsersPage() {
     setPrintingRoster(false)
 
     const { title: stationTitle, showStationCol } = printScopeLabel()
-
     const cellAlign = isAr ? 'right' : 'left'
-    const rows = printTargets.map((u, i) => `
+
+    const tableHead = `<thead><tr>
+        <th style="width:36px;text-align:center">#</th>
+        <th>${isAr ? 'الاسم' : 'Name'}</th>
+        <th>${isAr ? 'الرقم الوظيفي' : 'Emp #'}</th>
+        <th>${isAr ? 'رقم الجوال' : 'Mobile'}</th>
+        <th>${isAr ? 'البريد الإلكتروني' : 'Email'}</th>
+        <th>${isAr ? 'تاريخ المباشرة' : 'Hire Date'}</th>
+        <th style="text-align:center">${isAr ? 'الحالة' : 'Status'}</th>
+      </tr></thead>`
+
+    function renderRow(u, i) {
+      return `
       <tr style="background:${i % 2 ? '#F9FAFB' : '#fff'}">
         <td style="padding:9px 12px;text-align:center;color:#9CA3AF;font-size:11px;border:1px solid #EEF0F3">${i + 1}</td>
         <td style="padding:9px 12px;text-align:${cellAlign};font-weight:700;color:#111827;font-size:13px;border:1px solid #EEF0F3">${escapeHtml(u.full_name_ar)}</td>
@@ -1471,11 +1482,42 @@ export default function UsersPage() {
         <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3"><span dir="ltr">${escapeHtml(phoneById[u.id] || '—')}</span></td>
         <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:11px;border:1px solid #EEF0F3"><span dir="ltr">${escapeHtml(emailById[u.id] || '—')}</span></td>
         <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3"><span dir="ltr">${escapeHtml(u.hire_date || '—')}</span></td>
-        ${showStationCol ? `<td style="padding:9px 12px;text-align:${cellAlign};color:#6B7280;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(u.station ? (isAr ? u.station.name_ar : u.station.name_en) : '—')}</td>` : ''}
         <td style="padding:9px 12px;text-align:center;border:1px solid #EEF0F3">
           <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;${u.is_active ? 'background:#F0FDF4;color:#16A34A' : 'background:#F3F4F6;color:#9CA3AF'}">${u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive')}</span>
         </td>
-      </tr>`).join('')
+      </tr>`
+    }
+
+    function renderTable(list) {
+      return `<table>${tableHead}<tbody>${list.map((u, i) => renderRow(u, i)).join('')}</tbody></table>`
+    }
+
+    // شريط أنيق باسم المحطة وعدد موظفينها فوق جدول كل محطة على حدة
+    function sectionHeader(name, count) {
+      return `<div style="display:flex;align-items:center;gap:10px;margin:0 0 8px">
+        <div style="width:4px;height:20px;border-radius:2px;background:linear-gradient(180deg,#3E63A8,#9FBBE6)"></div>
+        <div style="font-size:13.5px;font-weight:800;color:#1C2B36">${escapeHtml(name)}</div>
+        <div style="background:#EEF2F7;color:#4B5563;padding:2px 11px;border-radius:999px;font-size:10.5px;font-weight:700">${count} ${isAr ? 'موظف' : 'staff'}</div>
+      </div>`
+    }
+
+    let bodyHtml
+    if (showStationCol) {
+      const groups = {}
+      printTargets.forEach(u => {
+        const key = u.station_id || '—'
+        const name = u.station ? (isAr ? u.station.name_ar : u.station.name_en) : (isAr ? 'بدون محطة' : 'No station')
+        ;(groups[key] ??= { name, list: [] }).list.push(u)
+      })
+      const sortedGroups = Object.values(groups).sort((a, b) => a.name.localeCompare(b.name, isAr ? 'ar' : 'en'))
+      bodyHtml = sortedGroups.map((g, idx) => `
+        <div style="${idx > 0 ? 'margin-top:22px;' : ''}page-break-inside:avoid">
+          ${sectionHeader(g.name, g.list.length)}
+          ${renderTable(g.list)}
+        </div>`).join('')
+    } else {
+      bodyHtml = renderTable(printTargets)
+    }
 
     const html = `<!DOCTYPE html><html dir="${isAr ? 'rtl' : 'ltr'}"><head><meta charset="UTF-8"><title>${isAr ? 'قائمة الموظفين' : 'Staff Roster'}</title>
       <style>
@@ -1493,26 +1535,14 @@ export default function UsersPage() {
         </button>
       </div>
       <div style="padding:24px 28px">
-        <div style="background:#1C2B36;color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="background:#1C2B36;color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
           <div>
             <div style="font-size:15px;font-weight:800">${isAr ? 'قائمة الموظفين' : 'Staff Roster'} — ${escapeHtml(stationTitle)}</div>
             <div style="font-size:10px;opacity:0.7;margin-top:3px">${printTargets.length} ${isAr ? 'موظف' : 'staff'} · ${new Date().toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</div>
           </div>
           <div style="font-size:12px;font-weight:800;letter-spacing:1px">NORTH WEST BUS</div>
         </div>
-        <table>
-          <thead><tr>
-            <th style="width:36px;text-align:center">#</th>
-            <th>${isAr ? 'الاسم' : 'Name'}</th>
-            <th>${isAr ? 'الرقم الوظيفي' : 'Emp #'}</th>
-            <th>${isAr ? 'رقم الجوال' : 'Mobile'}</th>
-            <th>${isAr ? 'البريد الإلكتروني' : 'Email'}</th>
-            <th>${isAr ? 'تاريخ المباشرة' : 'Hire Date'}</th>
-            ${showStationCol ? `<th>${isAr ? 'المحطة' : 'Station'}</th>` : ''}
-            <th style="text-align:center">${isAr ? 'الحالة' : 'Status'}</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+        ${bodyHtml}
       </div>
     </body></html>`
 
