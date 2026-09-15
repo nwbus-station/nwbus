@@ -838,6 +838,23 @@ export default function ReportsPage() {
     sales: isAr ? 'ملخص المبيعات' : 'Sales', lost: isAr ? 'الموجودات' : 'Lost & Found',
   }
 
+  // شريط معاينة قبل الطباعة — نفس أسلوب صفحة التقييم الوظيفي: يفتح تبويب من نفس
+  // التطبيق يقدر المستخدم يراجعه، ثم يطبع بزر صريح أو يقفل التبويب بدون طباعة
+  function reportPrintBarHtml() {
+    return `<div class="no-print" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 20px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
+      <span style="font-size:12.5px;font-weight:700;color:#1C2B4A;letter-spacing:0.04em;font-family:'IBM Plex Sans Arabic',Arial,sans-serif">NORTH WEST BUS — معاينة قبل الطباعة</span>
+      <button onclick="window.print()" style="display:inline-flex;align-items:center;gap:7px;background:#1C2B4A;color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'IBM Plex Sans Arabic',Arial,sans-serif;box-shadow:0 2px 8px rgba(28,43,74,0.25)">
+        🖨 طباعة / حفظ PDF
+      </button>
+    </div>`
+  }
+
+  function openPrintPreview(bodyHtml, pageCss) {
+    const w = window.open('', '_blank')
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${pageCss}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}@media print{.no-print{display:none!important}}</style></head><body>${reportPrintBarHtml()}${bodyHtml}</body></html>`)
+    w.document.close()
+  }
+
   function printStationsReport(idsOverride) {
     if (!data) return
     const sourceIds = idsOverride ?? printStationIds
@@ -933,10 +950,7 @@ export default function ReportsPage() {
     }).join('')
 
     const html = `<div style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:rtl;color:#1a2233;background:#fff">${pages}</div>`
-    const w = window.open('', '_blank')
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>@page{size:A4 landscape;margin:5mm}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}</style></head><body>${html}</body></html>`)
-    w.document.close()
-    setTimeout(() => { w.print(); w.close() }, 500)
+    openPrintPreview(html, `@page{size:A4 landscape;margin:5mm}body{margin:0;padding:0}`)
   }
 
   function printReport() {
@@ -975,11 +989,8 @@ export default function ReportsPage() {
         </div>
       </div>`
 
-    const printStyle = `@page{size:A4 landscape;margin:6mm}body{margin:0;font-family:IBM Plex Sans Arabic,Arial,sans-serif;font-size:9px}table{font-size:8px}th,td{padding:3px 5px}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}`
-    const w = window.open('', '_blank')
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${printStyle}</style></head><body>${html}</body></html>`)
-    w.document.close()
-    setTimeout(() => { w.print(); w.close() }, 500)
+    const printStyle = `@page{size:A4 landscape;margin:6mm}body{margin:0;font-family:IBM Plex Sans Arabic,Arial,sans-serif;font-size:9px}table{font-size:8px}th,td{padding:3px 5px}`
+    openPrintPreview(html, printStyle)
   }
 
   function exportCompliance() {
