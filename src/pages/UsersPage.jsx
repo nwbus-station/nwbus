@@ -1212,6 +1212,7 @@ export default function UsersPage() {
   const [supervisorFilter, setSupervisorFilter] = useState('')
   const [leaveFilter, setLeaveFilter] = useState('') // '' | 'zero' | 'low' | 'ok'
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [printingRoster, setPrintingRoster] = useState(false)
   const [bulkModule,  setBulkModule]  = useState('')
   const [bulkSupervisor, setBulkSupervisor] = useState('')
   const [bulkSaving,  setBulkSaving]  = useState(false)
@@ -1364,6 +1365,77 @@ export default function UsersPage() {
 
   const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter, moduleFilter, supervisorFilter, leaveFilter].filter(Boolean).length
 
+  async function printRoster() {
+    if (filtered.length === 0 || printingRoster) return
+    setPrintingRoster(true)
+    const phoneById = {}
+    await Promise.all(filtered.map(async u => {
+      try {
+        const { data } = await supabase.rpc('get_user_sensitive', { p_id: u.id })
+        phoneById[u.id] = data?.[0]?.phone ?? null
+      } catch { phoneById[u.id] = null }
+    }))
+    setPrintingRoster(false)
+
+    const stationTitle = stationFilter
+      ? (stations.find(s => s.id === stationFilter)?.[isAr ? 'name_ar' : 'name_en'] ?? '')
+      : (isAr ? 'كل المحطات' : 'All Stations')
+    const showStationCol = !stationFilter
+
+    const rows = filtered.map((u, i) => `
+      <tr style="background:${i % 2 ? '#F9FAFB' : '#fff'}">
+        <td style="padding:8px 12px;text-align:center;color:#9CA3AF;font-size:11px">${i + 1}</td>
+        <td style="padding:8px 12px;font-weight:700;color:#111827;font-size:13px">${escapeHtml(u.full_name_ar)}</td>
+        <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:12px">${escapeHtml(u.job_number || '—')}</td>
+        <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:12px" dir="ltr">${escapeHtml(phoneById[u.id] || '—')}</td>
+        ${showStationCol ? `<td style="padding:8px 12px;color:#6B7280;font-size:12px">${escapeHtml(u.station ? (isAr ? u.station.name_ar : u.station.name_en) : '—')}</td>` : ''}
+        <td style="padding:8px 12px;text-align:center">
+          <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;${u.is_active ? 'background:#F0FDF4;color:#16A34A' : 'background:#F3F4F6;color:#9CA3AF'}">${u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive')}</span>
+        </td>
+      </tr>`).join('')
+
+    const html = `<!DOCTYPE html><html dir="${isAr ? 'rtl' : 'ltr'}"><head><meta charset="UTF-8"><title>${isAr ? 'قائمة الموظفين' : 'Staff Roster'}</title>
+      <style>
+        *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+        body{margin:0;font-family:Arial,sans-serif;background:#fff;color:#1a1a1a}
+        @page{size:A4;margin:10mm}
+        @media print{.no-print{display:none!important}}
+        table{width:100%;border-collapse:collapse}
+        th{background:#F9FAFB;color:#6B7280;padding:8px 12px;font-size:11px;font-weight:700;text-align:${isAr ? 'right' : 'left'};border-bottom:1.5px solid #E5E7EB}
+      </style></head><body>
+      <div class="no-print" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 20px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
+        <span style="font-size:12.5px;font-weight:700;color:#1C2B4A;letter-spacing:0.04em">NORTH WEST BUS — ${isAr ? 'معاينة قبل الطباعة' : 'Preview before printing'}</span>
+        <button onclick="window.print()" style="display:inline-flex;align-items:center;gap:7px;background:#1C2B4A;color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(28,43,74,0.25)">
+          🖨 ${isAr ? 'طباعة / حفظ PDF' : 'Print / Save PDF'}
+        </button>
+      </div>
+      <div style="padding:24px 28px">
+        <div style="background:#1C2B36;color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div>
+            <div style="font-size:15px;font-weight:800">${isAr ? 'قائمة الموظفين' : 'Staff Roster'} — ${escapeHtml(stationTitle)}</div>
+            <div style="font-size:10px;opacity:0.7;margin-top:3px">${filtered.length} ${isAr ? 'موظف' : 'staff'} · ${new Date().toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</div>
+          </div>
+          <div style="font-size:12px;font-weight:800;letter-spacing:1px">NORTH WEST BUS</div>
+        </div>
+        <table>
+          <thead><tr>
+            <th style="width:36px;text-align:center">#</th>
+            <th>${isAr ? 'الاسم' : 'Name'}</th>
+            <th>${isAr ? 'الرقم الوظيفي' : 'Emp #'}</th>
+            <th>${isAr ? 'رقم الجوال' : 'Mobile'}</th>
+            ${showStationCol ? `<th>${isAr ? 'المحطة' : 'Station'}</th>` : ''}
+            <th style="text-align:center">${isAr ? 'الحالة' : 'Status'}</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </body></html>`
+
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
+  }
+
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
 
@@ -1375,12 +1447,18 @@ export default function UsersPage() {
             {isAr ? `${filtered.length} من ${users.length} موظف` : `${filtered.length} of ${users.length} staff`}
           </p>
         </div>
-        {isGeneralAdmin && (
-          <button onClick={() => setModal('new')}
-            className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors whitespace-nowrap self-start sm:self-auto">
-            + {isAr ? 'جديد' : 'New'}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button onClick={printRoster} disabled={filtered.length === 0 || printingRoster}
+            className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
+            {printingRoster ? (isAr ? 'جارٍ التجهيز...' : 'Preparing...') : `🖨 ${isAr ? 'طباعة القائمة' : 'Print Roster'}`}
           </button>
-        )}
+          {isGeneralAdmin && (
+            <button onClick={() => setModal('new')}
+              className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors whitespace-nowrap">
+              + {isAr ? 'جديد' : 'New'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search + Filters */}
