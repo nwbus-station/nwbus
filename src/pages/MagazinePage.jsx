@@ -767,6 +767,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [candidates, setCandidates] = useState([])
+  const [bulkTexts, setBulkTexts] = useState({}) // { [candidateId]: {title, body} } — تعديل يدوي لكل شخص بالوضع الجماعي
   const autoTextRef = useRef({ title: '', body: '' })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -804,6 +805,14 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     return style.gen(c)
   }
 
+  // النص الفعلي لشخص بالوضع الجماعي — يرجع التعديل اليدوي إن وُجد، وإلا النص المولَّد تلقائياً
+  function personTextFor(c) {
+    return bulkTexts[c.id] ?? personalizedText(c)
+  }
+  function setPersonTextField(c, field, value) {
+    setBulkTexts(prev => ({ ...prev, [c.id]: { ...(prev[c.id] ?? personalizedText(c)), [field]: value } }))
+  }
+
   // موظف واحد: يعبّي العنوان/النص القابلين للتعديل مباشرة (منشور واحد).
   // أكثر من موظف: كل واحد ياخذ منشوره المستقل بنص مخصص له تلقائياً عند الحفظ —
   // ما نعبّي حقول نص مشتركة لأنها ما راح تُستخدم
@@ -831,6 +840,8 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
   // عند تعديل منشور قديم، الشخص قد ما يكون موجود بقائمة "المتميزين حالياً" (لو انتهت
   // فترة تميّزه) فما نلقاه بـ candidates — نرجع لاسمه المحفوظ بالمنشور نفسه كحل بديل
   function selectTextStyle(styleKey) {
+    // بالوضع الجماعي، تغيير النمط يولّد نص كل شخص من جديد بدل التعديلات اليدوية السابقة
+    if (form.employee_ids.length > 1) setBulkTexts({})
     if (form.employee_ids.length === 1) {
       const targetId = form.employee_ids[0]
       const fromCandidates = candidates.find(cc => cc.id === targetId)
@@ -865,6 +876,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     if (key !== 'spotlight' && form.template === 'spotlight' && form.employee_ids.length > 0) {
       setForm(f => ({ ...f, template: key, employee_ids: [], title_ar: '', title_en: '', body_ar: '', body_en: '' }))
       autoTextRef.current = { title: '', body: '' }
+      setBulkTexts({})
     } else {
       set('template', key)
     }
@@ -904,7 +916,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
       setSaving(true); setErr('')
       const picked = candidates.filter(c => form.employee_ids.includes(c.id))
       const payloadFor = c => {
-        const { title, body } = personalizedText(c)
+        const { title, body } = personTextFor(c)
         return {
           title_ar: title, title_en: '', body_ar: body, body_en: '',
           template: 'spotlight', font: form.font,
@@ -1052,6 +1064,29 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                 : (isAr
                   ? `سيُنشأ ${form.employee_ids.length} منشورات مستقلة — كل موظف/مشرف يأخذ صفحته الخاصة بنص تهنئة مخصص له تلقائياً (يذكر عدد أشهره المتتالية إن وُجد).`
                   : `${form.employee_ids.length} separate posts will be created — each person gets their own page with an automatically personalized congratulation.`)}
+            </div>
+            <p style={{ margin: 0, fontSize: '0.7rem', color: '#9CA3AF' }}>
+              {isAr ? 'تقدر تعدّل نص أي شخص يدوياً تحت — النص المولَّد تلقائياً نقطة بداية بس' : 'You can manually edit any person’s text below — the auto-generated text is just a starting point'}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 420, overflowY: 'auto' }}>
+              {candidates.filter(c => form.employee_ids.includes(c.id)).map(c => {
+                const t = personTextFor(c)
+                return (
+                  <div key={c.id} style={{ border: '1px solid #EEF0F3', borderRadius: 10, padding: 12, background: '#fff' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: '0.76rem', fontWeight: 700, color: '#374151' }}>
+                      ⭐ {c.name}{c.station ? ` · ${c.station}` : ''}
+                    </p>
+                    <Field label={isAr ? 'العنوان' : 'Title'}>
+                      <input style={inp} value={t.title} onChange={e => setPersonTextField(c, 'title', e.target.value)} />
+                    </Field>
+                    <div style={{ marginTop: 8 }}>
+                      <Field label={isAr ? 'النص' : 'Body'}>
+                        <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={t.body} onChange={e => setPersonTextField(c, 'body', e.target.value)} />
+                      </Field>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </SectionCard>
         ) : PDF_TEMPLATES.includes(form.template) ? (
@@ -1208,7 +1243,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
         {isBulkSpotlight ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {candidates.filter(c => form.employee_ids.includes(c.id)).map(c => {
-              const { title, body } = personalizedText(c)
+              const { title, body } = personTextFor(c)
               return (
                 <div key={c.id} style={{ borderRadius: 14, overflow: 'hidden', background: previewBg, boxShadow: '0 10px 24px rgba(0,0,0,0.35)', position: 'relative' }}>
                   <div style={{ position: 'absolute', inset: 0, background: form.background_image_url ? 'linear-gradient(0deg, rgba(0,0,0,0.8), rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.35))' : 'linear-gradient(0deg, rgba(0,0,0,0.35), transparent 45%)' }} />
