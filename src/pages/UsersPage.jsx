@@ -1365,15 +1365,21 @@ export default function UsersPage() {
 
   const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter, moduleFilter, supervisorFilter, leaveFilter].filter(Boolean).length
 
+  // لو محدد موظفين معينين (بمربعات التحديد الموجودة أصلاً للتعديل الجماعي)، نطبع بس هم —
+  // وإلا كل اللي ظاهر بعد الفلاتر الحالية
+  const printTargets = selectedIds.size > 0 ? filtered.filter(u => selectedIds.has(u.id)) : filtered
+
   async function printRoster() {
-    if (filtered.length === 0 || printingRoster) return
+    if (printTargets.length === 0 || printingRoster) return
     setPrintingRoster(true)
     const phoneById = {}
-    await Promise.all(filtered.map(async u => {
+    const emailById = {}
+    await Promise.all(printTargets.map(async u => {
       try {
         const { data } = await supabase.rpc('get_user_sensitive', { p_id: u.id })
         phoneById[u.id] = data?.[0]?.phone ?? null
-      } catch { phoneById[u.id] = null }
+        emailById[u.id] = data?.[0]?.email ?? null
+      } catch { phoneById[u.id] = null; emailById[u.id] = null }
     }))
     setPrintingRoster(false)
 
@@ -1382,12 +1388,14 @@ export default function UsersPage() {
       : (isAr ? 'كل المحطات' : 'All Stations')
     const showStationCol = !stationFilter
 
-    const rows = filtered.map((u, i) => `
+    const rows = printTargets.map((u, i) => `
       <tr style="background:${i % 2 ? '#F9FAFB' : '#fff'}">
         <td style="padding:8px 12px;text-align:center;color:#9CA3AF;font-size:11px">${i + 1}</td>
         <td style="padding:8px 12px;font-weight:700;color:#111827;font-size:13px">${escapeHtml(u.full_name_ar)}</td>
         <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:12px">${escapeHtml(u.job_number || '—')}</td>
         <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:12px" dir="ltr">${escapeHtml(phoneById[u.id] || '—')}</td>
+        <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:11px" dir="ltr">${escapeHtml(emailById[u.id] || '—')}</td>
+        <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:12px" dir="ltr">${escapeHtml(u.hire_date || '—')}</td>
         ${showStationCol ? `<td style="padding:8px 12px;color:#6B7280;font-size:12px">${escapeHtml(u.station ? (isAr ? u.station.name_ar : u.station.name_en) : '—')}</td>` : ''}
         <td style="padding:8px 12px;text-align:center">
           <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;${u.is_active ? 'background:#F0FDF4;color:#16A34A' : 'background:#F3F4F6;color:#9CA3AF'}">${u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive')}</span>
@@ -1398,7 +1406,7 @@ export default function UsersPage() {
       <style>
         *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
         body{margin:0;font-family:Arial,sans-serif;background:#fff;color:#1a1a1a}
-        @page{size:A4;margin:10mm}
+        @page{size:A4 landscape;margin:10mm}
         @media print{.no-print{display:none!important}}
         table{width:100%;border-collapse:collapse}
         th{background:#F9FAFB;color:#6B7280;padding:8px 12px;font-size:11px;font-weight:700;text-align:${isAr ? 'right' : 'left'};border-bottom:1.5px solid #E5E7EB}
@@ -1413,7 +1421,7 @@ export default function UsersPage() {
         <div style="background:#1C2B36;color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
           <div>
             <div style="font-size:15px;font-weight:800">${isAr ? 'قائمة الموظفين' : 'Staff Roster'} — ${escapeHtml(stationTitle)}</div>
-            <div style="font-size:10px;opacity:0.7;margin-top:3px">${filtered.length} ${isAr ? 'موظف' : 'staff'} · ${new Date().toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</div>
+            <div style="font-size:10px;opacity:0.7;margin-top:3px">${printTargets.length} ${isAr ? 'موظف' : 'staff'} · ${new Date().toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</div>
           </div>
           <div style="font-size:12px;font-weight:800;letter-spacing:1px">NORTH WEST BUS</div>
         </div>
@@ -1423,6 +1431,8 @@ export default function UsersPage() {
             <th>${isAr ? 'الاسم' : 'Name'}</th>
             <th>${isAr ? 'الرقم الوظيفي' : 'Emp #'}</th>
             <th>${isAr ? 'رقم الجوال' : 'Mobile'}</th>
+            <th>${isAr ? 'البريد الإلكتروني' : 'Email'}</th>
+            <th>${isAr ? 'تاريخ المباشرة' : 'Hire Date'}</th>
             ${showStationCol ? `<th>${isAr ? 'المحطة' : 'Station'}</th>` : ''}
             <th style="text-align:center">${isAr ? 'الحالة' : 'Status'}</th>
           </tr></thead>
@@ -1448,9 +1458,13 @@ export default function UsersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button onClick={printRoster} disabled={filtered.length === 0 || printingRoster}
+          <button onClick={printRoster} disabled={printTargets.length === 0 || printingRoster}
             className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
-            {printingRoster ? (isAr ? 'جارٍ التجهيز...' : 'Preparing...') : `🖨 ${isAr ? 'طباعة القائمة' : 'Print Roster'}`}
+            {printingRoster
+              ? (isAr ? 'جارٍ التجهيز...' : 'Preparing...')
+              : selectedIds.size > 0
+                ? `🖨 ${isAr ? `طباعة المحدد (${selectedIds.size})` : `Print Selected (${selectedIds.size})`}`
+                : `🖨 ${isAr ? 'طباعة القائمة' : 'Print Roster'}`}
           </button>
           {isGeneralAdmin && (
             <button onClick={() => setModal('new')}
