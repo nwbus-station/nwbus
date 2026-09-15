@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import * as XLSX from 'xlsx'
 import { createClient } from '@supabase/supabase-js'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
@@ -1369,18 +1370,25 @@ export default function UsersPage() {
   // وإلا كل اللي ظاهر بعد الفلاتر الحالية
   const printTargets = selectedIds.size > 0 ? filtered.filter(u => selectedIds.has(u.id)) : filtered
 
-  async function printRoster() {
-    if (printTargets.length === 0 || printingRoster) return
-    setPrintingRoster(true)
+  // يجيب الجوال/الإيميل (حقول حساسة) لمجموعة موظفين وقت الحاجة بس — يشترك فيه
+  // كل من الطباعة وتصدير Excel بدل ما يتكرر
+  async function fetchPhoneEmailMap(targets) {
     const phoneById = {}
     const emailById = {}
-    await Promise.all(printTargets.map(async u => {
+    await Promise.all(targets.map(async u => {
       try {
         const { data } = await supabase.rpc('get_user_sensitive', { p_id: u.id })
         phoneById[u.id] = data?.[0]?.phone ?? null
         emailById[u.id] = data?.[0]?.email ?? null
       } catch { phoneById[u.id] = null; emailById[u.id] = null }
     }))
+    return { phoneById, emailById }
+  }
+
+  async function printRoster() {
+    if (printTargets.length === 0 || printingRoster) return
+    setPrintingRoster(true)
+    const { phoneById, emailById } = await fetchPhoneEmailMap(printTargets)
     setPrintingRoster(false)
 
     const stationTitle = stationFilter
@@ -1388,16 +1396,17 @@ export default function UsersPage() {
       : (isAr ? 'كل المحطات' : 'All Stations')
     const showStationCol = !stationFilter
 
+    const cellAlign = isAr ? 'right' : 'left'
     const rows = printTargets.map((u, i) => `
       <tr style="background:${i % 2 ? '#F9FAFB' : '#fff'}">
-        <td style="padding:8px 12px;text-align:center;color:#9CA3AF;font-size:11px">${i + 1}</td>
-        <td style="padding:8px 12px;font-weight:700;color:#111827;font-size:13px">${escapeHtml(u.full_name_ar)}</td>
-        <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:12px">${escapeHtml(u.job_number || '—')}</td>
-        <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:12px" dir="ltr">${escapeHtml(phoneById[u.id] || '—')}</td>
-        <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:11px" dir="ltr">${escapeHtml(emailById[u.id] || '—')}</td>
-        <td style="padding:8px 12px;font-family:monospace;color:#4B5563;font-size:12px" dir="ltr">${escapeHtml(u.hire_date || '—')}</td>
-        ${showStationCol ? `<td style="padding:8px 12px;color:#6B7280;font-size:12px">${escapeHtml(u.station ? (isAr ? u.station.name_ar : u.station.name_en) : '—')}</td>` : ''}
-        <td style="padding:8px 12px;text-align:center">
+        <td style="padding:9px 12px;text-align:center;color:#9CA3AF;font-size:11px;border:1px solid #EEF0F3">${i + 1}</td>
+        <td style="padding:9px 12px;text-align:${cellAlign};font-weight:700;color:#111827;font-size:13px;border:1px solid #EEF0F3">${escapeHtml(u.full_name_ar)}</td>
+        <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(u.job_number || '—')}</td>
+        <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3"><span dir="ltr">${escapeHtml(phoneById[u.id] || '—')}</span></td>
+        <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:11px;border:1px solid #EEF0F3"><span dir="ltr">${escapeHtml(emailById[u.id] || '—')}</span></td>
+        <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3"><span dir="ltr">${escapeHtml(u.hire_date || '—')}</span></td>
+        ${showStationCol ? `<td style="padding:9px 12px;text-align:${cellAlign};color:#6B7280;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(u.station ? (isAr ? u.station.name_ar : u.station.name_en) : '—')}</td>` : ''}
+        <td style="padding:9px 12px;text-align:center;border:1px solid #EEF0F3">
           <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;${u.is_active ? 'background:#F0FDF4;color:#16A34A' : 'background:#F3F4F6;color:#9CA3AF'}">${u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive')}</span>
         </td>
       </tr>`).join('')
@@ -1446,6 +1455,34 @@ export default function UsersPage() {
     w.document.close()
   }
 
+  async function exportRosterExcel() {
+    if (printTargets.length === 0 || printingRoster) return
+    setPrintingRoster(true)
+    const { phoneById, emailById } = await fetchPhoneEmailMap(printTargets)
+    setPrintingRoster(false)
+
+    const showStationColX = !stationFilter
+    const header = [
+      '#', isAr ? 'الاسم' : 'Name', isAr ? 'الرقم الوظيفي' : 'Emp #',
+      isAr ? 'رقم الجوال' : 'Mobile', isAr ? 'البريد الإلكتروني' : 'Email', isAr ? 'تاريخ المباشرة' : 'Hire Date',
+      ...(showStationColX ? [isAr ? 'المحطة' : 'Station'] : []),
+      isAr ? 'الحالة' : 'Status',
+    ]
+    const data = printTargets.map((u, i) => [
+      i + 1, u.full_name_ar, u.job_number || '', phoneById[u.id] || '', emailById[u.id] || '', u.hire_date || '',
+      ...(showStationColX ? [u.station ? (isAr ? u.station.name_ar : u.station.name_en) : ''] : []),
+      u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive'),
+    ])
+    const ws = XLSX.utils.aoa_to_sheet([header, ...data])
+    ws['!cols'] = [{ wch: 4 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, ...(showStationColX ? [{ wch: 16 }] : []), { wch: 10 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, isAr ? 'الموظفون' : 'Staff')
+    const stationTitleX = stationFilter
+      ? (stations.find(s => s.id === stationFilter)?.[isAr ? 'name_ar' : 'name_en'] ?? '')
+      : (isAr ? 'الكل' : 'All')
+    XLSX.writeFile(wb, `${isAr ? 'قائمة_الموظفين' : 'staff_roster'}_${stationTitleX}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
 
@@ -1457,14 +1494,20 @@ export default function UsersPage() {
             {isAr ? `${filtered.length} من ${users.length} موظف` : `${filtered.length} of ${users.length} staff`}
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <button onClick={exportRosterExcel} disabled={printTargets.length === 0 || printingRoster}
+            className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
+            {printingRoster
+              ? (isAr ? 'جارٍ التجهيز...' : 'Preparing...')
+              : `📊 ${isAr ? 'تصدير Excel' : 'Export Excel'}${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
+          </button>
           <button onClick={printRoster} disabled={printTargets.length === 0 || printingRoster}
             className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
             {printingRoster
               ? (isAr ? 'جارٍ التجهيز...' : 'Preparing...')
               : selectedIds.size > 0
-                ? `🖨 ${isAr ? `طباعة المحدد (${selectedIds.size})` : `Print Selected (${selectedIds.size})`}`
-                : `🖨 ${isAr ? 'طباعة القائمة' : 'Print Roster'}`}
+                ? `🖨 ${isAr ? `طباعة/PDF المحدد (${selectedIds.size})` : `Print/PDF Selected (${selectedIds.size})`}`
+                : `🖨 ${isAr ? 'طباعة / PDF' : 'Print / PDF'}`}
           </button>
           {isGeneralAdmin && (
             <button onClick={() => setModal('new')}
