@@ -422,7 +422,7 @@ export default function DashboardPage() {
   const quickLinks = [
     ...(!mods || mods.includes('transportation') ? [{ to: '/transportation', ar: 'الترحيل',    en: 'Transportation', icon: 'bus',     desc_ar: 'تتبع الرحلات والمغادرات', desc_en: 'Trips & departures' }] : []),
     ...(isAdmin || profile?.role === 'accountant' ? [{ to: '/reports',       ar: 'التقارير',    en: 'Reports',        icon: 'report',  desc_ar: 'تقارير تشغيلية شاملة',    desc_en: 'Operational reports' }] : []),
-    { to: '/magazine', ar: 'مجلة NW', en: 'NW Magazine', icon: 'magazine', desc_ar: 'إعلانات وموظفون متميزون', desc_en: 'Announcements & spotlights' },
+    { to: '/magazine', ar: 'Event', en: 'Event', icon: 'magazine', desc_ar: 'إعلانات وموظفون متميزون', desc_en: 'Announcements & spotlights' },
   ]
 
   /* ── المعلومات ── */

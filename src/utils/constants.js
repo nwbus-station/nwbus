@@ -48,7 +48,7 @@ export const MODULES = [
   { value: 'users',          ar: 'الموظفون',         en: 'Staff' },
   { value: 'map',            ar: 'الخريطة',          en: 'Map' },
   { value: 'customer_ratings', ar: 'تقييم العملاء', en: 'Customer Ratings' },
-  { value: 'magazine',       ar: 'إدارة مجلة NW',    en: 'NW Magazine Editor' },
+  { value: 'magazine',       ar: 'إدارة Event',      en: 'Event Editor' },
 ]
 
 // Departure accuracy thresholds (minutes)

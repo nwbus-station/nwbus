@@ -348,8 +348,9 @@ export default function MagazinePage() {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#fff', letterSpacing: '0.01em' }}>
-              {isAr ? '📖 مجلة NW' : '📖 NW Magazine'}
+            <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 9, fontSize: '1.35rem', fontWeight: 800, color: '#fff' }}>
+              <span>📅</span>
+              <span style={{ fontFamily: MONO, letterSpacing: '0.09em', textTransform: 'uppercase' }}>Event</span>
             </h1>
             <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)' }}>
               {isAr ? 'إعلانات، تعاميم، وموظفون متميزون' : 'Announcements, circulars & spotlights'}
