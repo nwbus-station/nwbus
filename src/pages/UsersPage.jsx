@@ -1214,6 +1214,10 @@ export default function UsersPage() {
   const [leaveFilter, setLeaveFilter] = useState('') // '' | 'zero' | 'low' | 'ok'
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [printingRoster, setPrintingRoster] = useState(false)
+  const [showStationPicker, setShowStationPicker] = useState(false)
+  const [printStationIds, setPrintStationIds] = useState(new Set())
+  const [pendingPrintAction, setPendingPrintAction] = useState(null) // 'print' | 'excel'
+  const [stationPickerSearch, setStationPickerSearch] = useState('')
   const [bulkModule,  setBulkModule]  = useState('')
   const [bulkSupervisor, setBulkSupervisor] = useState('')
   const [bulkSaving,  setBulkSaving]  = useState(false)
@@ -1357,7 +1361,9 @@ export default function UsersPage() {
   const supervisors = users.filter(u => ['station_admin', 'area_supervisor', 'general_admin', 'stations_executive_director'].includes(u.role))
   const shiftSupervisors = users.filter(u => u.role === 'shift_supervisor')
 
-  const filtered = users.filter(u => {
+  // كل الفلاتر إلا فلتر المحطة — نحتاجها لوحدها عشان منتقي محطات الطباعة (متعدد) يشتغل
+  // فوق نفس الفلاتر الظاهرة بدون ما يتقيّد بفلتر المحطة الأحادي بأعلى الصفحة
+  function matchesNonStationFilters(u) {
     const q = search.toLowerCase()
     const matchSearch = !search ||
       (u.full_name_ar ?? '').toLowerCase().includes(q) ||
@@ -1365,7 +1371,6 @@ export default function UsersPage() {
       (u.full_name_en ?? '').toLowerCase().includes(q) ||
       (u.job_number   ?? '').includes(q)
     const matchRole    = !roleFilter    || u.role       === roleFilter
-    const matchStation = !stationFilter || u.station_id === stationFilter
     const matchStatus  = !statusFilter  || (statusFilter === 'active' ? u.is_active : !u.is_active)
     const matchJob     = !jobFilter     || u.job_title  === jobFilter
     const hasModule    = !moduleFilter || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
@@ -1376,14 +1381,63 @@ export default function UsersPage() {
       leaveFilter === 'low'  ? (u.leaveRemaining ?? 0) > 0 && u.leaveRemaining < 7 :
       leaveFilter === 'ok'   ? (u.leaveRemaining ?? 0) >= 7 : true
     )
-    return matchSearch && matchRole && matchStation && matchStatus && matchJob && matchModule && matchSupervisor && matchLeave
-  })
+    return matchSearch && matchRole && matchStatus && matchJob && matchModule && matchSupervisor && matchLeave
+  }
+
+  const filtered = users.filter(u => matchesNonStationFilters(u) && (!stationFilter || u.station_id === stationFilter))
 
   const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter, moduleFilter, supervisorFilter, leaveFilter].filter(Boolean).length
 
-  // لو محدد موظفين معينين (بمربعات التحديد الموجودة أصلاً للتعديل الجماعي)، نطبع بس هم —
-  // وإلا كل اللي ظاهر بعد الفلاتر الحالية
-  const printTargets = selectedIds.size > 0 ? filtered.filter(u => selectedIds.has(u.id)) : filtered
+  // أولوية الطباعة/التصدير: موظفين محددين يدوياً (مربعات التحديد) > محطات مختارة من
+  // منتقي محطات الطباعة (متعدد) > كل اللي ظاهر بعد الفلاتر الحالية كما كان
+  const printBaseUsers = users.filter(matchesNonStationFilters)
+  const printTargets = selectedIds.size > 0
+    ? filtered.filter(u => selectedIds.has(u.id))
+    : printStationIds.size > 0
+      ? printBaseUsers.filter(u => printStationIds.has(u.station_id))
+      : filtered
+
+  // عنوان نطاق الطباعة/التصدير — يعكس محطات منتقي الطباعة المتعدد إن استُخدم، وإلا
+  // يرجع لسلوك فلتر المحطة الأحادي القديم
+  function printScopeLabel() {
+    if (printStationIds.size > 0 && printStationIds.size < stations.length) {
+      if (printStationIds.size === 1) {
+        const id = [...printStationIds][0]
+        return { title: stations.find(s => s.id === id)?.[isAr ? 'name_ar' : 'name_en'] ?? '', showStationCol: false }
+      }
+      return { title: isAr ? `${printStationIds.size} محطات محددة` : `${printStationIds.size} selected stations`, showStationCol: true }
+    }
+    if (stationFilter) {
+      return { title: stations.find(s => s.id === stationFilter)?.[isAr ? 'name_ar' : 'name_en'] ?? '', showStationCol: false }
+    }
+    return { title: isAr ? 'كل المحطات' : 'All Stations', showStationCol: true }
+  }
+
+  // منتقي محطات الطباعة (متعدد) — لو فيه تحديد أفراد يدوي نطبعهم مباشرة بدون فتح
+  // المنتقي، وإلا نفتحه أول عشان يختار المحطات (كل المحطات محددة افتراضياً)
+  function openStationPicker(action) {
+    setPendingPrintAction(action)
+    setPrintStationIds(stationFilter ? new Set([stationFilter]) : new Set(stations.map(s => s.id)))
+    setStationPickerSearch('')
+    setShowStationPicker(true)
+  }
+  function handlePrintClick() { selectedIds.size > 0 ? printRoster() : openStationPicker('print') }
+  function handleExcelClick() { selectedIds.size > 0 ? exportRosterExcel() : openStationPicker('excel') }
+  function toggleStationPick(id) {
+    setPrintStationIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  function toggleAllStationsPick() {
+    setPrintStationIds(prev => prev.size === stations.length ? new Set() : new Set(stations.map(s => s.id)))
+  }
+  function confirmStationPicker() {
+    setShowStationPicker(false)
+    if (pendingPrintAction === 'excel') exportRosterExcel()
+    else printRoster()
+  }
 
   // يجيب الجوال/الإيميل (حقول حساسة) لمجموعة موظفين وقت الحاجة بس — يشترك فيه
   // كل من الطباعة وتصدير Excel بدل ما يتكرر
@@ -1406,10 +1460,7 @@ export default function UsersPage() {
     const { phoneById, emailById } = await fetchPhoneEmailMap(printTargets)
     setPrintingRoster(false)
 
-    const stationTitle = stationFilter
-      ? (stations.find(s => s.id === stationFilter)?.[isAr ? 'name_ar' : 'name_en'] ?? '')
-      : (isAr ? 'كل المحطات' : 'All Stations')
-    const showStationCol = !stationFilter
+    const { title: stationTitle, showStationCol } = printScopeLabel()
 
     const cellAlign = isAr ? 'right' : 'left'
     const rows = printTargets.map((u, i) => `
@@ -1476,7 +1527,7 @@ export default function UsersPage() {
     const { phoneById, emailById } = await fetchPhoneEmailMap(printTargets)
     setPrintingRoster(false)
 
-    const showStationColX = !stationFilter
+    const { title: stationTitleX, showStationCol: showStationColX } = printScopeLabel()
     const header = [
       '#', isAr ? 'الاسم' : 'Name', isAr ? 'الرقم الوظيفي' : 'Emp #',
       isAr ? 'رقم الجوال' : 'Mobile', isAr ? 'البريد الإلكتروني' : 'Email', isAr ? 'تاريخ المباشرة' : 'Hire Date',
@@ -1492,14 +1543,54 @@ export default function UsersPage() {
     ws['!cols'] = [{ wch: 4 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, ...(showStationColX ? [{ wch: 16 }] : []), { wch: 10 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, isAr ? 'الموظفون' : 'Staff')
-    const stationTitleX = stationFilter
-      ? (stations.find(s => s.id === stationFilter)?.[isAr ? 'name_ar' : 'name_en'] ?? '')
-      : (isAr ? 'الكل' : 'All')
     XLSX.writeFile(wb, `${isAr ? 'قائمة_الموظفين' : 'staff_roster'}_${stationTitleX}_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
+
+      {showStationPicker && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <p className="text-sm font-bold text-gray-800">{isAr ? 'اختر المحطات' : 'Select stations'}</p>
+              <button onClick={() => setShowStationPicker(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+            </div>
+            <div className="p-4 border-b border-gray-100 space-y-2">
+              <input value={stationPickerSearch} onChange={e => setStationPickerSearch(e.target.value)}
+                placeholder={isAr ? 'بحث باسم المحطة...' : 'Search station...'}
+                className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:ring-2 focus:ring-nwbus-primary focus:outline-none" />
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">
+                  {isAr ? `${printStationIds.size} من ${stations.length} محطة` : `${printStationIds.size} of ${stations.length} stations`}
+                </span>
+                <button onClick={toggleAllStationsPick} className="text-xs font-semibold text-nwbus-primary">
+                  {printStationIds.size === stations.length ? (isAr ? 'إلغاء الكل' : 'Clear all') : (isAr ? 'تحديد الكل' : 'Select all')}
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+              {stations
+                .filter(s => !stationPickerSearch || s.name_ar.includes(stationPickerSearch) || (s.name_en || '').toLowerCase().includes(stationPickerSearch.toLowerCase()))
+                .map(s => (
+                  <label key={s.id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" className="rounded accent-nwbus-primary" checked={printStationIds.has(s.id)} onChange={() => toggleStationPick(s.id)} />
+                    <span className="text-sm text-gray-700">{isAr ? s.name_ar : s.name_en}</span>
+                  </label>
+                ))}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex items-center gap-2">
+              <button onClick={confirmStationPicker} disabled={printStationIds.size === 0}
+                className="flex-1 bg-nwbus-primary text-white py-2 rounded-lg text-sm font-semibold disabled:opacity-40 hover:bg-nwbus-dark transition-colors">
+                {pendingPrintAction === 'excel' ? `📊 ${isAr ? 'تصدير Excel' : 'Export Excel'}` : `🖨 ${isAr ? 'طباعة / PDF' : 'Print / PDF'}`}
+              </button>
+              <button onClick={() => setShowStationPicker(false)} className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-500 hover:bg-gray-50">
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -1510,13 +1601,13 @@ export default function UsersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-          <button onClick={exportRosterExcel} disabled={printTargets.length === 0 || printingRoster}
+          <button onClick={handleExcelClick} disabled={printTargets.length === 0 || printingRoster}
             className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
             {printingRoster
               ? (isAr ? 'جارٍ التجهيز...' : 'Preparing...')
               : `📊 ${isAr ? 'تصدير Excel' : 'Export Excel'}${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
           </button>
-          <button onClick={printRoster} disabled={printTargets.length === 0 || printingRoster}
+          <button onClick={handlePrintClick} disabled={printTargets.length === 0 || printingRoster}
             className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
             {printingRoster
               ? (isAr ? 'جارٍ التجهيز...' : 'Preparing...')
