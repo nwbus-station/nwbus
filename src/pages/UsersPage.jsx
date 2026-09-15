@@ -1239,6 +1239,21 @@ export default function UsersPage() {
     fetchAll(true)
   }
 
+  // إزالة قسم من المحدد — نتجاهل من عنده allowed_modules=null (يعني كل الأقسام مسموحة
+  // بدون قائمة صريحة)، لأن تحويله فجأة لقائمة مقيّدة يغيّر صلاحياته لأقسام ثانية ما قصدنا نلمسها
+  async function handleBulkRemoveModule() {
+    if (!bulkModule || selectedIds.size === 0) return
+    setBulkSaving(true)
+    const targets = users.filter(u => selectedIds.has(u.id) && u.allowed_modules !== null && u.allowed_modules.includes(bulkModule))
+    await Promise.all(targets.map(u =>
+      supabase.from('users').update({ allowed_modules: u.allowed_modules.filter(m => m !== bulkModule) }).eq('id', u.id)
+    ))
+    setBulkSaving(false)
+    setSelectedIds(new Set())
+    setBulkModule('')
+    fetchAll(true)
+  }
+
   async function handleBulkReassignSupervisor() {
     if (!bulkSupervisor || selectedIds.size === 0) return
     setBulkSaving(true)
@@ -1655,6 +1670,10 @@ export default function UsersPage() {
           <button onClick={handleBulkAddModule} disabled={!bulkModule || bulkSaving}
             className="bg-nwbus-primary text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-nwbus-dark transition-colors">
             {bulkSaving ? (isAr ? 'جارٍ الإضافة...' : 'Adding...') : (isAr ? 'إضافة القسم للمحدد' : 'Add section to selected')}
+          </button>
+          <button onClick={handleBulkRemoveModule} disabled={!bulkModule || bulkSaving}
+            className="bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-red-50 transition-colors">
+            {bulkSaving ? (isAr ? 'جارٍ الإزالة...' : 'Removing...') : (isAr ? 'إزالة القسم من المحدد' : 'Remove section from selected')}
           </button>
           <span className="text-gray-300">|</span>
           <select value={bulkSupervisor} onChange={e => setBulkSupervisor(e.target.value)}
