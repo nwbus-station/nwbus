@@ -46,6 +46,31 @@ export function pickTicketFromText(text) {
   return null
 }
 
+// لما يكون فيه أكثر من رقم بسبعة خانات بنفس اللقطة (مثلاً رقم هوية/جواز تحت الاسم
+// بجانب رقم التذكرة الحقيقي أعلى يمين البطاقة)، النص وحده ما يكفي يميّز بينهم.
+// نستخدم إحداثيات الكلمات (بحاجة output.blocks:true من recognize) نفضّل الأكبر
+// ارتفاعاً (رقم التذكرة يُعرض بخط أعرض/أكبر) ثم الأعلى موقعاً عند التعادل
+export function pickTicketFromWords(data) {
+  const words = []
+  for (const block of data?.blocks || []) {
+    for (const para of block.paragraphs || []) {
+      for (const line of para.lines || []) {
+        for (const w of line.words || []) words.push(w)
+      }
+    }
+  }
+  const candidates = words
+    .map(w => ({ digits: (w.text || '').replace(/\D/g, ''), bbox: w.bbox }))
+    .filter(c => c.digits.length === 7 && c.bbox)
+  if (!candidates.length) return null
+  candidates.sort((a, b) => {
+    const ha = a.bbox.y1 - a.bbox.y0, hb = b.bbox.y1 - b.bbox.y0
+    if (Math.abs(hb - ha) > 2) return hb - ha
+    return a.bbox.y0 - b.bbox.y0
+  })
+  return candidates[0].digits
+}
+
 /* بعض هواتف أندرويد (Galaxy/Honor وغيرها) تفتح الكاميرا بوضع تركيز ثابت
    مخصص للفيديو (continuous-video) بدل التركيز على الأجسام القريبة
    (continuous-picture) — هذا يخلي النص غير واضح للـOCR رغم أن الكاميرا تعمل. */
@@ -282,9 +307,14 @@ export default function QRScannerModal({
     setIsProcessing(true)
     try {
       const proc = buildOCRCanvas(video)
-      const { data: { text } } = await withTimeout(workerRef.current.recognize(proc.toDataURL('image/jpeg', 0.88)), 6000)
+      const { data } = await withTimeout(
+        workerRef.current.recognize(proc.toDataURL('image/jpeg', 0.88), {}, { blocks: true }),
+        6000
+      )
       if (!activeRef.current) return
-      const ticket = pickTicketFromText(text)
+      // رقم التذكرة هو الأكبر/الأعرض خطاً (أعلى يمين البطاقة) — نميّزه بالإحداثيات
+      // أولاً؛ لو ما توفرت (بلوكات فاضية) نرجع لمطابقة النص العادية كحل بديل
+      const ticket = pickTicketFromWords(data) ?? pickTicketFromText(data.text)
       if (ticket) presentFound(ticket)
       else scheduleOCR(2000)
     } catch { scheduleOCR(2500) }
