@@ -255,7 +255,7 @@ export default function QRScannerModal({
     qrRafRef.current = requestAnimationFrame(loopQR)
   }
 
-  function scheduleOCR(delay = 1500) {
+  function scheduleOCR(delay = 2000) {
     if (!activeRef.current) return
     clearTimeout(scanTimer.current)
     scanTimer.current = setTimeout(runOCR, delay)
@@ -276,7 +276,7 @@ export default function QRScannerModal({
       if (!activeRef.current) return
       const ticket = pickTicketFromText(text)
       if (ticket) presentFound(ticket)
-      else scheduleOCR(1500)
+      else scheduleOCR(2000)
     } catch { scheduleOCR(2500) }
     finally {
       busyRef.current = false
