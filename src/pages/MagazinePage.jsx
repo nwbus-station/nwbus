@@ -486,11 +486,25 @@ export default function MagazinePage() {
 function ManagePanel({ posts, isAr, onChanged }) {
   const [editing, setEditing] = useState(null) // post object | 'new' | null
   const [deleting, setDeleting] = useState(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkEditing, setBulkEditing] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkErr, setBulkErr] = useState('')
 
   if (editing) {
     return <PostForm post={editing === 'new' ? null : editing} isAr={isAr}
       onCancel={() => setEditing(null)}
       onSaved={() => { setEditing(null); onChanged() }} />
+  }
+
+  const selectedPosts = posts.filter(p => selectedIds.has(p.id))
+  const sameTemplate = selectedPosts.length > 0 && new Set(selectedPosts.map(p => p.template)).size === 1
+
+  if (bulkEditing) {
+    return <BulkEditForm posts={selectedPosts} isAr={isAr}
+      onCancel={() => setBulkEditing(false)}
+      onSaved={() => { setBulkEditing(false); setSelectedIds(new Set()); setSelectMode(false); onChanged() }} />
   }
 
   async function doDelete(id) {
@@ -499,17 +513,74 @@ function ManagePanel({ posts, isAr, onChanged }) {
     onChanged()
   }
 
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function doBulkDelete() {
+    const { error } = await supabase.from('magazine_posts').delete().in('id', [...selectedIds])
+    if (error) { setBulkErr(error.message); return }
+    setSelectedIds(new Set()); setBulkDeleting(false); setSelectMode(false); setBulkErr('')
+    onChanged()
+  }
+
   return (
     <div>
-      <button onClick={() => setEditing('new')}
-        style={{ background: '#5B5BD6', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', marginBottom: 16, fontFamily: 'inherit' }}>
-        + {isAr ? 'منشور جديد' : 'New post'}
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button onClick={() => setEditing('new')}
+          style={{ background: '#5B5BD6', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          + {isAr ? 'منشور جديد' : 'New post'}
+        </button>
+        <button onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()); setBulkDeleting(false); setBulkErr('') }}
+          style={{ background: selectMode ? '#111827' : '#F3F4F6', color: selectMode ? '#fff' : '#374151', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {selectMode ? (isAr ? '✕ إلغاء التحديد' : '✕ Cancel selection') : (isAr ? '☑ تحديد متعدد' : '☑ Select multiple')}
+        </button>
+
+        {selectMode && selectedIds.size > 0 && (
+          <>
+            <span style={{ fontSize: '0.72rem', color: '#6B7280', fontWeight: 700 }}>
+              {isAr ? `${selectedIds.size} محدد` : `${selectedIds.size} selected`}
+            </span>
+            <button onClick={() => sameTemplate && setBulkEditing(true)} disabled={!sameTemplate}
+              title={!sameTemplate ? (isAr ? 'اختر منشورات من نفس القالب فقط' : 'Select posts of the same template only') : ''}
+              style={{ background: '#EEF0FF', color: '#5B5BD6', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: '0.76rem', fontWeight: 700, cursor: sameTemplate ? 'pointer' : 'not-allowed', opacity: sameTemplate ? 1 : 0.45, fontFamily: 'inherit' }}>
+              ✎ {isAr ? 'تعديل جماعي' : 'Bulk edit'}
+            </button>
+            {bulkDeleting ? (
+              <>
+                <button onClick={doBulkDelete} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {isAr ? `تأكيد حذف ${selectedIds.size}` : `Confirm delete ${selectedIds.size}`}
+                </button>
+                <button onClick={() => setBulkDeleting(false)} style={{ background: 'none', border: 'none', fontSize: '0.76rem', color: '#9CA3AF', cursor: 'pointer' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+              </>
+            ) : (
+              <button onClick={() => setBulkDeleting(true)} style={{ background: 'none', border: '1.5px solid #FCA5A5', color: '#DC2626', borderRadius: 8, padding: '7px 14px', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                🗑 {isAr ? 'حذف المحدد' : 'Delete selected'}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {!sameTemplate && selectedIds.size > 1 && (
+        <p style={{ margin: '0 0 10px', fontSize: '0.72rem', color: '#B45309' }}>
+          {isAr ? 'التعديل الجماعي متاح بس لما تختار منشورات من نفس القالب — الحذف الجماعي شغّال بأي مزيج' : 'Bulk edit only works when the selection is all one template — bulk delete works with any mix'}
+        </p>
+      )}
+      {bulkErr && <p style={{ margin: '0 0 10px', fontSize: '0.76rem', color: '#DC2626' }}>⚠ {bulkErr}</p>}
+
       <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden' }}>
         {posts.length === 0 ? (
           <p style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: '0.85rem' }}>{isAr ? 'لا يوجد منشورات' : 'No posts'}</p>
         ) : posts.map((p, i) => (
           <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < posts.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
+            {selectMode && (
+              <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} style={{ width: 16, height: 16, flexShrink: 0, cursor: 'pointer' }} />
+            )}
             <span style={{ fontSize: '1.1rem' }}>{TEMPLATES[p.template]?.badge ?? '📄'}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#111827' }}>{p.title_ar}</p>
@@ -522,17 +593,159 @@ function ManagePanel({ posts, isAr, onChanged }) {
                 }
               </p>
             </div>
-            <button onClick={() => setEditing(p)} style={{ background: '#F3F4F6', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>{isAr ? 'تعديل' : 'Edit'}</button>
-            {deleting === p.id ? (
+            {!selectMode && (
               <>
-                <button onClick={() => doDelete(p.id)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>{isAr ? 'تأكيد الحذف' : 'Confirm'}</button>
-                <button onClick={() => setDeleting(null)} style={{ background: 'none', border: 'none', fontSize: '0.72rem', color: '#9CA3AF', cursor: 'pointer' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button onClick={() => setEditing(p)} style={{ background: '#F3F4F6', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>{isAr ? 'تعديل' : 'Edit'}</button>
+                {deleting === p.id ? (
+                  <>
+                    <button onClick={() => doDelete(p.id)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>{isAr ? 'تأكيد الحذف' : 'Confirm'}</button>
+                    <button onClick={() => setDeleting(null)} style={{ background: 'none', border: 'none', fontSize: '0.72rem', color: '#9CA3AF', cursor: 'pointer' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+                  </>
+                ) : (
+                  <button onClick={() => setDeleting(p.id)} style={{ background: 'none', border: 'none', color: '#DC2626', fontSize: '0.72rem', cursor: 'pointer' }}>{isAr ? 'حذف' : 'Delete'}</button>
+                )}
               </>
-            ) : (
-              <button onClick={() => setDeleting(p.id)} style={{ background: 'none', border: 'none', color: '#DC2626', fontSize: '0.72rem', cursor: 'pointer' }}>{isAr ? 'حذف' : 'Delete'}</button>
             )}
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// تعديل جماعي — بس لمنشورات من نفس القالب (شرط صريح). كل حقل له مفتاح تفعيل خاص
+// بيه، فقط الحقول المفعّلة تنطبّق على كل المنشورات المحددة؛ الباقي يبقى كما هو
+function BulkEditForm({ posts, isAr, onCancel, onSaved }) {
+  const template = posts[0]?.template
+  const [changeFont, setChangeFont] = useState(false)
+  const [font, setFontVal] = useState('default')
+  const [changeBg, setChangeBg] = useState(false)
+  const [backgroundPreset, setBackgroundPreset] = useState('navy')
+  const [changeEffect, setChangeEffect] = useState(false)
+  const [bgEffect, setBgEffect] = useState('shadow')
+  const [changeLabel, setChangeLabel] = useState(false)
+  const [labelAr, setLabelAr] = useState('')
+  const [changePublish, setChangePublish] = useState(false)
+  const [isPublished, setIsPublished] = useState(true)
+  const [changeSchedule, setChangeSchedule] = useState(false)
+  const [startsAt, setStartsAt] = useState('')
+  const [endsAt, setEndsAt] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const anyChangeSelected = changeFont || changeBg || changeEffect || changeLabel || changePublish || changeSchedule
+
+  async function handleSave() {
+    if (!anyChangeSelected) { setErr(isAr ? 'فعّل حقل واحد على الأقل عشان تغيّره' : 'Enable at least one field to change'); return }
+    if (changeSchedule && startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
+      setErr(isAr ? 'وقت النهاية لازم يكون بعد وقت البداية' : 'End time must be after start time')
+      return
+    }
+    const payload = {}
+    if (changeFont) payload.font = font
+    if (changeBg) { payload.background_preset = backgroundPreset; payload.background_image_url = '' }
+    if (changeEffect) payload.bg_effect = bgEffect
+    if (changeLabel) payload.label_ar = labelAr
+    if (changePublish) payload.is_published = isPublished
+    if (changeSchedule) {
+      payload.starts_at = startsAt ? new Date(startsAt).toISOString() : null
+      payload.ends_at = endsAt ? new Date(endsAt).toISOString() : null
+    }
+    setSaving(true); setErr('')
+    const { error } = await supabase.from('magazine_posts').update(payload).in('id', posts.map(p => p.id))
+    setSaving(false)
+    if (error) { setErr(error.message); return }
+    onSaved()
+  }
+
+  const row = { display: 'flex', alignItems: 'center', gap: 10 }
+  const checkboxLabel = { display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', fontWeight: 700, color: '#374151', cursor: 'pointer', minWidth: 150 }
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
+      <div>
+        <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#111827' }}>
+          {isAr ? `تعديل جماعي — ${posts.length} منشورات` : `Bulk edit — ${posts.length} posts`}
+        </p>
+        <p style={{ margin: '4px 0 0', fontSize: '0.76rem', color: '#6B7280' }}>
+          {TEMPLATES[template]?.badge} {isAr ? TEMPLATES[template]?.ar : TEMPLATES[template]?.en}
+        </p>
+      </div>
+      <p style={{ margin: 0, fontSize: '0.72rem', color: '#9CA3AF' }}>
+        {isAr ? 'فعّل فقط الحقول اللي تبي تغيّرها لكل المنشورات المحددة — الباقي يبقى كما هو لكل منشور' : 'Enable only the fields you want to change for all selected posts — everything else stays as-is per post'}
+      </p>
+
+      <div style={row}>
+        <label style={checkboxLabel}><input type="checkbox" checked={changeFont} onChange={e => setChangeFont(e.target.checked)} /> {isAr ? 'الخط' : 'Font'}</label>
+        {changeFont && (
+          <select style={inp} value={font} onChange={e => setFontVal(e.target.value)}>
+            {Object.entries(FONTS).map(([k, f]) => <option key={k} value={k}>{isAr ? f.ar : f.en}</option>)}
+          </select>
+        )}
+      </div>
+
+      <div style={row}>
+        <label style={checkboxLabel}><input type="checkbox" checked={changeBg} onChange={e => setChangeBg(e.target.checked)} /> {isAr ? 'الخلفية الجاهزة' : 'Preset background'}</label>
+        {changeBg && (
+          <select style={inp} value={backgroundPreset} onChange={e => setBackgroundPreset(e.target.value)}>
+            {PRESET_BACKGROUNDS.map(b => <option key={b.key} value={b.key}>{isAr ? b.ar : b.en}</option>)}
+          </select>
+        )}
+      </div>
+
+      <div style={row}>
+        <label style={checkboxLabel}><input type="checkbox" checked={changeEffect} onChange={e => setChangeEffect(e.target.checked)} /> {isAr ? 'تأثير الخلفية' : 'Background effect'}</label>
+        {changeEffect && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            {BG_EFFECT_ORDER.map(key => (
+              <button key={key} type="button" onClick={() => setBgEffect(key)}
+                style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, border: `1.5px solid ${bgEffect === key ? '#5B5BD6' : '#E5E7EB'}`, background: bgEffect === key ? '#EEF0FF' : '#fff', color: '#374151' }}>
+                {isAr ? BG_EFFECTS[key].ar : BG_EFFECTS[key].en}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={row}>
+        <label style={checkboxLabel}><input type="checkbox" checked={changeLabel} onChange={e => setChangeLabel(e.target.checked)} /> {isAr ? 'تسمية القالب المخصصة' : 'Custom template label'}</label>
+        {changeLabel && <input style={inp} value={labelAr} onChange={e => setLabelAr(e.target.value)} />}
+      </div>
+
+      <div style={row}>
+        <label style={checkboxLabel}><input type="checkbox" checked={changePublish} onChange={e => setChangePublish(e.target.checked)} /> {isAr ? 'حالة النشر' : 'Publish status'}</label>
+        {changePublish && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" onClick={() => setIsPublished(true)} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, border: `1.5px solid ${isPublished ? '#5B5BD6' : '#E5E7EB'}`, background: isPublished ? '#EEF0FF' : '#fff', color: '#374151' }}>{isAr ? 'منشور' : 'Published'}</button>
+            <button type="button" onClick={() => setIsPublished(false)} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, border: `1.5px solid ${!isPublished ? '#5B5BD6' : '#E5E7EB'}`, background: !isPublished ? '#EEF0FF' : '#fff', color: '#374151' }}>{isAr ? 'مسودة' : 'Draft'}</button>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label style={checkboxLabel}><input type="checkbox" checked={changeSchedule} onChange={e => setChangeSchedule(e.target.checked)} /> {isAr ? 'جدولة العرض' : 'Display schedule'}</label>
+        {changeSchedule && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
+            <Field label={isAr ? 'يبدأ في (٢٤ ساعة)' : 'Starts at (24h)'}>
+              <DateTimeField value={startsAt} onChange={setStartsAt} isAr={isAr} />
+            </Field>
+            <Field label={isAr ? 'ينتهي في (٢٤ ساعة)' : 'Ends at (24h)'}>
+              <DateTimeField value={endsAt} onChange={setEndsAt} isAr={isAr} />
+            </Field>
+          </div>
+        )}
+      </div>
+
+      {err && <p style={{ margin: 0, fontSize: '0.78rem', color: '#DC2626' }}>⚠ {err}</p>}
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={handleSave} disabled={saving}
+          style={{ background: '#5B5BD6', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>
+          {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? `تطبيق على ${posts.length}` : `Apply to ${posts.length}`)}
+        </button>
+        <button onClick={onCancel} style={{ background: '#F3F4F6', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {isAr ? 'إلغاء' : 'Cancel'}
+        </button>
       </div>
     </div>
   )
