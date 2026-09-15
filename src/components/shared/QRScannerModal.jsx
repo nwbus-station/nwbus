@@ -261,18 +261,29 @@ export default function QRScannerModal({
     scanTimer.current = setTimeout(runOCR, delay)
   }
 
+  // يسابق recognize() بمهلة — لو الووركر علّق (يصير أحياناً بعد فترة تشغيل طويلة أو
+  // صورة غريبة) بدون هذا كان busyRef يبقى true للأبد ويوقف القراءة كلياً إلى أن يقفل
+  // المستخدم الكاميرا ويرجع يفتحها من جديد
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('ocr-timeout')), ms)),
+    ])
+  }
+
   async function runOCR() {
     if (!activeRef.current || busyRef.current || !workerRef.current) {
       scheduleOCR(1200); return
     }
     const video = videoRef.current
     if (!video || video.readyState < 2) { scheduleOCR(800); return }
-    if (isColoredBackground(video)) { scheduleOCR(800); return }
+    // ما نتجاهل القراءة بسبب لون الخلفية — يمنع القراءة من شاشة جهاز ثاني (ألوان
+    // واجهة ملوّنة حوالين النص) رغم إن النص نفسه واضح ومقروء
     busyRef.current = true
     setIsProcessing(true)
     try {
       const proc = buildOCRCanvas(video)
-      const { data: { text } } = await workerRef.current.recognize(proc.toDataURL('image/jpeg', 0.88))
+      const { data: { text } } = await withTimeout(workerRef.current.recognize(proc.toDataURL('image/jpeg', 0.88)), 6000)
       if (!activeRef.current) return
       const ticket = pickTicketFromText(text)
       if (ticket) presentFound(ticket)
