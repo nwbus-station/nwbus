@@ -531,7 +531,7 @@ function ManagePanel({ posts, isAr, onChanged }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button onClick={() => setEditing('new')}
           style={{ background: '#5B5BD6', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          + {isAr ? 'Event جديد' : 'New Event'}
+          + {isAr ? 'جديد' : 'New'}
         </button>
         <button onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()); setBulkDeleting(false); setBulkErr('') }}
           style={{ background: selectMode ? '#111827' : '#F3F4F6', color: selectMode ? '#fff' : '#374151', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -966,7 +966,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
     <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
       <div style={{ background: '#fff', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#111827' }}>
-          {post ? (isAr ? 'تعديل Event' : 'Edit Event') : (isAr ? 'Event جديد' : 'New Event')}
+          {post ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'جديد' : 'New')}
         </p>
 
         <SectionCard title={isAr ? 'القالب' : 'Template'}>
