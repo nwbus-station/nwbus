@@ -277,8 +277,7 @@ export default function QRScannerModal({
     }
     const video = videoRef.current
     if (!video || video.readyState < 2) { scheduleOCR(800); return }
-    // ما نتجاهل القراءة بسبب لون الخلفية — يمنع القراءة من شاشة جهاز ثاني (ألوان
-    // واجهة ملوّنة حوالين النص) رغم إن النص نفسه واضح ومقروء
+    if (isColoredBackground(video)) { scheduleOCR(800); return }
     busyRef.current = true
     setIsProcessing(true)
     try {
