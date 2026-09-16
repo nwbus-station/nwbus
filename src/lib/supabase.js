@@ -14,4 +14,11 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     detectSessionInUrl: false,
   },
+  global: {
+    // كان بعض التعديلات ما يظهر فوراً بالصفحات (زي تعديل موظف أو إضافة رحلة) إلا
+    // بعد تحديث كامل للمتصفح — متصفحات معينة تكاش طلبات GET لنفس الرابط حتى بدون
+    // ترويسة Cache-Control صريحة من السيرفر. نجبر كل طلب لسوبابيس يتجاوز كاش
+    // المتصفح نهائياً بدل ما نحاول نتحكم بترويسة كل استعلام لحاله
+    fetch: (url, options = {}) => fetch(url, { ...options, cache: 'no-store' }),
+  },
 })

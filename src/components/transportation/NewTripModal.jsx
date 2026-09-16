@@ -291,7 +291,7 @@ export default function NewTripModal({ isAr, onClose, onCreated, editTrip }) {
           .upsert(rows, { onConflict: 'station_id,trip_schedule_id' })
         if (eup) throw eup
 
-        onCreated?.()
+        await onCreated?.()
         onClose()
       } catch (err) {
         const dupErr = /duplicate key|unique constraint/i.test(err.message || '')
@@ -401,7 +401,7 @@ export default function NewTripModal({ isAr, onClose, onCreated, editTrip }) {
         if (r4) throw r4
       }
 
-      onCreated?.()
+      await onCreated?.()
       onClose()
     } catch (err) {
       // تنظيف: لا نُبقي رحلة ناقصة
