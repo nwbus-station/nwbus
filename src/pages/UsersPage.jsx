@@ -1113,8 +1113,16 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
             )}
 
 
-            {isGeneralAdmin && user?.id && form.role === 'shift_supervisor' && (
-              <ShiftSupervisorAssignments userId={user.id} stationId={primaryStation()} isAr={isAr} />
+            {isGeneralAdmin && form.role === 'shift_supervisor' && (
+              user?.id ? (
+                <ShiftSupervisorAssignments userId={user.id} stationId={primaryStation()} isAr={isAr} />
+              ) : (
+                <p className="text-xs text-amber-600 mt-2">
+                  {isAr
+                    ? 'احفظ الموظف الجديد أولاً، ثم افتحه للتعديل عشان تقدر تحدد الموظفين اللي يقيّمهم'
+                    : 'Save the new employee first, then reopen them for editing to assign who they evaluate'}
+                </p>
+              )
             )}
           </Section>
           </div>
