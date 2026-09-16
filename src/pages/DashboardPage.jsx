@@ -489,7 +489,7 @@ export default function DashboardPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 28px' }}>
 
         {/* تنبيه إجازات معلقة */}
-        {isAdmin && pendingLeaves.length > 0 && (
+        {(isAdmin || profile?.role === 'station_admin') && pendingLeaves.length > 0 && (
           <button onClick={() => navigate('/leaves?tab=pending')}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', gap: 14,
