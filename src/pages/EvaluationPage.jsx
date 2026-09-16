@@ -483,7 +483,11 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
     onSave()
   }
 
-  const readonly = !!existing && !isAdmin
+  // غير الأدمن (مشرف محطة/منطقة/وردية) يقدر يعدّل تقييمه المحفوظ طالما لسا بنفس شهر
+  // التقييم الحالي — بمجرد ما يتعدى الشهر (نطّلع لشهر بعده) يثبت التقييم القديم ويصير للقراءة فقط
+  const now = new Date()
+  const isCurrentEvalPeriod = month === now.getMonth() + 1 && year === now.getFullYear()
+  const readonly = !!existing && !isAdmin && !isCurrentEvalPeriod
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
