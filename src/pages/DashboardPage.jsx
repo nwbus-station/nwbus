@@ -358,21 +358,23 @@ export default function DashboardPage() {
   /* ── إجازات معلقة ── */
   const [pendingLeaves, setPendingLeaves] = useState([])
   useEffect(() => {
-    if (!profile?.id || !isAdmin) return
+    // مشرف المحطة له نفس معاملة مشرف المنطقة (وليس بس الأدمن) — المسمى يختلف فقط
+    const canSeePending = isAdmin || profile?.role === 'station_admin'
+    if (!profile?.id || !canSeePending) return
     async function load() {
       const key = `dash_leaves_${profile.id}_${profile.role}`
       const cached = getCached(key)
       if (cached) setPendingLeaves(cached)
       let q = supabase.from('leaves').select('id, employee_name, station_id').eq('status', 'pending').order('created_at', { ascending: false })
-      if (profile.role === 'station_admin' && profile.station_id) q = q.eq('station_id', profile.station_id)
-      else if (profile.role === 'area_supervisor' && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
+      if ((profile.role === 'area_supervisor' || profile.role === 'station_admin') && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
+      else if (profile.role === 'station_admin' && profile.station_id) q = q.eq('station_id', profile.station_id)
       const { data, error } = await q
       if (!error && data) { setCached(key, data); setPendingLeaves(data) }
     }
     load()
     const ch = supabase.channel('dash-leaves').on('postgres_changes', { event: '*', schema: 'public', table: 'leaves' }, load).subscribe()
     return () => supabase.removeChannel(ch)
-  }, [profile?.id, profile?.role, profile?.station_id, isAdmin])
+  }, [profile?.id, profile?.role, profile?.station_id, isAdmin, allowedStationIds])
 
   /* ── إشعارات ── */
   const [notifs, setNotifs]           = useState([])

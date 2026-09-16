@@ -777,11 +777,11 @@ export default function SalesPage() {
     if (isGeneralAdmin) {
       supabase.from('stations').select('id,name_ar,name_en').eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
-    } else if (isAreaSupervisor && allowedStationIds?.length) {
+    } else if ((isAreaSupervisor || isStationAdmin) && allowedStationIds?.length) {
       supabase.from('stations').select('id,name_ar,name_en').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     }
-  }, [isGeneralAdmin, isAreaSupervisor, allowedStationIds])
+  }, [isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds])
 
   async function handleDelete(id) {
     setConfirmDel(id)
@@ -809,7 +809,7 @@ export default function SalesPage() {
     // ── Privacy filters ──────────────────────────────────
     if (isGeneralAdmin) {
       if (filterStation) q = q.eq('station_id', filterStation)
-    } else if (isAreaSupervisor && allowedStationIds?.length) {
+    } else if ((isAreaSupervisor || isStationAdmin) && allowedStationIds?.length) {
       const ids = filterStation ? [filterStation] : allowedStationIds
       q = q.in('station_id', ids)
     } else if (isStationAdmin || isAccountant) {
@@ -860,6 +860,7 @@ export default function SalesPage() {
           <h1 className="text-xl font-bold text-nwbus-primary">{isAr ? 'الإيرادات' : 'Revenue'}</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             {isGeneralAdmin ? (isAr ? 'جميع المحطات' : 'All stations')
+              : (isAreaSupervisor || isStationAdmin) && allowedStationIds?.length > 1 ? (isAr ? 'محطاتك المخصصة' : 'Your assigned stations')
               : isStationAdmin || isAccountant ? (isAr ? 'محطتك فقط' : 'Your station only')
               : (isAr ? 'مبيعاتك الخاصة' : 'Your own entries')}
           </p>
@@ -877,7 +878,7 @@ export default function SalesPage() {
         <span className="text-xs text-gray-400">{isAr ? 'التاريخ:' : 'Date:'}</span>
         <DatePicker value={filterDate} onChange={setFilterDate} isAr={isAr}
           className="border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
-        {(isGeneralAdmin || isAreaSupervisor) && stations.length > 0 && (
+        {(isGeneralAdmin || isAreaSupervisor || isStationAdmin) && stations.length > 0 && (
           <>
             <span className="text-xs text-gray-400">{isAr ? 'المحطة:' : 'Station:'}</span>
             <select value={filterStation} onChange={e => setStation(e.target.value)}

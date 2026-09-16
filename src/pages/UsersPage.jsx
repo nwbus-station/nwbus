@@ -1292,8 +1292,9 @@ export default function UsersPage() {
       .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, peer_supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, hire_date, is_accountant, is_agent, can_rate_customers, leave_balance_override, leave_balance_override_date, created_at, last_login, station:station_id(name_ar, name_en)')
       .order('created_at', { ascending: false })
 
-    // Station admin only sees users of their station; area supervisor sees their assigned stations
-    if (isAreaSupervisor && allowedStationIds?.length) {
+    // مشرف المحطة ومشرف المنطقة نفس المعاملة — كل محطاتهم المخصصة بـ user_stations
+    // (المسمى يختلف فقط، مو نطاق الصلاحية). عودة لمحطته الأساسية فقط لو ما فيه محطات مخصصة أصلاً
+    if ((isAreaSupervisor || isStationAdmin) && !isGeneralAdmin && allowedStationIds?.length) {
       usersQuery = usersQuery.in('station_id', allowedStationIds)
     } else if (isStationAdmin && !isGeneralAdmin) {
       usersQuery = usersQuery.eq('station_id', profile.station_id)
@@ -1700,8 +1701,8 @@ export default function UsersPage() {
             </select>
           )}
 
-          {/* Station — للأدمن ومشرف المنطقة */}
-          {(isGeneralAdmin || isAreaSupervisor) && stations.length > 1 && (
+          {/* Station — للأدمن ومشرف المنطقة/المحطة (لو معه أكثر من محطة مخصصة) */}
+          {(isGeneralAdmin || isAreaSupervisor || isStationAdmin) && stations.length > 1 && (
             <select value={stationFilter} onChange={e => setStationFilter(e.target.value)}
               className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
               style={{ fontFamily: 'inherit' }}>

@@ -1195,14 +1195,14 @@ export default function LeavePage() {
     if (tab === 'pending') {
       if (isAdmin) {
         q = q.eq('status', 'pending')
-      } else if (isAreaSupervisor && allowedStationIds?.length) {
+      } else if ((isAreaSupervisor || role === 'station_admin') && allowedStationIds?.length) {
         q = q.eq('supervisor_status', 'pending').in('station_id', allowedStationIds)
       } else if (isSupervisor) {
         q = q.eq('supervisor_status', 'pending').eq('station_id', profile.station_id)
       }
     }
     if (tab === 'all' && !isAdmin) {
-      if (isAreaSupervisor && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
+      if ((isAreaSupervisor || role === 'station_admin') && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
       else q = q.eq('station_id', profile.station_id)
     }
     const { data } = await q
@@ -1218,7 +1218,7 @@ export default function LeavePage() {
       .select('id, full_name_ar, hire_date, station_id, leave_balance_override, leave_balance_override_date, station:station_id(name_ar, name_en)')
       .eq('is_active', true).order('full_name_ar')
     if (!isGeneralAdmin) {
-      if (isAreaSupervisor && allowedStationIds?.length) uq = uq.in('station_id', allowedStationIds)
+      if ((isAreaSupervisor || role === 'station_admin') && allowedStationIds?.length) uq = uq.in('station_id', allowedStationIds)
       else uq = uq.eq('station_id', profile.station_id)
     }
     const { data: emps } = await uq

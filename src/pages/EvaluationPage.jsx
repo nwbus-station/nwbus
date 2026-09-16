@@ -897,8 +897,14 @@ export default function EvaluationPage() {
         .eq('is_active', true)
       if (!isAdmin) {
         q = q.eq('role', 'station_employee')
-        const stationId = profile?.station_id || profile?.station?.id
-        if (stationId) q = q.eq('station_id', stationId)
+        // مشرف المحطة له نفس معاملة مشرف المنطقة بالضبط لو معه أكثر من محطة مخصصة —
+        // الفرق بينهم مسمى فقط، مو نطاق صلاحية
+        if (allowedStationIds?.length) {
+          q = q.in('station_id', allowedStationIds)
+        } else {
+          const stationId = profile?.station_id || profile?.station?.id
+          if (stationId) q = q.eq('station_id', stationId)
+        }
       } else if (!isGeneralAdmin && allowedStationIds?.length) {
         // area_supervisor — فقط موظفو محطاته
         q = q.in('station_id', allowedStationIds)
@@ -946,12 +952,11 @@ export default function EvaluationPage() {
       promises.push(evq.then(r => setSupEvals(r.data || [])))
     }
 
-    // المحطات — مشرف المنطقة يشوف كل محطاته المخصصة، بس مشرف المحطة يشوف محطته
-    // الأساسية بس حتى لو معه محطات إضافية بجدول user_stations (تلك لأغراض ثانية،
-    // مو لتوسيع نطاق التقييم)
+    // المحطات — مشرف المنطقة ومشرف المحطة نفس المعاملة بالضبط: كل محطاتهم المخصصة
+    // بجدول user_stations (المسمى يختلف فقط، مو نطاق الصلاحية)
     if (canEvalStn) {
       let q = supabase.from('stations').select('id, name_ar, name_en')
-      if (isAreaSupervisor && allowedStationIds?.length) {
+      if ((isAreaSupervisor || profile?.role === 'station_admin') && allowedStationIds?.length) {
         q = q.in('id', allowedStationIds)
       } else if (profile?.role === 'station_admin') {
         const stationId = profile?.station_id || profile?.station?.id
@@ -970,7 +975,7 @@ export default function EvaluationPage() {
     // تقييمات المحطات
     if (canEvalStn) {
       let q = supabase.from('station_evaluations').select('*, evaluator:evaluator_id(full_name_ar, role)').eq('eval_month', selMonth).eq('eval_year', selYear)
-      if (isAreaSupervisor && allowedStationIds?.length) {
+      if ((isAreaSupervisor || profile?.role === 'station_admin') && allowedStationIds?.length) {
         q = q.in('station_id', allowedStationIds)
       } else if (profile?.role === 'station_admin') {
         const stationId = profile?.station_id || profile?.station?.id
