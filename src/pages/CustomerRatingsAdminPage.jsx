@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { todayStr } from '../utils/dates'
 import { escapeHtml } from '../utils/digits'
+import DatePicker from '../components/shared/DatePicker'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ' },
   { value: 'B', ar: 'الوردية ب' },
   { value: 'C', ar: 'الوردية ج' },
 ]
+
+const JOB_TITLE_AR = { customer_service: 'خدمة عملاء', dispatcher: 'مرحّل' }
 
 export default function CustomerRatingsAdminPage() {
   const [tab, setTab] = useState('ratings') // 'ratings' | 'messages'
@@ -34,9 +37,11 @@ export default function CustomerRatingsAdminPage() {
 function RatingsTab() {
   const [rows, setRows] = useState([])
   const [stations, setStations] = useState([])
+  const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [stationFilter, setStationFilter] = useState('')
   const [shiftFilter, setShiftFilter] = useState('')
+  const [employeeFilter, setEmployeeFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState(todayStr())
   const [sortBy, setSortBy] = useState('date') // 'date' | 'best' | 'worst'
@@ -45,14 +50,25 @@ function RatingsTab() {
     supabase.from('stations').select('id, name_ar').order('name_ar').then(({ data }) => setStations(data || []))
   }, [])
 
-  useEffect(() => { load() }, [stationFilter, shiftFilter, dateFrom, dateTo])
+  // موظفو خدمة العملاء/الترحيل — نطاقهم يضيق مع فلتر المحطة، ونمسح تحديد الموظف
+  // لو تغيّرت المحطة عشان ما يبقى محدد موظف من محطة ثانية
+  useEffect(() => {
+    let q = supabase.from('users').select('id, full_name_ar, job_number, job_title, station_id')
+      .in('job_title', ['customer_service', 'dispatcher']).eq('is_active', true)
+    if (stationFilter) q = q.eq('station_id', stationFilter)
+    q.order('full_name_ar').then(({ data }) => setEmployees(data || []))
+    setEmployeeFilter('')
+  }, [stationFilter])
+
+  useEffect(() => { load() }, [stationFilter, shiftFilter, employeeFilter, dateFrom, dateTo])
 
   function load() {
     setLoading(true)
     let q = supabase.from('customer_ratings')
-      .select('id, window_number, shift, ticket_number, reference_number, ticket_date, rating, comment, created_at, employee:employee_id(full_name_ar), station:station_id(name_ar)')
+      .select('id, window_number, shift, ticket_number, reference_number, ticket_date, rating, comment, created_at, employee:employee_id(full_name_ar, job_number, job_title), station:station_id(name_ar)')
     if (stationFilter) q = q.eq('station_id', stationFilter)
     if (shiftFilter) q = q.eq('shift', shiftFilter)
+    if (employeeFilter) q = q.eq('employee_id', employeeFilter)
     if (dateFrom) q = q.gte('created_at', dateFrom)
     if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
     q.order('created_at', { ascending: false }).limit(2000).then(({ data, error }) => {
@@ -70,30 +86,85 @@ function RatingsTab() {
   const avg = rows.length ? (rows.reduce((s, r) => s + r.rating, 0) / rows.length).toFixed(1) : '—'
 
   function printReport() {
-    const rowsHtml = sorted.map(r => `<tr>
-      <td>${escapeHtml(r.employee?.full_name_ar) || '—'}</td>
-      <td>${escapeHtml(r.station?.name_ar) || '—'}</td>
-      <td>${escapeHtml(r.window_number) || '—'}</td>
-      <td>${r.rating} / 5</td>
-      <td>${escapeHtml(r.ticket_number) || '—'}</td>
-      <td>${escapeHtml(r.reference_number) || '—'}</td>
-      <td>${r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA') : '—'}</td>
-      <td>${new Date(r.created_at).toLocaleDateString('ar-SA')}</td>
-      <td>${escapeHtml(r.comment)}</td>
-    </tr>`).join('')
-    const w = window.open('', '_blank')
-    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير تقييم العملاء</title>
+    const selectedEmployee = employeeFilter ? employees.find(e => e.id === employeeFilter) : null
+    const selectedStation = stationFilter ? stations.find(s => s.id === stationFilter) : null
+    const showEmpCol = !selectedEmployee
+
+    const rowsHtml = sorted.map((r, i) => `
+      <tr style="background:${i % 2 ? '#F9FAFB' : '#fff'}">
+        <td style="padding:9px 12px;text-align:center;color:#9CA3AF;font-size:11px;border:1px solid #EEF0F3">${i + 1}</td>
+        ${showEmpCol ? `<td style="padding:9px 12px;font-weight:700;color:#111827;font-size:13px;border:1px solid #EEF0F3">${escapeHtml(r.employee?.full_name_ar) || '—'}</td>` : ''}
+        <td style="padding:9px 12px;color:#6B7280;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(r.station?.name_ar) || '—'}</td>
+        <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(r.window_number) || '—'}</td>
+        <td style="padding:9px 12px;text-align:center;border:1px solid #EEF0F3">
+          <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;${r.rating >= 4 ? 'background:#F0FDF4;color:#16A34A' : r.rating === 3 ? 'background:#FFFBEB;color:#B45309' : 'background:#FEF2F2;color:#DC2626'}">${r.rating} / 5</span>
+        </td>
+        <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(r.ticket_number) || '—'}</td>
+        <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#9CA3AF;font-size:11px;border:1px solid #EEF0F3">${escapeHtml(r.reference_number) || '—'}</td>
+        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA') : '—'}</td>
+        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${new Date(r.created_at).toLocaleDateString('ar-SA')}</td>
+        <td style="padding:9px 12px;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${escapeHtml(r.comment) || ''}</td>
+      </tr>`).join('')
+
+    // صندوق السياق — بيانات الموظف كاملة لو التقرير لموظف واحد، وإلا اسم المحطة
+    const contextBoxHtml = selectedEmployee ? `
+      <div style="background:#1C2B36;color:#fff;padding:16px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+          <div style="font-size:16px;font-weight:800">${escapeHtml(selectedEmployee.full_name_ar)}</div>
+          <div style="font-size:11px;opacity:0.75;margin-top:4px">
+            ${selectedEmployee.job_number ? `الرقم الوظيفي: ${escapeHtml(selectedEmployee.job_number)} · ` : ''}${JOB_TITLE_AR[selectedEmployee.job_title] || ''}${selectedStation ? ` · ${escapeHtml(selectedStation.name_ar)}` : ''}
+          </div>
+        </div>
+        <div style="text-align:left">
+          <div style="font-size:20px;font-weight:800;color:#F59E0B">${avg} / 5</div>
+          <div style="font-size:10px;opacity:0.7">${rows.length} تقييم</div>
+        </div>
+      </div>` : `
+      <div style="background:#1C2B36;color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+          <div style="font-size:15px;font-weight:800">تقرير تقييم العملاء${selectedStation ? ` — ${escapeHtml(selectedStation.name_ar)}` : ''}</div>
+          <div style="font-size:10px;opacity:0.7;margin-top:3px">${rows.length} تقييم · المتوسط ${avg} / 5 · ${new Date().toLocaleDateString('ar-SA')}</div>
+        </div>
+        <div style="font-size:12px;font-weight:800;letter-spacing:1px">NORTH WEST BUS</div>
+      </div>`
+
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>تقرير تقييم العملاء</title>
       <style>
-        body{font-family:Arial, sans-serif; padding:24px}
-        h2{color:#1C2B4A}
-        table{width:100%; border-collapse:collapse; font-size:12px}
-        th,td{border:1px solid #ddd; padding:6px 8px; text-align:right}
-        th{background:#1C2B4A; color:#fff}
+        *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+        body{margin:0;font-family:Arial,sans-serif;background:#fff;color:#1a1a1a}
+        @page{size:A4 landscape;margin:10mm}
+        @media print{.no-print{display:none!important}}
+        table{width:100%;border-collapse:collapse}
+        th{background:#F9FAFB;color:#6B7280;padding:8px 12px;font-size:11px;font-weight:700;text-align:right;border-bottom:1.5px solid #E5E7EB}
       </style></head><body>
-      <h2>تقرير تقييم العملاء — إجمالي: ${rows.length} · المتوسط: ${avg}</h2>
-      <table><thead><tr><th>الموظف</th><th>المحطة</th><th>الشباك</th><th>التقييم</th><th>رقم التذكرة</th><th>رقم المرجع</th><th>تاريخ التذكرة</th><th>تاريخ التقييم</th><th>ملاحظة</th></tr></thead>
-      <tbody>${rowsHtml}</tbody></table>
-      <script>window.print()</script></body></html>`)
+      <div class="no-print" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 20px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
+        <span style="font-size:12.5px;font-weight:700;color:#1C2B4A;letter-spacing:0.04em">NORTH WEST BUS — معاينة قبل الطباعة</span>
+        <button onclick="window.print()" style="display:inline-flex;align-items:center;gap:7px;background:#1C2B4A;color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(28,43,74,0.25)">
+          🖨 طباعة / حفظ PDF
+        </button>
+      </div>
+      <div style="padding:24px 28px">
+        ${contextBoxHtml}
+        <table>
+          <thead><tr>
+            <th style="width:36px;text-align:center">#</th>
+            ${showEmpCol ? '<th>الموظف</th>' : ''}
+            <th>المحطة</th>
+            <th style="text-align:center">الشباك</th>
+            <th style="text-align:center">التقييم</th>
+            <th style="text-align:center">رقم التذكرة</th>
+            <th style="text-align:center">رقم المرجع</th>
+            <th style="text-align:center">تاريخ التذكرة</th>
+            <th style="text-align:center">تاريخ التقييم</th>
+            <th>ملاحظة</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </body></html>`
+
+    const w = window.open('', '_blank')
+    w.document.write(html)
     w.document.close()
   }
 
@@ -108,16 +179,22 @@ function RatingsTab() {
           <option value="">كل الورديات</option>
           {SHIFTS.map(s => <option key={s.value} value={s.value}>{s.ar}</option>)}
         </select>
-        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
+        <select value={employeeFilter} onChange={e => setEmployeeFilter(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
+          <option value="">{stationFilter ? 'كل موظفي المحطة' : 'كل الموظفين'}</option>
+          {employees.map(e => (
+            <option key={e.id} value={e.id}>{e.full_name_ar}{e.job_number ? ` (${e.job_number})` : ''}</option>
+          ))}
+        </select>
+        <DatePicker value={dateFrom} onChange={setDateFrom} className="border rounded-lg px-3 py-2 text-sm" placeholder="من تاريخ" />
         <span className="text-gray-400 text-sm">إلى</span>
-        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
+        <DatePicker value={dateTo} onChange={setDateTo} className="border rounded-lg px-3 py-2 text-sm" placeholder="إلى تاريخ" />
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
           <option value="date">الأحدث</option>
           <option value="best">الأعلى تقييماً</option>
           <option value="worst">الأقل تقييماً</option>
         </select>
         <button onClick={printReport} className="mr-auto bg-nwbus-primary text-white rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90">
-          طباعة التقرير
+          🖨 {employeeFilter ? 'طباعة تقرير الموظف' : stationFilter ? 'طباعة تقرير المحطة' : 'طباعة التقرير'}
         </button>
       </div>
 
