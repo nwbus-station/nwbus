@@ -1294,15 +1294,19 @@ export default function UsersPage() {
 
     // مشرف المحطة ومشرف المنطقة نفس المعاملة — كل محطاتهم المخصصة بـ user_stations
     // (المسمى يختلف فقط، مو نطاق الصلاحية). عودة لمحطته الأساسية فقط لو ما فيه محطات مخصصة أصلاً
+    let stationsQuery = supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
     if ((isAreaSupervisor || isStationAdmin) && !isGeneralAdmin && allowedStationIds?.length) {
       usersQuery = usersQuery.in('station_id', allowedStationIds)
+      // نفس التقييد على قائمة المحطات نفسها — القائمة/الفلتر يعرضون محطاته المخصصة بس، مو كل محطات الشبكة
+      stationsQuery = stationsQuery.in('id', allowedStationIds)
     } else if (isStationAdmin && !isGeneralAdmin) {
       usersQuery = usersQuery.eq('station_id', profile.station_id)
+      stationsQuery = stationsQuery.eq('id', profile.station_id)
     }
 
     const [{ data: u }, { data: s }] = await Promise.all([
       usersQuery,
-      supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar'),
+      stationsQuery,
     ])
     const filteredStations = (s ?? []).filter(st => !isRestStation(st))
     if (u && isGeneralAdmin) {
