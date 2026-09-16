@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { todayStr } from '../utils/dates'
-import { escapeHtml } from '../utils/digits'
+import { escapeHtml, toLatinDigits } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
 
 const SHIFTS = [
@@ -11,6 +11,56 @@ const SHIFTS = [
 ]
 
 const JOB_TITLE_AR = { customer_service: 'خدمة عملاء', dispatcher: 'مرحّل' }
+
+// قائمة موظفين قابلة للبحث بالاسم أو الرقم الوظيفي — بديل عن <select> عادي لما تكون
+// القائمة طويلة (كل من عنده صلاحية "يُقيّم من العميل" بكل المحطات)
+function EmployeePicker({ employees, value, onChange, defaultLabel }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const ref = useRef(null)
+  const selected = employees.find(e => e.id === value)
+
+  useEffect(() => {
+    if (!open) return
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  const q = toLatinDigits(query).trim().toLowerCase()
+  const filtered = !q ? employees : employees.filter(e =>
+    (e.full_name_ar || '').toLowerCase().includes(q) || toLatinDigits(e.job_number || '').includes(q)
+  )
+
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button" onClick={() => { setOpen(o => !o); setQuery('') }}
+        className="border rounded-lg px-3 py-2 text-sm bg-white text-right w-48 truncate">
+        {selected ? `${selected.full_name_ar}${selected.job_number ? ` (${selected.job_number})` : ''}` : defaultLabel}
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 p-2">
+          <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
+            placeholder="بحث بالاسم أو الرقم الوظيفي..."
+            className="w-full border rounded-lg px-3 py-1.5 text-sm mb-2" />
+          <div className="max-h-56 overflow-y-auto">
+            <button type="button" onClick={() => { onChange(''); setOpen(false) }}
+              className={`block w-full text-right px-2 py-1.5 rounded-lg text-sm hover:bg-gray-50 ${!value ? 'font-bold text-nwbus-primary' : 'text-gray-700'}`}>
+              {defaultLabel}
+            </button>
+            {filtered.map(e => (
+              <button key={e.id} type="button" onClick={() => { onChange(e.id); setOpen(false) }}
+                className={`block w-full text-right px-2 py-1.5 rounded-lg text-sm hover:bg-gray-50 ${value === e.id ? 'font-bold text-nwbus-primary' : 'text-gray-700'}`}>
+                {e.full_name_ar}{e.job_number ? ` (${e.job_number})` : ''}
+              </button>
+            ))}
+            {filtered.length === 0 && <p className="text-xs text-gray-400 text-center py-3">لا يوجد نتائج</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CustomerRatingsAdminPage() {
   const [tab, setTab] = useState('ratings') // 'ratings' | 'messages'
@@ -50,11 +100,12 @@ function RatingsTab() {
     supabase.from('stations').select('id, name_ar').order('name_ar').then(({ data }) => setStations(data || []))
   }, [])
 
-  // موظفو خدمة العملاء/الترحيل — نطاقهم يضيق مع فلتر المحطة، ونمسح تحديد الموظف
-  // لو تغيّرت المحطة عشان ما يبقى محدد موظف من محطة ثانية
+  // أي حساب مفعّل له "يُقيّم من العميل" — مو بس خدمة عملاء/ترحيل، ممكن يكون مشرف
+  // مفعّل له نفس الخاصية. نطاقهم يضيق مع فلتر المحطة، ونمسح تحديد الموظف لو تغيّرت
+  // المحطة عشان ما يبقى محدد موظف من محطة ثانية
   useEffect(() => {
     let q = supabase.from('users').select('id, full_name_ar, job_number, job_title, station_id')
-      .in('job_title', ['customer_service', 'dispatcher']).eq('is_active', true)
+      .eq('can_rate_customers', true).eq('is_active', true)
     if (stationFilter) q = q.eq('station_id', stationFilter)
     q.order('full_name_ar').then(({ data }) => setEmployees(data || []))
     setEmployeeFilter('')
@@ -179,12 +230,8 @@ function RatingsTab() {
           <option value="">كل الورديات</option>
           {SHIFTS.map(s => <option key={s.value} value={s.value}>{s.ar}</option>)}
         </select>
-        <select value={employeeFilter} onChange={e => setEmployeeFilter(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
-          <option value="">{stationFilter ? 'كل موظفي المحطة' : 'كل الموظفين'}</option>
-          {employees.map(e => (
-            <option key={e.id} value={e.id}>{e.full_name_ar}{e.job_number ? ` (${e.job_number})` : ''}</option>
-          ))}
-        </select>
+        <EmployeePicker employees={employees} value={employeeFilter} onChange={setEmployeeFilter}
+          defaultLabel={stationFilter ? 'كل موظفي المحطة' : 'كل الموظفين'} />
         <DatePicker value={dateFrom} onChange={setDateFrom} className="border rounded-lg px-3 py-2 text-sm" placeholder="من تاريخ" />
         <span className="text-gray-400 text-sm">إلى</span>
         <DatePicker value={dateTo} onChange={setDateTo} className="border rounded-lg px-3 py-2 text-sm" placeholder="إلى تاريخ" />
