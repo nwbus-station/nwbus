@@ -838,7 +838,7 @@ function PrintDropdown({ isAr, onSelect }) {
 }
 
 export default function EvaluationPage() {
-  const { profile, isAdmin, isGeneralAdmin, allowedStationIds } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds } = useAuth()
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
   const canEvalEmp = [...ADMIN_ROLE_VALUES,'station_admin','shift_supervisor','area_supervisor'].includes(profile?.role)
@@ -946,10 +946,17 @@ export default function EvaluationPage() {
       promises.push(evq.then(r => setSupEvals(r.data || [])))
     }
 
-    // المحطات
+    // المحطات — مشرف المنطقة يشوف كل محطاته المخصصة، بس مشرف المحطة يشوف محطته
+    // الأساسية بس حتى لو معه محطات إضافية بجدول user_stations (تلك لأغراض ثانية،
+    // مو لتوسيع نطاق التقييم)
     if (canEvalStn) {
       let q = supabase.from('stations').select('id, name_ar, name_en')
-      if (!isGeneralAdmin && allowedStationIds?.length) q = q.in('id', allowedStationIds)
+      if (isAreaSupervisor && allowedStationIds?.length) {
+        q = q.in('id', allowedStationIds)
+      } else if (profile?.role === 'station_admin') {
+        const stationId = profile?.station_id || profile?.station?.id
+        if (stationId) q = q.eq('id', stationId)
+      }
       promises.push(q.then(r => setStations((r.data || []).sort((a,b) => a.name_ar.localeCompare(b.name_ar, 'ar')))))
     }
 
@@ -963,7 +970,12 @@ export default function EvaluationPage() {
     // تقييمات المحطات
     if (canEvalStn) {
       let q = supabase.from('station_evaluations').select('*, evaluator:evaluator_id(full_name_ar, role)').eq('eval_month', selMonth).eq('eval_year', selYear)
-      if (!isGeneralAdmin && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
+      if (isAreaSupervisor && allowedStationIds?.length) {
+        q = q.in('station_id', allowedStationIds)
+      } else if (profile?.role === 'station_admin') {
+        const stationId = profile?.station_id || profile?.station?.id
+        if (stationId) q = q.eq('station_id', stationId)
+      }
       promises.push(q.then(r => setStnEvals(r.data || [])))
     }
 
@@ -987,7 +999,7 @@ export default function EvaluationPage() {
 
     await Promise.all(promises)
     setLoading(false)
-  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor])
+  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor])
 
   useEffect(() => { load() }, [load])
 
