@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * تقويم ميلادي عربي ثابت — بديل موحّد عن <input type="date"> في كل الصفحات.
@@ -34,6 +35,8 @@ export default function DatePicker({ value, onChange, className = '', isAr = tru
     ? { y: sel.y, m: sel.m }
     : { y: today.getFullYear(), m: today.getMonth() })
   const ref = useRef(null)
+  const panelRef = useRef(null)
+  const [pos, setPos] = useState(null) // { top, left|right } — بالإحداثيات المطلقة بالصفحة، للتقويم المنبثق (portal)
 
   // مزامنة العرض عند تغيّر القيمة من الخارج
   useEffect(() => {
@@ -41,13 +44,40 @@ export default function DatePicker({ value, onChange, className = '', isAr = tru
     if (s) setView({ y: s.y, m: s.m })
   }, [value])
 
-  // إغلاق عند الضغط خارج التقويم
+  // إغلاق عند الضغط خارج التقويم — التقويم نفسه أصبح منبثقاً (portal) خارج شجرة العنصر،
+  // فلازم نتحقق من عنصريه الاثنين (الحقل والتقويم المنبثق) مو بس الحقل
   useEffect(() => {
     if (!open) return
-    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) { setOpen(false) } }
+    function onDoc(e) {
+      if (ref.current?.contains(e.target)) return
+      if (panelRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
+
+  // نحسب موضع التقويم بإحداثيات الصفحة (fixed) بدل الاعتماد على absolute داخل الحقل —
+  // absolute كان يخرج من حاوية الـmodal اللي فيها overflow-y-auto (لأن CSS يفرض overflow-x:
+  // auto تلقائياً بمجرد ما overflow-y يصير auto)، فيتقص التقويم على حافة الحاوية بدل ما يطفو
+  // فوقها، وتظهر أقل من ٧ أعمدة أيام حسب مكان الحقل بالصفحة
+  useLayoutEffect(() => {
+    if (!open || inline) return
+    function place() {
+      const r = ref.current?.getBoundingClientRect()
+      if (!r) return
+      const top = r.bottom + 4
+      if (isAr) setPos({ top, right: window.innerWidth - r.right })
+      else setPos({ top, left: r.left })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open, inline, isAr])
 
   const months = isAr ? MONTHS_AR : MONTHS_EN
   const dow = isAr ? DOW_AR : DOW_EN
@@ -94,9 +124,12 @@ export default function DatePicker({ value, onChange, className = '', isAr = tru
 
   const cellCls = inline ? 'py-0.5 text-[11px]' : 'py-1 text-xs'
   const panel = (
-        <div className={inline
-          ? 'w-52 bg-white rounded-lg border border-gray-200 p-2 select-none'
-          : 'absolute z-50 mt-1 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 p-2.5 select-none'}>
+        <div ref={inline ? undefined : panelRef}
+          dir={inline ? undefined : (isAr ? 'rtl' : 'ltr')}
+          className={inline
+            ? 'w-52 bg-white rounded-lg border border-gray-200 p-2 select-none'
+            : 'w-64 bg-white rounded-xl shadow-2xl border border-gray-100 p-2.5 select-none'}
+          style={inline ? undefined : { position: 'fixed', zIndex: 9999, top: pos?.top ?? 0, left: pos?.left, right: pos?.right, visibility: pos ? 'visible' : 'hidden' }}>
           {/* الرأس — dropdowns مباشرة */}
           <div className="flex items-center justify-between mb-2 gap-1">
             <button type="button" onClick={() => stepMonth(-1)}
@@ -172,7 +205,7 @@ export default function DatePicker({ value, onChange, className = '', isAr = tru
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
       </button>
-      {open && panel}
+      {open && createPortal(panel, document.body)}
     </div>
   )
 }
