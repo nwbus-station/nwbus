@@ -1215,7 +1215,7 @@ export default function LeavePage() {
   async function loadBalances() {
     setLoadingBalances(true)
     let uq = supabase.from('users')
-      .select('id, full_name_ar, hire_date, station_id, leave_balance_override, leave_balance_override_date, station:station_id(name_ar, name_en)')
+      .select('id, full_name_ar, hire_date, station_id, job_number, username, leave_balance_override, leave_balance_override_date, station:station_id(name_ar, name_en)')
       .eq('is_active', true).order('full_name_ar')
     if (!isGeneralAdmin) {
       if ((isAreaSupervisor || role === 'station_admin') && allowedStationIds?.length) uq = uq.in('station_id', allowedStationIds)
@@ -1238,8 +1238,11 @@ export default function LeavePage() {
     setBalances(empList.map(e => {
       const rows = byEmployee[e.id] ?? []
       const entitlement = annualEntitlement(e.hire_date)
+      const jobNumber = e.job_number
+        ?? (e.username?.toUpperCase().startsWith('NW') ? e.username.slice(2) : e.username) ?? null
       return {
         ...e,
+        job_number: jobNumber,
         entitlement,
         accrued: accruedBalance(e.hire_date, entitlement),
         used: rows.reduce((s, r) => s + (r.days_count ?? 0), 0),
@@ -1381,7 +1384,7 @@ export default function LeavePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input
               value={balanceSearch} onChange={e => setBalanceSearch(e.target.value)}
-              placeholder={isAr ? 'بحث بالاسم...' : 'Search by name...'}
+              placeholder={isAr ? 'بحث بالاسم أو الرقم الوظيفي...' : 'Search by name or job number...'}
               style={{ ...inp, maxWidth: 280 }}
             />
             <div style={{ background: 'var(--card)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'auto' }}>
@@ -1392,8 +1395,8 @@ export default function LeavePage() {
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
                       {(isAr
-                        ? ['الموظف', 'المحطة', 'تاريخ المباشرة', 'سنوات الخدمة', 'الرصيد المستحق', 'المستخدم', 'المتبقي']
-                        : ['Employee', 'Station', 'Hire Date', 'Years', 'Accrued', 'Used', 'Remaining']
+                        ? ['الموظف', 'الرقم الوظيفي', 'المحطة', 'تاريخ المباشرة', 'سنوات الخدمة', 'الرصيد المستحق', 'المستخدم', 'المتبقي']
+                        : ['Employee', 'Job Number', 'Station', 'Hire Date', 'Years', 'Accrued', 'Used', 'Remaining']
                       ).map((h, i) => (
                         <th key={i} style={{ padding: '10px 14px', textAlign: isAr ? 'right' : 'left', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
@@ -1401,10 +1404,15 @@ export default function LeavePage() {
                   </thead>
                   <tbody>
                     {balances
-                      .filter(b => !balanceSearch || b.full_name_ar?.toLowerCase().includes(balanceSearch.toLowerCase()))
+                      .filter(b => {
+                        if (!balanceSearch) return true
+                        const q = balanceSearch.toLowerCase()
+                        return b.full_name_ar?.toLowerCase().includes(q) || b.job_number?.toLowerCase().includes(q)
+                      })
                       .map(b => (
                       <tr key={b.id} style={{ borderBottom: '1px solid var(--border)' }}>
                         <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-1)' }}>{b.full_name_ar}</td>
+                        <td style={{ padding: '10px 14px', color: 'var(--text-2)' }}>{b.job_number ?? '—'}</td>
                         <td style={{ padding: '10px 14px', color: 'var(--text-2)' }}>{isAr ? b.station?.name_ar : b.station?.name_en}</td>
                         <td style={{ padding: '10px 14px', color: 'var(--text-2)' }}>{b.hire_date}</td>
                         <td style={{ padding: '10px 14px', color: 'var(--text-2)', textAlign: 'center' }}>{yearsOfService(b.hire_date)}</td>
@@ -1419,7 +1427,7 @@ export default function LeavePage() {
                       </tr>
                     ))}
                     {balances.length === 0 && (
-                      <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'لا يوجد موظفون' : 'No employees'}</td></tr>
+                      <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'لا يوجد موظفون' : 'No employees'}</td></tr>
                     )}
                   </tbody>
                 </table>
