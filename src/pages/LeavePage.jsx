@@ -487,43 +487,49 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
     setSaving(false)
     if (err) { setError(err.message); return }
 
-    // الأنواع المعتمدة تلقائياً → إشعار للعلم فقط للمشرفين
-    if (autoApproved) {
-      const { data: supervisors } = await supabase.from('users')
-        .select('id').in('role', ['station_admin', 'shift_supervisor'])
-        .eq('station_id', profile.station_id).eq('is_active', true)
+    // إشعار طلب الإجازة الجديد → يصل للمشرف وللأدمن معاً دائماً
+    {
       const typeLabel = LEAVE_TYPES.find(t => t.id === form.leave_type)?.ar ?? form.leave_type
-      await notifyMany((supervisors ?? []).map(s => s.id), {
-        title: `${typeLabel} (معتمدة) — ${profile.full_name_ar}`,
-        body: `${days} أيام · ${form.start_date} ← ${form.end_date} — للعلم`,
-        type: 'info', refType: 'leave',
-      })
-    } else if (isEmployeeRole) {
-      const typeLabel = LEAVE_TYPES.find(t => t.id === form.leave_type)?.ar ?? form.leave_type
-      // إشعار المسؤول المباشر المحدد في بيانات الموظف — إن لم يُحدَّد يُرسَل لكل مشرفي المحطة
-      let recipientIds = []
+
+      // مستلمو المشرفين: المسؤول المباشر إن وُجد، وإلا كل مشرفي المحطة
+      let supervisorIds = []
       if (profile.supervisor_id) {
-        recipientIds = [profile.supervisor_id]
+        supervisorIds = [profile.supervisor_id]
       } else {
         const { data: supervisors } = await supabase.from('users')
           .select('id').in('role', ['station_admin', 'shift_supervisor'])
           .eq('station_id', profile.station_id).eq('is_active', true)
-        recipientIds = (supervisors ?? []).map(s => s.id)
+        supervisorIds = (supervisors ?? []).map(s => s.id)
       }
-      await notifyMany(recipientIds, {
-        title: `طلب إجازة جديد — ${profile.full_name_ar}`,
-        body: `${typeLabel} · ${days} أيام · ${form.start_date} ← ${form.end_date}`,
-        type: 'info', refType: 'leave',
-      })
-    } else {
-      // المشرف رفع مباشرة → أشعر الأدمن
-      const { data: admins } = await supabase.from('users')
+      supervisorIds = supervisorIds.filter(id => id !== profile.id)
+
+      const { data: adminsList } = await supabase.from('users')
         .select('id').in('role', ADMIN_ROLE_VALUES).eq('is_active', true)
-      const typeLabel = LEAVE_TYPES.find(t => t.id === form.leave_type)?.ar ?? form.leave_type
-      await notifyMany((admins ?? []).map(a => a.id), {
-        title: `طلب إجازة بانتظار موافقتك — ${profile.full_name_ar}`,
-        body: `${typeLabel} · ${days} أيام · ${form.start_date} ← ${form.end_date}`,
-        type: 'warning', refType: 'leave',
+      const adminIds = (adminsList ?? []).map(a => a.id).filter(id => id !== profile.id)
+
+      // supervisor_status = pending → المشرف مطالَب بالإجراء الآن
+      const supervisorActionNeeded = !autoApproved && isEmployeeRole
+      // manager_status = pending والمشرف لن يُسأل أولاً → الأدمن مطالَب بالإجراء الآن
+      const managerActionNeeded = !autoApproved && !supervisorActionNeeded
+
+      await notifyMany(supervisorIds, {
+        title: supervisorActionNeeded
+          ? `طلب إجازة جديد — ${profile.full_name_ar}`
+          : `${typeLabel}${autoApproved ? ' (معتمدة)' : ''} — ${profile.full_name_ar}`,
+        body: supervisorActionNeeded
+          ? `${typeLabel} · ${days} أيام · ${form.start_date} ← ${form.end_date}`
+          : `${days} أيام · ${form.start_date} ← ${form.end_date} — للعلم`,
+        type: supervisorActionNeeded ? 'warning' : 'info', refType: 'leave',
+      })
+
+      await notifyMany(adminIds, {
+        title: managerActionNeeded
+          ? `طلب إجازة بانتظار موافقتك — ${profile.full_name_ar}`
+          : `${typeLabel}${autoApproved ? ' (معتمدة)' : ''} — ${profile.full_name_ar}`,
+        body: managerActionNeeded
+          ? `${typeLabel} · ${days} أيام · ${form.start_date} ← ${form.end_date}`
+          : `${days} أيام · ${form.start_date} ← ${form.end_date} — للعلم`,
+        type: managerActionNeeded ? 'warning' : 'info', refType: 'leave',
       })
     }
 
@@ -1300,9 +1306,29 @@ export default function LeavePage() {
           })
         }
       } else {
-        // مدير يوافق/يرفض → أشعر الموظف
+        // مدير/أدمن يوافق أو يرفض → أشعر الموظف والمشرف
         await notifyMany([leave.employee_id], {
           title: isApproved ? `✓ تمت الموافقة على إجازتك` : `✗ رفض المدير إجازتك`,
+          body: `${typeLabel} · ${leave.days_count} أيام${notes ? ' · ' + notes : ''}`,
+          type: isApproved ? 'success' : 'error', refType: 'leave', refId: id,
+        })
+
+        // مستلمو المشرفين: المسؤول المباشر للموظف إن وُجد، وإلا كل مشرفي محطته
+        const { data: emp } = await supabase.from('users')
+          .select('supervisor_id, station_id').eq('id', leave.employee_id).single()
+        let supervisorIds = []
+        if (emp?.supervisor_id) {
+          supervisorIds = [emp.supervisor_id]
+        } else if (emp?.station_id) {
+          const { data: supervisors } = await supabase.from('users')
+            .select('id').in('role', ['station_admin', 'shift_supervisor'])
+            .eq('station_id', emp.station_id).eq('is_active', true)
+          supervisorIds = (supervisors ?? []).map(s => s.id)
+        }
+        await notifyMany(supervisorIds.filter(sid => sid !== profile.id), {
+          title: isApproved
+            ? `✓ تمت الموافقة على إجازة ${leave.employee_name}`
+            : `✗ رُفضت إجازة ${leave.employee_name}`,
           body: `${typeLabel} · ${leave.days_count} أيام${notes ? ' · ' + notes : ''}`,
           type: isApproved ? 'success' : 'error', refType: 'leave', refId: id,
         })
