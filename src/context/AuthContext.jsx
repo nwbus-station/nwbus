@@ -42,7 +42,9 @@ export function AuthProvider({ children }) {
     }
     if (data) {
       profileIdRef.current = data.id
-      setProfile(data)
+      // مشرف المنطقة = مشرف المحطة بالضبط، الاسم فقط يختلف — نوحّد الدور هنا حتى تنطبق نفس الصلاحيات في كل الشاشات،
+      // ونحتفظ بالمسمى الأصلي في display_role للعرض فقط
+      setProfile(data.role === 'area_supervisor' ? { ...data, role: 'station_admin', display_role: 'area_supervisor' } : data)
       setProfileError(null)
       // مشرف منطقة / مشرف محطة — نجلب محطاته المخصصة من user_stations
       if (data.role === 'area_supervisor' || data.role === 'station_admin') {
@@ -194,9 +196,9 @@ export function AuthProvider({ children }) {
   const isStationAdmin    = profile?.role === 'station_admin' || isShiftSupervisor
   const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true
   const isEmployee        = profile?.role === 'station_employee'
-  const isAreaSupervisor  = profile?.role === 'area_supervisor'
-  // isAdmin: صلاحيات المدير الكاملة في الواجهة — general_admin بدون قيود، area_supervisor مقيّد بمحطاته
-  const isAdmin            = isGeneralAdmin || isAreaSupervisor
+  const isAreaSupervisor  = profile?.display_role === 'area_supervisor'
+  // isAdmin: صلاحيات الأدمن الكاملة فقط — مشرف المنطقة كمشرف المحطة بدون صلاحيات أدمن
+  const isAdmin            = isGeneralAdmin
   const canManageUsers    = isGeneralAdmin
   const canViewAllStations = isGeneralAdmin
 

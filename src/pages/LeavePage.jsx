@@ -497,7 +497,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
         supervisorIds = [profile.supervisor_id]
       } else {
         const { data: supervisors } = await supabase.from('users')
-          .select('id').in('role', ['station_admin', 'shift_supervisor'])
+          .select('id').in('role', ['station_admin', 'area_supervisor', 'shift_supervisor'])
           .eq('station_id', profile.station_id).eq('is_active', true)
         supervisorIds = (supervisors ?? []).map(s => s.id)
       }
@@ -1321,7 +1321,7 @@ export default function LeavePage() {
           supervisorIds = [emp.supervisor_id]
         } else if (emp?.station_id) {
           const { data: supervisors } = await supabase.from('users')
-            .select('id').in('role', ['station_admin', 'shift_supervisor'])
+            .select('id').in('role', ['station_admin', 'area_supervisor', 'shift_supervisor'])
             .eq('station_id', emp.station_id).eq('is_active', true)
           supervisorIds = (supervisors ?? []).map(s => s.id)
         }

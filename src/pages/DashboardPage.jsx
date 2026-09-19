@@ -287,7 +287,7 @@ export default function DashboardPage() {
     return () => clearInterval(t)
   }, [])
 
-  const roleLabel   = ROLE_LABELS[profile?.role]?.[isAr ? 'ar' : 'en'] ?? profile?.role
+  const roleLabel   = ROLE_LABELS[profile?.display_role ?? profile?.role]?.[isAr ? 'ar' : 'en'] ?? profile?.role
   const stationName = profile?.station ? (isAr ? profile.station.name_ar : profile.station.name_en) : null
   const userName    = profile?.full_name_ar ?? ''
 
