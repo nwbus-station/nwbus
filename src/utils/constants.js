@@ -36,6 +36,17 @@ export const USER_ROLES = [
 // مساعد المدير التنفيذي: أدمن كامل + يشتغل كمشرف على محطاته المخصصة (يوافق على الإجازات أولاً ويقيّم موظفيه)
 export const ASSISTANT_DIRECTOR_ROLE = 'assistant_stations_executive_director'
 
+// صلاحيات المسميات المخصصة (مصفوفة) — نوعان:
+//  grant: تمنح قدرة إضافية للمسمى فقط لو فُعّلت (افتراضياً لا)
+//  allow: تقيّد قدرة يملكها الدور الأساسي أصلاً، تُقفل فقط لو أُلغيت (افتراضياً مسموحة)
+export const TITLE_CAPABILITIES = [
+  { key: 'leaves_supervisor_stage', kind: 'grant', ar: 'يوافق على الإجازات كمشرف (لموظفي محطاته المخصصة) قبل الأدمن', en: 'Approve leaves as supervisor for his assigned stations' },
+  { key: 'evaluation_my_employees', kind: 'grant', ar: 'يقيّم موظفيه (محطاته المخصصة أو مسؤوله المباشر) ويفتح على "موظفيني"', en: 'Evaluate his employees (assigned stations / direct reports)' },
+  { key: 'leaves_final_approve',    kind: 'allow', ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval (admin stage)' },
+  { key: 'settings_access',         kind: 'allow', ar: 'الدخول لصفحة الإعدادات', en: 'Access settings page' },
+  { key: 'lostfound_manage',        kind: 'allow', ar: 'حذف وإهداء الموجودات', en: 'Delete / donate lost & found items' },
+]
+
 // أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف
 export const ADMIN_ROLE_VALUES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
 

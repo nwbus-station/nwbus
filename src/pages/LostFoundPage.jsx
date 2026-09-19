@@ -1115,7 +1115,8 @@ const TABS = [
 ══════════════════════════════════════════════════════════ */
 export default function LostFoundPage() {
   const { i18n } = useTranslation()
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin: isAdminRole, allowCap } = useAuth()
+  const isAdmin = isAdminRole && allowCap('lostfound_manage')
   const isEmployee = profile?.role === 'station_employee'
   const isAr = i18n.language === 'ar'
   const [tab, setTab] = useState(isEmployee ? 'register' : 'report')

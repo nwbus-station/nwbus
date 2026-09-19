@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
   const [loading,           setLoading]           = useState(true)
   const [profileError,      setProfileError]      = useState(null)  // debug error message
   const [allowedStationIds, setAllowedStationIds] = useState(null)  // null = all, array = restricted
+  const [customTitle, setCustomTitle] = useState(null)  // المسمى المخصص للمستخدم (مصفوفة الصلاحيات)
   const [supervisedStationIds, setSupervisedStationIds] = useState([])  // محطات مساعد المدير كمشرف (لا تقيّد صلاحياته كأدمن)
   const profileIdRef = useRef(null)
   const authUserIdRef = useRef(null) // auth.users id لآخر مستخدم تم جلب بروفايله فعلياً
@@ -47,8 +48,14 @@ export function AuthProvider({ children }) {
       // ونحتفظ بالمسمى الأصلي في display_role للعرض فقط
       setProfile(data.role === 'area_supervisor' ? { ...data, role: 'station_admin', display_role: 'area_supervisor' } : data)
       setProfileError(null)
+      let title = null
+      if (data.custom_title_id) {
+        const { data: t } = await supabase.from('custom_titles').select('*').eq('id', data.custom_title_id).maybeSingle()
+        title = t ?? null
+      }
+      setCustomTitle(title)
       // مشرف منطقة / مشرف محطة — نجلب محطاته المخصصة من user_stations
-      if (data.role === ASSISTANT_DIRECTOR_ROLE) {
+      if (data.role === ASSISTANT_DIRECTOR_ROLE || title?.permissions?.leaves_supervisor_stage || title?.permissions?.evaluation_my_employees) {
         const { data: us } = await supabase.from('user_stations').select('station_id').eq('user_id', data.id)
         setSupervisedStationIds((us ?? []).map(r => r.station_id))
       } else {
@@ -200,6 +207,12 @@ export function AuthProvider({ children }) {
   // stations_executive_director له نفس صلاحيات general_admin بالضبط — فقط مسمى وظيفي مختلف
   const isGeneralAdmin    = ADMIN_ROLE_VALUES.includes(profile?.role)
   const isAssistantDirector = profile?.role === ASSISTANT_DIRECTOR_ROLE
+  // مصفوفة صلاحيات المسمى المخصص: grantCap تمنح قدرة إضافية، allowCap تقيّد قدرة الدور الأساسي
+  const titlePerms = customTitle?.permissions ?? null
+  const grantCap = key => !!titlePerms?.[key]
+  const allowCap = key => !titlePerms || titlePerms[key] !== false
+  const actsAsSupervisor = isAssistantDirector || grantCap('leaves_supervisor_stage')
+  const evaluatesOwnEmployees = isAssistantDirector || grantCap('evaluation_my_employees')
   const isShiftSupervisor = profile?.role === 'shift_supervisor'
   const isStationAdmin    = profile?.role === 'station_admin' || isShiftSupervisor
   const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true
@@ -220,6 +233,11 @@ export function AuthProvider({ children }) {
       signOut,
       isGeneralAdmin,
       isAssistantDirector,
+      customTitle,
+      grantCap,
+      allowCap,
+      actsAsSupervisor,
+      evaluatesOwnEmployees,
       supervisedStationIds,
       isShiftSupervisor,
       isStationAdmin,

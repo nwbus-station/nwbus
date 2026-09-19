@@ -14,7 +14,8 @@ const THEMES = [
 
 export default function SettingsPage() {
   const { i18n } = useTranslation()
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin: isAdminRole, allowCap } = useAuth()
+  const isAdmin = isAdminRole && allowCap('settings_access')
   const { settings, saveSetting } = useAppSettings()
   const isAr = i18n.language === 'ar'
 

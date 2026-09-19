@@ -276,7 +276,7 @@ function MagazineFeed({ posts, isAr, onNavigate }) {
 }
 
 export default function DashboardPage() {
-  const { profile, isAdmin, isGeneralAdmin, allowedStationIds } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, allowedStationIds, customTitle } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const navigate = useNavigate()
@@ -287,7 +287,8 @@ export default function DashboardPage() {
     return () => clearInterval(t)
   }, [])
 
-  const roleLabel   = ROLE_LABELS[profile?.display_role ?? profile?.role]?.[isAr ? 'ar' : 'en'] ?? profile?.role
+  const roleLabel   = (customTitle && (isAr ? customTitle.name_ar : (customTitle.name_en || customTitle.name_ar)))
+    || ROLE_LABELS[profile?.display_role ?? profile?.role]?.[isAr ? 'ar' : 'en'] || profile?.role
   const stationName = profile?.station ? (isAr ? profile.station.name_ar : profile.station.name_en) : null
   const userName    = profile?.full_name_ar ?? ''
 

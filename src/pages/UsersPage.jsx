@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
-import { USER_ROLES, MODULES } from '../utils/constants'
+import { USER_ROLES, MODULES, TITLE_CAPABILITIES } from '../utils/constants'
 import { toLatinDigits, escapeHtml } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -373,7 +373,134 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
 /* ─── User Modal ────────────────────────────────────────── */
 const NEW_USER_DRAFT_KEY = 'um_new_draft'
 
-function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose, onSaved }) {
+// إدارة المسميات المخصصة: اسم المسمى + الدور الأساسي (سقف الصلاحيات) + الأقسام + مصفوفة الصلاحيات
+function TitlesManager({ titles, onClose, onChanged, isAr }) {
+  useEscapeKey(onClose)
+  const blank = { id: null, name_ar: '', name_en: '', base_role: 'station_employee', permissions: {}, allowed_modules: null }
+  const [form, setForm] = useState(blank)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
+  const selMods = form.allowed_modules ?? MODULES.map(m => m.value)
+  const isAdminBase = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(form.base_role)
+
+  const setPerm = (k, v) => setForm(f => ({ ...f, permissions: { ...f.permissions, [k]: v } }))
+  const toggleMod = mod => setForm(f => {
+    const cur = f.allowed_modules ?? MODULES.map(m => m.value)
+    const next = cur.includes(mod) ? cur.filter(m => m !== mod) : [...cur, mod]
+    return { ...f, allowed_modules: next.length === MODULES.length ? null : next }
+  })
+  // قدرات "التقييد" مفتوحة افتراضياً، وقدرات "المنح" مقفلة افتراضياً
+  const permValue = cap => cap.kind === 'allow' ? form.permissions[cap.key] !== false : !!form.permissions[cap.key]
+
+  async function save() {
+    if (!form.name_ar.trim()) { setErr(isAr ? 'اسم المسمى بالعربي مطلوب' : 'Arabic name is required'); return }
+    setBusy(true); setErr('')
+    const permissions = Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, permValue(c)]))
+    const row = { name_ar: form.name_ar.trim(), name_en: form.name_en.trim() || null, base_role: form.base_role, permissions, allowed_modules: form.allowed_modules }
+    const { error } = form.id
+      ? await supabase.from('custom_titles').update(row).eq('id', form.id)
+      : await supabase.from('custom_titles').insert(row)
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setForm(blank)
+    onChanged()
+  }
+
+  async function remove(t) {
+    if (!window.confirm(isAr ? `حذف المسمى "${t.name_ar}"؟ الموظفون عليه يبقون بدورهم الأساسي.` : `Delete title "${t.name_ar}"?`)) return
+    const { error } = await supabase.from('custom_titles').delete().eq('id', t.id)
+    if (error) { setErr(error.message); return }
+    if (form.id === t.id) setForm(blank)
+    onChanged()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="px-5 py-4 border-b flex items-center justify-between">
+          <h2 className="font-bold text-gray-800">{isAr ? 'المسميات الوظيفية والصلاحيات' : 'Job Titles & Permissions'}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-lg">✕</button>
+        </div>
+        <div className="p-5 grid md:grid-cols-[220px_1fr] gap-5">
+          <div className="space-y-2">
+            <button onClick={() => { setForm(blank); setErr('') }}
+              className="w-full text-sm font-semibold border-2 border-dashed border-gray-300 rounded-lg py-2 text-gray-600 hover:border-nwbus-primary">
+              + {isAr ? 'مسمى جديد' : 'New title'}
+            </button>
+            {titles.length === 0 && <p className="text-xs text-gray-400 text-center py-4">{isAr ? 'ما فيه مسميات مضافة' : 'No titles yet'}</p>}
+            {titles.map(t => (
+              <div key={t.id} className={`border rounded-lg px-3 py-2 text-sm flex items-center justify-between gap-2 ${form.id === t.id ? 'border-nwbus-primary bg-nwbus-primary/5' : 'border-gray-200'}`}>
+                <button className="text-start flex-1 truncate font-semibold text-gray-800"
+                  onClick={() => { setForm({ id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null }); setErr('') }}>
+                  {t.name_ar}
+                </button>
+                <button onClick={() => remove(t)} className="text-red-500 text-xs">✕</button>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المسمى (عربي) *' : 'Title (Arabic) *'}</label>
+                <input className={inputCls} value={form.name_ar} onChange={e => setForm(f => ({ ...f, name_ar: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المسمى (إنجليزي)' : 'Title (English)'}</label>
+                <input className={inputCls} dir="ltr" value={form.name_en} onChange={e => setForm(f => ({ ...f, name_en: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الدور الأساسي (سقف الصلاحيات) *' : 'Base role (permission ceiling) *'}</label>
+              <select className={inputCls} value={form.base_role} onChange={e => setForm(f => ({ ...f, base_role: e.target.value }))}>
+                {USER_ROLES.map(r => <option key={r.value} value={r.value}>{isAr ? r.ar : r.en}</option>)}
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                {isAr ? 'قاعدة البيانات تطبّق صلاحيات هذا الدور فعلياً — المصفوفة تحت تضبط ما يظهر ويُسمح به داخل التطبيق ضمن هذا السقف.' : 'The database enforces this role; the matrix adjusts what is allowed in the app within it.'}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-700 mb-2">{isAr ? 'الأقسام المتاحة' : 'Available sections'}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {MODULES.map(m => (
+                  <ToggleRow key={m.value} checked={selMods.includes(m.value)} onChange={() => toggleMod(m.value)}>{isAr ? m.ar : m.en}</ToggleRow>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-700 mb-2">{isAr ? 'صلاحيات الإجراءات' : 'Action permissions'}</p>
+              <div className="space-y-2">
+                {TITLE_CAPABILITIES.map(c => {
+                  const meaningful = c.kind === 'grant' || isAdminBase
+                  return (
+                    <div key={c.key} className={meaningful ? '' : 'opacity-50'}>
+                      <ToggleRow checked={permValue(c)} onChange={v => setPerm(c.key, v)}>{isAr ? c.ar : c.en}</ToggleRow>
+                      {!meaningful && <p className="text-[10px] text-gray-400 mt-0.5 px-1">{isAr ? 'هذي الصلاحية أصلاً للأدمن فقط — اختر دوراً أساسياً أدمن لتفعيل تأثيرها' : 'Admin-only capability — choose an admin base role'}</p>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {err && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+            <div className="flex gap-2 justify-end">
+              <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600">{isAr ? 'إغلاق' : 'Close'}</button>
+              <button onClick={save} disabled={busy} className="px-5 py-2 rounded-lg text-sm font-semibold bg-nwbus-primary text-white disabled:opacity-60">
+                {busy ? '…' : (form.id ? (isAr ? 'حفظ التعديل' : 'Save changes') : (isAr ? 'إضافة المسمى' : 'Add title'))}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UserModal({ user, stations, supervisors, shiftSupervisors = [], customTitles = [], onClose, onSaved }) {
   const { profile, isGeneralAdmin, isStationAdmin } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -403,6 +530,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     full_name_ar:    user?.full_name_ar    ?? '',
     full_name_en:    user?.full_name_en    ?? '',
     role:            user?.role            ?? 'station_employee',
+    custom_title_id: user?.custom_title_id ?? '',
     station_id:      user?.station_id      ?? (isStationAdmin ? profile.station_id : ''),
     supervisor_id:   user?.supervisor_id   ?? '',
     phone:           user?.phone           ?? '',
@@ -538,7 +666,9 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     const ids = [...stationSet]
     if (ids.length) await supabase.from('user_stations').insert(ids.map(sid => ({ user_id: uid, station_id: sid })))
   }
+  const selectedTitle = customTitles.find(t => t.id === form.custom_title_id) ?? null
   const isMultiStationRole = form.role === 'station_admin' || form.role === 'area_supervisor' || form.role === 'assistant_stations_executive_director'
+    || !!selectedTitle?.permissions?.leaves_supervisor_stage || !!selectedTitle?.permissions?.evaluation_my_employees
   // المحطة الأساسية للمشرف = اللي حددها الأدمن صراحة (أو أول محطة كاحتياط)
   const primaryStation = () =>
     isMultiStationRole && stationSet.size
@@ -601,7 +731,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           created_by:   profile.id,
         }).select('id').single()
         if (insertErr) throw insertErr
-        if (inserted?.id && (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor' || form.role === 'assistant_stations_executive_director')) await syncStations(inserted.id)
+        if (inserted?.id && (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor' || isMultiStationRole)) await syncStations(inserted.id)
 
         if (inserted?.id) {
           const extras = {}
@@ -624,6 +754,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
             hire_date: form.hire_date || null,
             ...(isGeneralAdmin ? {
               is_accountant: !!form.is_accountant, is_agent: !!form.is_agent, can_rate_customers: !!form.can_rate_customers,
+              custom_title_id: form.custom_title_id || null,
               leave_balance_override: newOverride,
               leave_balance_override_date: newOverride != null ? new Date().toISOString().slice(0, 10) : null,
             } : {}),
@@ -656,7 +787,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           p_is_agent:        !!form.is_agent,
         })
         if (updErr) throw updErr
-        if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor' || form.role === 'assistant_stations_executive_director') await syncStations(user.id)
+        if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor' || isMultiStationRole) await syncStations(user.id)
 
         // خانة "تقييم العميل" و"مشرف الوردية الآخر" أضيفتا بعد إنشاء admin_update_user — تحديث مباشر بدل تعديل الدالة
         if (isGeneralAdmin) {
@@ -665,6 +796,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           const overrideChanged = newOverride !== prevOverride
           const { error: extraErr } = await supabase.from('users').update({
             can_rate_customers: !!form.can_rate_customers,
+            custom_title_id: form.custom_title_id || null,
             email: form.email.trim() || null,
             leave_balance_override: newOverride,
             ...(overrideChanged ? { leave_balance_override_date: newOverride != null ? new Date().toISOString().slice(0, 10) : null } : {}),
@@ -985,10 +1117,28 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الصلاحية *' : 'Role *'}</label>
-                <select required className={inputCls} value={form.role} onChange={e => set('role', e.target.value)}>
+                <select required className={inputCls} value={form.custom_title_id ? `title:${form.custom_title_id}` : form.role}
+                  onChange={e => {
+                    const v = e.target.value
+                    if (v.startsWith('title:')) {
+                      const t = customTitles.find(x => x.id === v.slice(6))
+                      if (!t) return
+                      touchedRef.current.add('role'); touchedRef.current.add('custom_title_id')
+                      setForm(f => ({ ...f, custom_title_id: t.id, role: t.base_role, allowed_modules: t.allowed_modules ?? null }))
+                    } else {
+                      touchedRef.current.add('custom_title_id')
+                      setForm(f => ({ ...f, custom_title_id: '' }))
+                      set('role', v)
+                    }
+                  }}>
                   {allowedRoles.map(r => (
                     <option key={r.value} value={r.value}>{isAr ? r.ar : r.en}</option>
                   ))}
+                  {isGeneralAdmin && customTitles.length > 0 && (
+                    <optgroup label={isAr ? 'مسميات مخصصة' : 'Custom titles'}>
+                      {customTitles.map(t => <option key={t.id} value={`title:${t.id}`}>{isAr ? t.name_ar : (t.name_en || t.name_ar)}</option>)}
+                    </optgroup>
+                  )}
                 </select>
               </div>
               <div>
@@ -1214,6 +1364,13 @@ export default function UsersPage() {
   const isAr = i18n.language === 'ar'
 
   const usersCacheKey = `users_all_${profile?.station_id ?? 'admin'}`
+  const [customTitles, setCustomTitles] = useState([])
+  const [showTitles, setShowTitles] = useState(false)
+  const loadTitles = useCallback(async () => {
+    const { data } = await supabase.from('custom_titles').select('*').order('created_at')
+    setCustomTitles(data ?? [])
+  }, [])
+  useEffect(() => { loadTitles() }, [loadTitles])
   const [users,    setUsers]    = useState(() => getCached(usersCacheKey)?.users ?? [])
   const hasLoadedRef = useRef(users.length > 0)
   const [stations, setStations] = useState(() => getCached(usersCacheKey)?.stations ?? [])
@@ -1300,7 +1457,7 @@ export default function UsersPage() {
     // بدون phone/national_id/login_password — حقول حساسة تُجلب فقط عند الحاجة عبر get_user_sensitive (أدمن فقط)
     let usersQuery = supabase
       .from('users')
-      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, peer_supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, hire_date, is_accountant, is_agent, can_rate_customers, leave_balance_override, leave_balance_override_date, created_at, last_login, station:station_id(name_ar, name_en)')
+      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, peer_supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, custom_title_id, hire_date, is_accountant, is_agent, can_rate_customers, leave_balance_override, leave_balance_override_date, created_at, last_login, station:station_id(name_ar, name_en)')
       .order('created_at', { ascending: false })
 
     // مشرف المحطة ومشرف المنطقة نفس المعاملة — كل محطاتهم المخصصة بـ user_stations
@@ -1670,6 +1827,12 @@ export default function UsersPage() {
                 : `🖨 ${isAr ? 'طباعة / PDF' : 'Print / PDF'}`}
           </button>
           {isGeneralAdmin && (
+            <button onClick={() => setShowTitles(true)}
+              className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap">
+              {isAr ? 'المسميات والصلاحيات' : 'Titles & Permissions'}
+            </button>
+          )}
+          {isGeneralAdmin && (
             <button onClick={() => setModal('new')}
               className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors whitespace-nowrap">
               + {isAr ? 'جديد' : 'New'}
@@ -1903,7 +2066,7 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs rounded-full px-2.5 py-0.5 border font-semibold whitespace-nowrap ${ROLE_COLORS[u.role]}`}>
-                      {USER_ROLES.find(r => r.value === u.role)?.[isAr ? 'ar' : 'en']}
+                      {(() => { const t = customTitles.find(x => x.id === u.custom_title_id); return t ? (isAr ? t.name_ar : (t.name_en || t.name_ar)) : USER_ROLES.find(r => r.value === u.role)?.[isAr ? 'ar' : 'en'] })()}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">
@@ -1951,6 +2114,10 @@ export default function UsersPage() {
         </div>
       )}
 
+      {showTitles && (
+        <TitlesManager titles={customTitles} isAr={isAr} onClose={() => setShowTitles(false)} onChanged={loadTitles} />
+      )}
+
       {modal && (
         <UserModal
           key={modal === 'new' ? 'new' : modal.id}
@@ -1958,6 +2125,7 @@ export default function UsersPage() {
           stations={stations}
           supervisors={supervisors}
           shiftSupervisors={shiftSupervisors}
+          customTitles={customTitles}
           onClose={() => setModal(null)}
           onSaved={() => fetchAll(true)}
         />

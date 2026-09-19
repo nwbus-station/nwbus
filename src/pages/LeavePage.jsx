@@ -364,8 +364,11 @@ async function findSupervisorIds(stationId, directSupervisorId) {
   const { data: us } = await supabase.from('user_stations').select('user_id').eq('station_id', stationId)
   let assistants = []
   if (us?.length) {
+    const { data: titles } = await supabase.from('custom_titles').select('id').contains('permissions', { leaves_supervisor_stage: true })
+    const titleIds = (titles ?? []).map(t => t.id)
     const { data } = await supabase.from('users')
-      .select('id').eq('role', ASSISTANT_DIRECTOR_ROLE).eq('is_active', true).in('id', us.map(r => r.user_id))
+      .select('id').eq('is_active', true).in('id', us.map(r => r.user_id))
+      .or(`role.eq.${ASSISTANT_DIRECTOR_ROLE}${titleIds.length ? `,custom_title_id.in.(${titleIds.join(',')})` : ''}`)
     assistants = data ?? []
   }
   return [...new Set([...(sups ?? []).map(x => x.id), ...assistants.map(x => x.id)])]
@@ -908,9 +911,9 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
   const isAdmin     = ADMIN_ROLE_VALUES.includes(role)
   const isSupervisor = role === 'station_admin' || role === 'shift_supervisor'
   const isOwn       = leave.employee_id === profile?.id
-  const { supervisedStationIds } = useAuth()
-  // مساعد المدير: أدمن كامل + مرحلة المشرف لموظفي محطاته المخصصة (يوافق أولاً ثم الأدمن)
-  const isAssistant = role === ASSISTANT_DIRECTOR_ROLE
+  const { supervisedStationIds, actsAsSupervisor, allowCap } = useAuth()
+  // مساعد المدير أو مسمى مخصص بصلاحية "يوافق كمشرف": مرحلة المشرف لموظفي محطاته المخصصة (يوافق أولاً ثم الأدمن)
+  const isAssistant = actsAsSupervisor
   const inMySupervisedStations = isAssistant && !!supervisedStationIds?.includes(leave.station_id)
 
   const typeLabel   = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
@@ -924,7 +927,7 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
   const canActSupervisor = (isSupervisor || inMySupervisedStations) && leave.supervisor_status === 'pending' && !isOwn
   // مساعد المدير اللي وافق كمشرف ما يعتمد نفس الإجازة كأدمن — الاعتماد النهائي لأدمن آخر
   const didSupervisorStage = isAssistant && leave.supervisor_status !== 'pending' && leave.supervisor_by === profile?.full_name_ar
-  const canActManager    = isAdmin && leave.manager_status === 'pending' && !didSupervisorStage
+  const canActManager    = isAdmin && leave.manager_status === 'pending' && !didSupervisorStage && allowCap('leaves_final_approve')
   const canAct           = canActSupervisor || canActManager
   const fullyApproved    = leave.status === 'approved' && leave.supervisor_status === 'approved' && leave.manager_status === 'approved'
 

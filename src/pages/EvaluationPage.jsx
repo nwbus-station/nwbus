@@ -842,7 +842,7 @@ function PrintDropdown({ isAr, onSelect }) {
 }
 
 export default function EvaluationPage() {
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, isAssistantDirector, supervisedStationIds } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds } = useAuth()
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
   const canEvalEmp = [...ADMIN_ROLE_VALUES,'station_admin','shift_supervisor','area_supervisor'].includes(profile?.role)

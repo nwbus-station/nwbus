@@ -391,7 +391,7 @@ function NavTab({ item, isAr }) {
 
 export default function AppLayout() {
   const { i18n } = useTranslation()
-  const { profile, signOut } = useAuth()
+  const { profile, signOut, customTitle } = useAuth()
   const navigate = useNavigate()
   const isAr = i18n.language === 'ar'
   const { settings } = useAppSettings()
@@ -467,7 +467,8 @@ export default function AppLayout() {
     })
   })).filter(g => g.items.length > 0)
 
-  const roleLabel   = (profile?.job_title && JOB_TITLES[profile.job_title]?.[isAr ? 'ar' : 'en'])
+  const roleLabel   = (customTitle && (isAr ? customTitle.name_ar : (customTitle.name_en || customTitle.name_ar)))
+    || (profile?.job_title && JOB_TITLES[profile.job_title]?.[isAr ? 'ar' : 'en'])
     || ROLE_LABELS[profile?.display_role ?? profile?.role]?.[isAr ? 'ar' : 'en']
     || profile?.role
   const stationName = profile?.station ? (isAr ? profile.station.name_ar : profile.station.name_en) : null
