@@ -12,6 +12,7 @@ const MONO = "'IBM Plex Mono', monospace"
 const ROLE_LABELS = {
   general_admin:    { ar: 'أدمن عام',    en: 'General Admin' },
   stations_executive_director: { ar: 'المدير التنفيذي للمحطات', en: 'Stations Executive Director' },
+  assistant_stations_executive_director: { ar: 'مساعد المدير التنفيذي للمحطات', en: 'Assistant Stations Executive Director' },
   station_admin:    { ar: 'مشرف المحطة', en: 'Station Supervisor' },
   accountant:       { ar: 'محاسب',        en: 'Accountant' },
   station_employee: { ar: 'موظف محطة',   en: 'Station Employee' },

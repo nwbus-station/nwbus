@@ -897,7 +897,7 @@ export default function EvaluationPage() {
     // الموظفون
     if (canEvalEmp || isAdmin) {
       let q = supabase.from('users').select('id, full_name_ar, username, job_number, role, job_title, station_id, station:station_id(name_ar, name_en)')
-        .not('role', 'in', '("general_admin","station_admin","area_supervisor","stations_executive_director")')
+        .not('role', 'in', '("general_admin","station_admin","area_supervisor","stations_executive_director","assistant_stations_executive_director")')
         .eq('is_active', true)
       if (!isAdmin) {
         q = q.eq('role', 'station_employee')

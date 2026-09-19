@@ -41,6 +41,7 @@ export default {
   role_station_admin: 'أدمن محطة',
   role_general_admin: 'أدمن عام',
   role_stations_executive_director: 'المدير التنفيذي للمحطات',
+  role_assistant_stations_executive_director: 'مساعد المدير التنفيذي للمحطات',
 
   // Station types
   station_main: 'محطة رئيسية',

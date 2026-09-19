@@ -244,6 +244,7 @@ const JOB_TITLES = [
 const ROLE_COLORS = {
   general_admin:    'bg-red-100 text-red-700 border-red-200',
   stations_executive_director: 'bg-rose-100 text-rose-700 border-rose-200',
+  assistant_stations_executive_director: 'bg-rose-100 text-rose-700 border-rose-200',
   area_supervisor:  'bg-purple-100 text-purple-700 border-purple-200',
   station_admin:    'bg-amber-100 text-amber-700 border-amber-200',
   shift_supervisor: 'bg-orange-100 text-orange-700 border-orange-200',
@@ -1371,7 +1372,7 @@ export default function UsersPage() {
     fetchAll()
   }
 
-  const supervisors = users.filter(u => ['station_admin', 'area_supervisor', 'general_admin', 'stations_executive_director'].includes(u.role))
+  const supervisors = users.filter(u => ['station_admin', 'area_supervisor', 'general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(u.role))
   const shiftSupervisors = users.filter(u => u.role === 'shift_supervisor')
 
   // كل الفلاتر إلا فلتر المحطة — نحتاجها لوحدها عشان منتقي محطات الطباعة (متعدد) يشتغل
