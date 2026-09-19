@@ -23,20 +23,27 @@ serve(async (req) => {
     const { data: { user }, error: authErr } = await caller.auth.getUser()
     if (authErr || !user) return json({ error: 'Unauthorized' }, 401)
 
-    // تحقق من الدور — فقط general_admin أو station_admin
+    // تحقق من الدور — أدوار الأدمن (بما فيها المدير التنفيذي ومساعده) أو مشرف المحطة
+    const ADMIN_ROLES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
     const { data: profile } = await caller
       .from('users')
       .select('role')
       .eq('auth_id', user.id)
       .single()
 
-    if (!profile || !['general_admin', 'station_admin'].includes(profile.role)) {
-      return json({ error: 'Forbidden' }, 403)
-    }
+    const callerIsAdmin = !!profile && ADMIN_ROLES.includes(profile.role)
+    const callerIsStationAdmin = profile?.role === 'station_admin'
+    if (!callerIsAdmin && !callerIsStationAdmin) return json({ error: 'Forbidden' }, 403)
 
     const { auth_id, new_password } = await req.json()
     if (!auth_id || !new_password || new_password.length < 6) {
       return json({ error: 'Invalid parameters' }, 400)
+    }
+
+    // مشرف المحطة يغيّر فقط كلمات مرور الموظفين والمحاسبين — مو الأدمن ولا المشرفين
+    if (!callerIsAdmin) {
+      const { data: target } = await caller.from('users').select('role').eq('auth_id', auth_id).single()
+      if (!target || !['station_employee', 'accountant'].includes(target.role)) return json({ error: 'Forbidden' }, 403)
     }
 
     // المفتاح يُقرأ من بيئة الخادم فقط — لا يصل إليه المتصفح
