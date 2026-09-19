@@ -1829,7 +1829,7 @@ export default function UsersPage() {
           {isGeneralAdmin && (
             <button onClick={() => setShowTitles(true)}
               className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap">
-              {isAr ? 'المسميات والصلاحيات' : 'Titles & Permissions'}
+              {isAr ? 'إضافة مسمى' : 'Add Title'}
             </button>
           )}
           {isGeneralAdmin && (
