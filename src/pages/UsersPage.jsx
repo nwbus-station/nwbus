@@ -1657,14 +1657,14 @@ export default function UsersPage() {
     function renderRow(u, i) {
       return `
       <tr style="background:${i % 2 ? '#F9FAFB' : '#fff'}">
-        <td style="padding:9px 12px;text-align:center;color:#9CA3AF;font-size:11px;border:1px solid #EEF0F3">${i + 1}</td>
-        <td style="padding:9px 12px;text-align:${cellAlign};font-weight:700;color:#111827;font-size:13px;border:1px solid #EEF0F3">${escapeHtml(u.full_name_ar)}</td>
-        <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(u.job_number || '—')}</td>
-        <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3"><span dir="ltr">${escapeHtml(phoneById[u.id] || '—')}</span></td>
-        <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:11px;border:1px solid #EEF0F3"><span dir="ltr">${escapeHtml(emailById[u.id] || '—')}</span></td>
-        <td style="padding:9px 12px;text-align:${cellAlign};font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3"><span dir="ltr">${escapeHtml(u.hire_date || '—')}</span></td>
-        <td style="padding:9px 12px;text-align:center;border:1px solid #EEF0F3">
-          <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;${u.is_active ? 'background:#F0FDF4;color:#16A34A' : 'background:#F3F4F6;color:#9CA3AF'}">${u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive')}</span>
+        <td style="padding:10px 12px;text-align:center;color:#6B7280;font-size:12.5px;border:1px solid #E5E7EB">${i + 1}</td>
+        <td style="padding:10px 12px;text-align:${cellAlign};font-weight:600;color:#111827;font-size:14px;border:1px solid #E5E7EB">${escapeHtml(u.full_name_ar)}</td>
+        <td style="padding:10px 12px;text-align:${cellAlign};color:#1F2937;font-size:13.5px;font-weight:500;border:1px solid #E5E7EB"><span class="num">${escapeHtml(u.job_number || '—')}</span></td>
+        <td style="padding:10px 12px;text-align:${cellAlign};color:#1F2937;font-size:13.5px;font-weight:500;border:1px solid #E5E7EB"><span class="num" dir="ltr">${escapeHtml(phoneById[u.id] || '—')}</span></td>
+        <td style="padding:10px 12px;text-align:${cellAlign};color:#1F2937;font-size:12.5px;font-weight:500;border:1px solid #E5E7EB"><span class="num" dir="ltr">${escapeHtml(emailById[u.id] || '—')}</span></td>
+        <td style="padding:10px 12px;text-align:${cellAlign};color:#1F2937;font-size:13.5px;font-weight:500;border:1px solid #E5E7EB"><span class="num" dir="ltr">${escapeHtml(u.hire_date || '—')}</span></td>
+        <td style="padding:10px 12px;text-align:center;border:1px solid #E5E7EB">
+          <span style="display:inline-block;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:700;${u.is_active ? 'background:#DCFCE7;color:#15803D' : 'background:#E5E7EB;color:#4B5563'}">${u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive')}</span>
         </td>
       </tr>`
     }
@@ -1677,8 +1677,8 @@ export default function UsersPage() {
     function sectionHeader(name, count) {
       return `<div style="display:flex;align-items:center;gap:10px;margin:0 0 8px">
         <div style="width:4px;height:20px;border-radius:2px;background:linear-gradient(180deg,#3E63A8,#9FBBE6)"></div>
-        <div style="font-size:13.5px;font-weight:800;color:#1C2B36">${escapeHtml(name)}</div>
-        <div style="background:#EEF2F7;color:#4B5563;padding:2px 11px;border-radius:999px;font-size:10.5px;font-weight:700">${count} ${isAr ? 'موظف' : 'staff'}</div>
+        <div style="font-size:15px;font-weight:700;color:#1C2B36">${escapeHtml(name)}</div>
+        <div style="background:#EEF2F7;color:#374151;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:600">${count} ${isAr ? 'موظف' : 'staff'}</div>
       </div>`
     }
 
@@ -1701,13 +1701,15 @@ export default function UsersPage() {
     }
 
     const html = `<!DOCTYPE html><html dir="${isAr ? 'rtl' : 'ltr'}"><head><meta charset="UTF-8"><title>${isAr ? 'قائمة الموظفين' : 'Staff Roster'}</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
       <style>
         *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-        body{margin:0;font-family:Arial,sans-serif;background:#fff;color:#1a1a1a}
+        body{margin:0;font-family:'IBM Plex Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111827}
+        .num{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:embed}
         @page{size:A4 landscape;margin:10mm}
         @media print{.no-print{display:none!important}}
         table{width:100%;border-collapse:collapse}
-        th{background:#F9FAFB;color:#6B7280;padding:8px 12px;font-size:11px;font-weight:700;text-align:${isAr ? 'right' : 'left'};border-bottom:1.5px solid #E5E7EB}
+        th{background:#F3F4F6;color:#374151;padding:10px 12px;font-size:12.5px;font-weight:700;text-align:${isAr ? 'right' : 'left'};border-bottom:1.5px solid #E5E7EB}
       </style></head><body>
       <div class="no-print" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 20px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
         <span style="font-size:12.5px;font-weight:700;color:#1C2B4A;letter-spacing:0.04em">NORTH WEST BUS — ${isAr ? 'معاينة قبل الطباعة' : 'Preview before printing'}</span>
