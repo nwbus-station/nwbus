@@ -574,9 +574,19 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'nwbus_temp_' + Date.now() } }
         )
         const email = `${form.username.toLowerCase()}@nwbus.sa`
+        let authId
         const { data: authData, error: authErr } = await tempClient.auth.signUp({ email, password: form.password })
-        if (authErr) throw authErr
-        const authId = authData?.user?.id
+        if (authErr) {
+          // حساب مصادقة يتيم من محاولة سابقة فشلت قبل حفظ الموظف: نعيد استخدامه لو كلمة المرور مطابقة ومافيه موظف مربوط به
+          if (!/already registered|already been registered/i.test(authErr.message || '')) throw authErr
+          const { data: si, error: siErr } = await tempClient.auth.signInWithPassword({ email, password: form.password })
+          if (siErr || !si?.user?.id) throw authErr
+          const { data: linked } = await supabase.from('users').select('id').eq('auth_id', si.user.id).maybeSingle()
+          if (linked) throw authErr
+          authId = si.user.id
+        } else {
+          authId = authData?.user?.id
+        }
         if (!authId) throw new Error(isAr ? 'فشل إنشاء حساب المصادقة — تأكد من تعطيل Email Confirmation في Supabase' : 'Auth account creation failed — disable Email Confirmation in Supabase')
 
         const { data: inserted, error: insertErr } = await supabase.from('users').insert({
