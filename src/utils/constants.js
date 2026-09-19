@@ -33,6 +33,9 @@ export const USER_ROLES = [
   { value: 'assistant_stations_executive_director', ar: 'مساعد المدير التنفيذي للمحطات', en: 'Assistant Stations Executive Director' },
 ]
 
+// مساعد المدير التنفيذي: أدمن كامل + يشتغل كمشرف على محطاته المخصصة (يوافق على الإجازات أولاً ويقيّم موظفيه)
+export const ASSISTANT_DIRECTOR_ROLE = 'assistant_stations_executive_director'
+
 // أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف
 export const ADMIN_ROLE_VALUES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
 

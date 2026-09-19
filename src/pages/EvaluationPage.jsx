@@ -842,7 +842,7 @@ function PrintDropdown({ isAr, onSelect }) {
 }
 
 export default function EvaluationPage() {
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, isAssistantDirector, supervisedStationIds } = useAuth()
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
   const canEvalEmp = [...ADMIN_ROLE_VALUES,'station_admin','shift_supervisor','area_supervisor'].includes(profile?.role)
@@ -877,6 +877,8 @@ export default function EvaluationPage() {
 
   const [filterStation,   setFilterStation]   = useState('all')
   const [searchQuery,     setSearchQuery]     = useState('')
+  // مساعد المدير: افتراضياً يشوف موظفيه (محطاته المخصصة أو المسؤول المباشر) مثل المشرف، ويقدر يبدّل لكل الموظفين
+  const [onlyMine,         setOnlyMine]         = useState(true)
   const [stnSearchQuery,  setStnSearchQuery]  = useState('')
   const [loading,       setLoading]       = useState(true)
 
@@ -896,7 +898,7 @@ export default function EvaluationPage() {
 
     // الموظفون
     if (canEvalEmp || isAdmin) {
-      let q = supabase.from('users').select('id, full_name_ar, username, job_number, role, job_title, station_id, station:station_id(name_ar, name_en)')
+      let q = supabase.from('users').select('id, full_name_ar, username, job_number, role, job_title, station_id, supervisor_id, station:station_id(name_ar, name_en)')
         .not('role', 'in', '("general_admin","station_admin","area_supervisor","stations_executive_director","assistant_stations_executive_director")')
         .eq('is_active', true)
       if (!isAdmin) {
@@ -1025,6 +1027,7 @@ export default function EvaluationPage() {
 
   // ── فلترة ─────────────────────────────────────────────────
   const filteredEmployees = employees
+    .filter(e => !(isAssistantDirector && onlyMine) || e.supervisor_id === profile?.id || !!supervisedStationIds?.includes(e.station_id))
     .filter(e => filterStation === 'all' || e.station_id === filterStation)
     .filter(e => !searchQuery ||
       (e.full_name_ar || '').includes(searchQuery) ||
@@ -1178,6 +1181,16 @@ export default function EvaluationPage() {
               <input className="ev-input" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                 placeholder={isAr ? 'بحث: اسم، رقم وظيفي، محطة...' : 'Search: name, job no., station...'}
                 style={{ flex: '1 1 180px', direction: isAr ? 'rtl' : 'ltr' }} />
+              {isAssistantDirector && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[[true, isAr ? 'موظفيني' : 'My employees'], [false, isAr ? 'الكل' : 'All']].map(([v, l]) => (
+                    <button key={String(v)} onClick={() => setOnlyMine(v)}
+                      style={{ padding: '5px 14px', borderRadius: 8, border: `1.5px solid ${onlyMine === v ? '#1C2B4A' : 'var(--border)'}`, background: onlyMine === v ? '#1C2B4A' : 'var(--card)', color: onlyMine === v ? '#fff' : 'var(--text-3)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              )}
               {isAdmin && (
                 <StationPicker stations={stations} value={filterStation} onChange={setFilterStation} isAr={isAr} />
               )}

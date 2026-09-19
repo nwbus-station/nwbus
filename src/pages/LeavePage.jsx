@@ -7,7 +7,7 @@ import { getCached, setCached, clearCached } from '../lib/pageCache'
 import DatePicker from '../components/shared/DatePicker'
 import { notifyMany } from '../utils/notifications'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
-import { ADMIN_ROLE_VALUES } from '../utils/constants'
+import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE } from '../utils/constants'
 import { yearsOfService, annualEntitlement, accruedBalance, leaveRemaining } from '../utils/leaveBalance'
 
 /* ─── ثوابت ─── */
@@ -354,6 +354,23 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
   }
 }
 
+// مستلمو مرحلة المشرف: المسؤول المباشر إن وُجد، وإلا كل مشرفي المحطة + مساعد المدير المخصصة له المحطة
+async function findSupervisorIds(stationId, directSupervisorId) {
+  if (directSupervisorId) return [directSupervisorId]
+  if (!stationId) return []
+  const { data: sups } = await supabase.from('users')
+    .select('id').in('role', ['station_admin', 'area_supervisor', 'shift_supervisor'])
+    .eq('station_id', stationId).eq('is_active', true)
+  const { data: us } = await supabase.from('user_stations').select('user_id').eq('station_id', stationId)
+  let assistants = []
+  if (us?.length) {
+    const { data } = await supabase.from('users')
+      .select('id').eq('role', ASSISTANT_DIRECTOR_ROLE).eq('is_active', true).in('id', us.map(r => r.user_id))
+    assistants = data ?? []
+  }
+  return [...new Set([...(sups ?? []).map(x => x.id), ...assistants.map(x => x.id)])]
+}
+
 /* ══════════════════════════════════════════
    فورم طلب إجازة جديد
 ══════════════════════════════════════════ */
@@ -491,21 +508,11 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
     {
       const typeLabel = LEAVE_TYPES.find(t => t.id === form.leave_type)?.ar ?? form.leave_type
 
-      // مستلمو المشرفين: المسؤول المباشر إن وُجد، وإلا كل مشرفي المحطة
-      let supervisorIds = []
-      if (profile.supervisor_id) {
-        supervisorIds = [profile.supervisor_id]
-      } else {
-        const { data: supervisors } = await supabase.from('users')
-          .select('id').in('role', ['station_admin', 'area_supervisor', 'shift_supervisor'])
-          .eq('station_id', profile.station_id).eq('is_active', true)
-        supervisorIds = (supervisors ?? []).map(s => s.id)
-      }
-      supervisorIds = supervisorIds.filter(id => id !== profile.id)
+      const supervisorIds = (await findSupervisorIds(profile.station_id, profile.supervisor_id)).filter(id => id !== profile.id)
 
       const { data: adminsList } = await supabase.from('users')
         .select('id').in('role', ADMIN_ROLE_VALUES).eq('is_active', true)
-      const adminIds = (adminsList ?? []).map(a => a.id).filter(id => id !== profile.id)
+      const adminIds = (adminsList ?? []).map(a => a.id).filter(id => id !== profile.id && !supervisorIds.includes(id))
 
       // supervisor_status = pending → المشرف مطالَب بالإجراء الآن
       const supervisorActionNeeded = !autoApproved && isEmployeeRole
@@ -901,6 +908,10 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
   const isAdmin     = ADMIN_ROLE_VALUES.includes(role)
   const isSupervisor = role === 'station_admin' || role === 'shift_supervisor'
   const isOwn       = leave.employee_id === profile?.id
+  const { supervisedStationIds } = useAuth()
+  // مساعد المدير: أدمن كامل + مرحلة المشرف لموظفي محطاته المخصصة (يوافق أولاً ثم الأدمن)
+  const isAssistant = role === ASSISTANT_DIRECTOR_ROLE
+  const inMySupervisedStations = isAssistant && !!supervisedStationIds?.includes(leave.station_id)
 
   const typeLabel   = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
   const typeIcon    = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.icon ?? ''
@@ -910,8 +921,10 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
     ? formatHoursAr(leave.days_count * 24) : null
 
   // هل يمكن لهذا المستخدم الموافقة/الرفض؟
-  const canActSupervisor = isSupervisor && leave.supervisor_status === 'pending' && !isOwn
-  const canActManager    = isAdmin && leave.manager_status === 'pending'
+  const canActSupervisor = (isSupervisor || inMySupervisedStations) && leave.supervisor_status === 'pending' && !isOwn
+  // مساعد المدير اللي وافق كمشرف ما يعتمد نفس الإجازة كأدمن — الاعتماد النهائي لأدمن آخر
+  const didSupervisorStage = isAssistant && leave.supervisor_status !== 'pending' && leave.supervisor_by === profile?.full_name_ar
+  const canActManager    = isAdmin && leave.manager_status === 'pending' && !didSupervisorStage
   const canAct           = canActSupervisor || canActManager
   const fullyApproved    = leave.status === 'approved' && leave.supervisor_status === 'approved' && leave.manager_status === 'approved'
 
@@ -1299,7 +1312,7 @@ export default function LeavePage() {
         // إذا وافق → أشعر الأدمن
         if (isApproved) {
           const { data: admins } = await supabase.from('users').select('id').in('role', ADMIN_ROLE_VALUES).eq('is_active', true)
-          await notifyMany((admins ?? []).map(a => a.id), {
+          await notifyMany((admins ?? []).map(a => a.id).filter(aid => aid !== profile.id), {
             title: `طلب إجازة بانتظار موافقتك — ${leave.employee_name}`,
             body: `${typeLabel} · ${leave.days_count} أيام · وافق عليها المشرف`,
             type: 'warning', refType: 'leave', refId: id,
@@ -1313,18 +1326,9 @@ export default function LeavePage() {
           type: isApproved ? 'success' : 'error', refType: 'leave', refId: id,
         })
 
-        // مستلمو المشرفين: المسؤول المباشر للموظف إن وُجد، وإلا كل مشرفي محطته
         const { data: emp } = await supabase.from('users')
           .select('supervisor_id, station_id').eq('id', leave.employee_id).single()
-        let supervisorIds = []
-        if (emp?.supervisor_id) {
-          supervisorIds = [emp.supervisor_id]
-        } else if (emp?.station_id) {
-          const { data: supervisors } = await supabase.from('users')
-            .select('id').in('role', ['station_admin', 'area_supervisor', 'shift_supervisor'])
-            .eq('station_id', emp.station_id).eq('is_active', true)
-          supervisorIds = (supervisors ?? []).map(s => s.id)
-        }
+        const supervisorIds = await findSupervisorIds(emp?.station_id, emp?.supervisor_id)
         await notifyMany(supervisorIds.filter(sid => sid !== profile.id), {
           title: isApproved
             ? `✓ تمت الموافقة على إجازة ${leave.employee_name}`

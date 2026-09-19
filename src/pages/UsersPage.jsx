@@ -515,7 +515,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     } catch {}
   }, [user, form, stationSet, primaryStationId])
   useEffect(() => {
-    if (user?.id && (user.role === 'station_admin' || user.role === 'area_supervisor')) {
+    if (user?.id && (user.role === 'station_admin' || user.role === 'area_supervisor' || user.role === 'assistant_stations_executive_director')) {
       supabase.from('user_stations').select('station_id').eq('user_id', user.id)
         .then(({ data }) => { if (data?.length) setStationSet(new Set(data.map(r => r.station_id))) })
     }
@@ -538,7 +538,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
     const ids = [...stationSet]
     if (ids.length) await supabase.from('user_stations').insert(ids.map(sid => ({ user_id: uid, station_id: sid })))
   }
-  const isMultiStationRole = form.role === 'station_admin' || form.role === 'area_supervisor'
+  const isMultiStationRole = form.role === 'station_admin' || form.role === 'area_supervisor' || form.role === 'assistant_stations_executive_director'
   // المحطة الأساسية للمشرف = اللي حددها الأدمن صراحة (أو أول محطة كاحتياط)
   const primaryStation = () =>
     isMultiStationRole && stationSet.size
@@ -591,7 +591,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           created_by:   profile.id,
         }).select('id').single()
         if (insertErr) throw insertErr
-        if (inserted?.id && (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor')) await syncStations(inserted.id)
+        if (inserted?.id && (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor' || form.role === 'assistant_stations_executive_director')) await syncStations(inserted.id)
 
         if (inserted?.id) {
           const extras = {}
@@ -646,7 +646,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], onClose
           p_is_agent:        !!form.is_agent,
         })
         if (updErr) throw updErr
-        if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor') await syncStations(user.id)
+        if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor' || form.role === 'assistant_stations_executive_director') await syncStations(user.id)
 
         // خانة "تقييم العميل" و"مشرف الوردية الآخر" أضيفتا بعد إنشاء admin_update_user — تحديث مباشر بدل تعديل الدالة
         if (isGeneralAdmin) {

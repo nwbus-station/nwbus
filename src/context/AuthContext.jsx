@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { ADMIN_ROLE_VALUES } from '../utils/constants'
+import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE } from '../utils/constants'
 
 const AuthContext = createContext(null)
 
@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
   const [loading,           setLoading]           = useState(true)
   const [profileError,      setProfileError]      = useState(null)  // debug error message
   const [allowedStationIds, setAllowedStationIds] = useState(null)  // null = all, array = restricted
+  const [supervisedStationIds, setSupervisedStationIds] = useState([])  // محطات مساعد المدير كمشرف (لا تقيّد صلاحياته كأدمن)
   const profileIdRef = useRef(null)
   const authUserIdRef = useRef(null) // auth.users id لآخر مستخدم تم جلب بروفايله فعلياً
 
@@ -47,6 +48,12 @@ export function AuthProvider({ children }) {
       setProfile(data.role === 'area_supervisor' ? { ...data, role: 'station_admin', display_role: 'area_supervisor' } : data)
       setProfileError(null)
       // مشرف منطقة / مشرف محطة — نجلب محطاته المخصصة من user_stations
+      if (data.role === ASSISTANT_DIRECTOR_ROLE) {
+        const { data: us } = await supabase.from('user_stations').select('station_id').eq('user_id', data.id)
+        setSupervisedStationIds((us ?? []).map(r => r.station_id))
+      } else {
+        setSupervisedStationIds([])
+      }
       if (data.role === 'area_supervisor' || data.role === 'station_admin') {
         const { data: us } = await supabase
           .from('user_stations')
@@ -192,6 +199,7 @@ export function AuthProvider({ children }) {
   // Permission helpers
   // stations_executive_director له نفس صلاحيات general_admin بالضبط — فقط مسمى وظيفي مختلف
   const isGeneralAdmin    = ADMIN_ROLE_VALUES.includes(profile?.role)
+  const isAssistantDirector = profile?.role === ASSISTANT_DIRECTOR_ROLE
   const isShiftSupervisor = profile?.role === 'shift_supervisor'
   const isStationAdmin    = profile?.role === 'station_admin' || isShiftSupervisor
   const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true
@@ -211,6 +219,8 @@ export function AuthProvider({ children }) {
       signIn,
       signOut,
       isGeneralAdmin,
+      isAssistantDirector,
+      supervisedStationIds,
       isShiftSupervisor,
       isStationAdmin,
       isAccountant,
