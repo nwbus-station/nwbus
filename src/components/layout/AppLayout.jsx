@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import { useAppSettings } from '../../context/AppSettingsContext'
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
 import { onPwaUpdateAvailable, applyPwaUpdate } from '../../lib/pwaUpdate'
@@ -191,22 +192,33 @@ const Icon = ({ d, size = 16 }) => (
   </svg>
 )
 
-async function selfChangePasswordViaEdge(currentPassword, newPassword) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const token = session?.access_token
-  if (!token) throw new Error('No active session')
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/self-change-password`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
-  })
-  const body = await res.json()
-  if (!res.ok) throw new Error(body.error || 'Failed to change password')
+// الموظف يغيّر كلمة مروره بنفسه مباشرة من حسابه (بدون دالة سيرفر): نتأكد من الحالية بجلسة منفصلة ثم نحدّث بجلسته هو
+async function changeOwnPassword(currentPassword, newPassword) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user?.email) throw new Error('No active session')
+
+  const verifier = createClient(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_ANON_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'nwbus_verify_' + Date.now() } }
+  )
+  const { error: verifyErr } = await verifier.auth.signInWithPassword({ email: user.email, password: currentPassword })
+  if (verifyErr) throw new Error('Current password is incorrect')
+
+  const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword })
+  if (updateErr) throw updateErr
+
+  // كلمة المرور صارت من اختيار الموظف — تُمسح النسخة اللي كان الأدمن يقدر يشوفها، ونُشعره بالتغيير
+  const { data: me } = await supabase.from('users').select('id').eq('auth_id', user.id).single()
+  if (me?.id) {
+    await supabase.from('users').update({ login_password: null }).eq('id', me.id)
+    await supabase.from('notifications').insert({
+      user_id: me.id,
+      type: 'info',
+      title: 'تم تغيير كلمة المرور',
+      body: 'تم تغيير كلمة مرور حسابك بنجاح. إذا لم تكن أنت من قام بهذا، تواصل مع الإدارة فوراً.',
+    })
+  }
 }
 
 function ChangePasswordModal({ isAr, onClose }) {
@@ -225,7 +237,7 @@ function ChangePasswordModal({ isAr, onClose }) {
     if (next !== confirm) { setError(isAr ? 'كلمتا المرور الجديدتان غير متطابقتين' : 'New passwords do not match'); return }
     setSaving(true)
     try {
-      await selfChangePasswordViaEdge(current, next)
+      await changeOwnPassword(current, next)
       setDone(true)
       setTimeout(onClose, 1500)
     } catch (err) {
