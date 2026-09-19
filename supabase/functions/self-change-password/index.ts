@@ -36,7 +36,8 @@ serve(async (req) => {
     // تحقق من كلمة المرور الحالية بمحاولة دخول منفصلة — بدون المساس بجلسة المستخدم الفعلية
     const verifier = createClient(url, anonKey, { auth: { persistSession: false } })
     const { error: verifyErr } = await verifier.auth.signInWithPassword({
-      email: `${callerProfile.username}@nwbus.sa`,
+      // إيميل حساب المصادقة الفعلي — بدل إعادة بنائه من username (يفشل لو اختلفت حالة الأحرف أو الصيغة عند الموظفين القدامى)
+      email: user.email ?? `${String(callerProfile.username).toLowerCase()}@nwbus.sa`,
       password: current_password,
     })
     if (verifyErr) return json({ error: 'Current password is incorrect' }, 401)
