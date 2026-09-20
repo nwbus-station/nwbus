@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import ConfirmDialog from '../shared/ConfirmDialog'
+import RouteText from '../shared/RouteText'
 import NewTripModal from './NewTripModal'
 
 const WEEKDAYS = [
@@ -109,9 +110,7 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-1 truncate">
-                        {(isAr ? tr.from_station?.name_ar : tr.from_station?.name_en) || '—'}
-                        {' ← '}
-                        {(isAr ? tr.to_station?.name_ar : tr.to_station?.name_en) || '—'}
+                        <RouteText from={(isAr ? tr.from_station?.name_ar : tr.from_station?.name_en) || '—'} to={(isAr ? tr.to_station?.name_ar : tr.to_station?.name_en) || '—'} />
                         {tr.scheduled_departure && <> {' · '}{tr.scheduled_departure.slice(0, 5)}</>}
                       </p>
                     </div>

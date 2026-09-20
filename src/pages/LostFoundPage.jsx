@@ -6,6 +6,7 @@ import { getCached, setCached, clearCached } from '../lib/pageCache'
 import { ITEM_TYPES } from '../utils/constants'
 import DatePicker from '../components/shared/DatePicker'
 import { todayStr } from '../utils/dates'
+import RouteText from '../components/shared/RouteText'
 
 const toLatinNums = v => v.replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => d.charCodeAt(0) - 1632)
 
@@ -842,7 +843,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                         </div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                           <span>{r.contact_number}</span>
-                          {r.from_st?.name_ar && r.to_st?.name_ar && <span>{r.from_st.name_ar} ← {r.to_st.name_ar}</span>}
+                          {r.from_st?.name_ar && r.to_st?.name_ar && <span><RouteText from={r.from_st.name_ar} to={r.to_st.name_ar} /></span>}
                           <span>{r.created_by_name}</span>
                         </div>
                       </div>

@@ -20,6 +20,7 @@ import { applyDueSchedules } from '../utils/importSchedule'
 
 /* ─── helpers ────────────────────────────────────────────── */
 import { todayStr } from '../utils/dates'
+import RouteText from '../components/shared/RouteText'
 import { isRestStation } from '../utils/stations'
 
 const accuracyColor = v => ({
@@ -1238,24 +1239,20 @@ export default function TransportationPage() {
                         )}
                         {tripShipments.map((sh, si) => (
                           <span key={si} className="text-[9px] font-bold rounded px-1.5 py-px" style={{ background: 'var(--warning-bg)', color: 'var(--warning)' }}>
-                            {sh.from_st?.name_ar} ← {sh.to_st?.name_ar}
+                            <RouteText from={sh.from_st?.name_ar} to={sh.to_st?.name_ar} />
                           </span>
                         ))}
                       </div>
                       {trip.trip_name && <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>{trip.trip_name}</div>}
                       {/* اسم الخط على الجوال */}
                       <div className="md:hidden text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-                        {isAr ? trip.from_station?.name_ar : trip.from_station?.name_en}
-                        <span style={{ margin:'0 3px', color:'var(--border)' }}>←</span>
-                        {isAr ? trip.to_station?.name_ar : trip.to_station?.name_en}
+                        <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
                       </div>
                     </td>
 
                     {/* الخط */}
                     <td className="px-3 py-2.5 text-xs hidden md:table-cell" style={{ color: 'var(--text-3)' }}>
-                      {isAr ? trip.from_station?.name_ar : trip.from_station?.name_en}
-                      <span style={{ margin:'0 4px', color:'var(--border)' }}>←</span>
-                      {isAr ? trip.to_station?.name_ar : trip.to_station?.name_en}
+                      <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
                     </td>
 
                     {/* التنفيذ */}
