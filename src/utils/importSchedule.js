@@ -19,7 +19,94 @@ import { todayStr } from './dates'
 const isMissingFn = err =>
   err && (err.code === 'PGRST202' || /could not find the function|does not exist/i.test(err.message || ''))
 
+/* ── تحديث أوقات رحلات المحطات بعد أي رفع جدول ──
+   الرفع (دالة القاعدة أو المسار القديم) لا يلمس صفوف station_trips الموجودة، فتبقى أوقات المحطات
+   نسخة من أول جدول. هنا نقارن كل وقت مخزّن بالجدول القديم: لو يطابقه (ما عدّله أحد) نحدّثه للجديد،
+   ولو يخالفه (تعديل يدوي من الأدمن) نتركه كما هو. */
+const hhmm5 = v => (v ? String(v).slice(0, 5) : '')
+
+async function fetchAllRows(table, columns, orderCols) {
+  const out = []
+  for (let from = 0; ; from += 1000) {
+    let q = supabase.from(table).select(columns)
+    orderCols.forEach(c => { q = q.order(c) })   // ترتيب ثابت حتى لا تتكرر/تُفقد صفوف بين الصفحات
+    const { data, error } = await q.range(from, from + 999)
+    if (error) throw new Error(`قراءة ${table}: ${error.message}`)
+    out.push(...(data || []))
+    if (!data || data.length < 1000) break
+  }
+  return out
+}
+
+async function snapshotScheduleTimes() {
+  const [trips, stops] = await Promise.all([
+    fetchAllRows('trip_schedule', 'id, scheduled_departure, scheduled_arrival, from_station_id, to_station_id', ['id']),
+    fetchAllRows('trip_schedule_stops', 'trip_schedule_id, station_id, arrival_time, departure_time', ['trip_schedule_id', 'station_id']),
+  ])
+  const m = new Map()
+  stops.forEach(x => m.set(`${x.station_id}|${x.trip_schedule_id}`, { arr: hhmm5(x.arrival_time), dep: hhmm5(x.departure_time) }))
+  trips.forEach(t => {
+    if (t.from_station_id) {
+      const k = `${t.from_station_id}|${t.id}`
+      const cur = m.get(k) || { arr: '', dep: '' }
+      if (!cur.dep) cur.dep = hhmm5(t.scheduled_departure)
+      m.set(k, cur)
+    }
+    if (t.to_station_id) {
+      const k = `${t.to_station_id}|${t.id}`
+      const cur = m.get(k) || { arr: '', dep: '' }
+      if (!cur.arr) cur.arr = hhmm5(t.scheduled_arrival)
+      m.set(k, cur)
+    }
+  })
+  return m
+}
+
+async function refreshStationTripTimes(oldTimes, existingRows) {
+  const newTimes = await snapshotScheduleTimes()
+  const patches = []
+  existingRows.forEach(r => {
+    const k = `${r.station_id}|${r.trip_schedule_id}`
+    const o = oldTimes.get(k), n = newTimes.get(k)
+    if (!o || !n) return
+    const patch = {}
+    const curArr = hhmm5(r.arrival_time), curDep = hhmm5(r.departure_time)
+    if (curArr && n.arr && n.arr !== curArr && curArr === o.arr) patch.arrival_time = n.arr
+    if (curDep && n.dep && n.dep !== curDep && curDep === o.dep) patch.departure_time = n.dep
+    if (Object.keys(patch).length) patches.push({ station_id: r.station_id, trip_schedule_id: r.trip_schedule_id, patch })
+  })
+  for (let i = 0; i < patches.length; i += 25) {
+    const results = await Promise.all(patches.slice(i, i + 25).map(p =>
+      supabase.from('station_trips').update(p.patch)
+        .eq('station_id', p.station_id).eq('trip_schedule_id', p.trip_schedule_id)
+    ))
+    const failed = results.find(x => x.error)
+    if (failed) throw new Error('تحديث أوقات المحطات: ' + failed.error.message)
+  }
+  return patches.length
+}
+
 export async function importSchedule(parsed, profile, fileName = '', opts = {}) {
+  let oldTimes = null, existingRows = null
+  try {
+    ;[oldTimes, existingRows] = await Promise.all([
+      snapshotScheduleTimes(),
+      fetchAllRows('station_trips', 'station_id, trip_schedule_id, arrival_time, departure_time', ['station_id', 'trip_schedule_id']),
+    ])
+  } catch (err) { console.warn('schedule times snapshot skipped:', err) }
+
+  const summary = await importScheduleCore(parsed, profile, fileName, opts)
+
+  if (oldTimes && existingRows) {
+    try {
+      const n = await refreshStationTripTimes(oldTimes, existingRows)
+      if (summary && typeof summary === 'object') summary.stationTimesRefreshed = n
+    } catch (err) { console.warn('station times refresh failed:', err) }
+  }
+  return summary
+}
+
+async function importScheduleCore(parsed, profile, fileName = '', opts = {}) {
   const { startDate = null, endDate = null, keepManualIds = [] } = opts
 
   // بعد أي مسار رفع: نعيد تفعيل الرحلات اليدوية اللي الأدمن اختار إبقاءها
