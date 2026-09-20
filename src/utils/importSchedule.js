@@ -68,9 +68,16 @@ async function refreshStationTripTimes(oldTimes, existingRows) {
   existingRows.forEach(r => {
     const k = `${r.station_id}|${r.trip_schedule_id}`
     const o = oldTimes.get(k), n = newTimes.get(k)
-    if (!o || !n) return
+    if (!o) return                              // ربط يدوي ليس من الجدول — لا نلمسه
     const patch = {}
     const curArr = hhmm5(r.arrival_time), curDep = hhmm5(r.departure_time)
+    if (!n) {
+      // المحطة اختفت من مسار الرحلة في الجدول الجديد: نمسح أوقاتها غير المعدّلة (وإلا تظهر كرحلة وهمية بعد الرفع)
+      if (curArr && curArr === o.arr) patch.arrival_time = null
+      if (curDep && curDep === o.dep) patch.departure_time = null
+      if (Object.keys(patch).length) patches.push({ station_id: r.station_id, trip_schedule_id: r.trip_schedule_id, patch })
+      return
+    }
     if (curArr && n.arr && n.arr !== curArr && curArr === o.arr) patch.arrival_time = n.arr
     if (curDep && n.dep && n.dep !== curDep && curDep === o.dep) patch.departure_time = n.dep
     if (Object.keys(patch).length) patches.push({ station_id: r.station_id, trip_schedule_id: r.trip_schedule_id, patch })
