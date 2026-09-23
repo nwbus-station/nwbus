@@ -22,3 +22,9 @@ drop policy if exists "titles_select" on custom_titles;
 drop policy if exists "titles_write"  on custom_titles;
 create policy "titles_select" on custom_titles for select using (auth.uid() is not null);
 create policy "titles_write"  on custom_titles for all using (is_admin()) with check (is_admin());
+
+-- منح صريح لوصول الـ Data API (Supabase توقفت عن منحه تلقائياً للجداول الجديدة بعد 30 أكتوبر 2026) —
+-- RLS أعلاه يبقى هو الحارس الفعلي؛ هذا فقط يفتح الباب لتصل الصلاحيات إليه أصلاً
+grant select on public.custom_titles to anon;
+grant select, insert, update, delete on public.custom_titles to authenticated;
+grant select, insert, update, delete on public.custom_titles to service_role;
