@@ -148,6 +148,7 @@ function StationModal({ station, onClose, onSaved }) {
     city_group: station?.city_group ?? '',
     operational: station?.operational ?? true,
     is_active:  station?.is_active  ?? true,
+    combined_arr_dep: station?.combined_arr_dep ?? false,
   })
   const [tripNums, setTripNums] = useState(Array.isArray(station?.trip_numbers) ? station.trip_numbers : [])
   const [numInput, setNumInput] = useState('')
@@ -294,6 +295,17 @@ function StationModal({ station, onClose, onSaved }) {
               checked={form.is_active} onChange={e => set('is_active', e.target.checked)} />
             {isAr ? 'نشطة' : 'Active'}
           </label>
+          <div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" className="rounded"
+                checked={!!form.combined_arr_dep} onChange={e => set('combined_arr_dep', e.target.checked)} />
+              {isAr ? 'وصول ومغادرة ببطاقة إدخال واحدة' : 'Arrival + departure on one entry card'}
+            </label>
+            <p className="text-[11px] text-gray-400 mt-1 ms-6">
+              {isAr ? 'للمحطات اللي الباص يوصلها ويغادرها بنفس الوقت (مثل الطائف): يُدخل الموظف بطاقة واحدة، وتُسجَّل في التقارير كوصول ومغادرة.'
+                    : 'For stops where the bus arrives and departs together: one entry card, still recorded as both arrival and departure in reports.'}
+            </p>
+          </div>
           {error && <p className="text-red-600 text-xs bg-red-50 rounded p-2">{error}</p>}
           <div className="flex gap-3">
             <button type="submit" disabled={saving}

@@ -59,7 +59,7 @@ const busTypeLookup = t => BUS_TYPE[String(t || '').toUpperCase()] ?? null
 /* ─── Trip Entry Modal ──────────────────────────────────── */
 const DRAFT_KEY = 'tm_draft'
 
-function TripModal({ trip, record, stationId, stationName, stations = [], isArrival, schedTime, recordDate, onClose, onSaved }) {
+function TripModal({ trip, record, stationId, stationName, stations = [], isArrival, combined = false, arrivalRecord = null, schedArrTime = '', schedTime, recordDate, onClose, onSaved }) {
   const { profile, isGeneralAdmin, isStationAdmin } = useAuth()
   const canPickStation = isGeneralAdmin || isStationAdmin
   const { i18n } = useTranslation()
@@ -82,8 +82,9 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     bus_number:         record?.bus_number ?? '',
     actual_departure:   record?.actual_departure
       ? new Date(record.actual_departure).toISOString().slice(11, 16) : '',
-    actual_arrival:     record?.actual_arrival
-      ? new Date(record.actual_arrival).toISOString().slice(11, 16) : '',
+    actual_arrival:     (combined ? arrivalRecord : record)?.actual_arrival
+      ? new Date((combined ? arrivalRecord : record).actual_arrival).toISOString().slice(11, 16) : '',
+    arr_passenger_count: arrivalRecord?.passenger_count ?? '',
     passenger_count:    record?.passenger_count ?? '',
     missed_count:       record?.missed_count ?? 0,
     operational_status: record?.operational_status ?? 'Normal',
@@ -181,6 +182,13 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
       setError(isAr ? 'يرجى إدخال عدد الركاب (يمكن أن يكون 0)' : 'Passenger count is required (can be 0)')
       return
     }
+    if (combined) {
+      if (!form.actual_arrival) { setError(isAr ? 'يرجى إدخال وقت الوصول الفعلي' : 'Actual arrival time is required'); return }
+      if (form.arr_passenger_count === '' || form.arr_passenger_count === null || form.arr_passenger_count === undefined) {
+        setError(isAr ? 'يرجى إدخال عدد ركاب الوصول (يمكن أن يكون 0)' : 'Arrival passenger count is required (can be 0)')
+        return
+      }
+    }
 
     // التحقق من تطابق عدد التذاكر مع الفرق المحسوب (المغادرة فقط)
     if (!isArrival && manifestMatch === false && expectedMissed !== null) {
@@ -231,34 +239,51 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     }
 
     // وقت المغادرة أو الوصول حسب النوع
+    const sharedBase = { ...base }
     if (isArrival) base.actual_arrival = ts(form.actual_arrival)
     else           base.actual_departure = ts(form.actual_departure)
 
-    let res
-    if (record) {
-      // قفل متفائل: لا تكتب إلا إذا لم يتغيّر الصف منذ فتحه (يمنع الكتابة فوق تعديل مستخدم آخر)
-      let q = supabase.from('trip_records').update({
-        ...base,
-        updated_by:      profile.id,
-        updated_by_name: profile.full_name_ar,
-        updated_at:      new Date().toISOString(),
-      }).eq('id', record.id)
-      q = record.updated_at ? q.eq('updated_at', record.updated_at) : q.is('updated_at', null)
-      res = await q.select('id')
-      if (!res.error && (!res.data || res.data.length === 0)) {
-        setError(isAr
-          ? '⚠ عُدّل هذا السجل من مستخدم آخر للتو. حدّث الصفحة وأعد الإدخال حتى لا تُمحى بياناته.'
-          : '⚠ This record was just changed by another user. Refresh and re-enter to avoid overwriting.')
-        setSaving(false)
-        return
+    const conflictMsg = isAr
+      ? '⚠ عُدّل هذا السجل من مستخدم آخر للتو. حدّث الصفحة وأعد الإدخال حتى لا تُمحى بياناته.'
+      : '⚠ This record was just changed by another user. Refresh and re-enter to avoid overwriting.'
+
+    // كتابة سجل واحد: تعديل بقفل متفائل لو موجود (يمنع الكتابة فوق تعديل مستخدم آخر)، وإلا إضافة
+    async function writeRecord(existing, payload) {
+      if (existing) {
+        let q = supabase.from('trip_records').update({
+          ...payload,
+          updated_by:      profile.id,
+          updated_by_name: profile.full_name_ar,
+          updated_at:      new Date().toISOString(),
+        }).eq('id', existing.id)
+        q = existing.updated_at ? q.eq('updated_at', existing.updated_at) : q.is('updated_at', null)
+        const r = await q.select('id')
+        if (!r.error && (!r.data || r.data.length === 0)) return { conflict: true }
+        return r
       }
-    } else {
-      res = await supabase.from('trip_records').upsert(base, {
+      return supabase.from('trip_records').upsert(payload, {
         onConflict: 'trip_schedule_id,record_date,station_id,is_arrival',
         ignoreDuplicates: false,
       })
     }
 
+    // بطاقة وصول + مغادرة: سجل الوصول أولاً ثم سجل المغادرة بنفس الحافلة — كل منهما سجل مستقل يظهر في التقارير
+    if (combined) {
+      const arrPayload = {
+        ...sharedBase,
+        is_arrival: true,
+        passenger_count: Number(form.arr_passenger_count),
+        manifest_match: null, manifest_total: null,
+        missed_count: 0, missed_tickets: [],
+        actual_arrival: ts(form.actual_arrival),
+      }
+      const ra = await writeRecord(arrivalRecord, arrPayload)
+      if (ra.conflict) { setError(conflictMsg); setSaving(false); return }
+      if (ra.error) { setError(ra.error.message); setSaving(false); return }
+    }
+
+    const res = await writeRecord(record, base)
+    if (res.conflict) { setError(conflictMsg); setSaving(false); return }
     if (res.error) setError(res.error.message)
     else { clearDraft(); onSaved(); onClose() }
     setSaving(false)
@@ -290,7 +315,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
           </div>
           <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
             <span style={{ fontSize:'0.7rem', borderRadius:20, padding:'3px 10px', fontWeight:700, background: isArrival ? 'rgba(52,211,153,0.2)' : 'rgba(251,191,36,0.2)', color: isArrival ? '#34D399' : '#FBBF24' }}>
-              {isArrival ? (isAr ? 'وصول' : 'Arrival') : (isAr ? 'مغادرة' : 'Departure')}
+              {combined ? (isAr ? 'وصول + مغادرة' : 'Arrival + Departure') : isArrival ? (isAr ? 'وصول' : 'Arrival') : (isAr ? 'مغادرة' : 'Departure')}
             </span>
             {trip.bus_type && busTypeLookup(trip.bus_type) && (
               <span style={{ fontSize:'0.65rem', borderRadius:4, padding:'2px 8px', ...busTypeLookup(trip.bus_type).style }}>
@@ -316,6 +341,27 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
             />
           </div>
 
+          {/* بطاقة وصول + مغادرة: قسم الوصول */}
+          {combined && (
+            <div style={{ border:'1px solid var(--border)', borderRadius:10, padding:'12px 14px', background:'var(--surface)', display:'flex', flexDirection:'column', gap:12 }}>
+              <p style={{ margin:0, fontSize:'0.75rem', fontWeight:700, color:'var(--success)' }}>
+                {isAr ? 'الوصول' : 'Arrival'}{schedArrTime ? ` · ${isAr ? 'مجدول' : 'sched.'} ${schedArrTime}` : ''}
+              </p>
+              <div>
+                <label style={S.label}>{isAr ? 'وقت الوصول الفعلي *' : 'Actual Arrival *'}</label>
+                <TimeInput24 value={form.actual_arrival} onChange={v => set('actual_arrival', v)} />
+              </div>
+              <div>
+                <label style={S.label}>{isAr ? 'ركاب الوصول *' : 'Arrival passengers *'}</label>
+                <input type="text" inputMode="numeric" style={S.input} placeholder="0"
+                  value={form.arr_passenger_count} onChange={e => set('arr_passenger_count', cleanNumber(e.target.value))}
+                  onFocus={e => e.target.style.borderColor='var(--accent)'}
+                  onBlur={e => e.target.style.borderColor='var(--border)'}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Actual time */}
           <div>
             <label style={S.label}>
@@ -331,7 +377,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
           {/* Passengers */}
           <div>
-            <label style={S.label}>{isAr ? 'الركاب *' : 'Passengers *'}</label>
+            <label style={S.label}>{combined ? (isAr ? 'ركاب المغادرة *' : 'Departure passengers *') : (isAr ? 'الركاب *' : 'Passengers *')}</label>
             <input type="text" inputMode="numeric" style={S.input} placeholder="0"
               value={form.passenger_count} onChange={e => set('passenger_count', cleanNumber(e.target.value))}
               onFocus={e => e.target.style.borderColor='var(--accent)'}
@@ -647,10 +693,10 @@ export default function TransportationPage() {
   // جلب المحطات: الأدمن يرى الكل؛ مشرف المنطقة محطاته؛ المشرف والمحاسب محطاتهم فقط
   useEffect(() => {
     if (isGeneralAdmin) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group').eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (isAreaSupervisor && allowedStationIds?.length) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if ((isStationAdmin || isAccountant) && profile?.id) {
       supabase.from('user_stations').select('station:station_id(id, name_ar, name_en)').eq('user_id', profile.id)
@@ -736,7 +782,7 @@ export default function TransportationPage() {
     const stationObj = stations.find(s => s.id === stationId) || profile?.station || { id: stationId }
     const s5 = t => t ? String(t).slice(0, 5) : ''
 
-    const entries = []
+    let entries = []
     ;(chosen ?? []).forEach(r => {
       const tr = r.trip
       if (!tr || !tr.is_active) return
@@ -794,6 +840,22 @@ export default function TransportationPage() {
         if (!(currentGroup && toGroup   && currentGroup === toGroup))   addDep(stationObj, depT)
       }
     })
+    // محطة "وصول ومغادرة ببطاقة واحدة": الرحلة اللي فيها وصول ومغادرة معاً تُعرض بطاقة واحدة
+    if (stationObj?.combined_arr_dep) {
+      const byTrip = {}
+      entries.forEach(e => { (byTrip[e.id] ??= {})[e.role] = e })
+      const seenTrip = new Set()
+      entries = entries.reduce((acc, e) => {
+        const g = byTrip[e.id]
+        if (g.arrival && g.departure) {
+          if (!seenTrip.has(e.id)) {
+            seenTrip.add(e.id)
+            acc.push({ ...g.arrival, role: 'both', schedTime: g.arrival.schedTime, schedArr: g.arrival.schedTime, schedDep: g.departure.schedTime, _key: e.id + '-ad' })
+          }
+        } else acc.push(e)
+        return acc
+      }, [])
+    }
     entries.sort((a, b) => (a.schedTime || '').localeCompare(b.schedTime || ''))
 
     // عدد الرحلات المخفية (كلياً أو أحد اتجاهيها) — لتنبيه الأدمن
@@ -916,13 +978,15 @@ export default function TransportationPage() {
       const matchedRecord = records.find(r =>
         r.trip_schedule_id === matchedTrip.id && r.is_arrival === draft.isArrival
       ) ?? null
-      setModal({ trip: matchedTrip, record: matchedRecord, isArrival: draft.isArrival, schedTime: matchedTrip.schedTime })
+      const isBothTrip = matchedTrip.role === 'both'
+      const matchedArr = isBothTrip ? (records.find(r => r.trip_schedule_id === matchedTrip.id && r.is_arrival === true) ?? null) : null
+      setModal({ trip: matchedTrip, record: matchedRecord, arrivalRecord: matchedArr, combined: isBothTrip, isArrival: draft.isArrival, schedTime: isBothTrip ? matchedTrip.schedDep : matchedTrip.schedTime })
     } catch {}
   }, [loading, trips])
 
   // إخفاء (تعليق) اتجاه واحد من الرحلة (مغادرة أو وصول) — للأدمن
   async function suspendStationTrip(tripId, role) {
-    const patch = role === 'arrival' ? { arr_enabled: false } : { dep_enabled: false }
+    const patch = role === 'arrival' ? { arr_enabled: false } : role === 'both' ? { arr_enabled: false, dep_enabled: false } : { dep_enabled: false }
     const { error } = await supabase.from('station_trips').update(patch)
       .eq('station_id', stationId).eq('trip_schedule_id', tripId)
     if (error) { alert((isAr ? 'فشل: ' : 'Failed: ') + error.message); return }
@@ -961,7 +1025,7 @@ export default function TransportationPage() {
 
   // Filter & search
   const filtered = trips.filter(t => {
-    if (filter !== 'all' && t.role !== filter) return false
+    if (filter !== 'all' && t.role !== filter && t.role !== 'both') return false
     if (!search) return true
     const q = search.toLowerCase()
     return (
@@ -970,14 +1034,15 @@ export default function TransportationPage() {
       t.trip_name?.includes(q) ||
       t.to_station?.name_ar?.includes(q) ||
       t.to_station?.name_en?.toLowerCase().includes(q) ||
-      recordMap[`${t.id}|${t.role === 'arrival' ? 'arrival' : 'departure'}`]?.bus_number?.includes(q)
+      recordMap[`${t.id}|${t.role === 'arrival' ? 'arrival' : 'departure'}`]?.bus_number?.includes(q) ||
+      (t.role === 'both' && recordMap[`${t.id}|arrival`]?.bus_number?.includes(q))
     )
   })
 
   // Stats
   const total        = trips.length
-  const departureCnt = trips.filter(t => t.role === 'departure').length
-  const arrivalCnt   = trips.filter(t => t.role === 'arrival').length
+  const departureCnt = trips.filter(t => t.role === 'departure' || t.role === 'both').length
+  const arrivalCnt   = trips.filter(t => t.role === 'arrival' || t.role === 'both').length
   const entered      = Object.keys(recordMap).length
   const onTime       = records.filter(r => r.departure_accuracy === 'On Time').length
   const delayed      = records.filter(r => r.departure_accuracy === 'Delayed').length
@@ -1194,9 +1259,11 @@ export default function TransportationPage() {
             </thead>
             <tbody>
               {filtered.map(trip => {
+                const isBoth      = trip.role === 'both'
                 const isArrival   = trip.role === 'arrival'
                 const rec         = recordMap[`${trip.id}|${isArrival ? 'arrival' : 'departure'}`]
-                const isEntry     = !!rec
+                const arrRec      = isBoth ? recordMap[`${trip.id}|arrival`] : null
+                const isEntry     = isBoth ? !!(rec && arrRec) : !!rec
                 const isCancelled = rec?.is_cancelled
                 const showTime    = trip.schedTime
                 const tripShipments = shipmentMap[trip.id] || []
@@ -1209,14 +1276,23 @@ export default function TransportationPage() {
 
                     {/* الوقت */}
                     <td className="px-3 py-2.5 text-center">
-                      <span className="font-mono font-bold text-gray-800">{showTime}</span>
+                      {isBoth ? (
+                        <div className="font-mono font-bold text-gray-800 leading-tight">
+                          <div>{trip.schedArr}</div>
+                          <div className="text-gray-500 text-[0.85em]">{trip.schedDep}</div>
+                        </div>
+                      ) : (
+                        <span className="font-mono font-bold text-gray-800">{showTime}</span>
+                      )}
                     </td>
 
                     {/* النوع */}
                     <td className="px-2 py-2.5 text-center">
                       <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap"
-                        style={{ background: isArrival ? 'var(--success-bg)' : 'var(--info-bg)', color: isArrival ? 'var(--success)' : 'var(--info)' }}>
-                        {isArrival ? (isAr ? 'وصول' : 'ARR') : (isAr ? 'مغادرة' : 'DEP')}
+                        style={isBoth
+                          ? { background: 'var(--surface-2)', color: 'var(--text-2)' }
+                          : { background: isArrival ? 'var(--success-bg)' : 'var(--info-bg)', color: isArrival ? 'var(--success)' : 'var(--info)' }}>
+                        {isBoth ? (isAr ? 'وصول + مغادرة' : 'ARR + DEP') : isArrival ? (isAr ? 'وصول' : 'ARR') : (isAr ? 'مغادرة' : 'DEP')}
                       </span>
                     </td>
 
@@ -1265,8 +1341,11 @@ export default function TransportationPage() {
                             </span>
                           )}
                           {rec.bus_number && <span className="font-mono text-gray-500">{rec.bus_number}</span>}
+                          {isBoth && arrRec?.passenger_count > 0 && (
+                            <span className="text-gray-500 font-mono">↓ {arrRec.passenger_count}</span>
+                          )}
                           {rec.passenger_count > 0 && (
-                            <span className="text-gray-500 font-mono">{rec.passenger_count} {isAr ? 'راكب' : 'pax'}</span>
+                            <span className="text-gray-500 font-mono">{isBoth ? '↑ ' : ''}{rec.passenger_count} {isAr ? 'راكب' : 'pax'}</span>
                           )}
                           {rec.operational_status && rec.operational_status !== 'Normal' && (
                             <span className="text-red-600 font-semibold">
@@ -1295,14 +1374,14 @@ export default function TransportationPage() {
                         )}
                         {isGeneralAdmin && (
                           <button onClick={() => suspendStationTrip(trip.id, trip.role)}
-                            title={isAr ? (trip.role === 'arrival' ? 'إخفاء الوصول' : 'إخفاء المغادرة') : 'Hide'}
+                            title={isAr ? (trip.role === 'arrival' ? 'إخفاء الوصول' : trip.role === 'both' ? 'إخفاء الوصول والمغادرة' : 'إخفاء المغادرة') : 'Hide'}
                             className="text-[11px] border border-gray-300 text-gray-400 rounded-sm px-1.5 py-1 hover:border-red-400 hover:text-red-500">
                             —
                           </button>
                         )}
                         {canEdit ? (
                           <button
-                            onClick={() => setModal({ trip, record: rec ?? null, isArrival, schedTime: trip.schedTime })}
+                            onClick={() => setModal({ trip, record: rec ?? null, arrivalRecord: arrRec ?? null, combined: isBoth, isArrival, schedTime: isBoth ? trip.schedDep : trip.schedTime })}
                             className={`text-xs rounded-sm px-3 py-1.5 font-semibold transition-colors whitespace-nowrap ${
                               isEntry
                                 ? 'border border-gray-300 text-gray-500 hover:border-gray-400 bg-white'
@@ -1411,6 +1490,9 @@ export default function TransportationPage() {
           stationName={selectedStationName || (isAr ? profile?.station?.name_ar : profile?.station?.name_en) || ''}
           stations={stations}
           isArrival={modal.isArrival}
+          combined={!!modal.combined}
+          arrivalRecord={modal.arrivalRecord}
+          schedArrTime={modal.trip?.schedArr}
           schedTime={modal.schedTime}
           recordDate={date}
           onClose={() => setModal(null)}
