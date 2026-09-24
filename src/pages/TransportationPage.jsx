@@ -1047,7 +1047,12 @@ export default function TransportationPage() {
   const total        = trips.length
   const departureCnt = trips.filter(t => t.role === 'departure' || t.role === 'both').length
   const arrivalCnt   = trips.filter(t => t.role === 'arrival' || t.role === 'both').length
-  const entered      = Object.keys(recordMap).length
+  const hasBoth      = trips.some(t => t.role === 'both')
+  const entered      = hasBoth
+    ? trips.filter(t => t.role === 'both'
+        ? (recordMap[`${t.id}|arrival`] && recordMap[`${t.id}|departure`])
+        : recordMap[`${t.id}|${t.role === 'arrival' ? 'arrival' : 'departure'}`]).length
+    : Object.keys(recordMap).length
   const onTime       = records.filter(r => r.departure_accuracy === 'On Time').length
   const delayed      = records.filter(r => r.departure_accuracy === 'Delayed').length
   const cancelled    = records.filter(r => r.is_cancelled).length
@@ -1267,7 +1272,9 @@ export default function TransportationPage() {
                 const isArrival   = trip.role === 'arrival'
                 const rec         = recordMap[`${trip.id}|${isArrival ? 'arrival' : 'departure'}`]
                 const arrRec      = isBoth ? recordMap[`${trip.id}|arrival`] : null
-                const isEntry     = isBoth ? !!(rec && arrRec) : !!rec
+                const dRec        = isBoth ? (rec || arrRec) : rec        // السجل المعروض في عمود التنفيذ
+                const isEntry     = isBoth ? !!(rec || arrRec) : !!rec      // فيه بيانات مدخلة (ولو جزئياً)
+                const isComplete  = isBoth ? !!(rec && arrRec) : !!rec
                 const isCancelled = rec?.is_cancelled
                 const showTime    = trip.schedTime
                 const tripShipments = shipmentMap[trip.id] || []
@@ -1339,21 +1346,26 @@ export default function TransportationPage() {
                     <td className="px-3 py-2.5 hidden lg:table-cell">
                       {isEntry ? (
                         <div className="flex items-center gap-2.5 flex-wrap text-xs">
-                          {rec.departure_accuracy && !isArrival && (
+                          {isBoth && !isComplete && (
+                            <span className="text-[10px] font-bold rounded px-1.5 py-px" style={{ background: 'var(--warning-bg)', color: 'var(--warning)' }}>
+                              {isAr ? (rec ? 'ناقص: الوصول' : 'ناقص: المغادرة') : (rec ? 'Missing arrival' : 'Missing departure')}
+                            </span>
+                          )}
+                          {rec?.departure_accuracy && !isArrival && (
                             <span className={accuracyColor(rec.departure_accuracy)}>
                               {isAr ? accuracyAr(rec.departure_accuracy) : rec.departure_accuracy}
                             </span>
                           )}
-                          {rec.bus_number && <span className="font-mono text-gray-500">{rec.bus_number}</span>}
+                          {dRec.bus_number && <span className="font-mono text-gray-500">{dRec.bus_number}</span>}
                           {isBoth && arrRec?.passenger_count > 0 && (
                             <span className="text-gray-500 font-mono">↓ {arrRec.passenger_count}</span>
                           )}
-                          {rec.passenger_count > 0 && (
+                          {rec?.passenger_count > 0 && (
                             <span className="text-gray-500 font-mono">{isBoth ? '↑ ' : ''}{rec.passenger_count} {isAr ? 'راكب' : 'pax'}</span>
                           )}
-                          {rec.operational_status && rec.operational_status !== 'Normal' && (
+                          {dRec.operational_status && dRec.operational_status !== 'Normal' && (
                             <span className="text-red-600 font-semibold">
-                              {isAr ? TRIP_STATUSES.find(s => s.value === rec.operational_status)?.ar : rec.operational_status}
+                              {isAr ? TRIP_STATUSES.find(s => s.value === dRec.operational_status)?.ar : dRec.operational_status}
                             </span>
                           )}
                         </div>
@@ -1390,7 +1402,7 @@ export default function TransportationPage() {
                               isEntry
                                 ? 'border border-gray-300 text-gray-500 hover:border-gray-400 bg-white'
                                 : 'bg-nwbus-primary text-white hover:bg-nwbus-dark'}`}>
-                            {isEntry ? (isAr ? 'تعديل' : 'Edit') : (isAr ? '+ إدخال' : '+ Enter')}
+                            {isEntry ? (isComplete ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'إكمال' : 'Complete')) : (isAr ? '+ إدخال' : '+ Enter')}
                           </button>
                         ) : (
                           <span className={`w-2.5 h-2.5 inline-block ${isEntry ? 'bg-green-600' : 'bg-gray-200'}`} style={{ borderRadius: 1 }} />
