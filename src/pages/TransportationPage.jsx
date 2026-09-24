@@ -183,7 +183,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     return <span className="text-red-500">{isAr ? 'متأخر ⚠' : 'Delayed ⚠'} (+{diff} {isAr ? 'د' : 'min'})</span>
   }
 
-  // مغادرة مبكرة (ولو بدقيقة): تنبيه ظاهر + تأكيد قبل الحفظ
+  // مغادرة مبكرة (ولو بدقيقة): تنبيه ظاهر في البطاقة
   const earlyMin = (() => {
     if (isArrival || !form.actual_departure || !schedDep) return 0
     const [sh, sm] = schedDep.split(':').map(Number)
@@ -241,10 +241,6 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
         return
       }
     }
-
-    if (earlyMin > 0 && !window.confirm(isAr
-      ? `⚠ تنبيه: الحافلة غادرت قبل موعدها المجدول (${schedDep}) بـ ${earlyMin} دقيقة.\nهل تأكد الحفظ؟`
-      : `⚠ Warning: the bus left ${earlyMin} min before its scheduled time (${schedDep}).\nConfirm saving?`)) return
 
     setSaving(true)
 
