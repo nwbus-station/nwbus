@@ -850,7 +850,7 @@ export default function TransportationPage() {
         if (g.arrival && g.departure) {
           if (!seenTrip.has(e.id)) {
             seenTrip.add(e.id)
-            acc.push({ ...g.arrival, role: 'both', schedTime: g.arrival.schedTime, schedArr: g.arrival.schedTime, schedDep: g.departure.schedTime, _key: e.id + '-ad' })
+            acc.push({ ...g.arrival, role: 'both', schedTime: g.arrival.schedTime, schedArr: g.arrival.schedTime, schedDep: g.departure.schedTime, depFromStation: g.departure.from_station, depToStation: g.departure.to_station, _key: e.id + '-ad' })
           }
         } else acc.push(e)
         return acc
@@ -1333,13 +1333,33 @@ export default function TransportationPage() {
                       {trip.trip_name && <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>{trip.trip_name}</div>}
                       {/* اسم الخط على الجوال */}
                       <div className="md:hidden text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-                        <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
+                        {isBoth ? (
+                          <>
+                            <div><b>{isAr ? 'وصول' : 'ARR'}:</b> <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} /></div>
+                            <div><b>{isAr ? 'مغادرة' : 'DEP'}:</b> <RouteText from={isAr ? trip.depFromStation?.name_ar : trip.depFromStation?.name_en} to={isAr ? trip.depToStation?.name_ar : trip.depToStation?.name_en} /></div>
+                          </>
+                        ) : (
+                          <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
+                        )}
                       </div>
                     </td>
 
                     {/* الخط */}
                     <td className="px-3 py-2.5 text-xs hidden md:table-cell" style={{ color: 'var(--text-3)' }}>
-                      <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
+                      {isBoth ? (
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-bold rounded px-1.5 py-px shrink-0" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>{isAr ? 'وصول' : 'ARR'}</span>
+                            <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-bold rounded px-1.5 py-px shrink-0" style={{ background: 'var(--info-bg)', color: 'var(--info)' }}>{isAr ? 'مغادرة' : 'DEP'}</span>
+                            <RouteText from={isAr ? trip.depFromStation?.name_ar : trip.depFromStation?.name_en} to={isAr ? trip.depToStation?.name_ar : trip.depToStation?.name_en} />
+                          </div>
+                        </div>
+                      ) : (
+                        <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
+                      )}
                     </td>
 
                     {/* التنفيذ */}
