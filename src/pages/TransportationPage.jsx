@@ -64,9 +64,11 @@ function UpstreamChip({ up, isAr }) {
     <span className="inline-flex items-center gap-1.5 text-[11px]">
       {up.bus_number && <span className="font-mono text-gray-600 bg-gray-100 rounded px-1.5 py-0.5">{up.bus_number}</span>}
       {typeof d === 'number' && (
-        <span className={d > 5 ? 'text-red-600 font-semibold' : 'text-green-700'}>
-          {d > 5 ? `${isAr ? 'متأخرة' : 'Late'} ${d} ${isAr ? 'د' : 'min'}` : (isAr ? 'في الوقت' : 'On time')}
-        </span>
+        d < -2
+          ? <span className="text-blue-600 font-semibold">{isAr ? `غادرت مبكرة ${-d} د` : `Left ${-d} min early`}</span>
+          : <span className={d > 5 ? 'text-red-600 font-semibold' : 'text-green-700'}>
+              {d > 5 ? `${isAr ? 'متأخرة' : 'Late'} ${d} ${isAr ? 'د' : 'min'}` : (isAr ? 'في الوقت' : 'On time')}
+            </span>
       )}
     </span>
   )
@@ -174,7 +176,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     const [ah, am] = form[actualKey].split(':').map(Number)
     let diff = (ah * 60 + am) - (sh * 60 + sm)
     if (diff < -120) diff += 1440 // تجاوز منتصف الليل
-    if (diff < -2) return <span className="text-blue-500">{isAr ? 'مبكر' : 'Early'} ({Math.abs(diff)} {isAr ? 'د' : 'min'})</span>
+    if (diff < -2) return <span className="text-blue-500 font-semibold">{isArrival ? (isAr ? 'وصلت قبل الموعد' : 'Arrived early') : (isAr ? 'غادرت قبل الموعد' : 'Left early')} ({Math.abs(diff)} {isAr ? 'د' : 'min'})</span>
     if (diff <= 5)  return <span className="text-green-500">{isAr ? 'في الوقت ✓' : 'On Time ✓'}</span>
     if (diff <= 15) return <span className="text-yellow-500">{isAr ? 'غير منتظم' : 'Not On Time'} (+{diff} {isAr ? 'د' : 'min'})</span>
     return <span className="text-red-500">{isAr ? 'متأخر ⚠' : 'Delayed ⚠'} (+{diff} {isAr ? 'د' : 'min'})</span>
