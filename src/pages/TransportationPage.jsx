@@ -651,6 +651,7 @@ export default function TransportationPage() {
   const [modal, setModal]     = useState(null)
   const [search, setSearch]   = useState('')
   const [filter, setFilter]   = useState('departure') // 'departure' | 'arrival' | 'all'
+  const [filterPicked, setFilterPicked] = useState(false) // المستخدم اختار تبويباً بنفسه
   const [viewMode, setViewMode] = useState('station') // 'station' | 'schedule'
   const [scheduleData, setScheduleData] = useState([])
   const [scheduleLoading, setScheduleLoading] = useState(false)
@@ -1025,7 +1026,9 @@ export default function TransportationPage() {
 
   // محطة كل رحلاتها بطاقة وصول+مغادرة: تبويبات وصول/مغادرة تكرر نفس البطاقات، فنخفيها ونعرض الكل
   const allBoth = trips.length > 0 && trips.every(t => t.role === 'both')
-  const effFilter = allBoth ? 'all' : filter
+  const combinedStation = !!stations.find(s => s.id === stationId)?.combined_arr_dep
+  // محطة البطاقة الواحدة: نعرض الكل افتراضياً حتى لا تختفي رحلات الوصول فقط أو المغادرة فقط تحت تبويب آخر
+  const effFilter = allBoth ? 'all' : (combinedStation && !filterPicked ? 'all' : filter)
 
   // Filter & search
   const filtered = trips.filter(t => {
@@ -1224,11 +1227,11 @@ export default function TransportationPage() {
             { val: 'arrival',   label: isAr ? 'وصول' : 'Arrivals',     cnt: arrivalCnt },
             { val: 'all',       label: isAr ? 'الكل' : 'All',          cnt: total },
           ].map((t, i) => (
-            <button key={t.val} onClick={() => setFilter(t.val)}
+            <button key={t.val} onClick={() => { setFilterPicked(true); setFilter(t.val) }}
               className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors ${i > 0 ? 'border-s border-gray-300' : ''} ${
-                filter === t.val ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+                effFilter === t.val ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
               {t.label}
-              <span className={`font-mono text-[10px] ${filter === t.val ? 'opacity-75' : 'text-gray-400'}`}>{t.cnt}</span>
+              <span className={`font-mono text-[10px] ${effFilter === t.val ? 'opacity-75' : 'text-gray-400'}`}>{t.cnt}</span>
             </button>
           ))}
         </div>}
