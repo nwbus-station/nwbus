@@ -58,6 +58,7 @@ export default function StationTripsModal({ stationId, stationName, stations = [
   const [candidates, setCandidates] = useState([])
   const [selected, setSelected]     = useState(new Map())   // tripId -> {departure_time, departure_station_id}
   const [stopTimes, setStopTimes]   = useState({})          // tripId -> "HH:MM" من جدول العبور
+  const [depIds, setDepIds]         = useState(new Set())   // رحلات تنطلق من هذي المحطة (مرشّحة للربط كـ"نفس الباص")
   const [loading, setLoading]       = useState(true)
   const [busy, setBusy]             = useState(null)
   const [search, setSearch]         = useState('')
@@ -71,8 +72,9 @@ export default function StationTripsModal({ stationId, stationName, stations = [
         supabase.from('trip_schedule').select(tripFields).eq('is_active', true).order('scheduled_departure'),
         supabase.from('trip_schedule').select('id').eq('is_active', true).eq('from_station_id', stationId),
         supabase.from('trip_schedule_stops').select('trip_schedule_id, arrival_time, departure_time').eq('station_id', stationId),
-        supabase.from('station_trips').select('trip_schedule_id, departure_time, arrival_time, departure_station_id, is_extra, dep_enabled, arr_enabled').eq('station_id', stationId),
+        supabase.from('station_trips').select('trip_schedule_id, departure_time, arrival_time, departure_station_id, is_extra, dep_enabled, arr_enabled, linked_trip_id').eq('station_id', stationId),
       ])
+      setDepIds(new Set((dep ?? []).map(t => t.id)))
 
       const passes = new Set([
         ...(dep ?? []).map(t => t.id),
@@ -98,6 +100,7 @@ export default function StationTripsModal({ stationId, stationName, stations = [
         depOn: s.dep_enabled === true,
         arrOn: s.arr_enabled === true,
         enabled: s.dep_enabled === true || s.arr_enabled === true,
+        linked_trip_id: s.linked_trip_id ?? '',
         exists: true,
       }))
       setSelected(m)
@@ -349,6 +352,30 @@ export default function StationTripsModal({ stationId, stationName, stations = [
                     <div className="col-span-3 text-[10px] text-gray-400">
                       {t('Destination', 'الوجهة')}: {tr.to_station ? stName(tr.to_station) : '—'}
                     </div>
+                    {ov.arrOn && (() => {
+                      const depOptions = candidates.filter(c => depIds.has(c.id) && c.id !== tr.id)
+                      return (
+                        <div className="col-span-3">
+                          <label className="block text-[10px] text-gray-500 mb-0.5">
+                            {t('Same bus continues as (link to a departure)', 'ربط بمغادرة — نفس الباص يكمل بها')}
+                          </label>
+                          <select value={ov.linked_trip_id || ''} disabled={!canEdit}
+                            onChange={e => updateOverride(tr.id, { linked_trip_id: e.target.value || null })}
+                            className="w-full border rounded-lg px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none disabled:bg-gray-50 disabled:text-gray-500">
+                            <option value="">{t('None', 'بدون ربط')}</option>
+                            {depOptions.map(d => (
+                              <option key={d.id} value={d.id}>
+                                {d.trip_number} — {d.to_station ? stName(d.to_station) : '—'}{d.scheduled_departure ? ` · ${d.scheduled_departure.slice(0,5)}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {t('When this arrival is recorded, its bus number is suggested automatically for the linked departure.',
+                               'عند تسجيل هذا الوصول، يُقترح رقم الباص تلقائياً لرحلة المغادرة المربوطة.')}
+                          </p>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
               </div>

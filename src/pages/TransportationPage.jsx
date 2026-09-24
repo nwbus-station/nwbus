@@ -59,7 +59,7 @@ const busTypeLookup = t => BUS_TYPE[String(t || '').toUpperCase()] ?? null
 /* ─── Trip Entry Modal ──────────────────────────────────── */
 const DRAFT_KEY = 'tm_draft'
 
-function TripModal({ trip, record, stationId, stationName, stations = [], isArrival, schedTime, recordDate, onClose, onSaved }) {
+function TripModal({ trip, record, stationId, stationName, stations = [], isArrival, schedTime, recordDate, suggestedBusNumber, onClose, onSaved }) {
   const { profile, isGeneralAdmin, isStationAdmin } = useAuth()
   const canPickStation = isGeneralAdmin || isStationAdmin
   const { i18n } = useTranslation()
@@ -79,7 +79,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   })()
 
   const [form, setForm] = useState(draft?.form ?? {
-    bus_number:         record?.bus_number ?? '',
+    bus_number:         record?.bus_number ?? suggestedBusNumber ?? '',
     actual_departure:   record?.actual_departure
       ? new Date(record.actual_departure).toISOString().slice(11, 16) : '',
     actual_arrival:     record?.actual_arrival
@@ -314,6 +314,11 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
               onFocus={e => e.target.style.borderColor='var(--accent)'}
               onBlur={e => e.target.style.borderColor='var(--border)'}
             />
+            {!record && suggestedBusNumber && form.bus_number === suggestedBusNumber && (
+              <p style={{ margin: '4px 0 0', fontSize: '0.7rem', color: 'var(--text-3)' }}>
+                {isAr ? 'مُقترَح من رحلة الوصول المرتبطة — تأكد منه' : 'Suggested from the linked arrival — please confirm'}
+              </p>
+            )}
           </div>
 
           {/* Actual time */}
@@ -600,6 +605,7 @@ export default function TransportationPage() {
   const handleDateChange = d => { setDate(d); sessionStorage.setItem('tp_date', d) }
   const [trips, setTrips]     = useState(() => initialTransportCache?.trips ?? [])
   const [records, setRecords] = useState(() => initialTransportCache?.records ?? [])
+  const [depLinkMap, setDepLinkMap] = useState({}) // departureTripId -> arrivalTripId (نفس الباص، من إعدادات المحطة)
   const [shipmentMap, setShipmentMap] = useState({}) // trip_schedule_id → shipments[]
   const [loading, setLoading] = useState(() => !initialStationId ? false : !initialTransportCache)
   const [modal, setModal]     = useState(null)
@@ -694,7 +700,7 @@ export default function TransportationPage() {
       { data: shipmentRows },
     ] = await Promise.all([
       supabase.from('station_trips')
-        .select(`departure_time, arrival_time, is_extra, dep_enabled, arr_enabled, departure_station:departure_station_id(id, name_ar, name_en), trip:trip_schedule_id(${tripFields})`)
+        .select(`departure_time, arrival_time, is_extra, dep_enabled, arr_enabled, linked_trip_id, departure_station:departure_station_id(id, name_ar, name_en), trip:trip_schedule_id(${tripFields})`)
         .eq('station_id', stationId),
 
       supabase.from('trip_schedule_stops')
@@ -806,6 +812,9 @@ export default function TransportationPage() {
     if (entries.length || finalRecords.length) setCached(cacheKey, { trips: entries, records: finalRecords })
     setTrips(entries)
     setRecords(finalRecords)
+    const linkMap = {}
+    ;(chosen ?? []).forEach(r => { if (r.linked_trip_id && r.trip?.id) linkMap[r.linked_trip_id] = r.trip.id })
+    setDepLinkMap(linkMap)
     setLoading(false)
   }, [date, stationId, stations, profile])
 
@@ -1210,6 +1219,9 @@ export default function TransportationPage() {
                     {/* الوقت */}
                     <td className="px-3 py-2.5 text-center">
                       <span className="font-mono font-bold text-gray-800">{showTime}</span>
+                      {rec?.bus_number && (
+                        <div className="font-mono text-[10px] text-gray-400 mt-0.5">{rec.bus_number}</div>
+                      )}
                     </td>
 
                     {/* النوع */}
@@ -1302,7 +1314,11 @@ export default function TransportationPage() {
                         )}
                         {canEdit ? (
                           <button
-                            onClick={() => setModal({ trip, record: rec ?? null, isArrival, schedTime: trip.schedTime })}
+                            onClick={() => {
+                              const linkedArrivalId = !isArrival ? depLinkMap[trip.id] : null
+                              const suggestedBusNumber = linkedArrivalId ? recordMap[`${linkedArrivalId}|arrival`]?.bus_number : null
+                              setModal({ trip, record: rec ?? null, isArrival, schedTime: trip.schedTime, suggestedBusNumber })
+                            }}
                             className={`text-xs rounded-sm px-3 py-1.5 font-semibold transition-colors whitespace-nowrap ${
                               isEntry
                                 ? 'border border-gray-300 text-gray-500 hover:border-gray-400 bg-white'
@@ -1412,6 +1428,7 @@ export default function TransportationPage() {
           stations={stations}
           isArrival={modal.isArrival}
           schedTime={modal.schedTime}
+          suggestedBusNumber={modal.suggestedBusNumber}
           recordDate={date}
           onClose={() => setModal(null)}
           onSaved={fetchData}
