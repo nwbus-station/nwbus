@@ -1069,7 +1069,7 @@ export default function ReportsPage() {
         )}
         <div>
           <label className="block text-xs text-gray-500 mb-1">{isAr ? 'من' : 'From'}</label>
-          <DatePicker value={dateFrom} onChange={setDateFrom} isAr={isAr}
+          <DatePicker value={dateFrom} onChange={v => { setDateFrom(v); if (v) setDateTo(v) }} isAr={isAr}
             className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
         </div>
         <div>
@@ -1548,7 +1548,7 @@ export default function ReportsPage() {
 
             {/* فلاتر */}
             <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-              <input type="date" value={auditFrom} onChange={e => setAuditFrom(e.target.value)}
+              <input type="date" value={auditFrom} onChange={e => { setAuditFrom(e.target.value); if (e.target.value) setAuditTo(e.target.value) }}
                 style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }} />
               <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>—</span>
               <input type="date" value={auditTo} onChange={e => setAuditTo(e.target.value)}
