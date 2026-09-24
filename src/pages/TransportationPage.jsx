@@ -1023,9 +1023,13 @@ export default function TransportationPage() {
     recordMap[key] = r
   })
 
+  // محطة كل رحلاتها بطاقة وصول+مغادرة: تبويبات وصول/مغادرة تكرر نفس البطاقات، فنخفيها ونعرض الكل
+  const allBoth = trips.length > 0 && trips.every(t => t.role === 'both')
+  const effFilter = allBoth ? 'all' : filter
+
   // Filter & search
   const filtered = trips.filter(t => {
-    if (filter !== 'all' && t.role !== filter && t.role !== 'both') return false
+    if (effFilter !== 'all' && t.role !== effFilter && t.role !== 'both') return false
     if (!search) return true
     const q = search.toLowerCase()
     return (
@@ -1209,7 +1213,7 @@ export default function TransportationPage() {
       <>
       {/* شريط الأدوات: تصفية + بحث */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div className="flex border border-gray-300 rounded-md overflow-hidden shrink-0">
+        {!allBoth && <div className="flex border border-gray-300 rounded-md overflow-hidden shrink-0">
           {[
             { val: 'departure', label: isAr ? 'مغادرة' : 'Departures', cnt: departureCnt },
             { val: 'arrival',   label: isAr ? 'وصول' : 'Arrivals',     cnt: arrivalCnt },
@@ -1222,7 +1226,7 @@ export default function TransportationPage() {
               <span className={`font-mono text-[10px] ${filter === t.val ? 'opacity-75' : 'text-gray-400'}`}>{t.cnt}</span>
             </button>
           ))}
-        </div>
+        </div>}
         <input type="text"
           placeholder={isAr ? 'بحث برقم الرحلة أو الاسم أو رقم الحافلة…' : 'Search by trip #, name or bus #…'}
           value={search} onChange={e => setSearch(e.target.value)}
