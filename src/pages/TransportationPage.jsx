@@ -1288,9 +1288,9 @@ export default function TransportationPage() {
                     {/* الوقت */}
                     <td className="px-3 py-2.5 text-center">
                       {isBoth ? (
-                        <div className="font-mono font-bold text-gray-800 leading-tight">
-                          <div>{trip.schedArr}</div>
-                          <div className="text-gray-500 text-[0.85em]">{trip.schedDep}</div>
+                        <div className="font-mono font-bold text-gray-800">
+                          <div className="h-7 flex items-center justify-center">{trip.schedDep}</div>
+                          <div className="h-7 flex items-center justify-center">{trip.schedArr}</div>
                         </div>
                       ) : (
                         <span className="font-mono font-bold text-gray-800">{showTime}</span>
@@ -1335,8 +1335,8 @@ export default function TransportationPage() {
                       <div className="md:hidden text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
                         {isBoth ? (
                           <>
-                            <div><b>{isAr ? 'وصول' : 'ARR'}:</b> <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} /></div>
                             <div><b>{isAr ? 'مغادرة' : 'DEP'}:</b> <RouteText from={isAr ? trip.depFromStation?.name_ar : trip.depFromStation?.name_en} to={isAr ? trip.depToStation?.name_ar : trip.depToStation?.name_en} /></div>
+                            <div><b>{isAr ? 'وصول' : 'ARR'}:</b> <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} /></div>
                           </>
                         ) : (
                           <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
@@ -1347,14 +1347,14 @@ export default function TransportationPage() {
                     {/* الخط */}
                     <td className="px-3 py-2.5 text-xs hidden md:table-cell" style={{ color: 'var(--text-3)' }}>
                       {isBoth ? (
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-bold rounded px-1.5 py-px shrink-0" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>{isAr ? 'وصول' : 'ARR'}</span>
-                            <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
-                          </div>
-                          <div className="flex items-center gap-2">
+                        <div className="flex flex-col">
+                          <div className="h-7 flex items-center gap-2">
                             <span className="text-[9px] font-bold rounded px-1.5 py-px shrink-0" style={{ background: 'var(--info-bg)', color: 'var(--info)' }}>{isAr ? 'مغادرة' : 'DEP'}</span>
                             <RouteText from={isAr ? trip.depFromStation?.name_ar : trip.depFromStation?.name_en} to={isAr ? trip.depToStation?.name_ar : trip.depToStation?.name_en} />
+                          </div>
+                          <div className="h-7 flex items-center gap-2">
+                            <span className="text-[9px] font-bold rounded px-1.5 py-px shrink-0" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>{isAr ? 'وصول' : 'ARR'}</span>
+                            <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
                           </div>
                         </div>
                       ) : (
