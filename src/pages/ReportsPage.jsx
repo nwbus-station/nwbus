@@ -472,7 +472,7 @@ export default function ReportsPage() {
       const [sh, sm] = sch.split(':').map(Number), [ah, am] = act.split(':').map(Number)
       let d = (ah * 60 + am) - (sh * 60 + sm)
       if (d < -120) d += 1440 // تجاوز منتصف الليل
-      if (d < -2) return { key: 'early', label: isArrRow ? (isAr ? 'وصلت قبل موعدها' : 'Arrived before schedule') : (isAr ? 'غادرت قبل موعدها' : 'Left before schedule'), color: '#2563eb' }
+      if (d < 0) return { key: 'early', label: isArrRow ? (isAr ? 'وصلت قبل موعدها' : 'Arrived before schedule') : (isAr ? 'غادرت قبل موعدها' : 'Left before schedule'), color: '#2563eb' }
       if (d <= 5) return { key: 'ontime', label: isAr ? 'في الوقت' : 'On Time', color: '#16a34a' }
       if (d <= 15) return { key: 'noton', label: isAr ? 'غير منتظم' : 'Not On Time', color: '#ca8a04' }
       return { key: 'delayed', label: isAr ? 'متأخر' : 'Delayed', color: '#dc2626' }

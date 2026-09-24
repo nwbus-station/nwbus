@@ -64,8 +64,8 @@ function UpstreamChip({ up, isAr }) {
     <span className="inline-flex items-center gap-1.5 text-[11px]">
       {up.bus_number && <span className="font-mono text-gray-600 bg-gray-100 rounded px-1.5 py-0.5">{up.bus_number}</span>}
       {typeof d === 'number' && (
-        d < -2
-          ? <span className="text-blue-600 font-semibold">{isAr ? `غادرت قبل موعدها (${-d} د)` : `Left before schedule (${-d} min)`}</span>
+        d < 0
+          ? <span className="text-amber-800 font-semibold bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5">⚠ {isAr ? `غادرت قبل موعدها (${-d} د)` : `Left before schedule (${-d} min)`}</span>
           : <span className={d > 5 ? 'text-red-600 font-semibold' : 'text-green-700'}>
               {d > 5 ? `${isAr ? 'متأخرة' : 'Late'} ${d} ${isAr ? 'د' : 'min'}` : (isAr ? 'في الوقت' : 'On time')}
             </span>
@@ -175,12 +175,24 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
     const [sh, sm] = schedDep.split(':').map(Number)
     const [ah, am] = form[actualKey].split(':').map(Number)
     let diff = (ah * 60 + am) - (sh * 60 + sm)
-    if (diff < -120) diff += 1440 // تجاوز منتصف الليل
-    if (diff < -2) return <span className="text-blue-500 font-semibold">{isArrival ? (isAr ? 'وصلت قبل موعدها' : 'Arrived before schedule') : (isAr ? 'غادرت قبل موعدها' : 'Left before schedule')} ({Math.abs(diff)} {isAr ? 'د' : 'min'})</span>
+    if (diff < -720) diff += 1440      // تجاوز منتصف الليل
+    else if (diff > 720) diff -= 1440
+    if (diff < 0) return <span className="text-amber-600 font-semibold">{isArrival ? (isAr ? 'وصلت قبل موعدها' : 'Arrived before schedule') : (isAr ? 'غادرت قبل موعدها' : 'Left before schedule')} ({Math.abs(diff)} {isAr ? 'د' : 'min'})</span>
     if (diff <= 5)  return <span className="text-green-500">{isAr ? 'في الوقت ✓' : 'On Time ✓'}</span>
     if (diff <= 15) return <span className="text-yellow-500">{isAr ? 'غير منتظم' : 'Not On Time'} (+{diff} {isAr ? 'د' : 'min'})</span>
     return <span className="text-red-500">{isAr ? 'متأخر ⚠' : 'Delayed ⚠'} (+{diff} {isAr ? 'د' : 'min'})</span>
   }
+
+  // مغادرة مبكرة (ولو بدقيقة): تنبيه ظاهر + تأكيد قبل الحفظ
+  const earlyMin = (() => {
+    if (isArrival || !form.actual_departure || !schedDep) return 0
+    const [sh, sm] = schedDep.split(':').map(Number)
+    const [ah, am] = form.actual_departure.split(':').map(Number)
+    let d = (ah * 60 + am) - (sh * 60 + sm)
+    if (d < -720) d += 1440
+    else if (d > 720) d -= 1440
+    return d < 0 ? -d : 0
+  })()
 
   async function handleSave(e) {
     e.preventDefault()
@@ -229,6 +241,10 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
         return
       }
     }
+
+    if (earlyMin > 0 && !window.confirm(isAr
+      ? `⚠ تنبيه: الحافلة غادرت قبل موعدها المجدول (${schedDep}) بـ ${earlyMin} دقيقة.\nهل تأكد الحفظ؟`
+      : `⚠ Warning: the bus left ${earlyMin} min before its scheduled time (${schedDep}).\nConfirm saving?`)) return
 
     setSaving(true)
 
@@ -395,6 +411,11 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
               <p style={{ margin:'5px 0 0', fontSize:'0.72rem', color:'var(--text-3)' }}>
                 {isAr ? 'المجدول:' : 'Scheduled:'} {schedDep} → {accuracyPreview()}
               </p>
+            )}
+            {earlyMin > 0 && (
+              <div style={{ marginTop:8, border:'1px solid #f59e0b', background:'#fffbeb', color:'#92400e', borderRadius:8, padding:'8px 12px', fontSize:'0.78rem', fontWeight:700 }}>
+                {isAr ? `⚠ تنبيه: الحافلة غادرت قبل موعدها المجدول (${schedDep}) بـ ${earlyMin} دقيقة` : `⚠ Warning: the bus left ${earlyMin} min before its scheduled time (${schedDep})`}
+              </div>
             )}
           </div>
 
@@ -1436,9 +1457,9 @@ export default function TransportationPage() {
                               let d = (ah * 60 + am) - (sh * 60 + sm)
                               if (d < -720) d += 1440
                               else if (d > 720) d -= 1440
-                              if (d < -2) return (
-                                <span className="text-blue-600 font-semibold">
-                                  {isAr ? `غادرت قبل موعدها (${-d} د)` : `Left before schedule (${-d} min)`}
+                              if (d < 0) return (
+                                <span className="text-amber-800 font-semibold bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5">
+                                  ⚠ {isAr ? `غادرت قبل موعدها (${-d} د)` : `Left before schedule (${-d} min)`}
                                 </span>
                               )
                             }
