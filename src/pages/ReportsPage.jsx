@@ -467,12 +467,12 @@ export default function ReportsPage() {
     let depCount = 0, arrCount = 0, missedTotal = 0, paxTotal = 0, depPax = 0, arrPax = 0, depOnTime = 0, depWithSched = 0, arrOnTime = 0, arrWithSched = 0
     const fmtT = v => v ? new Date(v).toISOString().slice(11, 16) : '—'
     const nm = s => s?.name_ar || s?.name_en || '—'
-    const accOf = (sch, act) => {
+    const accOf = (sch, act, isArrRow = false) => {
       if (!sch || !act || act === '—') return { key: 'none', label: '—', color: '#9ca3af' }
       const [sh, sm] = sch.split(':').map(Number), [ah, am] = act.split(':').map(Number)
       let d = (ah * 60 + am) - (sh * 60 + sm)
       if (d < -120) d += 1440 // تجاوز منتصف الليل
-      if (d < -2) return { key: 'early', label: isAr ? 'مبكر' : 'Early', color: '#2563eb' }
+      if (d < -2) return { key: 'early', label: isArrRow ? (isAr ? 'وصلت قبل موعدها' : 'Arrived before schedule') : (isAr ? 'غادرت قبل موعدها' : 'Left before schedule'), color: '#2563eb' }
       if (d <= 5) return { key: 'ontime', label: isAr ? 'في الوقت' : 'On Time', color: '#16a34a' }
       if (d <= 15) return { key: 'noton', label: isAr ? 'غير منتظم' : 'Not On Time', color: '#ca8a04' }
       return { key: 'delayed', label: isAr ? 'متأخر' : 'Delayed', color: '#dc2626' }
@@ -525,7 +525,7 @@ export default function ReportsPage() {
           to:   isArr ? st : nm(t.trip?.to_station),
           sched: schedHHMM || '—',
           actual: actHHMM,
-          acc: accOf(schedHHMM, actHHMM),
+          acc: accOf(schedHHMM, actHHMM, isArr),
           delay: delayMin,
           missed: t.missed_count || 0,
           pax: t.passenger_count || 0,
