@@ -1427,11 +1427,27 @@ export default function TransportationPage() {
                               {isAr ? (rec ? 'ناقص: الوصول' : 'ناقص: المغادرة') : (rec ? 'Missing arrival' : 'Missing departure')}
                             </span>
                           )}
-                          {rec?.departure_accuracy && !isArrival && (
-                            <span className={accuracyColor(rec.departure_accuracy)}>
-                              {isAr ? accuracyAr(rec.departure_accuracy) : rec.departure_accuracy}
-                            </span>
-                          )}
+                          {rec && !isArrival && (() => {
+                            // مبكرة: نحسبها مقابل موعد المحطة نفسها (تنطبق على الأيام السابقة كذلك)
+                            const sched = isBoth ? trip.schedDep : trip.schedTime
+                            if (sched && rec.actual_departure) {
+                              const [ah, am] = String(rec.actual_departure).slice(11, 16).split(':').map(Number)
+                              const [sh, sm] = sched.split(':').map(Number)
+                              let d = (ah * 60 + am) - (sh * 60 + sm)
+                              if (d < -720) d += 1440
+                              else if (d > 720) d -= 1440
+                              if (d < -2) return (
+                                <span className="text-blue-600 font-semibold">
+                                  {isAr ? `غادرت قبل موعدها (${-d} د)` : `Left before schedule (${-d} min)`}
+                                </span>
+                              )
+                            }
+                            return rec.departure_accuracy ? (
+                              <span className={accuracyColor(rec.departure_accuracy)}>
+                                {isAr ? accuracyAr(rec.departure_accuracy) : rec.departure_accuracy}
+                              </span>
+                            ) : null
+                          })()}
                           {dRec.bus_number && <span className="font-mono text-gray-500">{dRec.bus_number}</span>}
                           {isBoth && arrRec?.passenger_count > 0 && (
                             <span className="text-gray-500 font-mono">↓ {arrRec.passenger_count}</span>
