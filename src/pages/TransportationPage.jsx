@@ -56,10 +56,26 @@ const BUS_TYPE = {
 }
 const busTypeLookup = t => BUS_TYPE[String(t || '').toUpperCase()] ?? null
 
+// رقم الحافلة ومدة تأخرها من آخر محطة غادرتها (يُدخلها موظف المحطة السابقة)
+function UpstreamChip({ up, isAr }) {
+  if (!up) return null
+  const d = up.delay_minutes
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px]">
+      {up.bus_number && <span className="font-mono text-gray-600 bg-gray-100 rounded px-1.5 py-0.5">{up.bus_number}</span>}
+      {typeof d === 'number' && (
+        <span className={d > 5 ? 'text-red-600 font-semibold' : 'text-green-700'}>
+          {d > 5 ? `${isAr ? 'متأخرة' : 'Late'} ${d} ${isAr ? 'د' : 'min'}` : (isAr ? 'في الوقت' : 'On time')}
+        </span>
+      )}
+    </span>
+  )
+}
+
 /* ─── Trip Entry Modal ──────────────────────────────────── */
 const DRAFT_KEY = 'tm_draft'
 
-function TripModal({ trip, record, stationId, stationName, stations = [], isArrival, combined = false, arrivalRecord = null, schedArrTime = '', schedTime, recordDate, onClose, onSaved }) {
+function TripModal({ trip, record, stationId, stationName, stations = [], isArrival, combined = false, arrivalRecord = null, schedArrTime = '', suggestedBusNumber = null, schedTime, recordDate, onClose, onSaved }) {
   const { profile, isGeneralAdmin, isStationAdmin } = useAuth()
   const canPickStation = isGeneralAdmin || isStationAdmin
   const { i18n } = useTranslation()
@@ -79,7 +95,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   })()
 
   const [form, setForm] = useState(draft?.form ?? {
-    bus_number:         record?.bus_number ?? '',
+    bus_number:         record?.bus_number ?? arrivalRecord?.bus_number ?? suggestedBusNumber ?? '',
     actual_departure:   record?.actual_departure
       ? new Date(record.actual_departure).toISOString().slice(11, 16) : '',
     actual_arrival:     (combined ? arrivalRecord : record)?.actual_arrival
@@ -339,6 +355,11 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
               onFocus={e => e.target.style.borderColor='var(--accent)'}
               onBlur={e => e.target.style.borderColor='var(--border)'}
             />
+            {!record && !arrivalRecord && suggestedBusNumber && form.bus_number === suggestedBusNumber && (
+              <p style={{ margin: '4px 0 0', fontSize: '0.7rem', color: 'var(--text-3)' }}>
+                {isAr ? 'من موظف المحطة السابقة — تأكد منه، تقدر تغيّره' : 'From the previous station — confirm or change it'}
+              </p>
+            )}
           </div>
 
           {/* بطاقة وصول + مغادرة: قسم الوصول */}
@@ -754,7 +775,7 @@ export default function TransportationPage() {
 
       // سجلات المغادرة من محطات أخرى لنفس الرحلات (لعرض الوقت الفعلي للوصول)
       supabase.from('trip_records')
-        .select('trip_schedule_id, actual_departure, station_id')
+        .select('trip_schedule_id, actual_departure, station_id, bus_number, delay_minutes')
         .eq('record_date', date)
         .neq('station_id', stationId)
         .not('actual_departure', 'is', null),
@@ -767,8 +788,37 @@ export default function TransportationPage() {
     ])
 
     // خريطة المغادرة الفعلية من محطات أخرى: tripId → actual_departure
+    // آخر مغادرة سُجّلت لنفس الرحلة من محطة أخرى: منها نعرف رقم الحافلة ومدة التأخير قبل ما توصل هذي المحطة
+    const upstreamMap = {}
+    ;(crossRecs ?? []).forEach(r => {
+      const cur = upstreamMap[r.trip_schedule_id]
+      if (!cur || r.actual_departure > cur.actual_departure) upstreamMap[r.trip_schedule_id] = r
+    })
     const crossDepMap = {}
-    ;(crossRecs ?? []).forEach(r => { crossDepMap[r.trip_schedule_id] = r.actual_departure })
+    Object.entries(upstreamMap).forEach(([tid, r]) => { crossDepMap[tid] = r.actual_departure })
+
+    // مدة التأخير تُحسب هنا مقابل موعد الرحلة المجدول في المحطة اللي غادرتها (مو موعد انطلاق الرحلة الأصلي)
+    const upIds = Object.keys(upstreamMap)
+    const upStopMap = {}
+    if (upIds.length) {
+      const { data: upStops } = await supabase.from('trip_schedule_stops')
+        .select('trip_schedule_id, station_id, departure_time').in('trip_schedule_id', upIds)
+      ;(upStops ?? []).forEach(x => { upStopMap[`${x.trip_schedule_id}|${x.station_id}`] = x.departure_time })
+    }
+    const toMin = t => { const [h, m] = String(t).slice(0, 5).split(':').map(Number); return h * 60 + m }
+    const upstreamFor = tr => {
+      const r = upstreamMap[tr.id]
+      if (!r) return null
+      const originId = tr.from_station?.id || tr.from_station_id
+      const sched = upStopMap[`${r.trip_schedule_id}|${r.station_id}`] || (r.station_id === originId ? tr.scheduled_departure : null)
+      let delay = null
+      if (sched && r.actual_departure) {
+        delay = toMin(String(r.actual_departure).slice(11, 16)) - toMin(sched)
+        if (delay < -720) delay += 1440
+        else if (delay > 720) delay -= 1440
+      }
+      return { ...r, delay_minutes: delay }
+    }
 
     const stopMap = {}
     ;(stopRows ?? []).forEach(s => { stopMap[s.trip_schedule_id] = { arrival: s.arrival_time, departure: s.departure_time } })
@@ -801,8 +851,8 @@ export default function TransportationPage() {
       const arrT = r.arrival_time || ''
       const depT = r.departure_time || ''
       const crossDep = crossDepMap[tr.id]
-      const addArr = (toStation, time) => arrOn && time && entries.push({ ...base, role: 'arrival', ...(toStation ? { to_station: toStation } : {}), schedTime: s5(time), _key: tr.id + '-a', crossActualDep: crossDep ?? null })
-      const addDep = (fromStation, time) => depOn && time && entries.push({ ...base, role: 'departure', ...(fromStation ? { from_station: fromStation } : {}), schedTime: s5(time), _key: tr.id + '-d' })
+      const addArr = (toStation, time) => arrOn && time && entries.push({ ...base, role: 'arrival', ...(toStation ? { to_station: toStation } : {}), schedTime: s5(time), _key: tr.id + '-a', crossActualDep: crossDep ?? null, upstream: upstreamFor(tr) })
+      const addDep = (fromStation, time) => depOn && time && entries.push({ ...base, role: 'departure', ...(fromStation ? { from_station: fromStation } : {}), schedTime: s5(time), _key: tr.id + '-d', upstream: upstreamFor(tr) })
 
       const toId   = tr.to_station?.id   || tr.to_station_id
       const fromId = tr.from_station?.id || tr.from_station_id
@@ -1334,6 +1384,7 @@ export default function TransportationPage() {
                         ))}
                       </div>
                       {trip.trip_name && <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>{trip.trip_name}</div>}
+                      {!isEntry && trip.upstream && <div className="lg:hidden mt-1"><UpstreamChip up={trip.upstream} isAr={isAr} /></div>}
                       {/* اسم الخط على الجوال */}
                       <div className="md:hidden text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
                         {isBoth ? (
@@ -1392,10 +1443,15 @@ export default function TransportationPage() {
                             </span>
                           )}
                         </div>
-                      ) : isArrival && trip.crossActualDep ? (
-                        <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 rounded px-2 py-0.5">
-                          {isAr ? 'غادر' : 'Departed'} {new Date(trip.crossActualDep).toISOString().slice(11, 16)}
-                        </span>
+                      ) : trip.upstream || (isArrival && trip.crossActualDep) ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <UpstreamChip up={trip.upstream} isAr={isAr} />
+                          {trip.crossActualDep && (
+                            <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 rounded px-2 py-0.5">
+                              {isAr ? 'غادر' : 'Departed'} {new Date(trip.crossActualDep).toISOString().slice(11, 16)}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-[11px] text-gray-300">{isAr ? 'لم تُدخل' : 'Not entered'}</span>
                       )}
@@ -1420,7 +1476,7 @@ export default function TransportationPage() {
                         )}
                         {canEdit ? (
                           <button
-                            onClick={() => setModal({ trip, record: rec ?? null, arrivalRecord: arrRec ?? null, combined: isBoth, isArrival, schedTime: isBoth ? trip.schedDep : trip.schedTime })}
+                            onClick={() => setModal({ trip, record: rec ?? null, arrivalRecord: arrRec ?? null, combined: isBoth, isArrival, suggestedBusNumber: trip.upstream?.bus_number ?? null, schedTime: isBoth ? trip.schedDep : trip.schedTime })}
                             className={`text-xs rounded-sm px-3 py-1.5 font-semibold transition-colors whitespace-nowrap ${
                               isEntry
                                 ? 'border border-gray-300 text-gray-500 hover:border-gray-400 bg-white'
@@ -1532,6 +1588,7 @@ export default function TransportationPage() {
           combined={!!modal.combined}
           arrivalRecord={modal.arrivalRecord}
           schedArrTime={modal.trip?.schedArr}
+          suggestedBusNumber={modal.suggestedBusNumber}
           schedTime={modal.schedTime}
           recordDate={date}
           onClose={() => setModal(null)}
