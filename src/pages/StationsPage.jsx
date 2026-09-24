@@ -146,7 +146,6 @@ function StationModal({ station, onClose, onSaved }) {
     type:       station?.type       ?? 'main',
     region:     station?.region     ?? '',
     city_group: station?.city_group ?? '',
-    operational: station?.operational ?? true,
     is_active:  station?.is_active  ?? true,
     combined_arr_dep: station?.combined_arr_dep ?? false,
   })
