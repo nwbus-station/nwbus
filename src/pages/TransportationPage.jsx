@@ -673,7 +673,9 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
 /* ─── Main Page ─────────────────────────────────────────── */
 export default function TransportationPage() {
-  const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds } = useAuth()
+  const { profile, isGeneralAdmin, isRestricted, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds } = useAuth()
+  // الحساب المقيّد (مسمى مخصص) يستخدم أزرار الأدمن حسب المفاتيح المفعّلة له فقط
+  const adminLike = isGeneralAdmin || isRestricted
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const scopedIds = grantCap('scope_assigned_stations') && supervisedStationIds?.length ? supervisedStationIds : null
@@ -1181,28 +1183,28 @@ export default function TransportationPage() {
 
         <div className="flex flex-wrap gap-2 items-center">
           {/* Upload schedule — admin only */}
-          {isGeneralAdmin && allowCap('transport_upload_schedule') && (
+          {adminLike && allowCap('transport_upload_schedule') && (
             <button onClick={() => setShowUpload(true)}
               className="h-9 flex items-center bg-nwbus-primary text-white rounded-lg px-3.5 text-xs font-semibold hover:opacity-90">
               {isAr ? 'رفع جدول الرحلات' : 'Upload Schedule'}
             </button>
           )}
           {/* New permanent trip — admin only */}
-          {isGeneralAdmin && allowCap('transport_manage_trips') && (
+          {adminLike && allowCap('transport_manage_trips') && (
             <button onClick={() => setShowNewTrip(true)}
               className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'رحلة جديدة' : 'New Trip'}
             </button>
           )}
           {/* Manage manually added trips — admin only */}
-          {isGeneralAdmin && allowCap('transport_manage_trips') && (
+          {adminLike && allowCap('transport_manage_trips') && (
             <button onClick={() => setShowManualTrips(true)}
               className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'الرحلات المضافة' : 'Added Trips'}
             </button>
           )}
           {/* Select station trips — supervisor & admin */}
-          {isGeneralAdmin && allowCap('transport_manage_trips') && stationId && (
+          {adminLike && allowCap('transport_manage_trips') && stationId && (
             <button onClick={() => setShowSelect(true)}
               className="h-9 flex items-center gap-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'تفعيل رحلات المحطة' : 'Activate Trips'}
@@ -1215,7 +1217,7 @@ export default function TransportationPage() {
             </button>
           )}
           {/* Add extra trip (RF) — supervisor & admin */}
-          {((isGeneralAdmin && allowCap('transport_manage_trips')) || isStationAdmin) && (
+          {((adminLike && allowCap('transport_manage_trips')) || isStationAdmin) && (
             <button onClick={() => setShowExtra(true)}
               className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'رحلة إضافية (RF)' : 'Extra Trip (RF)'}
@@ -1506,7 +1508,7 @@ export default function TransportationPage() {
                             ✕
                           </button>
                         )}
-                        {isGeneralAdmin && (
+                        {adminLike && allowCap('transport_manage_trips') && (
                           <button onClick={() => suspendStationTrip(trip.id, trip.role)}
                             title={isAr ? (trip.role === 'arrival' ? 'إخفاء الوصول' : trip.role === 'both' ? 'إخفاء الوصول والمغادرة' : 'إخفاء المغادرة') : 'Hide'}
                             className="text-[11px] border border-gray-300 text-gray-400 rounded-sm px-1.5 py-1 hover:border-red-400 hover:text-red-500">

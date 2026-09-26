@@ -216,32 +216,32 @@ drop policy if exists "rst_trip_schedule_w" on trip_schedule;
 create policy "rst_trip_schedule_w" on trip_schedule as restrictive for insert to authenticated with check (
   not is_restricted()
   or title_cap('transport_upload_schedule', true)
-  or (title_cap('transport_manage_trips', true) and is_rf)
+  or title_cap('transport_manage_trips', true)
 );
 drop policy if exists "rst_trip_schedule_u" on trip_schedule;
 create policy "rst_trip_schedule_u" on trip_schedule as restrictive for update to authenticated using (
-  not is_restricted() or title_cap('transport_upload_schedule', true)
+  not is_restricted() or title_cap('transport_upload_schedule', true) or title_cap('transport_manage_trips', true)
 );
 drop policy if exists "rst_trip_schedule_d" on trip_schedule;
 create policy "rst_trip_schedule_d" on trip_schedule as restrictive for delete to authenticated using (
   not is_restricted()
   or title_cap('transport_upload_schedule', true)
-  or (title_cap('transport_manage_trips', true) and is_rf)
+  or title_cap('transport_manage_trips', true)
 );
 
 drop policy if exists "rst_stops_w" on trip_schedule_stops;
 create policy "rst_stops_w" on trip_schedule_stops as restrictive for insert to authenticated with check (
   not is_restricted() or title_cap('transport_upload_schedule', true)
-  or (title_cap('transport_manage_trips', true) and trip_is_rf(trip_schedule_id))
+  or title_cap('transport_manage_trips', true)
 );
 drop policy if exists "rst_stops_u" on trip_schedule_stops;
 create policy "rst_stops_u" on trip_schedule_stops as restrictive for update to authenticated using (
-  not is_restricted() or title_cap('transport_upload_schedule', true)
+  not is_restricted() or title_cap('transport_upload_schedule', true) or title_cap('transport_manage_trips', true)
 );
 drop policy if exists "rst_stops_d" on trip_schedule_stops;
 create policy "rst_stops_d" on trip_schedule_stops as restrictive for delete to authenticated using (
   not is_restricted() or title_cap('transport_upload_schedule', true)
-  or (title_cap('transport_manage_trips', true) and trip_is_rf(trip_schedule_id))
+  or title_cap('transport_manage_trips', true)
 );
 
 drop policy if exists "rst_uploads_all" on schedule_uploads;
