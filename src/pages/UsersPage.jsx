@@ -376,7 +376,7 @@ const NEW_USER_DRAFT_KEY = 'um_new_draft'
 // إدارة المسميات المخصصة: اسم المسمى + الدور الأساسي (سقف الصلاحيات) + الأقسام + مصفوفة الصلاحيات
 function TitlesManager({ titles, onClose, onChanged, isAr }) {
   useEscapeKey(onClose)
-  const blank = { id: null, name_ar: '', name_en: '', base_role: 'station_employee', permissions: {}, allowed_modules: null }
+  const blank = { id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: {}, allowed_modules: null }
   const [form, setForm] = useState(blank)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -472,17 +472,25 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
             </div>
 
             <div>
-              <p className="text-xs font-bold text-gray-700 mb-2">{isAr ? 'صلاحيات الإجراءات' : 'Action permissions'}</p>
-              <div className="space-y-2">
-                {TITLE_CAPABILITIES.map(c => {
-                  const meaningful = c.kind === 'grant' || !c.adminOnly || isAdminBase
-                  return (
-                    <div key={c.key} className={meaningful ? '' : 'opacity-50'}>
-                      <ToggleRow checked={permValue(c)} onChange={v => setPerm(c.key, v)}>{isAr ? c.ar : c.en}</ToggleRow>
-                      {!meaningful && <p className="text-[10px] text-gray-400 mt-0.5 px-1">{isAr ? 'هذي الصلاحية أصلاً للأدمن فقط — اختر دوراً أساسياً أدمن لتفعيل تأثيرها' : 'Admin-only capability — choose an admin base role'}</p>}
+              <p className="text-xs font-bold text-gray-700 mb-1">{isAr ? 'تفاصيل حساب الأدمن — اختر ما يظهر له' : 'Admin account details — choose what he gets'}</p>
+              <p className="text-[11px] text-gray-400 mb-3">{isAr ? 'كل بند مفعّل = يظهر له. ألغِ البنود اللي ما تبيها له.' : 'Each enabled item is visible to him. Turn off what he should not see.'}</p>
+              <div className="space-y-3">
+                {[...new Set(TITLE_CAPABILITIES.map(c => c.group))].map(group => (
+                  <div key={group} className="border border-gray-200 rounded-lg p-2.5">
+                    <p className="text-[11px] font-bold text-nwbus-primary mb-2">{group}</p>
+                    <div className="space-y-1.5">
+                      {TITLE_CAPABILITIES.filter(c => c.group === group).map(c => {
+                        const meaningful = c.kind === 'grant' || !c.adminOnly || isAdminBase
+                        return (
+                          <div key={c.key} className={meaningful ? '' : 'opacity-50'}>
+                            <ToggleRow checked={permValue(c)} onChange={v => setPerm(c.key, v)}>{isAr ? c.ar : c.en}</ToggleRow>
+                            {!meaningful && <p className="text-[10px] text-gray-400 mt-0.5 px-1">{isAr ? 'هذي الصلاحية للأدمن فقط — اختر دوراً أساسياً أدمن لتفعيل تأثيرها' : 'Admin-only capability — choose an admin base role'}</p>}
+                          </div>
+                        )
+                      })}
                     </div>
-                  )
-                })}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -668,7 +676,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   }
   const selectedTitle = customTitles.find(t => t.id === form.custom_title_id) ?? null
   const isMultiStationRole = form.role === 'station_admin' || form.role === 'area_supervisor' || form.role === 'assistant_stations_executive_director'
-    || !!selectedTitle?.permissions?.leaves_supervisor_stage || !!selectedTitle?.permissions?.evaluation_my_employees
+    || !!selectedTitle?.permissions?.leaves_supervisor_stage || !!selectedTitle?.permissions?.evaluation_my_employees || !!selectedTitle?.permissions?.scope_assigned_stations
   // المحطة الأساسية للمشرف = اللي حددها الأدمن صراحة (أو أول محطة كاحتياط)
   const primaryStation = () =>
     isMultiStationRole && stationSet.size

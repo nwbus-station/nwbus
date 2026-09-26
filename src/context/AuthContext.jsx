@@ -55,7 +55,7 @@ export function AuthProvider({ children }) {
       }
       setCustomTitle(title)
       // مشرف منطقة / مشرف محطة — نجلب محطاته المخصصة من user_stations
-      if (data.role === ASSISTANT_DIRECTOR_ROLE || title?.permissions?.leaves_supervisor_stage || title?.permissions?.evaluation_my_employees) {
+      if (data.role === ASSISTANT_DIRECTOR_ROLE || title?.permissions?.leaves_supervisor_stage || title?.permissions?.evaluation_my_employees || title?.permissions?.scope_assigned_stations) {
         const { data: us } = await supabase.from('user_stations').select('station_id').eq('user_id', data.id)
         setSupervisedStationIds((us ?? []).map(r => r.station_id))
       } else {

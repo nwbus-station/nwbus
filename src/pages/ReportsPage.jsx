@@ -240,8 +240,11 @@ function MoveTableComp({ list, color, label, isAr, storageKey }) {
 export default function ReportsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const { isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile, allowCap } = useAuth()
-  const canSalesReport = allowCap('reports_sales')
+  const { isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile, allowCap, grantCap, supervisedStationIds } = useAuth()
+  // مسمى مخصص: أي أنواع التقارير تظهر له، ونطاق المحطات المخصصة له فقط
+  const REPORT_CAP = { movements: 'reports_movements', compliance: 'reports_compliance', transport: 'reports_transport', missed: 'reports_missed', facilities: 'reports_facilities', sales: 'reports_sales', lost: 'reports_lost' }
+  const typeAllowed = id => !REPORT_CAP[id] || allowCap(REPORT_CAP[id])
+  const scopedIds = grantCap('scope_assigned_stations') && supervisedStationIds?.length ? supervisedStationIds : null
 
   const [dateFrom, _setDateFrom] = useState(() => localStorage.getItem('rpt_dateFrom') || toLocalDateStr())
   const setDateFrom = v => { localStorage.setItem('rpt_dateFrom', v); _setDateFrom(v) }
@@ -276,7 +279,7 @@ export default function ReportsPage() {
   const [showUnenteredWarn, setShowUnenteredWarn] = useState(false)
 
   // سجل النشاط — للأدمن العام فقط
-  const canSeeAudit = isGeneralAdmin
+  const canSeeAudit = isGeneralAdmin && allowCap('reports_activity_log')
   const PAGE_SIZE = 50
   const [auditRows,    setAuditRows]    = useState([])
   const [auditLoading, setAuditLoading] = useState(false)
@@ -342,12 +345,15 @@ export default function ReportsPage() {
 
   useEffect(() => { if (canSeeAudit) fetchAudit(0) }, [canSeeAudit, fetchAudit])
 
-  const seesAll = isGeneralAdmin   // الأدمن فقط؛ المحاسب محصور بمحطته
+  const seesAll = isGeneralAdmin && !scopedIds   // الأدمن فقط؛ المحاسب محصور بمحطته؛ ومسمى "محصور بمحطاته" كذلك
 
   // جلب المحطات: الكل للأدمن، محطاته لمشرف المنطقة، والمعيّنة للمشرف/المحاسب
   useEffect(() => {
     if (seesAll) {
       supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
+        .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
+    } else if (scopedIds) {
+      supabase.from('stations').select('id, name_ar, name_en').in('id', scopedIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     } else if (isAreaSupervisor && allowedStationIds?.length) {
       supabase.from('stations').select('id, name_ar, name_en').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
@@ -362,7 +368,7 @@ export default function ReportsPage() {
     } else if (profile?.station) {
       setStations([profile.station])
     }
-  }, [seesAll, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, profile?.id])
+  }, [seesAll, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, profile?.id, scopedIds?.join(',')])
 
   const myStationIds = stations.map(s => s.id)
 
@@ -378,6 +384,7 @@ export default function ReportsPage() {
     // تطبيق نطاق المحطة: محطة محددة، أو كل محطات المشرف، أو الكل للأدمن
     const scope = q => {
       if (station !== 'all') return q.eq('station_id', station)
+      if (scopedIds && !myStationIds.length) return q.in('station_id', ['00000000-0000-0000-0000-000000000000'])
       if (!seesAll && myStationIds.length) return q.in('station_id', myStationIds)
       return q
     }
@@ -647,7 +654,7 @@ export default function ReportsPage() {
 
   const onTimeRate = data ? Math.round((data.trips.onTime / (data.trips.total || 1)) * 100) : 0
   const normalRate = data ? Math.round((data.trips.normal / (data.trips.total || 1)) * 100) : 0
-  const show = type => reportTypes.length === 0 || reportTypes.includes(type)
+  const show = type => typeAllowed(type) && (reportTypes.length === 0 || reportTypes.includes(type))
   function toggleReportType(id) {
     setReportTypes(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
   }
@@ -955,7 +962,7 @@ export default function ReportsPage() {
   }
 
   function printReport() {
-    const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', ...(canSalesReport ? ['sales'] : []), 'lost']
+    const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost'].filter(typeAllowed)
     const types = reportTypes.length === 0 ? ALL_TYPES : ALL_TYPES.filter(t => reportTypes.includes(t))
     // header احترافي موحّد لجميع الأقسام
     const printHeader = `
@@ -1041,7 +1048,7 @@ export default function ReportsPage() {
               { id: 'facilities', label: isAr ? 'الحالة التشغيلية' : 'Facilities' },
               { id: 'sales',      label: isAr ? 'ملخص المبيعات' : 'Sales' },
               { id: 'lost',       label: isAr ? 'الموجودات' : 'Lost & Found' },
-            ].filter(t => t.id !== 'sales' || canSalesReport).map(({ id, label }) => {
+            ].filter(t => t.id === 'all' || typeAllowed(t.id)).map(({ id, label }) => {
               const isAll = id === 'all'
               const active = isAll ? reportTypes.length === 0 : reportTypes.includes(id)
               return (
@@ -1481,7 +1488,7 @@ export default function ReportsPage() {
           )}
 
           {/* Sales summary — للأدمن العام فقط */}
-          {isGeneralAdmin && canSalesReport && show('sales') && (
+          {isGeneralAdmin && show('sales') && (
           <section>
             <h2 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
               {isAr ? 'ملخص المبيعات' : 'Sales Summary'}

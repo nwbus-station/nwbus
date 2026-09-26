@@ -36,17 +36,35 @@ export const USER_ROLES = [
 // مساعد المدير التنفيذي: أدمن كامل + يشتغل كمشرف على محطاته المخصصة (يوافق على الإجازات أولاً ويقيّم موظفيه)
 export const ASSISTANT_DIRECTOR_ROLE = 'assistant_stations_executive_director'
 
-// صلاحيات المسميات المخصصة (مصفوفة) — نوعان:
+// تفاصيل حساب الأدمن مجمّعة بالصفحات — يختار منها كل مسمى ما يظهر له:
 //  grant: تمنح قدرة إضافية للمسمى فقط لو فُعّلت (افتراضياً لا)
-//  allow: تقيّد قدرة يملكها الدور الأساسي أصلاً، تُقفل فقط لو أُلغيت (افتراضياً مسموحة)
+//  allow: تقيّد ما يملكه الأدمن أصلاً، تُقفل فقط لو أُلغيت (افتراضياً مسموحة)
 export const TITLE_CAPABILITIES = [
-  { key: 'leaves_supervisor_stage', kind: 'grant', ar: 'يوافق على الإجازات كمشرف (لموظفي محطاته المخصصة) قبل الأدمن', en: 'Approve leaves as supervisor for his assigned stations' },
-  { key: 'evaluation_my_employees', kind: 'grant', ar: 'يقيّم موظفيه (محطاته المخصصة أو مسؤوله المباشر) ويفتح على "موظفيني"', en: 'Evaluate his employees (assigned stations / direct reports)' },
-  { key: 'evaluation_dispatchers_only', kind: 'grant', ar: 'تقييم المرحّلين فقط (يُخفى تقييم المحطات والمشرفين)', en: 'Evaluate dispatchers only (hides station/supervisor evaluation)' },
-  { key: 'reports_sales',           kind: 'allow', ar: 'تقرير المبيعات ضمن التقارير', en: 'Sales report inside Reports' },
-  { key: 'leaves_final_approve',    kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval (admin stage)' },
-  { key: 'settings_access',         kind: 'allow', adminOnly: true, ar: 'الدخول لصفحة الإعدادات', en: 'Access settings page' },
-  { key: 'lostfound_manage',        kind: 'allow', adminOnly: true, ar: 'حذف وإهداء الموجودات', en: 'Delete / donate lost & found items' },
+  // التقارير
+  { group: 'التقارير', key: 'reports_movements',  kind: 'allow', ar: 'تقرير الوصول والمغادرة', en: 'Arrivals & departures report' },
+  { group: 'التقارير', key: 'reports_compliance', kind: 'allow', ar: 'تقرير الالتزام بالمواعيد', en: 'Punctuality report' },
+  { group: 'التقارير', key: 'reports_transport',  kind: 'allow', ar: 'ملخص الترحيل', en: 'Transport summary' },
+  { group: 'التقارير', key: 'reports_missed',     kind: 'allow', ar: 'تقرير المتخلفين', en: 'Missed passengers report' },
+  { group: 'التقارير', key: 'reports_facilities', kind: 'allow', ar: 'تقرير الحالة التشغيلية', en: 'Facilities report' },
+  { group: 'التقارير', key: 'reports_sales',      kind: 'allow', ar: 'ملخص المبيعات', en: 'Sales summary' },
+  { group: 'التقارير', key: 'reports_lost',       kind: 'allow', ar: 'تقرير الموجودات', en: 'Lost & found report' },
+  { group: 'التقارير', key: 'reports_activity_log', kind: 'allow', ar: 'سجل النشاط', en: 'Activity log' },
+  // التقييم الوظيفي
+  { group: 'التقييم الوظيفي', key: 'evaluation_dispatchers_only', kind: 'grant', ar: 'يقيّم المرحّلين فقط (من مسماهم الوظيفي مرحّل)', en: 'Evaluate dispatchers only' },
+  { group: 'التقييم الوظيفي', key: 'evaluation_supervisors_tab',  kind: 'allow', ar: 'تبويب تقييم المشرفين', en: 'Supervisor evaluation tab' },
+  { group: 'التقييم الوظيفي', key: 'evaluation_stations_tab',     kind: 'allow', ar: 'تبويب تقييم المحطات', en: 'Station evaluation tab' },
+  { group: 'التقييم الوظيفي', key: 'evaluation_my_employees',     kind: 'grant', ar: 'يقيّم موظفيه (محطاته المخصصة أو مسؤوله المباشر) ويفتح على "موظفيني"', en: 'Evaluate his own employees' },
+  // الترحيل
+  { group: 'الترحيل', key: 'transport_upload_schedule', kind: 'allow', ar: 'رفع جدول الرحلات', en: 'Upload schedule' },
+  { group: 'الترحيل', key: 'transport_manage_trips',    kind: 'allow', ar: 'رحلة جديدة والرحلات المضافة وتفعيل رحلات المحطة والرحلة الإضافية', en: 'Manage trips (new, added, activate, extra)' },
+  // الإجازات
+  { group: 'الإجازات', key: 'leaves_supervisor_stage', kind: 'grant', ar: 'يوافق على الإجازات كمشرف (لموظفي محطاته المخصصة) قبل الأدمن', en: 'Approve leaves as supervisor for his stations' },
+  { group: 'الإجازات', key: 'leaves_final_approve',    kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval' },
+  // الصفحات والنطاق
+  { group: 'الصفحات والنطاق', key: 'scope_assigned_stations', kind: 'grant', ar: 'يقتصر على المحطات المخصصة له (التقارير والترحيل)', en: 'Limit to his assigned stations' },
+  { group: 'الصفحات والنطاق', key: 'stations_page',    kind: 'allow', adminOnly: true, ar: 'صفحة المحطات', en: 'Stations page' },
+  { group: 'الصفحات والنطاق', key: 'settings_access',  kind: 'allow', adminOnly: true, ar: 'صفحة الإعدادات', en: 'Settings page' },
+  { group: 'الصفحات والنطاق', key: 'lostfound_manage', kind: 'allow', adminOnly: true, ar: 'حذف وإهداء الموجودات', en: 'Delete / donate lost & found items' },
 ]
 
 // أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف

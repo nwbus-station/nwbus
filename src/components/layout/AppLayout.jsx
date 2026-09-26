@@ -341,8 +341,8 @@ const NAV_GROUPS = [
   {
     items: [
       { to: '/users',    labelAr: 'الموظفون', labelEn: 'Staff',     icon: 'users',   roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'users' },
-      { to: '/stations', labelAr: 'المحطات',  labelEn: 'Stations',  icon: 'station', roles: ADMIN_ROLE_VALUES,                 module: null },
-      { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ADMIN_ROLE_VALUES,               module: null },
+      { to: '/stations', labelAr: 'المحطات',  labelEn: 'Stations',  icon: 'station', roles: ADMIN_ROLE_VALUES,                 module: null, capKey: 'stations_page' },
+      { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ADMIN_ROLE_VALUES,               module: null, capKey: 'settings_access' },
       { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'map' },
       { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings' },
     ]
@@ -403,7 +403,7 @@ function NavTab({ item, isAr }) {
 
 export default function AppLayout() {
   const { i18n } = useTranslation()
-  const { profile, signOut, customTitle } = useAuth()
+  const { profile, signOut, customTitle, allowCap } = useAuth()
   const navigate = useNavigate()
   const isAr = i18n.language === 'ar'
   const { settings } = useAppSettings()
@@ -475,6 +475,7 @@ export default function AppLayout() {
       if (n.roles && !n.roles.includes(profile?.role)) return false
       if (n.module && mods && !mods.includes(n.module)) return false
       if (n.requireFlag && !profile?.[n.requireFlag]) return false
+      if (n.capKey && !allowCap(n.capKey)) return false
       return true
     })
   })).filter(g => g.items.length > 0)

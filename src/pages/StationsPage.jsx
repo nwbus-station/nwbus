@@ -325,7 +325,7 @@ function StationModal({ station, onClose, onSaved }) {
 export default function StationsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const { isGeneralAdmin } = useAuth()
+  const { isGeneralAdmin, allowCap } = useAuth()
   const [stations, setStations] = useState(() => getCached('stations_all') ?? [])
   const [loading, setLoading]   = useState(() => !getCached('stations_all'))
   const [modal, setModal]       = useState(null)
@@ -349,6 +349,10 @@ export default function StationsPage() {
   const mainCount    = stations.filter(s => s.type === 'main').length
   const transitCount = stations.filter(s => s.type === 'transit').length
   const activeCount  = stations.filter(s => s.is_active).length
+
+  if (!allowCap('stations_page')) {
+    return <div className="flex items-center justify-center text-sm text-gray-400" style={{ minHeight: 'calc(100vh - 58px)' }}>{isAr ? 'غير مصرح' : 'Access denied'}</div>
+  }
 
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>

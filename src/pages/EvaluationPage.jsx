@@ -842,17 +842,17 @@ function PrintDropdown({ isAr, onSelect }) {
 }
 
 export default function EvaluationPage() {
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap } = useAuth()
   // مسمى "مشرف المرحّلين": يقيّم من مسماهم الوظيفي مرحّل فقط، بدون تقييم المحطات أو المشرفين
   const dispatchersOnly = grantCap('evaluation_dispatchers_only')
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
   const canEvalEmp = [...ADMIN_ROLE_VALUES,'station_admin','shift_supervisor','area_supervisor'].includes(profile?.role)
-  const canEvalStn = [...ADMIN_ROLE_VALUES,'station_admin','area_supervisor'].includes(profile?.role) && !dispatchersOnly
+  const canEvalStn = [...ADMIN_ROLE_VALUES,'station_admin','area_supervisor'].includes(profile?.role) && !dispatchersOnly && allowCap('evaluation_stations_tab')
   // مشرف المحطة/المنطقة يفتح تبويب تقييم المشرفين كمان — بس عشان يقيّم مشرفي الورديات
   // المحددين له صراحة (حقل "المشرف" بحسابهم)، مو باقي المشرفين
   // (مشرف الوردية نفسه ما عاد يقيّم أحد هنا — أُلغي مصدر "مشرف وردية آخر")
-  const canEvalSup = (isGeneralAdmin || ['station_admin','area_supervisor'].includes(profile?.role)) && !dispatchersOnly
+  const canEvalSup = (isGeneralAdmin || ['station_admin','area_supervisor'].includes(profile?.role)) && !dispatchersOnly && allowCap('evaluation_supervisors_tab')
   // مصدر تقييم المستخدم الحالي لما يقيّم مشرف وردية بنفسه (مو أدمن)
   const myEvalSourceForSup = 'assigned_supervisor'
   const isShiftSupervisor = profile?.role === 'shift_supervisor'

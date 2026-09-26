@@ -673,9 +673,10 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
 /* ─── Main Page ─────────────────────────────────────────── */
 export default function TransportationPage() {
-  const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds } = useAuth()
+  const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
+  const scopedIds = grantCap('scope_assigned_stations') && supervisedStationIds?.length ? supervisedStationIds : null
 
   const initialDate = todayStr()
   const initialStationId = profile?.station_id || null
@@ -732,8 +733,11 @@ export default function TransportationPage() {
 
   // جلب المحطات: الأدمن يرى الكل؛ مشرف المنطقة محطاته؛ المشرف والمحاسب محطاتهم فقط
   useEffect(() => {
-    if (isGeneralAdmin) {
+    if (isGeneralAdmin && !scopedIds) {
       supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').eq('is_active', true).order('name_ar')
+        .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
+    } else if (scopedIds) {
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').in('id', scopedIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (isAreaSupervisor && allowedStationIds?.length) {
       supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
@@ -746,7 +750,7 @@ export default function TransportationPage() {
           setStations(sts)
         })
     }
-  }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id])
+  }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id, scopedIds?.join(',')])
 
   // اختيار محطة افتراضية
   useEffect(() => {
@@ -1177,28 +1181,28 @@ export default function TransportationPage() {
 
         <div className="flex flex-wrap gap-2 items-center">
           {/* Upload schedule — admin only */}
-          {isGeneralAdmin && (
+          {isGeneralAdmin && allowCap('transport_upload_schedule') && (
             <button onClick={() => setShowUpload(true)}
               className="h-9 flex items-center bg-nwbus-primary text-white rounded-lg px-3.5 text-xs font-semibold hover:opacity-90">
               {isAr ? 'رفع جدول الرحلات' : 'Upload Schedule'}
             </button>
           )}
           {/* New permanent trip — admin only */}
-          {isGeneralAdmin && (
+          {isGeneralAdmin && allowCap('transport_manage_trips') && (
             <button onClick={() => setShowNewTrip(true)}
               className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'رحلة جديدة' : 'New Trip'}
             </button>
           )}
           {/* Manage manually added trips — admin only */}
-          {isGeneralAdmin && (
+          {isGeneralAdmin && allowCap('transport_manage_trips') && (
             <button onClick={() => setShowManualTrips(true)}
               className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'الرحلات المضافة' : 'Added Trips'}
             </button>
           )}
           {/* Select station trips — supervisor & admin */}
-          {isGeneralAdmin && stationId && (
+          {isGeneralAdmin && allowCap('transport_manage_trips') && stationId && (
             <button onClick={() => setShowSelect(true)}
               className="h-9 flex items-center gap-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'تفعيل رحلات المحطة' : 'Activate Trips'}
@@ -1211,7 +1215,7 @@ export default function TransportationPage() {
             </button>
           )}
           {/* Add extra trip (RF) — supervisor & admin */}
-          {(isGeneralAdmin || isStationAdmin) && (
+          {((isGeneralAdmin && allowCap('transport_manage_trips')) || isStationAdmin) && (
             <button onClick={() => setShowExtra(true)}
               className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'رحلة إضافية (RF)' : 'Extra Trip (RF)'}
