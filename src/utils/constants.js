@@ -60,6 +60,8 @@ export const TITLE_CAPABILITIES = [
   // الإجازات
   { group: 'الإجازات', key: 'leaves_supervisor_stage', kind: 'grant', ar: 'يوافق على الإجازات كمشرف (لموظفي محطاته المخصصة) قبل الأدمن', en: 'Approve leaves as supervisor for his stations' },
   { group: 'الإجازات', key: 'leaves_final_approve',    kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval' },
+  // الموظفون المحددون
+  { group: 'الموظفون المحددون', key: 'assigned_employees', kind: 'grant', ar: 'موظفون محددون بالاسم أو الرقم الوظيفي: يقيّمهم ويوافق على إجازاتهم كمشرف (تحددهم من تعديل حسابه)', en: 'Specific employees he evaluates and approves leaves for' },
   // الصفحات والنطاق
   { group: 'الصفحات والنطاق', key: 'scope_assigned_stations', kind: 'grant', ar: 'يقتصر على المحطات المخصصة له (التقارير والترحيل)', en: 'Limit to his assigned stations' },
   { group: 'الصفحات والنطاق', key: 'stations_page',    kind: 'allow', adminOnly: true, ar: 'صفحة المحطات', en: 'Stations page' },

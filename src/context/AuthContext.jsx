@@ -18,6 +18,7 @@ export function AuthProvider({ children }) {
   const [profileError,      setProfileError]      = useState(null)  // debug error message
   const [allowedStationIds, setAllowedStationIds] = useState(null)  // null = all, array = restricted
   const [customTitle, setCustomTitle] = useState(null)  // المسمى المخصص للمستخدم (مصفوفة الصلاحيات)
+  const [assignedEmployeeIds, setAssignedEmployeeIds] = useState([])  // موظفون محددون له (يقيّمهم ويوافق على إجازاتهم)
   const [supervisedStationIds, setSupervisedStationIds] = useState([])  // محطات مساعد المدير كمشرف (لا تقيّد صلاحياته كأدمن)
   const profileIdRef = useRef(null)
   const authUserIdRef = useRef(null) // auth.users id لآخر مستخدم تم جلب بروفايله فعلياً
@@ -54,6 +55,12 @@ export function AuthProvider({ children }) {
         title = t ?? null
       }
       setCustomTitle(title)
+      if (title?.permissions?.assigned_employees) {
+        const { data: asg } = await supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', data.id)
+        setAssignedEmployeeIds((asg ?? []).map(r => r.employee_id))
+      } else {
+        setAssignedEmployeeIds([])
+      }
       // مشرف منطقة / مشرف محطة — نجلب محطاته المخصصة من user_stations
       if (data.role === ASSISTANT_DIRECTOR_ROLE || title?.permissions?.leaves_supervisor_stage || title?.permissions?.evaluation_my_employees || title?.permissions?.scope_assigned_stations) {
         const { data: us } = await supabase.from('user_stations').select('station_id').eq('user_id', data.id)
@@ -239,6 +246,7 @@ export function AuthProvider({ children }) {
       actsAsSupervisor,
       evaluatesOwnEmployees,
       supervisedStationIds,
+      assignedEmployeeIds,
       isShiftSupervisor,
       isStationAdmin,
       isAccountant,

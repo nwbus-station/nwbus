@@ -88,6 +88,91 @@ function RatingActivationAdmin({ userId, isAr }) {
 }
 
 // مشرف الوردية ما يقيّم كل موظفي المحطة — بس جزء محدد له صراحة من هنا
+// موظفون محددون لمسمى (يقيّمهم ويوافق على إجازاتهم): بحث بالاسم أو الرقم الوظيفي ثم إضافة/إزالة
+function AssignedEmployeesPicker({ userId, isAr }) {
+  const [assigned, setAssigned] = useState([])
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState([])
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const loadAssigned = useCallback(async () => {
+    const { data: asg, error } = await supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', userId)
+    if (error) { setErr(error.message); return }
+    const ids = (asg ?? []).map(r => r.employee_id)
+    if (!ids.length) { setAssigned([]); return }
+    const { data } = await supabase.from('users').select('id, full_name_ar, job_number').in('id', ids)
+    setAssigned((data ?? []).sort((a, b) => (a.full_name_ar || '').localeCompare(b.full_name_ar || '', 'ar')))
+  }, [userId])
+  useEffect(() => { loadAssigned() }, [loadAssigned])
+
+  useEffect(() => {
+    const term = q.trim().replace(/[%,()*]/g, '')
+    if (term.length < 2) { setResults([]); return }
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('users')
+        .select('id, full_name_ar, job_number, station:station_id(name_ar)')
+        .eq('is_active', true).neq('id', userId)
+        .or(`full_name_ar.ilike.%${term}%,job_number.ilike.%${term}%,username.ilike.%${term}%`).limit(15)
+      setResults((data ?? []).filter(e => !assigned.some(a => a.id === e.id)))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [q, assigned, userId])
+
+  async function add(emp) {
+    setBusy(true); setErr('')
+    const { error } = await supabase.from('shift_supervisor_assignments').insert({ supervisor_id: userId, employee_id: emp.id })
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setQ('')
+    loadAssigned()
+  }
+  async function remove(empId) {
+    setBusy(true); setErr('')
+    const { error } = await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId).eq('employee_id', empId)
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setAssigned(prev => prev.filter(a => a.id !== empId))
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 mt-2">
+      <p className="text-xs font-semibold text-gray-600 mb-2">
+        {isAr ? `الموظفون اللي يقيّمهم ويوافق على إجازاتهم (${assigned.length})` : `Employees he evaluates & approves leaves for (${assigned.length})`}
+      </p>
+      <input value={q} onChange={e => setQ(e.target.value)}
+        placeholder={isAr ? 'ابحث بالاسم أو الرقم الوظيفي...' : 'Search by name or job number...'}
+        className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
+      {results.length > 0 && (
+        <div className="mt-1 border rounded-lg bg-white max-h-44 overflow-y-auto divide-y divide-gray-100">
+          {results.map(e => (
+            <button type="button" key={e.id} disabled={busy} onClick={() => add(e)}
+              className="w-full text-start px-3 py-1.5 text-xs hover:bg-blue-50 flex items-center gap-2">
+              <span className="font-semibold text-gray-800">{e.full_name_ar}</span>
+              {e.job_number && <span className="text-gray-400 font-mono">{e.job_number}</span>}
+              {e.station?.name_ar && <span className="text-gray-400 truncate">· {e.station.name_ar}</span>}
+              <span className="ms-auto text-nwbus-primary font-bold">+</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mt-2 flex flex-wrap gap-1.5 min-h-[28px]">
+        {assigned.length === 0
+          ? <span className="text-xs text-gray-400">{isAr ? 'ما حُدد أي موظف بعد' : 'No employees assigned yet'}</span>
+          : assigned.map(a => (
+            <span key={a.id} className="inline-flex items-center gap-1.5 bg-white border rounded-full px-2.5 py-1 text-xs">
+              <span className="font-semibold text-gray-800">{a.full_name_ar}</span>
+              {a.job_number && <span className="text-gray-400 font-mono">{a.job_number}</span>}
+              <button type="button" disabled={busy} onClick={() => remove(a.id)} className="text-gray-400 hover:text-red-500">×</button>
+            </span>
+          ))}
+      </div>
+      {err && <p className="text-xs text-red-600 mt-2">{err}</p>}
+      <p className="text-[10px] text-gray-400 mt-2">{isAr ? 'بدون تحديد، ما يقيّم ولا يوافق على إجازة أي موظف.' : 'With none selected he evaluates / approves nobody.'}</p>
+    </div>
+  )
+}
+
 function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
   const [employees, setEmployees] = useState([])
   const [assigned, setAssigned] = useState(new Set())
@@ -1281,6 +1366,18 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
               </div>
             )}
 
+
+            {isGeneralAdmin && selectedTitle?.permissions?.assigned_employees && (
+              user?.id ? (
+                <AssignedEmployeesPicker userId={user.id} isAr={isAr} />
+              ) : (
+                <p className="text-xs text-amber-600 mt-2">
+                  {isAr
+                    ? 'احفظ الموظف الجديد أولاً، ثم افتحه للتعديل عشان تقدر تحدد الموظفين اللي يقيّمهم ويوافق على إجازاتهم'
+                    : 'Save the new employee first, then reopen him to assign the employees he evaluates and approves leaves for'}
+                </p>
+              )
+            )}
 
             {isGeneralAdmin && form.role === 'shift_supervisor' && (
               user?.id ? (

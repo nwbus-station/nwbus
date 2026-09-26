@@ -842,7 +842,8 @@ function PrintDropdown({ isAr, onSelect }) {
 }
 
 export default function EvaluationPage() {
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap, assignedEmployeeIds } = useAuth()
+  const assignedOnly = grantCap('assigned_employees')
   // مسمى "مشرف المرحّلين": يقيّم من مسماهم الوظيفي مرحّل فقط، بدون تقييم المحطات أو المشرفين
   const dispatchersOnly = grantCap('evaluation_dispatchers_only')
   const { i18n }   = useTranslation()
@@ -930,6 +931,8 @@ export default function EvaluationPage() {
           list = list.filter(e => ids.has(e.id))
         } else {
           setEmpListErr('')
+          // مسمى بموظفين محددين بالاسم: يقيّم هؤلاء فقط
+          if (assignedOnly) list = list.filter(e => assignedEmployeeIds.includes(e.id))
         }
         setEmployees(list)
       }))
@@ -1013,7 +1016,7 @@ export default function EvaluationPage() {
 
     await Promise.all(promises)
     setLoading(false)
-  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor, dispatchersOnly])
+  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor, dispatchersOnly, assignedOnly, assignedEmployeeIds])
 
   useEffect(() => { load() }, [load])
 
@@ -1207,7 +1210,7 @@ export default function EvaluationPage() {
                 </div>
               ) : filteredEmployees.length === 0 ? (
                 <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>
-                  {isShiftSupervisor
+                  {(isShiftSupervisor || assignedOnly)
                     ? (isAr ? 'ما تم تحديد أي موظف لك للتقييم — تواصل مع الإدمن ليحدد لك الموظفين من صفحة تعديل حسابك' : 'No employees have been assigned to you yet — ask an admin to assign them from your user profile')
                     : (isAr ? 'لا يوجد موظفون' : 'No employees')}
                 </div>
