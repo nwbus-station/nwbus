@@ -1243,6 +1243,28 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
               </div>
             </div>
 
+            {selectedTitle && (() => {
+              const mods = selectedTitle.allowed_modules ?? MODULES.map(m => m.value)
+              const perms = selectedTitle.permissions ?? {}
+              const short = c => (isAr ? c.ar : c.en).split('(')[0].trim()
+              const chip = (txt, cls) => <span key={txt} className={`rounded-full px-2 py-0.5 ${cls}`}>{txt}</span>
+              return (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2 text-[11px]">
+                  <p className="font-bold text-gray-700">{isAr ? `ماذا يشوف "${selectedTitle.name_ar}"` : `What "${selectedTitle.name_en || selectedTitle.name_ar}" gets`}</p>
+                  <div className="flex flex-wrap gap-1 items-center">
+                    <span className="text-gray-500">{isAr ? 'يشوف:' : 'Sees:'}</span>
+                    {MODULES.filter(m => mods.includes(m.value)).map(m => chip(isAr ? m.ar : m.en, 'bg-green-50 text-green-700 border border-green-200'))}
+                    {TITLE_CAPABILITIES.filter(c => c.kind === 'grant' && perms[c.key]).map(c => chip('+ ' + short(c), 'bg-blue-50 text-blue-700 border border-blue-200'))}
+                  </div>
+                  <div className="flex flex-wrap gap-1 items-center">
+                    <span className="text-gray-500">{isAr ? 'لا يشوف:' : 'Hidden:'}</span>
+                    {MODULES.filter(m => !mods.includes(m.value)).map(m => chip(isAr ? m.ar : m.en, 'bg-gray-100 text-gray-500 line-through'))}
+                    {TITLE_CAPABILITIES.filter(c => c.kind === 'allow' && perms[c.key] === false).map(c => chip(short(c), 'bg-red-50 text-red-600 border border-red-200'))}
+                  </div>
+                </div>
+              )
+            })()}
+
             {isGeneralAdmin && (
               <div className="space-y-2">
                 {form.role !== 'accountant' && form.role !== 'general_admin' && (
@@ -1286,12 +1308,22 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                   <label className="text-xs font-medium text-gray-600">
                     {isAr ? 'محطات المشرف (يمكن اختيار أكثر من محطة)' : 'Supervisor Stations (multiple allowed)'}
                   </label>
-                  {stationSet.size > 0 && (
-                    <button type="button" onClick={() => { setStationSet(new Set()); setPrimaryStationId(null) }}
-                      className="text-[11px] text-red-400 hover:text-red-600">
-                      {isAr ? 'مسح الكل' : 'Clear all'}
+                  <div className="flex items-center gap-3">
+                    <button type="button" onClick={() => {
+                      const q = stationSearch.toLowerCase()
+                      const list = stations.filter(s => !q || (s.name_ar ?? '').toLowerCase().includes(q) || (s.name_en ?? '').toLowerCase().includes(q))
+                      setStationSet(prev => { const n = new Set(prev); list.forEach(s => n.add(s.id)); return n })
+                      setPrimaryStationId(cur => cur ?? list[0]?.id ?? null)
+                    }} className="text-[11px] text-nwbus-primary hover:underline font-semibold">
+                      {isAr ? (stationSearch ? 'تحديد نتائج البحث' : 'تحديد الكل') : (stationSearch ? 'Select results' : 'Select all')}
                     </button>
-                  )}
+                    {stationSet.size > 0 && (
+                      <button type="button" onClick={() => { setStationSet(new Set()); setPrimaryStationId(null) }}
+                        className="text-[11px] text-red-400 hover:text-red-600">
+                        {isAr ? 'مسح الكل' : 'Clear all'}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {stationSet.size > 1 && (
                   <p className="text-[11px] text-amber-600 mb-1.5">
@@ -1351,17 +1383,19 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
               </div>
             )}
 
-            {/* Supervisor — for all roles except general_admin */}
-            {form.role !== 'general_admin' && supervisors.length > 0 && (
+            {/* Supervisor — for all roles except general_admin (المسمى المخصص له مسؤول مباشر دائماً) */}
+            {(form.role !== 'general_admin' || form.custom_title_id) && supervisors.length > 0 && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   {isAr ? 'المسؤول المباشر' : 'Direct Supervisor'}
                 </label>
                 <select className={inputCls} value={form.supervisor_id} onChange={e => set('supervisor_id', e.target.value)}>
                   <option value="">{isAr ? '— بدون مشرف —' : '— No Supervisor —'}</option>
-                  {supervisors.map(s => (
-                    <option key={s.id} value={s.id}>{s.full_name_ar}</option>
-                  ))}
+                  {supervisors.filter(s => s.id !== user?.id).map(s => {
+                    const t = customTitles.find(x => x.id === s.custom_title_id)
+                    const r = t ? (isAr ? t.name_ar : (t.name_en || t.name_ar)) : USER_ROLES.find(x => x.value === s.role)?.[isAr ? 'ar' : 'en']
+                    return <option key={s.id} value={s.id}>{s.full_name_ar}{r ? ` — ${r}` : ''}</option>
+                  })}
                 </select>
               </div>
             )}
@@ -1464,7 +1498,9 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
 
 /* ─── Main Page ────────────────────────────────────────── */
 export default function UsersPage() {
-  const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds } = useAuth()
+  const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds } = useAuth()
+  const canManageAccounts = isGeneralAdmin && allowCap('users_manage')
+  const scopedIds = grantCap('scope_assigned_stations') && supervisedStationIds?.length ? supervisedStationIds : null
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -1572,6 +1608,10 @@ export default function UsersPage() {
       usersQuery = usersQuery.in('station_id', allowedStationIds)
       // نفس التقييد على قائمة المحطات نفسها — القائمة/الفلتر يعرضون محطاته المخصصة بس، مو كل محطات الشبكة
       stationsQuery = stationsQuery.in('id', allowedStationIds)
+    } else if (scopedIds) {
+      // مسمى محصور بمحطاته المخصصة: يشوف موظفي محطاته فقط
+      usersQuery = usersQuery.in('station_id', scopedIds)
+      stationsQuery = stationsQuery.in('id', scopedIds)
     } else if (isStationAdmin && !isGeneralAdmin) {
       usersQuery = usersQuery.eq('station_id', profile.station_id)
       stationsQuery = stationsQuery.eq('id', profile.station_id)
@@ -1603,7 +1643,7 @@ export default function UsersPage() {
       hasLoadedRef.current = true
     }
     setLoading(false)
-  }, [isGeneralAdmin, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.station_id])
+  }, [isGeneralAdmin, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.station_id, scopedIds?.join(',')])
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
@@ -1644,7 +1684,7 @@ export default function UsersPage() {
     fetchAll()
   }
 
-  const supervisors = users.filter(u => ['station_admin', 'area_supervisor', 'general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(u.role))
+  const supervisors = users.filter(u => ['station_admin', 'area_supervisor', 'general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(u.role) || u.custom_title_id)
   const shiftSupervisors = users.filter(u => u.role === 'shift_supervisor')
 
   // كل الفلاتر إلا فلتر المحطة — نحتاجها لوحدها عشان منتقي محطات الطباعة (متعدد) يشتغل
@@ -1939,7 +1979,7 @@ export default function UsersPage() {
               {isAr ? 'إضافة مسمى' : 'Add Title'}
             </button>
           )}
-          {isGeneralAdmin && (
+          {canManageAccounts && (
             <button onClick={() => setModal('new')}
               className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors whitespace-nowrap">
               + {isAr ? 'جديد' : 'New'}
@@ -2194,7 +2234,7 @@ export default function UsersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {isGeneralAdmin && (
+                    {canManageAccounts && (
                       <div className="flex gap-1 justify-end">
                         <button onClick={() => setModal(u)} title={isAr ? 'تعديل' : 'Edit'}
                           className="w-8 h-8 grid place-items-center rounded-lg text-gray-400 hover:bg-nwbus-primary hover:text-white transition-colors">
