@@ -9,6 +9,7 @@ import { USER_ROLES, MODULES, TITLE_CAPABILITIES } from '../utils/constants'
 import { toLatinDigits, escapeHtml } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import DatePicker from '../components/shared/DatePicker'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { SHIFTS, computeActiveUntil } from '../utils/ratingShifts'
@@ -459,152 +460,211 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
 const NEW_USER_DRAFT_KEY = 'um_new_draft'
 
 // إدارة المسميات المخصصة: اسم المسمى + الدور الأساسي (سقف الصلاحيات) + الأقسام + مصفوفة الصلاحيات
+function PermSwitch({ checked, onChange }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+      className={`relative shrink-0 w-10 h-[22px] rounded-full transition-colors ${checked ? 'bg-nwbus-primary' : 'bg-gray-300'}`}>
+      <span className="absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-all"
+        style={{ insetInlineStart: checked ? 21 : 3 }} />
+    </button>
+  )
+}
+
 function TitlesManager({ titles, onClose, onChanged, isAr }) {
   useEscapeKey(onClose)
+  useBodyScrollLock()
   const blank = { id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: { restricted_mode: true }, allowed_modules: null }
   const [form, setForm] = useState(blank)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
-  const selMods = form.allowed_modules ?? MODULES.map(m => m.value)
+  const [q, setQ] = useState('')
+  const [saved, setSaved] = useState(false)
+  const groupRefs = useRef({})
+  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary/40 focus:border-nwbus-primary focus:outline-none"
   const isAdminBase = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(form.base_role)
 
-  const setPerm = (k, v) => setForm(f => ({ ...f, permissions: { ...f.permissions, [k]: v } }))
-  const toggleMod = mod => setForm(f => {
-    const cur = f.allowed_modules ?? MODULES.map(m => m.value)
-    const next = cur.includes(mod) ? cur.filter(m => m !== mod) : [...cur, mod]
-    return { ...f, allowed_modules: next.length === MODULES.length ? null : next }
-  })
   // قدرات "التقييد" مفتوحة افتراضياً، وقدرات "المنح" مقفلة افتراضياً
   const permValue = cap => cap.kind === 'allow' ? form.permissions[cap.key] !== false : !!form.permissions[cap.key]
+  const setPerm = (k, v) => { setSaved(false); setForm(f => ({ ...f, permissions: { ...f.permissions, [k]: v } })) }
+  const setMany = (caps, v) => { setSaved(false); setForm(f => ({ ...f, permissions: { ...f.permissions, ...Object.fromEntries(caps.filter(c => c.key !== 'restricted_mode').map(c => [c.key, v])) } })) }
+
+  const groups = [...new Set(TITLE_CAPABILITIES.map(c => c.group))]
+  const term = q.trim().toLowerCase()
+  const matches = c => !term || c.ar.toLowerCase().includes(term) || c.en.toLowerCase().includes(term) || c.group.includes(term)
+  const onCount = TITLE_CAPABILITIES.filter(permValue).length
+
+  const pick = t => { setForm(t ? { id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null } : blank); setErr(''); setSaved(false); setQ('') }
 
   async function save() {
     if (!form.name_ar.trim()) { setErr(isAr ? 'اسم المسمى بالعربي مطلوب' : 'Arabic name is required'); return }
     setBusy(true); setErr('')
     const permissions = Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, permValue(c)]))
     const row = { name_ar: form.name_ar.trim(), name_en: form.name_en.trim() || null, base_role: form.base_role, permissions, allowed_modules: form.allowed_modules }
-    const { error } = form.id
-      ? await supabase.from('custom_titles').update(row).eq('id', form.id)
-      : await supabase.from('custom_titles').insert(row)
+    const { data, error } = form.id
+      ? await supabase.from('custom_titles').update(row).eq('id', form.id).select().single()
+      : await supabase.from('custom_titles').insert(row).select().single()
     setBusy(false)
+    if (error) { setErr(error.message); return }
+    if (data) setForm(f => ({ ...f, id: data.id }))
+    setSaved(true)
+    onChanged()
+  }
+
+  async function remove() {
+    if (!form.id) return
+    if (!window.confirm(isAr ? `حذف المسمى "${form.name_ar}"؟ الموظفون عليه يبقون بدورهم الأساسي.` : `Delete title "${form.name_ar}"?`)) return
+    const { error } = await supabase.from('custom_titles').delete().eq('id', form.id)
     if (error) { setErr(error.message); return }
     setForm(blank)
     onChanged()
   }
 
-  async function remove(t) {
-    if (!window.confirm(isAr ? `حذف المسمى "${t.name_ar}"؟ الموظفون عليه يبقون بدورهم الأساسي.` : `Delete title "${t.name_ar}"?`)) return
-    const { error } = await supabase.from('custom_titles').delete().eq('id', t.id)
-    if (error) { setErr(error.message); return }
-    if (form.id === t.id) setForm(blank)
-    onChanged()
-  }
+  const roleLabel = v => { const r = USER_ROLES.find(x => x.value === v); return r ? (isAr ? r.ar : r.en) : v }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}
+    <div className="fixed inset-0 z-50 bg-black/45 flex items-center justify-center p-3 md:p-6" dir={isAr ? 'rtl' : 'ltr'}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-        <div className="px-5 py-4 border-b flex items-center justify-between">
-          <h2 className="font-bold text-gray-800">{isAr ? 'المسميات الوظيفية والصلاحيات' : 'Job Titles & Permissions'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-lg">✕</button>
-        </div>
-        <div className="p-5 grid md:grid-cols-[200px_1fr_380px] gap-5">
-          <div className="space-y-2">
-            <button onClick={() => { setForm(blank); setErr('') }}
-              className="w-full text-sm font-semibold border-2 border-dashed border-gray-300 rounded-lg py-2 text-gray-600 hover:border-nwbus-primary">
-              + {isAr ? 'مسمى جديد' : 'New title'}
-            </button>
-            {titles.length === 0 && <p className="text-xs text-gray-400 text-center py-4">{isAr ? 'ما فيه مسميات مضافة' : 'No titles yet'}</p>}
-            {titles.map(t => (
-              <div key={t.id} className={`border rounded-lg px-3 py-2 text-sm flex items-center justify-between gap-2 ${form.id === t.id ? 'border-nwbus-primary bg-nwbus-primary/5' : 'border-gray-200'}`}>
-                <button className="text-start flex-1 truncate font-semibold text-gray-800"
-                  onClick={() => { setForm({ id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null }); setErr('') }}>
-                  {t.name_ar}
-                </button>
-                <button onClick={() => remove(t)} className="text-red-500 text-xs">✕</button>
-              </div>
-            ))}
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+        {/* الرأس */}
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-900 text-base">{isAr ? 'المسميات الوظيفية والصلاحيات' : 'Job Titles & Permissions'}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">{isAr ? 'أنشئ مسمى وحدد بالضبط ما يقدر يشوفه ويسويه. القيود تسري على حسابات هذا المسمى فقط، والأدمن العام لا يتأثر.' : 'Create a title and control exactly what it can see and do. The general admin is never affected.'}</p>
           </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-lg leading-none">✕</button>
+        </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المسمى (عربي) *' : 'Title (Arabic) *'}</label>
-                <input className={inputCls} value={form.name_ar} onChange={e => setForm(f => ({ ...f, name_ar: e.target.value }))} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المسمى (إنجليزي)' : 'Title (English)'}</label>
-                <input className={inputCls} dir="ltr" value={form.name_en} onChange={e => setForm(f => ({ ...f, name_en: e.target.value }))} />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الدور الأساسي (سقف الصلاحيات) *' : 'Base role (permission ceiling) *'}</label>
-              <select className={inputCls} value={form.base_role} onChange={e => setForm(f => ({ ...f, base_role: e.target.value }))}>
-                {USER_ROLES.map(r => <option key={r.value} value={r.value}>{isAr ? r.ar : r.en}</option>)}
-              </select>
-              <p className="text-[11px] text-gray-400 mt-1">
-                {isAr ? 'قاعدة البيانات تطبّق صلاحيات هذا الدور فعلياً — المصفوفة تحت تضبط ما يظهر ويُسمح به داخل التطبيق ضمن هذا السقف.' : 'The database enforces this role; the matrix adjusts what is allowed in the app within it.'}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold text-gray-700 mb-2">{isAr ? 'الأقسام المتاحة' : 'Available sections'}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {MODULES.map(m => (
-                  <ToggleRow key={m.value} checked={selMods.includes(m.value)} onChange={() => toggleMod(m.value)}>{isAr ? m.ar : m.en}</ToggleRow>
-                ))}
-              </div>
-            </div>
-
-            {err && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
-            <div className="flex gap-2 justify-end">
-              <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600">{isAr ? 'إغلاق' : 'Close'}</button>
-              <button onClick={save} disabled={busy} className="px-5 py-2 rounded-lg text-sm font-semibold bg-nwbus-primary text-white disabled:opacity-60">
-                {busy ? '…' : (form.id ? (isAr ? 'حفظ التعديل' : 'Save changes') : (isAr ? 'إضافة المسمى' : 'Add title'))}
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row">
+          {/* قائمة المسميات */}
+          <aside className="md:w-64 shrink-0 border-b md:border-b-0 md:border-e border-gray-200 bg-gray-50/60 flex flex-col max-h-44 md:max-h-none">
+            <div className="p-3 shrink-0">
+              <button onClick={() => pick(null)}
+                className={`w-full text-sm font-semibold rounded-lg py-2.5 transition-colors ${!form.id ? 'bg-nwbus-primary text-white' : 'border border-gray-300 text-gray-700 hover:bg-white'}`}>
+                + {isAr ? 'مسمى جديد' : 'New title'}
               </button>
             </div>
-          </div>
-
-          <aside className="md:border-s md:ps-5 space-y-3 md:max-h-[70vh] md:overflow-y-auto">
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-bold text-gray-700">{isAr ? 'كل الصلاحيات' : 'All permissions'}</p>
-                <span className="text-[11px] text-gray-500">{TITLE_CAPABILITIES.filter(permValue).length}/{TITLE_CAPABILITIES.length} {isAr ? 'مفعّلة' : 'on'}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">{isAr
-                ? 'كل بند تقدر تفعّله أو تقفله. القيود تسري على حساب هذا المسمى فقط — الأدمن العام ما يتأثر أبداً. البند اللي عليه "قاعدة" مفروض من قاعدة البيانات نفسها (يمنع الوصول للبيانات حتى لو فُتح النظام بطريقة ثانية)، والباقي على مستوى الواجهة.'
-                : 'Toggle any item. Restrictions apply to this title only — the general admin is never affected. Items tagged DB are enforced by the database itself.'}</p>
+            <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-1.5">
+              {titles.length === 0 && <p className="text-xs text-gray-400 text-center py-6">{isAr ? 'ما فيه مسميات مضافة' : 'No titles yet'}</p>}
+              {titles.map(t => {
+                const on = TITLE_CAPABILITIES.filter(c => c.kind === 'allow' ? (t.permissions ?? {})[c.key] !== false : !!(t.permissions ?? {})[c.key]).length
+                return (
+                  <button key={t.id} onClick={() => pick(t)}
+                    className={`w-full text-start rounded-lg px-3 py-2.5 border transition-colors ${form.id === t.id ? 'border-nwbus-primary bg-white shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
+                    <p className="text-sm font-semibold text-gray-900 truncate">{t.name_ar}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{roleLabel(t.base_role)} · {on}/{TITLE_CAPABILITIES.length}</p>
+                  </button>
+                )
+              })}
             </div>
-            {[...new Set(TITLE_CAPABILITIES.map(c => c.group))].map(group => {
-              const caps = TITLE_CAPABILITIES.filter(c => c.group === group)
-              const setGroup = v => setForm(f => ({ ...f, permissions: { ...f.permissions, ...Object.fromEntries(caps.filter(c => c.key !== 'restricted_mode').map(c => [c.key, v])) } }))
-              return (
-                <div key={group} className="border border-gray-200 rounded-lg p-2.5">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[11px] font-bold text-nwbus-primary">{group}</p>
-                    <div className="flex gap-2 text-[10px]">
-                      <button type="button" onClick={() => setGroup(true)} className="text-green-700 hover:underline">{isAr ? 'تفعيل الكل' : 'All on'}</button>
-                      <button type="button" onClick={() => setGroup(false)} className="text-red-600 hover:underline">{isAr ? 'قفل الكل' : 'All off'}</button>
-                    </div>
+          </aside>
+
+          {/* المحرر */}
+          <section className="flex-1 min-w-0 flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 md:p-6 space-y-6">
+              {/* بيانات المسمى */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 mb-3">{form.id ? (isAr ? 'تعديل المسمى' : 'Edit title') : (isAr ? 'مسمى جديد' : 'New title')}</h3>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم بالعربي *' : 'Arabic name *'}</label>
+                    <input className={inputCls} value={form.name_ar} onChange={e => { setSaved(false); setForm(f => ({ ...f, name_ar: e.target.value })) }} />
                   </div>
-                  <div className="space-y-1.5">
-                    {caps.map(c => {
-                      const meaningful = c.kind === 'grant' || !c.adminOnly || isAdminBase
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم بالإنجليزي' : 'English name'}</label>
+                    <input className={inputCls} dir="ltr" value={form.name_en} onChange={e => { setSaved(false); setForm(f => ({ ...f, name_en: e.target.value })) }} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'نوع الحساب الأساسي *' : 'Base account type *'}</label>
+                    <select className={inputCls} value={form.base_role} onChange={e => { setSaved(false); setForm(f => ({ ...f, base_role: e.target.value })) }}>
+                      {USER_ROLES.map(r => <option key={r.value} value={r.value}>{isAr ? r.ar : r.en}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-2">{isAr ? 'النوع الأساسي هو سقف الصلاحيات — والصلاحيات تحت تضيّق منه أو تضيف عليه.' : 'The base type is the ceiling; the permissions below narrow or extend it.'}</p>
+              </div>
+
+              {/* الصلاحيات */}
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">{isAr ? 'الصلاحيات' : 'Permissions'}</h3>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? `${onCount} مفعّلة من ${TITLE_CAPABILITIES.length}` : `${onCount} of ${TITLE_CAPABILITIES.length} enabled`}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input value={q} onChange={e => setQ(e.target.value)} placeholder={isAr ? 'بحث في الصلاحيات…' : 'Search permissions…'}
+                      className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs w-48 focus:ring-2 focus:ring-nwbus-primary/40 focus:outline-none" />
+                    <button type="button" onClick={() => setMany(TITLE_CAPABILITIES, true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-green-700 hover:bg-green-50">{isAr ? 'تفعيل الكل' : 'Enable all'}</button>
+                    <button type="button" onClick={() => setMany(TITLE_CAPABILITIES, false)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-red-600 hover:bg-red-50">{isAr ? 'قفل الكل' : 'Disable all'}</button>
+                  </div>
+                </div>
+
+                <div className="flex gap-5">
+                  {/* فهرس المجموعات */}
+                  <nav className="hidden lg:block w-44 shrink-0">
+                    <div className="sticky top-0 space-y-0.5">
+                      {groups.map(g => {
+                        const caps = TITLE_CAPABILITIES.filter(c => c.group === g)
+                        return (
+                          <button key={g} type="button" onClick={() => groupRefs.current[g]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                            className="w-full flex items-center justify-between text-start text-xs px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
+                            <span className="truncate">{g}</span>
+                            <span className="text-[10px] text-gray-400 tabular-nums">{caps.filter(permValue).length}/{caps.length}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </nav>
+
+                  <div className="flex-1 min-w-0 space-y-4">
+                    {groups.map(g => {
+                      const caps = TITLE_CAPABILITIES.filter(c => c.group === g)
+                      const shown = caps.filter(matches)
+                      if (!shown.length) return null
                       return (
-                        <div key={c.key} className={meaningful ? '' : 'opacity-50'}>
-                          <ToggleRow checked={permValue(c)} onChange={v => setPerm(c.key, v)}>
-                            <span className="flex-1">{isAr ? c.ar : c.en}</span>
-                            {c.db && <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-nwbus-primary/10 text-nwbus-primary">{isAr ? 'قاعدة' : 'DB'}</span>}
-                          </ToggleRow>
-                          {!meaningful && <p className="text-[10px] text-gray-400 mt-0.5 px-1">{isAr ? 'هذي الصلاحية للأدمن فقط — اختر دوراً أساسياً أدمن لتفعيل تأثيرها' : 'Admin-only capability — choose an admin base role'}</p>}
+                        <div key={g} ref={el => { groupRefs.current[g] = el }} className="border border-gray-200 rounded-xl overflow-hidden scroll-mt-2">
+                          <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                            <p className="text-xs font-bold text-gray-800">{g}</p>
+                            <div className="flex gap-3 text-[11px]">
+                              <button type="button" onClick={() => setMany(caps, true)} className="text-green-700 hover:underline">{isAr ? 'تفعيل الكل' : 'All on'}</button>
+                              <button type="button" onClick={() => setMany(caps, false)} className="text-red-600 hover:underline">{isAr ? 'قفل الكل' : 'All off'}</button>
+                            </div>
+                          </div>
+                          <div className="divide-y divide-gray-100">
+                            {shown.map(c => {
+                              const meaningful = c.kind === 'grant' || !c.adminOnly || isAdminBase
+                              return (
+                                <div key={c.key} className={`flex items-center justify-between gap-4 px-4 py-3 ${meaningful ? '' : 'opacity-50'}`}>
+                                  <div className="min-w-0">
+                                    <p className="text-sm text-gray-800">{isAr ? c.ar : c.en}</p>
+                                    {!meaningful && <p className="text-[11px] text-gray-400 mt-0.5">{isAr ? 'تحتاج نوع حساب أساسي أدمن لتأثيرها' : 'Needs an admin base type to take effect'}</p>}
+                                  </div>
+                                  <PermSwitch checked={permValue(c)} onChange={v => setPerm(c.key, v)} />
+                                </div>
+                              )
+                            })}
+                          </div>
                         </div>
                       )
                     })}
+                    {term && !TITLE_CAPABILITIES.some(matches) && <p className="text-xs text-gray-400 text-center py-8">{isAr ? 'ما فيه نتائج' : 'No results'}</p>}
                   </div>
                 </div>
-              )
-            })}
-          </aside>
+              </div>
+            </div>
+
+            {/* التذييل */}
+            <div className="shrink-0 border-t border-gray-200 px-5 md:px-6 py-3 flex items-center gap-3 bg-white">
+              <div className="flex-1 min-w-0 text-xs">
+                {err && <span className="text-red-600">{err}</span>}
+                {!err && saved && <span className="text-green-700">{isAr ? 'تم الحفظ. الحسابات على هذا المسمى تأخذ الصلاحيات فوراً.' : 'Saved.'}</span>}
+              </div>
+              {form.id && <button onClick={remove} className="px-4 py-2 rounded-lg text-sm text-red-600 border border-red-200 hover:bg-red-50">{isAr ? 'حذف المسمى' : 'Delete'}</button>}
+              <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-700 hover:bg-gray-50">{isAr ? 'إغلاق' : 'Close'}</button>
+              <button onClick={save} disabled={busy} className="px-6 py-2 rounded-lg text-sm font-semibold bg-nwbus-primary text-white disabled:opacity-60">
+                {busy ? '…' : (form.id ? (isAr ? 'حفظ التعديلات' : 'Save changes') : (isAr ? 'إضافة المسمى' : 'Add title'))}
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -633,6 +693,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   function clearNewUserDraft() { sessionStorage.removeItem(NEW_USER_DRAFT_KEY) }
   function closeAndClearDraft() { if (!user) clearNewUserDraft(); onClose() }
   useEscapeKey(closeAndClearDraft)
+  useBodyScrollLock()
 
   const [form, setForm] = useState(newUserDraft?.form ?? {
     job_number:      user?.job_number      ?? '',
