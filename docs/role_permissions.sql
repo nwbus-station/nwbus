@@ -63,3 +63,21 @@ drop policy if exists "rrole_audit_select" on audit_log;
 create policy "rrole_audit_select" on audit_log as restrictive for select to authenticated using (
   not is_role_limited() or title_cap('reports_activity_log', true)
 );
+
+-- ─── سقف أقسام الدور (يُفرض من القاعدة أيضاً) ─────────────────
+-- القسم لازم يكون ضمن أقسام الموظف، وضمن الأقسام المسموحة لدوره (permissions.modules) لو الدور محدَّد
+create or replace function title_module(k text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select ((u.allowed_modules is null) or (k = any(u.allowed_modules)))
+       and (
+         u.custom_title_id is not null
+         or rp.permissions is null
+         or jsonb_typeof(rp.permissions->'modules') is distinct from 'array'
+         or jsonb_exists(rp.permissions->'modules', k)
+       )
+    from users u
+    left join role_permissions rp on rp.role = u.role::text
+    where u.auth_id = auth.uid()
+  ), false)
+$$;

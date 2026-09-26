@@ -1138,7 +1138,7 @@ export default function TransportationPage() {
   const enteredPct   = total > 0 ? Math.round((entered / total) * 100) : 0
 
   // المحاسب الصرف لا يُدخل ترحيلاً — لكن المشرف/الأدمن الذي يحمل صفة محاسب إضافية يُدخل عادي
-  const canEdit = isGeneralAdmin || isStationAdmin || !isAccountant
+  const canEdit = (isGeneralAdmin || isStationAdmin || !isAccountant) && allowCap('transport_record_edit')
 
   const selectedStationName = stations.find(s => s.id === selectedStation)
     ? (isAr
@@ -1501,7 +1501,7 @@ export default function TransportationPage() {
                     {/* إجراءات */}
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1.5">
-                        {trip.is_rf && (isGeneralAdmin || isStationAdmin) && (
+                        {trip.is_rf && (isGeneralAdmin || isStationAdmin) && allowCap('transport_delete_rf') && (
                           <button onClick={() => deleteRfTrip(trip.id)}
                             title={isAr ? 'حذف الرحلة الإضافية' : 'Delete extra trip'}
                             className="text-[11px] border border-gray-300 text-gray-400 rounded-sm px-1.5 py-1 hover:border-red-400 hover:text-red-500">

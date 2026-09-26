@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
-import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities } from '../utils/constants'
+import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed } from '../utils/constants'
 import { toLatinDigits, escapeHtml } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -484,6 +484,16 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   useEffect(() => { supabase.from('role_permissions').select('role, permissions').then(({ data }) => setRolePerms(Object.fromEntries((data ?? []).map(r => [r.role, r.permissions ?? {}])))) }, [])
   const isRole = form.kind === 'role'
   const capListForRole = roleCapabilities()
+  // أقسام الدور: مفعّل = متاح افتراضياً للدور + ما عطّلته أنت
+  const modEnabled = m => roleModuleAllowed(m, form.role, form.permissions)
+  const setModule = (m, v) => {
+    setSaved(false)
+    setForm(f => {
+      const cur = MODULES.map(x => x.value).filter(x => roleModuleAllowed(x, f.role, f.permissions))
+      const next = v ? [...new Set([...cur, m])] : cur.filter(x => x !== m)
+      return { ...f, permissions: { ...f.permissions, modules: next } }
+    })
+  }
   const capList = isRole ? roleCapabilities() : TITLE_CAPABILITIES
   const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary/40 focus:border-nwbus-primary focus:outline-none"
   const isAdminBase = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(form.base_role)
@@ -505,6 +515,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
     if (isRole) {
       setBusy(true); setErr('')
       const permissions = Object.fromEntries(capList.map(c => [c.key, permValue(c)]))
+      permissions.modules = MODULES.map(x => x.value).filter(x => roleModuleAllowed(x, form.role, form.permissions))
       const { error } = await supabase.from('role_permissions').upsert({ role: form.role, permissions, updated_at: new Date().toISOString() })
       setBusy(false)
       if (error) { setErr(error.message); return }
@@ -655,6 +666,30 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                   </nav>
 
                   <div className="flex-1 min-w-0 space-y-4">
+                    {isRole && (
+                      <div className="border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                          <p className="text-xs font-bold text-gray-800">{isAr ? 'الأقسام المتاحة لهذا الدور' : 'Sections available to this role'}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? 'أي قسم مقفول هنا ما تقدر تعطيه لموظف من هذا الدور — يطلع لك "غير مسموح" عند إضافة الموظف.' : 'A section turned off here cannot be granted to a user of this role.'}</p>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {MODULES.map(m => {
+                            const possible = moduleDefaultForRole(m.value, form.role)
+                            return (
+                              <div key={m.value} className={`flex items-center justify-between gap-4 px-4 py-3 ${possible ? '' : 'opacity-50'}`}>
+                                <div className="min-w-0">
+                                  <p className="text-sm text-gray-800">{isAr ? m.ar : m.en}</p>
+                                  {!possible && <p className="text-[11px] text-gray-400 mt-0.5">{isAr ? 'غير متاح لهذا الدور في النظام' : 'Not available to this role'}</p>}
+                                </div>
+                                {possible
+                                  ? <PermSwitch checked={modEnabled(m.value)} onChange={v => setModule(m.value, v)} />
+                                  : <span className="text-[11px] text-gray-400">{isAr ? 'مقفول' : 'Locked'}</span>}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
                     {groups.map(g => {
                       const caps = capList.filter(c => c.group === g)
                       const shown = caps.filter(matches)
@@ -898,6 +933,27 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   }
 
   const selectedMods = form.allowed_modules ?? MODULES.map(m => m.value)
+
+  // سقف الأقسام حسب الدور الأساسي (أو أساس المسمى المخصص) — اللي يعدّله الأدمن من "المسميات الوظيفية"
+  const [rolePermRows, setRolePermRows] = useState({})
+  const [modWarn, setModWarn] = useState('')
+  useEffect(() => {
+    supabase.from('role_permissions').select('role, permissions')
+      .then(({ data }) => setRolePermRows(Object.fromEntries((data ?? []).map(r => [r.role, r.permissions ?? {}]))))
+  }, [])
+  const titleObj = form.custom_title_id ? customTitles.find(t => t.id === form.custom_title_id) : null
+  const effRole = titleObj?.base_role ?? form.role
+  const modAllowed = m => roleModuleAllowed(m, effRole, titleObj ? null : rolePermRows[effRole])
+  const effRoleLabel = (() => { const r = USER_ROLES.find(x => x.value === effRole); return r ? (isAr ? r.ar : r.en) : '' })()
+  // لو غيّرت الدور وفيه أقسام صار ما يسمح فيها، نشيلها ونبلغك
+  useEffect(() => {
+    if (!Array.isArray(form.allowed_modules)) return
+    const bad = form.allowed_modules.filter(m => !modAllowed(m))
+    if (!bad.length) return
+    setForm(f => ({ ...f, allowed_modules: f.allowed_modules.filter(m => modAllowed(m)) }))
+    const names = bad.map(m => { const x = MODULES.find(y => y.value === m); return isAr ? x?.ar : x?.en }).join('، ')
+    setModWarn(isAr ? `شلت قسم (${names}) لأنه غير مسموح لدور ${effRoleLabel}` : `Removed (${names}) — not allowed for ${effRoleLabel}`)
+  }, [effRole, rolePermRows])
 
   async function handleSave(e) {
     e.preventDefault()
@@ -1558,11 +1614,29 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                 {isAr ? 'تحديد الكل' : 'Select all'}
               </button>
             </div>
+            {modWarn && (
+              <div className="text-xs rounded-lg px-3 py-2 bg-amber-50 text-amber-800 border border-amber-200 flex items-start justify-between gap-2">
+                <span>{modWarn}</span>
+                <button type="button" onClick={() => setModWarn('')} className="text-amber-600">✕</button>
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {MODULES.map(m => {
-                const on = selectedMods.includes(m.value)
+                const allowed = modAllowed(m.value)
+                const on = allowed && selectedMods.includes(m.value)
+                if (!allowed) {
+                  return (
+                    <button key={m.value} type="button"
+                      onClick={() => setModWarn(isAr ? `قسم (${m.ar}) غير مسموح لدور ${effRoleLabel}. تقدر تغيّر ذلك من "المسميات الوظيفية ← الأدوار الأساسية".` : `${m.en} is not allowed for ${effRoleLabel}.`)}
+                      className="w-full flex items-center gap-2 text-start text-xs px-3 py-2.5 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed">
+                      <span className="w-4 h-4 shrink-0 rounded-md border-2 border-gray-200" />
+                      <span className="text-sm line-through">{isAr ? m.ar : m.en}</span>
+                      <span className="ms-auto text-[10px]">{isAr ? 'غير مسموح' : 'Not allowed'}</span>
+                    </button>
+                  )
+                }
                 return (
-                  <ToggleRow key={m.value} checked={on} onChange={() => toggleModule(m.value)}>
+                  <ToggleRow key={m.value} checked={on} onChange={() => { setModWarn(''); toggleModule(m.value) }}>
                     <span className="text-sm">{isAr ? m.ar : m.en}</span>
                   </ToggleRow>
                 )
@@ -2077,20 +2151,20 @@ function UsersPageFull() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-          <button onClick={handleExcelClick} disabled={printTargets.length === 0 || printingRoster}
+          {allowCap('users_export') && <button onClick={handleExcelClick} disabled={printTargets.length === 0 || printingRoster}
             className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
             {printingRoster
               ? (isAr ? 'جارٍ التجهيز...' : 'Preparing...')
               : `📊 ${isAr ? 'تصدير Excel' : 'Export Excel'}${selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}`}
-          </button>
-          <button onClick={handlePrintClick} disabled={printTargets.length === 0 || printingRoster}
+          </button>}
+          {allowCap('users_export') && <button onClick={handlePrintClick} disabled={printTargets.length === 0 || printingRoster}
             className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed">
             {printingRoster
               ? (isAr ? 'جارٍ التجهيز...' : 'Preparing...')
               : selectedIds.size > 0
                 ? `🖨 ${isAr ? `طباعة/PDF المحدد (${selectedIds.size})` : `Print/PDF Selected (${selectedIds.size})`}`
                 : `🖨 ${isAr ? 'طباعة / PDF' : 'Print / PDF'}`}
-          </button>
+          </button>}
           {isGeneralAdmin && (
             <button onClick={() => setShowTitles(true)}
               className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap">

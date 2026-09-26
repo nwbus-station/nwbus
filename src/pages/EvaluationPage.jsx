@@ -849,7 +849,7 @@ export default function EvaluationPage() {
   const dispatchersOnly = grantCap('evaluation_dispatchers_only')
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
-  const canEvalEmp = [...ADMIN_ROLE_VALUES,'station_admin','shift_supervisor','area_supervisor'].includes(profile?.role)
+  const canEvalEmp = [...ADMIN_ROLE_VALUES,'station_admin','shift_supervisor','area_supervisor'].includes(profile?.role) && allowCap('evaluation_employees_tab')
   const canEvalStn = [...ADMIN_ROLE_VALUES,'station_admin','area_supervisor'].includes(profile?.role) && !dispatchersOnly && allowCap('evaluation_stations_tab')
   // مشرف المحطة/المنطقة يفتح تبويب تقييم المشرفين كمان — بس عشان يقيّم مشرفي الورديات
   // المحددين له صراحة (حقل "المشرف" بحسابهم)، مو باقي المشرفين

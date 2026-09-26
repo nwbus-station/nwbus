@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE } from '../utils/constants'
+import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE, roleModuleAllowed } from '../utils/constants'
 
 const AuthContext = createContext(null)
 
@@ -57,7 +57,7 @@ export function AuthProvider({ children }) {
       }
       setCustomTitle(title)
       {
-        const { data: rp } = await supabase.from('role_permissions').select('permissions').eq('role', data.role).maybeSingle()
+        const { data: rp } = await supabase.from('role_permissions').select('permissions').eq('role', data.role).maybeSingle()  // data.role = الدور الأصلي (مشرف المنطقة مستقل)
         setRolePerms(rp?.permissions ?? null)
       }
       if (title?.permissions?.assigned_employees) {
@@ -220,6 +220,8 @@ export function AuthProvider({ children }) {
   const isAssistantDirector = profile?.role === ASSISTANT_DIRECTOR_ROLE
   // مصفوفة صلاحيات المسمى المخصص: grantCap تمنح قدرة إضافية، allowCap تقيّد قدرة الدور الأساسي
   const titlePerms = customTitle?.permissions ?? rolePerms ?? null
+  // سقف الأقسام للدور الأساسي (الحساب اللي عليه مسمى مخصص ما ينطبق عليه)
+  const roleAllowsModule = mod => customTitle ? true : roleModuleAllowed(mod, profile?.display_role ?? profile?.role, rolePerms)
   const grantCap = key => !!titlePerms?.[key]
   const allowCap = key => !titlePerms || titlePerms[key] !== false
   // حساب مقيّد (مثل مشرف المرحلين): أساسه أدمن في قاعدة البيانات لكن التطبيق يعامله كمشرف — لا يُعامل كأدمن أبداً
@@ -251,6 +253,7 @@ export function AuthProvider({ children }) {
       customTitle,
       grantCap,
       allowCap,
+      roleAllowsModule,
       actsAsSupervisor,
       evaluatesOwnEmployees,
       supervisedStationIds,

@@ -1085,7 +1085,7 @@ export default function ReportsPage() {
           <DatePicker value={dateTo} onChange={setDateTo} isAr={isAr}
             className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
         </div>
-        {data && (
+        {data && allowCap('reports_print') && (
           <button onClick={printReport}
             className="bg-nwbus-primary text-white px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90">
             {isAr ? 'طباعة التقرير' : 'Print Report'}
@@ -1275,7 +1275,7 @@ export default function ReportsPage() {
                   color="#1C2B36"
                   storageKey="rpt_comp_open"
                 >
-                {detail.length > 0 && (
+                {detail.length > 0 && allowCap('reports_export') && (
                   <div className="flex justify-end mb-3">
                     <button onClick={exportCompliance}
                       className="text-xs bg-green-600 text-white rounded-lg px-3 py-1.5 font-semibold hover:opacity-90">
@@ -1406,7 +1406,7 @@ export default function ReportsPage() {
                 {isAr ? 'المتخلفون عن الرحلات' : 'Missed Passengers'}
                 <span className="text-xs font-normal text-gray-400">({data.missed.length})</span>
               </h2>
-              {data.missed.length > 0 && (
+              {data.missed.length > 0 && allowCap('reports_export') && (
                 <button onClick={exportMissed}
                   className="text-xs bg-green-600 text-white rounded-lg px-3 py-1.5 font-semibold hover:opacity-90">
                   {isAr ? 'تصدير Excel' : 'Export Excel'}

@@ -1128,7 +1128,9 @@ export default function LostFoundPage() {
       .then(({ data }) => setStations(data ?? []))
   }, [])
 
-  const visibleTabs = TABS.filter(t => !(t.hideForEmployee && isEmployee))
+  const TAB_CAP = { report: 'lostfound_report_tab', handover: 'lostfound_handover_tab', register: 'lostfound_register_tab', logs: 'lostfound_archive_tab' }
+  const visibleTabs = TABS.filter(t => !(t.hideForEmployee && isEmployee) && allowCap(TAB_CAP[t.id]))
+  const activeTab = visibleTabs.some(t => t.id === tab) ? tab : visibleTabs[0]?.id
 
   return (
     <div style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
@@ -1139,9 +1141,9 @@ export default function LostFoundPage() {
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{
               padding: '14px 20px', border: 'none', background: 'none', cursor: 'pointer',
-              fontSize: '0.88rem', fontWeight: tab === t.id ? 800 : 500, fontFamily: 'inherit',
-              color: tab === t.id ? 'var(--text-1)' : 'var(--text-3)',
-              borderBottom: `2.5px solid ${tab === t.id ? 'var(--text-1)' : 'transparent'}`,
+              fontSize: '0.88rem', fontWeight: activeTab === t.id ? 800 : 500, fontFamily: 'inherit',
+              color: activeTab === t.id ? 'var(--text-1)' : 'var(--text-3)',
+              borderBottom: `2.5px solid ${activeTab === t.id ? 'var(--text-1)' : 'transparent'}`,
               transition: 'all 0.15s', whiteSpace: 'nowrap',
             }}>
             {isAr ? t.ar : t.en}
@@ -1150,10 +1152,10 @@ export default function LostFoundPage() {
       </div>
 
       {/* Content */}
-      {tab === 'report'   && !isEmployee && <LostReportTab   stations={stations} profile={profile} isAr={isAr} />}
-      {tab === 'handover' && <HandoverTab    profile={profile} isAr={isAr} />}
-      {tab === 'register' && <RegisterItemTab profile={profile} isAr={isAr} stations={stations} />}
-      {tab === 'logs'     && <LogsTab stationFilter={isEmployee ? profile?.station_id : null} isAdmin={isAdmin} isAr={isAr} />}
+      {activeTab === 'report'   && !isEmployee && <LostReportTab   stations={stations} profile={profile} isAr={isAr} />}
+      {activeTab === 'handover' && <HandoverTab    profile={profile} isAr={isAr} />}
+      {activeTab === 'register' && <RegisterItemTab profile={profile} isAr={isAr} stations={stations} />}
+      {activeTab === 'logs'     && <LogsTab stationFilter={isEmployee ? profile?.station_id : null} isAdmin={isAdmin} isAr={isAr} />}
     </div>
   )
 }

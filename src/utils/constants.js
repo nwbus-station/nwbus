@@ -49,20 +49,35 @@ export const TITLE_CAPABILITIES = [
   { group: 'التقارير', key: 'reports_sales',      db: true, kind: 'allow', ar: 'ملخص المبيعات', en: 'Sales summary' },
   { group: 'التقارير', key: 'reports_lost',       db: true, kind: 'allow', ar: 'تقرير الموجودات', en: 'Lost & found report' },
   { group: 'التقارير', key: 'reports_activity_log', db: true, kind: 'allow', ar: 'سجل النشاط', en: 'Activity log' },
+  { group: 'التقارير', key: 'reports_print',  kind: 'allow', ar: 'طباعة التقارير', en: 'Print reports' },
+  { group: 'التقارير', key: 'reports_export', kind: 'allow', ar: 'تصدير التقارير إلى Excel', en: 'Export reports to Excel' },
   // تقييمات العملاء
   { group: 'تقييمات العملاء', key: 'customer_ratings_view', db: true, kind: 'allow', ar: 'يشوف تقييمات العملاء (الصفحة والبيانات)', en: 'See customer ratings' },
+  // الإيرادات
+  { group: 'الإيرادات', key: 'sales_add', kind: 'allow', ar: 'إدخال إيرادات جديدة', en: 'Add sales entries' },
+  // الموجودات
+  { group: 'الموجودات', key: 'lostfound_report_tab',   kind: 'allow', ar: 'تبويب بلاغ مفقودات', en: 'Lost report tab' },
+  { group: 'الموجودات', key: 'lostfound_handover_tab', kind: 'allow', ar: 'تبويب تسليم موجودات', en: 'Handover tab' },
+  { group: 'الموجودات', key: 'lostfound_register_tab', kind: 'allow', ar: 'تبويب تسجيل موجود', en: 'Register item tab' },
+  { group: 'الموجودات', key: 'lostfound_archive_tab',  kind: 'allow', ar: 'تبويب سجل الأرشيف', en: 'Archive log tab' },
   // بيانات الموظفين
   { group: 'بيانات الموظفين', key: 'users_view_phones', db: true, kind: 'allow', ar: 'يشوف أرقام جوالات الموظفين المتاحين له', en: 'See employee phone numbers' },
+  { group: 'بيانات الموظفين', key: 'users_export', kind: 'allow', ar: 'تصدير وطباعة قائمة الموظفين', en: 'Export / print staff roster' },
   // التقييم الوظيفي
   { group: 'التقييم الوظيفي', key: 'evaluation_dispatchers_only', db: true, kind: 'grant', ar: 'يقيّم المرحّلين فقط (من مسماهم الوظيفي مرحّل)', en: 'Evaluate dispatchers only' },
+  { group: 'التقييم الوظيفي', key: 'evaluation_employees_tab', kind: 'allow', ar: 'تبويب تقييم الموظفين', en: 'Employee evaluation tab' },
   { group: 'التقييم الوظيفي', key: 'evaluation_supervisors_tab',  kind: 'allow', ar: 'تبويب تقييم المشرفين', en: 'Supervisor evaluation tab' },
   { group: 'التقييم الوظيفي', key: 'evaluation_stations_tab',     kind: 'allow', ar: 'تبويب تقييم المحطات', en: 'Station evaluation tab' },
   { group: 'التقييم الوظيفي', key: 'evaluation_my_employees',     db: true, kind: 'grant', ar: 'يقيّم موظفيه (محطاته المخصصة أو مسؤوله المباشر) ويفتح على "موظفيني"', en: 'Evaluate his own employees' },
   // الترحيل
   { group: 'الترحيل', key: 'transport_upload_schedule', db: true, kind: 'allow', ar: 'رفع جدول الرحلات', en: 'Upload schedule' },
   { group: 'الترحيل', key: 'transport_manage_trips',    db: true, kind: 'allow', ar: 'رحلة جديدة والرحلات المضافة وتفعيل رحلات المحطة والرحلة الإضافية', en: 'Manage trips (new, added, activate, extra)' },
+  { group: 'الترحيل', key: 'transport_record_edit', kind: 'allow', ar: 'إدخال وتعديل سجلات الرحلات (الوصول والمغادرة)', en: 'Enter / edit trip records' },
+  { group: 'الترحيل', key: 'transport_delete_rf',   kind: 'allow', ar: 'حذف الرحلة الإضافية', en: 'Delete extra trips' },
   // الإجازات
   { group: 'الإجازات', key: 'leaves_supervisor_stage', db: true, kind: 'grant', ar: 'يوافق على الإجازات كمشرف (لموظفي محطاته المخصصة) قبل الأدمن', en: 'Approve leaves as supervisor for his stations' },
+  { group: 'الإجازات', key: 'leaves_request',   kind: 'allow', ar: 'تقديم طلب إجازة', en: 'Submit leave requests' },
+  { group: 'الإجازات', key: 'leaves_supervise', kind: 'allow', ar: 'الموافقة على إجازات الموظفين (مرحلة المشرف) وتبويباتها', en: 'Approve leaves as supervisor' },
   { group: 'الإجازات', key: 'leaves_final_approve',    db: true, kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval' },
   // الموظفون المحددون
   { group: 'الموظفون المحددون', key: 'assigned_employees', db: true, kind: 'grant', ar: 'موظفون محددون بالاسم أو الرقم الوظيفي: يقيّمهم ويوافق على إجازاتهم كمشرف (تحددهم من تعديل حسابه)', en: 'Specific employees he evaluates and approves leaves for' },
@@ -81,6 +96,22 @@ export const EDITABLE_ROLES = ['station_employee', 'accountant', 'station_admin'
 // البنود اللي تنطبق على الأدوار الأساسية: قيود فقط (allow) وما هي للأدمن وحده
 export const ROLE_CAPABILITY_EXCLUDE = ['customer_ratings_view', 'users_view_phones', 'transport_upload_schedule']
 export const roleCapabilities = () => TITLE_CAPABILITIES.filter(c => c.kind === 'allow' && !c.adminOnly && !ROLE_CAPABILITY_EXCLUDE.includes(c.key))
+
+// الأقسام اللي ما هي متاحة لكل الأدوار أصلاً (بحسب تصميم التطبيق) — الباقي متاح للكل
+const MODULE_ROLE_LIMITS = {
+  reports:          ['station_admin', 'area_supervisor', 'accountant'],
+  evaluation:       ['station_admin', 'area_supervisor', 'shift_supervisor'],
+  users:            ['station_admin', 'area_supervisor'],
+  map:              ['station_admin', 'area_supervisor'],
+  customer_ratings: [],
+}
+const ADMIN_LIKE_ROLES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
+// هل القسم متاح لهذا الدور أصلاً؟ (السقف الافتراضي)
+export const moduleDefaultForRole = (mod, role) =>
+  ADMIN_LIKE_ROLES.includes(role) || !(mod in MODULE_ROLE_LIMITS) || MODULE_ROLE_LIMITS[mod].includes(role)
+// السقف الفعلي: الافتراضي + اللي عدّله الأدمن من "الأدوار الأساسية" (permissions.modules)
+export const roleModuleAllowed = (mod, role, rolePerms) =>
+  moduleDefaultForRole(mod, role) && (!Array.isArray(rolePerms?.modules) || rolePerms.modules.includes(mod))
 
 // أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف
 export const ADMIN_ROLE_VALUES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']

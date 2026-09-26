@@ -952,7 +952,7 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
     ? formatHoursAr(leave.days_count * 24) : null
 
   // هل يمكن لهذا المستخدم الموافقة/الرفض؟
-  const canActSupervisor = (isSupervisor || inMySupervisedStations) && leave.supervisor_status === 'pending' && !isOwn
+  const canActSupervisor = ((isSupervisor && allowCap('leaves_supervise')) || inMySupervisedStations) && leave.supervisor_status === 'pending' && !isOwn
   // مساعد المدير اللي وافق كمشرف ما يعتمد نفس الإجازة كأدمن — الاعتماد النهائي لأدمن آخر
   const didSupervisorStage = isAssistant && leave.supervisor_status !== 'pending' && leave.supervisor_by === profile?.full_name_ar
   const canActManager    = isAdmin && leave.manager_status === 'pending' && !didSupervisorStage && allowCap('leaves_final_approve')
@@ -1215,9 +1215,9 @@ const TABS_CFG = [
 export default function LeavePage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, isRestricted, grantCap, actsAsSupervisor, assignedEmployeeIds, supervisedStationIds } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, isRestricted, grantCap, allowCap, actsAsSupervisor, assignedEmployeeIds, supervisedStationIds } = useAuth()
   const role        = profile?.role
-  const isSupervisor = role === 'station_admin' || role === 'shift_supervisor' || role === 'area_supervisor'
+  const isSupervisor = (role === 'station_admin' || role === 'shift_supervisor' || role === 'area_supervisor') && allowCap('leaves_supervise')
   const canSupervise = isAdmin || isSupervisor || actsAsSupervisor || grantCap('assigned_employees') || grantCap('all_dispatchers')
   // حساب مقيّد: يشوف طلبات موظفيه المحددين والمرحّلين فقط
   const restrictedScope = q => {
@@ -1229,7 +1229,7 @@ export default function LeavePage() {
   }
 
   const [searchParams] = useSearchParams()
-  const [tab, setTab]       = useState(() => searchParams.get('tab') || 'new')
+  const [tab, setTab]       = useState(() => searchParams.get('tab') || (allowCap('leaves_request') ? 'new' : 'mine'))
   const [leaves, setLeaves] = useState([])
   const [loading, setLoading] = useState(false)
   const [saved, setSaved]   = useState(false)
@@ -1241,6 +1241,7 @@ export default function LeavePage() {
   const visibleTabs = TABS_CFG.filter(t => {
     if (t.adminOnly && !isGeneralAdmin) return false
     if (t.supervisorOnly && !canSupervise) return false
+    if (t.id === 'new' && !allowCap('leaves_request')) return false
     return true
   })
 

@@ -403,7 +403,7 @@ function NavTab({ item, isAr }) {
 
 export default function AppLayout() {
   const { i18n } = useTranslation()
-  const { profile, signOut, customTitle, allowCap, isRestricted } = useAuth()
+  const { profile, signOut, customTitle, allowCap, isRestricted, roleAllowsModule } = useAuth()
   const navigate = useNavigate()
   const isAr = i18n.language === 'ar'
   const { settings } = useAppSettings()
@@ -474,6 +474,7 @@ export default function AppLayout() {
     items: g.items.filter(n => {
       if (n.roles && !n.roles.includes(profile?.role)) return false
       if (n.module && mods && !mods.includes(n.module)) return false
+      if (n.module && !roleAllowsModule(n.module)) return false
       if (n.requireFlag && !profile?.[n.requireFlag]) return false
       if (n.capKey && (!allowCap(n.capKey) || isRestricted)) return false
       if (n.allowKey && !allowCap(n.allowKey)) return false
@@ -529,7 +530,7 @@ export default function AppLayout() {
         <div style={{ flex: 1 }} />
 
         {/* شاشة العرض */}
-        {(!mods || mods.includes('live_board')) && (
+        {(!mods || mods.includes('live_board')) && roleAllowsModule('live_board') && (
         <span className="header-live-board" style={{ display: 'contents' }}>
         <button onClick={() => navigate('/board')} style={ghostBtn}
           onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = 'var(--text-1)' }}

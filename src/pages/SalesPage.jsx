@@ -734,7 +734,7 @@ function AuditModal({ sale, onClose }) {
 
 /* ─── Main Page ────────────────────────────────────────── */
 export default function SalesPage() {
-  const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds } = useAuth()
+  const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds, allowCap } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -849,7 +849,7 @@ export default function SalesPage() {
   const totalActualSum   = records.reduce((s, r) => s + Number(r.total_actual   ?? 0), 0)
   const totalExpectedSum = records.reduce((s, r) => s + Number(r.total_expected  ?? 0), 0)
   const confirmed        = records.filter(r => r.is_confirmed).length
-  const canAdd           = !isAccountant
+  const canAdd           = !isAccountant && allowCap('sales_add')
 
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
