@@ -344,7 +344,7 @@ const NAV_GROUPS = [
       { to: '/stations', labelAr: 'المحطات',  labelEn: 'Stations',  icon: 'station', roles: ADMIN_ROLE_VALUES,                 module: null, capKey: 'stations_page' },
       { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ADMIN_ROLE_VALUES,               module: null, capKey: 'settings_access' },
       { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'map' },
-      { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings' },
+      { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings', allowKey: 'customer_ratings_view' },
     ]
   },
 ]
@@ -476,6 +476,7 @@ export default function AppLayout() {
       if (n.module && mods && !mods.includes(n.module)) return false
       if (n.requireFlag && !profile?.[n.requireFlag]) return false
       if (n.capKey && (!allowCap(n.capKey) || isRestricted)) return false
+      if (n.allowKey && !allowCap(n.allowKey)) return false
       return true
     })
   })).filter(g => g.items.length > 0)

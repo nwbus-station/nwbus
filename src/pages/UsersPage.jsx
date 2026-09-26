@@ -503,12 +503,12 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
         <div className="px-5 py-4 border-b flex items-center justify-between">
           <h2 className="font-bold text-gray-800">{isAr ? 'المسميات الوظيفية والصلاحيات' : 'Job Titles & Permissions'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-lg">✕</button>
         </div>
-        <div className="p-5 grid md:grid-cols-[220px_1fr] gap-5">
+        <div className="p-5 grid md:grid-cols-[200px_1fr_380px] gap-5">
           <div className="space-y-2">
             <button onClick={() => { setForm(blank); setErr('') }}
               className="w-full text-sm font-semibold border-2 border-dashed border-gray-300 rounded-lg py-2 text-gray-600 hover:border-nwbus-primary">
@@ -556,29 +556,6 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
               </div>
             </div>
 
-            <div>
-              <p className="text-xs font-bold text-gray-700 mb-1">{isAr ? 'تفاصيل حساب الأدمن — اختر ما يظهر له' : 'Admin account details — choose what he gets'}</p>
-              <p className="text-[11px] text-gray-400 mb-3">{isAr ? 'كل بند مفعّل = يظهر له. ألغِ البنود اللي ما تبيها له.' : 'Each enabled item is visible to him. Turn off what he should not see.'}</p>
-              <div className="space-y-3">
-                {[...new Set(TITLE_CAPABILITIES.map(c => c.group))].map(group => (
-                  <div key={group} className="border border-gray-200 rounded-lg p-2.5">
-                    <p className="text-[11px] font-bold text-nwbus-primary mb-2">{group}</p>
-                    <div className="space-y-1.5">
-                      {TITLE_CAPABILITIES.filter(c => c.group === group).map(c => {
-                        const meaningful = c.kind === 'grant' || !c.adminOnly || isAdminBase
-                        return (
-                          <div key={c.key} className={meaningful ? '' : 'opacity-50'}>
-                            <ToggleRow checked={permValue(c)} onChange={v => setPerm(c.key, v)}>{isAr ? c.ar : c.en}</ToggleRow>
-                            {!meaningful && <p className="text-[10px] text-gray-400 mt-0.5 px-1">{isAr ? 'هذي الصلاحية للأدمن فقط — اختر دوراً أساسياً أدمن لتفعيل تأثيرها' : 'Admin-only capability — choose an admin base role'}</p>}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {err && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
             <div className="flex gap-2 justify-end">
               <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600">{isAr ? 'إغلاق' : 'Close'}</button>
@@ -587,6 +564,47 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
               </button>
             </div>
           </div>
+
+          <aside className="md:border-s md:ps-5 space-y-3 md:max-h-[70vh] md:overflow-y-auto">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-bold text-gray-700">{isAr ? 'كل الصلاحيات' : 'All permissions'}</p>
+                <span className="text-[11px] text-gray-500">{TITLE_CAPABILITIES.filter(permValue).length}/{TITLE_CAPABILITIES.length} {isAr ? 'مفعّلة' : 'on'}</span>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">{isAr
+                ? 'كل بند تقدر تفعّله أو تقفله. القيود تسري على حساب هذا المسمى فقط — الأدمن العام ما يتأثر أبداً. البند اللي عليه "قاعدة" مفروض من قاعدة البيانات نفسها (يمنع الوصول للبيانات حتى لو فُتح النظام بطريقة ثانية)، والباقي على مستوى الواجهة.'
+                : 'Toggle any item. Restrictions apply to this title only — the general admin is never affected. Items tagged DB are enforced by the database itself.'}</p>
+            </div>
+            {[...new Set(TITLE_CAPABILITIES.map(c => c.group))].map(group => {
+              const caps = TITLE_CAPABILITIES.filter(c => c.group === group)
+              const setGroup = v => setForm(f => ({ ...f, permissions: { ...f.permissions, ...Object.fromEntries(caps.filter(c => c.key !== 'restricted_mode').map(c => [c.key, v])) } }))
+              return (
+                <div key={group} className="border border-gray-200 rounded-lg p-2.5">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11px] font-bold text-nwbus-primary">{group}</p>
+                    <div className="flex gap-2 text-[10px]">
+                      <button type="button" onClick={() => setGroup(true)} className="text-green-700 hover:underline">{isAr ? 'تفعيل الكل' : 'All on'}</button>
+                      <button type="button" onClick={() => setGroup(false)} className="text-red-600 hover:underline">{isAr ? 'قفل الكل' : 'All off'}</button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {caps.map(c => {
+                      const meaningful = c.kind === 'grant' || !c.adminOnly || isAdminBase
+                      return (
+                        <div key={c.key} className={meaningful ? '' : 'opacity-50'}>
+                          <ToggleRow checked={permValue(c)} onChange={v => setPerm(c.key, v)}>
+                            <span className="flex-1">{isAr ? c.ar : c.en}</span>
+                            {c.db && <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-nwbus-primary/10 text-nwbus-primary">{isAr ? 'قاعدة' : 'DB'}</span>}
+                          </ToggleRow>
+                          {!meaningful && <p className="text-[10px] text-gray-400 mt-0.5 px-1">{isAr ? 'هذي الصلاحية للأدمن فقط — اختر دوراً أساسياً أدمن لتفعيل تأثيرها' : 'Admin-only capability — choose an admin base role'}</p>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </aside>
         </div>
       </div>
     </div>
@@ -2293,6 +2311,8 @@ function UsersPageFull() {
 
 // دليل المرحّلين (للحساب المقيّد): كل من مسماه الوظيفي مرحّل بالمملكة — الاسم والمحطة ورقم الجوال فقط، للعرض بدون أي تعديل
 function DispatchersDirectory() {
+  const { allowCap } = useAuth()
+  const canPhones = allowCap('users_view_phones')
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const [rows, setRows] = useState([])
@@ -2311,16 +2331,18 @@ function DispatchersDirectory() {
       setRows(list)
       setLoading(false)
       const ph = {}
+      if (!canPhones) { setPhones(Object.fromEntries(list.map(u => [u.id, null]))); return }
       await Promise.all(list.map(async u => {
         try {
-          const { data: d } = await supabase.rpc('get_user_sensitive', { p_id: u.id })
-          ph[u.id] = d?.[0]?.phone ?? null
+          // دالة مخصصة: ترجع الجوال للمرحّلين فقط ولمن عنده صلاحية "كل المرحّلين" — بدون بيانات حساسة أخرى
+          const { data: d } = await supabase.rpc('get_dispatcher_phone', { p_id: u.id })
+          ph[u.id] = d ?? null
         } catch { ph[u.id] = null }
       }))
       if (!cancelled) setPhones(ph)
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [canPhones])
 
   const term = q.trim().toLowerCase()
   const shown = rows.filter(u => !term
@@ -2344,7 +2366,7 @@ function DispatchersDirectory() {
             <tr className="bg-gray-50 text-gray-500 text-xs">
               <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'الاسم' : 'Name'}</th>
               <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'المحطة' : 'Station'}</th>
-              <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'رقم الجوال' : 'Phone'}</th>
+              {canPhones && <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'رقم الجوال' : 'Phone'}</th>}
             </tr>
           </thead>
           <tbody>
@@ -2356,7 +2378,7 @@ function DispatchersDirectory() {
               <tr key={u.id} className="border-t border-gray-100">
                 <td className="px-4 py-2.5 font-semibold text-gray-800">{u.full_name_ar}</td>
                 <td className="px-4 py-2.5 text-gray-600">{isAr ? u.station?.name_ar : u.station?.name_en}</td>
-                <td className="px-4 py-2.5 font-mono text-gray-700" dir="ltr">{phones[u.id] ?? (u.id in phones ? '—' : '…')}</td>
+                {canPhones && <td className="px-4 py-2.5 font-mono text-gray-700" dir="ltr">{phones[u.id] ?? (u.id in phones ? '—' : '…')}</td>}
               </tr>
             ))}
           </tbody>

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { todayStr } from '../utils/dates'
 import { escapeHtml, toLatinDigits } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
+import { useAuth } from '../context/AuthContext'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ' },
@@ -63,7 +64,12 @@ function EmployeePicker({ employees, value, onChange, defaultLabel }) {
 }
 
 export default function CustomerRatingsAdminPage() {
+  const { allowCap } = useAuth()
   const [tab, setTab] = useState('ratings') // 'ratings' | 'messages'
+
+  if (!allowCap('customer_ratings_view')) {
+    return <div className="max-w-5xl mx-auto p-10 text-center text-gray-500" dir="rtl">ما عندك صلاحية لعرض تقييمات العملاء</div>
+  }
 
   return (
     <div className="max-w-5xl mx-auto p-6" dir="rtl">

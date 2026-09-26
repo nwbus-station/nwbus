@@ -46,29 +46,33 @@ export const TITLE_CAPABILITIES = [
   { group: 'التقارير', key: 'reports_transport',  kind: 'allow', ar: 'ملخص الترحيل', en: 'Transport summary' },
   { group: 'التقارير', key: 'reports_missed',     kind: 'allow', ar: 'تقرير المتخلفين', en: 'Missed passengers report' },
   { group: 'التقارير', key: 'reports_facilities', kind: 'allow', ar: 'تقرير الحالة التشغيلية', en: 'Facilities report' },
-  { group: 'التقارير', key: 'reports_sales',      kind: 'allow', ar: 'ملخص المبيعات', en: 'Sales summary' },
-  { group: 'التقارير', key: 'reports_lost',       kind: 'allow', ar: 'تقرير الموجودات', en: 'Lost & found report' },
-  { group: 'التقارير', key: 'reports_activity_log', kind: 'allow', ar: 'سجل النشاط', en: 'Activity log' },
+  { group: 'التقارير', key: 'reports_sales',      db: true, kind: 'allow', ar: 'ملخص المبيعات', en: 'Sales summary' },
+  { group: 'التقارير', key: 'reports_lost',       db: true, kind: 'allow', ar: 'تقرير الموجودات', en: 'Lost & found report' },
+  { group: 'التقارير', key: 'reports_activity_log', db: true, kind: 'allow', ar: 'سجل النشاط', en: 'Activity log' },
+  // تقييمات العملاء
+  { group: 'تقييمات العملاء', key: 'customer_ratings_view', db: true, kind: 'allow', ar: 'يشوف تقييمات العملاء (الصفحة والبيانات)', en: 'See customer ratings' },
+  // بيانات الموظفين
+  { group: 'بيانات الموظفين', key: 'users_view_phones', db: true, kind: 'allow', ar: 'يشوف أرقام جوالات الموظفين المتاحين له', en: 'See employee phone numbers' },
   // التقييم الوظيفي
-  { group: 'التقييم الوظيفي', key: 'evaluation_dispatchers_only', kind: 'grant', ar: 'يقيّم المرحّلين فقط (من مسماهم الوظيفي مرحّل)', en: 'Evaluate dispatchers only' },
+  { group: 'التقييم الوظيفي', key: 'evaluation_dispatchers_only', db: true, kind: 'grant', ar: 'يقيّم المرحّلين فقط (من مسماهم الوظيفي مرحّل)', en: 'Evaluate dispatchers only' },
   { group: 'التقييم الوظيفي', key: 'evaluation_supervisors_tab',  kind: 'allow', ar: 'تبويب تقييم المشرفين', en: 'Supervisor evaluation tab' },
   { group: 'التقييم الوظيفي', key: 'evaluation_stations_tab',     kind: 'allow', ar: 'تبويب تقييم المحطات', en: 'Station evaluation tab' },
-  { group: 'التقييم الوظيفي', key: 'evaluation_my_employees',     kind: 'grant', ar: 'يقيّم موظفيه (محطاته المخصصة أو مسؤوله المباشر) ويفتح على "موظفيني"', en: 'Evaluate his own employees' },
+  { group: 'التقييم الوظيفي', key: 'evaluation_my_employees',     db: true, kind: 'grant', ar: 'يقيّم موظفيه (محطاته المخصصة أو مسؤوله المباشر) ويفتح على "موظفيني"', en: 'Evaluate his own employees' },
   // الترحيل
-  { group: 'الترحيل', key: 'transport_upload_schedule', kind: 'allow', ar: 'رفع جدول الرحلات', en: 'Upload schedule' },
-  { group: 'الترحيل', key: 'transport_manage_trips',    kind: 'allow', ar: 'رحلة جديدة والرحلات المضافة وتفعيل رحلات المحطة والرحلة الإضافية', en: 'Manage trips (new, added, activate, extra)' },
+  { group: 'الترحيل', key: 'transport_upload_schedule', db: true, kind: 'allow', ar: 'رفع جدول الرحلات', en: 'Upload schedule' },
+  { group: 'الترحيل', key: 'transport_manage_trips',    db: true, kind: 'allow', ar: 'رحلة جديدة والرحلات المضافة وتفعيل رحلات المحطة والرحلة الإضافية', en: 'Manage trips (new, added, activate, extra)' },
   // الإجازات
-  { group: 'الإجازات', key: 'leaves_supervisor_stage', kind: 'grant', ar: 'يوافق على الإجازات كمشرف (لموظفي محطاته المخصصة) قبل الأدمن', en: 'Approve leaves as supervisor for his stations' },
-  { group: 'الإجازات', key: 'leaves_final_approve',    kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval' },
+  { group: 'الإجازات', key: 'leaves_supervisor_stage', db: true, kind: 'grant', ar: 'يوافق على الإجازات كمشرف (لموظفي محطاته المخصصة) قبل الأدمن', en: 'Approve leaves as supervisor for his stations' },
+  { group: 'الإجازات', key: 'leaves_final_approve',    db: true, kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval' },
   // الموظفون المحددون
-  { group: 'الموظفون المحددون', key: 'assigned_employees', kind: 'grant', ar: 'موظفون محددون بالاسم أو الرقم الوظيفي: يقيّمهم ويوافق على إجازاتهم كمشرف (تحددهم من تعديل حسابه)', en: 'Specific employees he evaluates and approves leaves for' },
-  { group: 'الموظفون المحددون', key: 'all_dispatchers', kind: 'grant', ar: 'كل من مسماه الوظيفي مرحّل في المملكة (يقيّمهم ويوافق على إجازاتهم بدون تحديدهم واحداً واحداً)', en: 'Every employee titled dispatcher in the Kingdom' },
+  { group: 'الموظفون المحددون', key: 'assigned_employees', db: true, kind: 'grant', ar: 'موظفون محددون بالاسم أو الرقم الوظيفي: يقيّمهم ويوافق على إجازاتهم كمشرف (تحددهم من تعديل حسابه)', en: 'Specific employees he evaluates and approves leaves for' },
+  { group: 'الموظفون المحددون', key: 'all_dispatchers', db: true, kind: 'grant', ar: 'كل من مسماه الوظيفي مرحّل في المملكة (يقيّمهم ويوافق على إجازاتهم بدون تحديدهم واحداً واحداً)', en: 'Every employee titled dispatcher in the Kingdom' },
   // الصفحات والنطاق
   { group: 'الصفحات والنطاق', key: 'restricted_mode', kind: 'grant', ar: 'حساب مقيّد: ما يُعامل كأدمن أبداً — يظهر له فقط اللي فعّلته', en: 'Restricted account: never treated as admin' },
-  { group: 'الصفحات والنطاق', key: 'scope_assigned_stations', kind: 'grant', ar: 'يقتصر على المحطات المخصصة له (التقارير والترحيل)', en: 'Limit to his assigned stations' },
-  { group: 'الصفحات والنطاق', key: 'users_manage',   kind: 'allow', adminOnly: true, ar: 'إضافة وتعديل وحذف الحسابات', en: 'Create / edit / delete accounts' },
-  { group: 'الصفحات والنطاق', key: 'stations_page',    kind: 'allow', adminOnly: true, ar: 'صفحة المحطات', en: 'Stations page' },
-  { group: 'الصفحات والنطاق', key: 'settings_access',  kind: 'allow', adminOnly: true, ar: 'صفحة الإعدادات', en: 'Settings page' },
+  { group: 'الصفحات والنطاق', key: 'scope_assigned_stations', db: true, kind: 'grant', ar: 'يقتصر على المحطات المخصصة له (التقارير والترحيل)', en: 'Limit to his assigned stations' },
+  { group: 'الصفحات والنطاق', key: 'users_manage',   db: true, kind: 'allow', adminOnly: true, ar: 'إضافة وتعديل وحذف الحسابات', en: 'Create / edit / delete accounts' },
+  { group: 'الصفحات والنطاق', key: 'stations_page',    db: true, kind: 'allow', adminOnly: true, ar: 'صفحة المحطات', en: 'Stations page' },
+  { group: 'الصفحات والنطاق', key: 'settings_access',  db: true, kind: 'allow', adminOnly: true, ar: 'صفحة الإعدادات', en: 'Settings page' },
   { group: 'الصفحات والنطاق', key: 'lostfound_manage', kind: 'allow', adminOnly: true, ar: 'حذف وإهداء الموجودات', en: 'Delete / donate lost & found items' },
 ]
 
