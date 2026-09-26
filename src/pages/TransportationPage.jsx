@@ -745,14 +745,21 @@ export default function TransportationPage() {
       supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if ((isStationAdmin || isAccountant) && profile?.id) {
-      supabase.from('user_stations').select('station:station_id(id, name_ar, name_en)').eq('user_id', profile.id)
-        .then(({ data }) => {
+      supabase.from('user_stations').select('station:station_id(id, name_ar, name_en, city_group, combined_arr_dep)').eq('user_id', profile.id)
+        .then(async ({ data }) => {
           let sts = (data ?? []).map(r => r.station).filter(Boolean).filter(s => !isRestStation(s))
-          if (sts.length === 0 && profile?.station) sts = [profile.station]
+          if (sts.length === 0 && profile?.station_id) {
+            const { data: st } = await supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').eq('id', profile.station_id).maybeSingle()
+            sts = st ? [st] : (profile?.station ? [profile.station] : [])
+          }
           setStations(sts)
         })
+    } else if (profile?.station_id) {
+      // الموظف: محطته فقط — نجيبها كاملة (بما فيها إعداد دمج الوصول والمغادرة) عشان تظهر له نفس بطاقة الأدمن
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').eq('id', profile.station_id).maybeSingle()
+        .then(({ data }) => { if (data) setStations([data]) })
     }
-  }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id, scopedIds?.join(',')])
+  }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id, profile?.station_id, scopedIds?.join(',')])
 
   // اختيار محطة افتراضية
   useEffect(() => {
