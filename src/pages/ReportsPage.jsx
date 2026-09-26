@@ -240,7 +240,8 @@ function MoveTableComp({ list, color, label, isAr, storageKey }) {
 export default function ReportsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const { isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile } = useAuth()
+  const { isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile, allowCap } = useAuth()
+  const canSalesReport = allowCap('reports_sales')
 
   const [dateFrom, _setDateFrom] = useState(() => localStorage.getItem('rpt_dateFrom') || toLocalDateStr())
   const setDateFrom = v => { localStorage.setItem('rpt_dateFrom', v); _setDateFrom(v) }
@@ -954,7 +955,7 @@ export default function ReportsPage() {
   }
 
   function printReport() {
-    const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost']
+    const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', ...(canSalesReport ? ['sales'] : []), 'lost']
     const types = reportTypes.length === 0 ? ALL_TYPES : ALL_TYPES.filter(t => reportTypes.includes(t))
     // header احترافي موحّد لجميع الأقسام
     const printHeader = `
@@ -1040,7 +1041,7 @@ export default function ReportsPage() {
               { id: 'facilities', label: isAr ? 'الحالة التشغيلية' : 'Facilities' },
               { id: 'sales',      label: isAr ? 'ملخص المبيعات' : 'Sales' },
               { id: 'lost',       label: isAr ? 'الموجودات' : 'Lost & Found' },
-            ].map(({ id, label }) => {
+            ].filter(t => t.id !== 'sales' || canSalesReport).map(({ id, label }) => {
               const isAll = id === 'all'
               const active = isAll ? reportTypes.length === 0 : reportTypes.includes(id)
               return (
@@ -1480,7 +1481,7 @@ export default function ReportsPage() {
           )}
 
           {/* Sales summary — للأدمن العام فقط */}
-          {isGeneralAdmin && show('sales') && (
+          {isGeneralAdmin && canSalesReport && show('sales') && (
           <section>
             <h2 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
               {isAr ? 'ملخص المبيعات' : 'Sales Summary'}

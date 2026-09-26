@@ -842,15 +842,17 @@ function PrintDropdown({ isAr, onSelect }) {
 }
 
 export default function EvaluationPage() {
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap } = useAuth()
+  // مسمى "مشرف المرحّلين": يقيّم من مسماهم الوظيفي مرحّل فقط، بدون تقييم المحطات أو المشرفين
+  const dispatchersOnly = grantCap('evaluation_dispatchers_only')
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
   const canEvalEmp = [...ADMIN_ROLE_VALUES,'station_admin','shift_supervisor','area_supervisor'].includes(profile?.role)
-  const canEvalStn = [...ADMIN_ROLE_VALUES,'station_admin','area_supervisor'].includes(profile?.role)
+  const canEvalStn = [...ADMIN_ROLE_VALUES,'station_admin','area_supervisor'].includes(profile?.role) && !dispatchersOnly
   // مشرف المحطة/المنطقة يفتح تبويب تقييم المشرفين كمان — بس عشان يقيّم مشرفي الورديات
   // المحددين له صراحة (حقل "المشرف" بحسابهم)، مو باقي المشرفين
   // (مشرف الوردية نفسه ما عاد يقيّم أحد هنا — أُلغي مصدر "مشرف وردية آخر")
-  const canEvalSup = isGeneralAdmin || ['station_admin','area_supervisor'].includes(profile?.role)
+  const canEvalSup = (isGeneralAdmin || ['station_admin','area_supervisor'].includes(profile?.role)) && !dispatchersOnly
   // مصدر تقييم المستخدم الحالي لما يقيّم مشرف وردية بنفسه (مو أدمن)
   const myEvalSourceForSup = 'assigned_supervisor'
   const isShiftSupervisor = profile?.role === 'shift_supervisor'
@@ -901,6 +903,7 @@ export default function EvaluationPage() {
       let q = supabase.from('users').select('id, full_name_ar, username, job_number, role, job_title, station_id, supervisor_id, station:station_id(name_ar, name_en)')
         .not('role', 'in', '("general_admin","station_admin","area_supervisor","stations_executive_director","assistant_stations_executive_director")')
         .eq('is_active', true)
+      if (dispatchersOnly) q = q.eq('job_title', 'dispatcher')
       if (!isAdmin) {
         q = q.eq('role', 'station_employee')
         // مشرف المحطة له نفس معاملة مشرف المنطقة بالضبط لو معه أكثر من محطة مخصصة —
@@ -1010,7 +1013,7 @@ export default function EvaluationPage() {
 
     await Promise.all(promises)
     setLoading(false)
-  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor])
+  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor, dispatchersOnly])
 
   useEffect(() => { load() }, [load])
 

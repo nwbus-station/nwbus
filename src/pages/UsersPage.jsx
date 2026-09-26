@@ -475,7 +475,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
               <p className="text-xs font-bold text-gray-700 mb-2">{isAr ? 'صلاحيات الإجراءات' : 'Action permissions'}</p>
               <div className="space-y-2">
                 {TITLE_CAPABILITIES.map(c => {
-                  const meaningful = c.kind === 'grant' || isAdminBase
+                  const meaningful = c.kind === 'grant' || !c.adminOnly || isAdminBase
                   return (
                     <div key={c.key} className={meaningful ? '' : 'opacity-50'}>
                       <ToggleRow checked={permValue(c)} onChange={v => setPerm(c.key, v)}>{isAr ? c.ar : c.en}</ToggleRow>

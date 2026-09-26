@@ -42,9 +42,11 @@ export const ASSISTANT_DIRECTOR_ROLE = 'assistant_stations_executive_director'
 export const TITLE_CAPABILITIES = [
   { key: 'leaves_supervisor_stage', kind: 'grant', ar: 'يوافق على الإجازات كمشرف (لموظفي محطاته المخصصة) قبل الأدمن', en: 'Approve leaves as supervisor for his assigned stations' },
   { key: 'evaluation_my_employees', kind: 'grant', ar: 'يقيّم موظفيه (محطاته المخصصة أو مسؤوله المباشر) ويفتح على "موظفيني"', en: 'Evaluate his employees (assigned stations / direct reports)' },
-  { key: 'leaves_final_approve',    kind: 'allow', ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval (admin stage)' },
-  { key: 'settings_access',         kind: 'allow', ar: 'الدخول لصفحة الإعدادات', en: 'Access settings page' },
-  { key: 'lostfound_manage',        kind: 'allow', ar: 'حذف وإهداء الموجودات', en: 'Delete / donate lost & found items' },
+  { key: 'evaluation_dispatchers_only', kind: 'grant', ar: 'تقييم المرحّلين فقط (يُخفى تقييم المحطات والمشرفين)', en: 'Evaluate dispatchers only (hides station/supervisor evaluation)' },
+  { key: 'reports_sales',           kind: 'allow', ar: 'تقرير المبيعات ضمن التقارير', en: 'Sales report inside Reports' },
+  { key: 'leaves_final_approve',    kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval (admin stage)' },
+  { key: 'settings_access',         kind: 'allow', adminOnly: true, ar: 'الدخول لصفحة الإعدادات', en: 'Access settings page' },
+  { key: 'lostfound_manage',        kind: 'allow', adminOnly: true, ar: 'حذف وإهداء الموجودات', en: 'Delete / donate lost & found items' },
 ]
 
 // أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف
