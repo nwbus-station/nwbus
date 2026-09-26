@@ -76,6 +76,12 @@ export const TITLE_CAPABILITIES = [
   { group: 'الصفحات والنطاق', key: 'lostfound_manage', kind: 'allow', adminOnly: true, ar: 'حذف وإهداء الموجودات', en: 'Delete / donate lost & found items' },
 ]
 
+// الأدوار الأساسية القابلة لتعديل صلاحياتها من نافذة المسميات (الأدمن العام خارج القائمة — كل شي مفتوح له)
+export const EDITABLE_ROLES = ['station_employee', 'accountant', 'station_admin', 'shift_supervisor', 'area_supervisor']
+// البنود اللي تنطبق على الأدوار الأساسية: قيود فقط (allow) وما هي للأدمن وحده
+export const ROLE_CAPABILITY_EXCLUDE = ['customer_ratings_view', 'users_view_phones', 'transport_upload_schedule']
+export const roleCapabilities = () => TITLE_CAPABILITIES.filter(c => c.kind === 'allow' && !c.adminOnly && !ROLE_CAPABILITY_EXCLUDE.includes(c.key))
+
 // أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف
 export const ADMIN_ROLE_VALUES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
 

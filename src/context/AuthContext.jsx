@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
   const [loading,           setLoading]           = useState(true)
   const [profileError,      setProfileError]      = useState(null)  // debug error message
   const [allowedStationIds, setAllowedStationIds] = useState(null)  // null = all, array = restricted
+  const [rolePerms, setRolePerms] = useState(null)      // صلاحيات الدور الأساسي (من نافذة المسميات)
   const [customTitle, setCustomTitle] = useState(null)  // المسمى المخصص للمستخدم (مصفوفة الصلاحيات)
   const [assignedEmployeeIds, setAssignedEmployeeIds] = useState([])  // موظفون محددون له (يقيّمهم ويوافق على إجازاتهم)
   const [supervisedStationIds, setSupervisedStationIds] = useState([])  // محطات مساعد المدير كمشرف (لا تقيّد صلاحياته كأدمن)
@@ -55,6 +56,10 @@ export function AuthProvider({ children }) {
         title = t ?? null
       }
       setCustomTitle(title)
+      {
+        const { data: rp } = await supabase.from('role_permissions').select('permissions').eq('role', data.role).maybeSingle()
+        setRolePerms(rp?.permissions ?? null)
+      }
       if (title?.permissions?.assigned_employees) {
         const { data: asg } = await supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', data.id)
         setAssignedEmployeeIds((asg ?? []).map(r => r.employee_id))
@@ -214,7 +219,7 @@ export function AuthProvider({ children }) {
   // stations_executive_director له نفس صلاحيات general_admin بالضبط — فقط مسمى وظيفي مختلف
   const isAssistantDirector = profile?.role === ASSISTANT_DIRECTOR_ROLE
   // مصفوفة صلاحيات المسمى المخصص: grantCap تمنح قدرة إضافية، allowCap تقيّد قدرة الدور الأساسي
-  const titlePerms = customTitle?.permissions ?? null
+  const titlePerms = customTitle?.permissions ?? rolePerms ?? null
   const grantCap = key => !!titlePerms?.[key]
   const allowCap = key => !titlePerms || titlePerms[key] !== false
   // حساب مقيّد (مثل مشرف المرحلين): أساسه أدمن في قاعدة البيانات لكن التطبيق يعامله كمشرف — لا يُعامل كأدمن أبداً

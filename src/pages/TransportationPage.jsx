@@ -1217,7 +1217,7 @@ export default function TransportationPage() {
             </button>
           )}
           {/* Add extra trip (RF) — supervisor & admin */}
-          {((adminLike && allowCap('transport_manage_trips')) || isStationAdmin) && (
+          {((adminLike || isStationAdmin) && allowCap('transport_manage_trips')) && (
             <button onClick={() => setShowExtra(true)}
               className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'رحلة إضافية (RF)' : 'Extra Trip (RF)'}

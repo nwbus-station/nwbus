@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
-import { USER_ROLES, MODULES, TITLE_CAPABILITIES } from '../utils/constants'
+import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities } from '../utils/constants'
 import { toLatinDigits, escapeHtml } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -473,13 +473,18 @@ function PermSwitch({ checked, onChange }) {
 function TitlesManager({ titles, onClose, onChanged, isAr }) {
   useEscapeKey(onClose)
   useBodyScrollLock()
-  const blank = { id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: { restricted_mode: true }, allowed_modules: null }
+  const blank = { kind: 'title', role: null, id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: { restricted_mode: true }, allowed_modules: null }
   const [form, setForm] = useState(blank)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
   const [saved, setSaved] = useState(false)
   const groupRefs = useRef({})
+  const [rolePerms, setRolePerms] = useState({})
+  useEffect(() => { supabase.from('role_permissions').select('role, permissions').then(({ data }) => setRolePerms(Object.fromEntries((data ?? []).map(r => [r.role, r.permissions ?? {}])))) }, [])
+  const isRole = form.kind === 'role'
+  const capListForRole = roleCapabilities()
+  const capList = isRole ? roleCapabilities() : TITLE_CAPABILITIES
   const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary/40 focus:border-nwbus-primary focus:outline-none"
   const isAdminBase = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(form.base_role)
 
@@ -488,14 +493,25 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   const setPerm = (k, v) => { setSaved(false); setForm(f => ({ ...f, permissions: { ...f.permissions, [k]: v } })) }
   const setMany = (caps, v) => { setSaved(false); setForm(f => ({ ...f, permissions: { ...f.permissions, ...Object.fromEntries(caps.filter(c => c.key !== 'restricted_mode').map(c => [c.key, v])) } })) }
 
-  const groups = [...new Set(TITLE_CAPABILITIES.map(c => c.group))]
+  const groups = [...new Set(capList.map(c => c.group))]
   const term = q.trim().toLowerCase()
   const matches = c => !term || c.ar.toLowerCase().includes(term) || c.en.toLowerCase().includes(term) || c.group.includes(term)
-  const onCount = TITLE_CAPABILITIES.filter(permValue).length
+  const onCount = capList.filter(permValue).length
 
-  const pick = t => { setForm(t ? { id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null } : blank); setErr(''); setSaved(false); setQ('') }
+  const pickRole = r => { setForm({ ...blank, kind: 'role', role: r, permissions: rolePerms[r] ?? {} }); setErr(''); setSaved(false); setQ('') }
+  const pick = t => { setForm(t ? { kind: 'title', role: null, id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null } : blank); setErr(''); setSaved(false); setQ('') }
 
   async function save() {
+    if (isRole) {
+      setBusy(true); setErr('')
+      const permissions = Object.fromEntries(capList.map(c => [c.key, permValue(c)]))
+      const { error } = await supabase.from('role_permissions').upsert({ role: form.role, permissions, updated_at: new Date().toISOString() })
+      setBusy(false)
+      if (error) { setErr(error.message); return }
+      setRolePerms(m => ({ ...m, [form.role]: permissions }))
+      setSaved(true)
+      return
+    }
     if (!form.name_ar.trim()) { setErr(isAr ? 'اسم المسمى بالعربي مطلوب' : 'Arabic name is required'); return }
     setBusy(true); setErr('')
     const permissions = Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, permValue(c)]))
@@ -539,11 +555,27 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
           <aside className="md:w-64 shrink-0 border-b md:border-b-0 md:border-e border-gray-200 bg-gray-50/60 flex flex-col max-h-44 md:max-h-none">
             <div className="p-3 shrink-0">
               <button onClick={() => pick(null)}
-                className={`w-full text-sm font-semibold rounded-lg py-2.5 transition-colors ${!form.id ? 'bg-nwbus-primary text-white' : 'border border-gray-300 text-gray-700 hover:bg-white'}`}>
+                className={`w-full text-sm font-semibold rounded-lg py-2.5 transition-colors ${!form.id && !isRole ? 'bg-nwbus-primary text-white' : 'border border-gray-300 text-gray-700 hover:bg-white'}`}>
                 + {isAr ? 'مسمى جديد' : 'New title'}
               </button>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-1.5">
+              <p className="text-[11px] font-bold text-gray-500 px-1 pt-1">{isAr ? 'الأدوار الأساسية' : 'Base roles'}</p>
+              {EDITABLE_ROLES.map(r => {
+                const info = USER_ROLES.find(x => x.value === r)
+                const on = capListForRole.filter(c => (rolePerms[r] ?? {})[c.key] !== false).length
+                return (
+                  <button key={r} onClick={() => pickRole(r)}
+                    className={`w-full text-start rounded-lg px-3 py-2 border transition-colors ${isRole && form.role === r ? 'border-nwbus-primary bg-white shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
+                    <p className="text-sm font-semibold text-gray-900 truncate">{isAr ? info.ar : info.en}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{on}/{capListForRole.length}</p>
+                  </button>
+                )
+              })}
+              <div className="rounded-lg px-3 py-2 text-[11px] text-gray-400 border border-dashed border-gray-200">
+                {isAr ? 'الأدمن العام: كل الصلاحيات مفتوحة دائماً ولا تتعدل.' : 'General admin: always full access, not editable.'}
+              </div>
+              <p className="text-[11px] font-bold text-gray-500 px-1 pt-3">{isAr ? 'المسميات المخصصة' : 'Custom titles'}</p>
               {titles.length === 0 && <p className="text-xs text-gray-400 text-center py-6">{isAr ? 'ما فيه مسميات مضافة' : 'No titles yet'}</p>}
               {titles.map(t => {
                 const on = TITLE_CAPABILITIES.filter(c => c.kind === 'allow' ? (t.permissions ?? {})[c.key] !== false : !!(t.permissions ?? {})[c.key]).length
@@ -562,6 +594,12 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
           <section className="flex-1 min-w-0 flex flex-col">
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 md:p-6 space-y-6">
               {/* بيانات المسمى */}
+              {isRole ? (
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">{isAr ? 'صلاحيات دور: ' : 'Role permissions: '}{(() => { const r = USER_ROLES.find(x => x.value === form.role); return r ? (isAr ? r.ar : r.en) : '' })()}</h3>
+                  <p className="text-[11px] text-gray-500 mt-1">{isAr ? 'تسري على كل الحسابات من هذا الدور اللي ما عليها مسمى مخصص. المسمى المخصص له صلاحياته الخاصة ويتقدّم على الدور.' : 'Applies to every account of this role without a custom title.'}</p>
+                </div>
+              ) : (
               <div>
                 <h3 className="text-sm font-bold text-gray-900 mb-3">{form.id ? (isAr ? 'تعديل المسمى' : 'Edit title') : (isAr ? 'مسمى جديد' : 'New title')}</h3>
                 <div className="grid sm:grid-cols-3 gap-3">
@@ -582,19 +620,20 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                 </div>
                 <p className="text-[11px] text-gray-500 mt-2">{isAr ? 'النوع الأساسي هو سقف الصلاحيات — والصلاحيات تحت تضيّق منه أو تضيف عليه.' : 'The base type is the ceiling; the permissions below narrow or extend it.'}</p>
               </div>
+              )}
 
               {/* الصلاحيات */}
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div>
                     <h3 className="text-sm font-bold text-gray-900">{isAr ? 'الصلاحيات' : 'Permissions'}</h3>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? `${onCount} مفعّلة من ${TITLE_CAPABILITIES.length}` : `${onCount} of ${TITLE_CAPABILITIES.length} enabled`}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? `${onCount} مفعّلة من ${capList.length}` : `${onCount} of ${capList.length} enabled`}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <input value={q} onChange={e => setQ(e.target.value)} placeholder={isAr ? 'بحث في الصلاحيات…' : 'Search permissions…'}
                       className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs w-48 focus:ring-2 focus:ring-nwbus-primary/40 focus:outline-none" />
-                    <button type="button" onClick={() => setMany(TITLE_CAPABILITIES, true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-green-700 hover:bg-green-50">{isAr ? 'تفعيل الكل' : 'Enable all'}</button>
-                    <button type="button" onClick={() => setMany(TITLE_CAPABILITIES, false)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-red-600 hover:bg-red-50">{isAr ? 'قفل الكل' : 'Disable all'}</button>
+                    <button type="button" onClick={() => setMany(capList, true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-green-700 hover:bg-green-50">{isAr ? 'تفعيل الكل' : 'Enable all'}</button>
+                    <button type="button" onClick={() => setMany(capList, false)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-red-600 hover:bg-red-50">{isAr ? 'قفل الكل' : 'Disable all'}</button>
                   </div>
                 </div>
 
@@ -603,7 +642,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                   <nav className="hidden lg:block w-44 shrink-0">
                     <div className="sticky top-0 space-y-0.5">
                       {groups.map(g => {
-                        const caps = TITLE_CAPABILITIES.filter(c => c.group === g)
+                        const caps = capList.filter(c => c.group === g)
                         return (
                           <button key={g} type="button" onClick={() => groupRefs.current[g]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                             className="w-full flex items-center justify-between text-start text-xs px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
@@ -617,7 +656,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
 
                   <div className="flex-1 min-w-0 space-y-4">
                     {groups.map(g => {
-                      const caps = TITLE_CAPABILITIES.filter(c => c.group === g)
+                      const caps = capList.filter(c => c.group === g)
                       const shown = caps.filter(matches)
                       if (!shown.length) return null
                       return (
@@ -646,7 +685,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                         </div>
                       )
                     })}
-                    {term && !TITLE_CAPABILITIES.some(matches) && <p className="text-xs text-gray-400 text-center py-8">{isAr ? 'ما فيه نتائج' : 'No results'}</p>}
+                    {term && !capList.some(matches) && <p className="text-xs text-gray-400 text-center py-8">{isAr ? 'ما فيه نتائج' : 'No results'}</p>}
                   </div>
                 </div>
               </div>
@@ -656,12 +695,12 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
             <div className="shrink-0 border-t border-gray-200 px-5 md:px-6 py-3 flex items-center gap-3 bg-white">
               <div className="flex-1 min-w-0 text-xs">
                 {err && <span className="text-red-600">{err}</span>}
-                {!err && saved && <span className="text-green-700">{isAr ? 'تم الحفظ. الحسابات على هذا المسمى تأخذ الصلاحيات فوراً.' : 'Saved.'}</span>}
+                {!err && saved && <span className="text-green-700">{isAr ? isRole ? 'تم الحفظ. تسري على الحسابات فور تحديث صفحتهم.' : 'تم الحفظ. الحسابات على هذا المسمى تأخذ الصلاحيات فوراً.' : 'Saved.'}</span>}
               </div>
-              {form.id && <button onClick={remove} className="px-4 py-2 rounded-lg text-sm text-red-600 border border-red-200 hover:bg-red-50">{isAr ? 'حذف المسمى' : 'Delete'}</button>}
+              {!isRole && form.id && <button onClick={remove} className="px-4 py-2 rounded-lg text-sm text-red-600 border border-red-200 hover:bg-red-50">{isAr ? 'حذف المسمى' : 'Delete'}</button>}
               <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-700 hover:bg-gray-50">{isAr ? 'إغلاق' : 'Close'}</button>
               <button onClick={save} disabled={busy} className="px-6 py-2 rounded-lg text-sm font-semibold bg-nwbus-primary text-white disabled:opacity-60">
-                {busy ? '…' : (form.id ? (isAr ? 'حفظ التعديلات' : 'Save changes') : (isAr ? 'إضافة المسمى' : 'Add title'))}
+                {busy ? '…' : ((form.id || isRole) ? (isAr ? 'حفظ التعديلات' : 'Save changes') : (isAr ? 'إضافة المسمى' : 'Add title'))}
               </button>
             </div>
           </section>
