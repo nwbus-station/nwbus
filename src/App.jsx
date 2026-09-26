@@ -45,7 +45,7 @@ import AppLayout        from './components/layout/AppLayout'
 import LoadingSpinner   from './components/shared/LoadingSpinner'
 
 function RequireAuth({ children, allowedRoles }) {
-  const { session, profile, loading, signOut } = useAuth()
+  const { session, profile, loading, signOut, isRestricted, customTitle } = useAuth()
   if (loading) return <LoadingSpinner />
 
   // Not authenticated
@@ -71,6 +71,10 @@ function RequireAuth({ children, allowedRoles }) {
   }
 
   if (allowedRoles && !allowedRoles.includes(profile.role)) {
+    return <Navigate to="/" replace />
+  }
+  // حساب مقيّد (أساسه أدمن): صفحات الأدمن فقط ممنوعة عليه حتى لو كتب رابطها
+  if (isRestricted && allowedRoles && !allowedRoles.includes('station_admin')) {
     return <Navigate to="/" replace />
   }
   return children

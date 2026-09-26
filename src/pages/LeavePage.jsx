@@ -415,7 +415,8 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
   const [bypassDeadline, setBypassDeadline] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
-  const isAdmin = ADMIN_ROLE_VALUES.includes(profile?.role)
+  const { isRestricted: restrictedTitle } = useAuth()
+  const isAdmin = ADMIN_ROLE_VALUES.includes(profile?.role) && !restrictedTitle
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -931,7 +932,8 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
   const proofInputRef = useRef(null)
 
   const role        = profile?.role
-  const isAdmin     = ADMIN_ROLE_VALUES.includes(role)
+  const { isRestricted: restrictedTitle } = useAuth()
+  const isAdmin     = ADMIN_ROLE_VALUES.includes(role) && !restrictedTitle
   const isSupervisor = role === 'station_admin' || role === 'shift_supervisor'
   const isOwn       = leave.employee_id === profile?.id
   const { supervisedStationIds, actsAsSupervisor, allowCap, grantCap, assignedEmployeeIds } = useAuth()
@@ -1213,10 +1215,18 @@ const TABS_CFG = [
 export default function LeavePage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, isRestricted, grantCap, actsAsSupervisor, assignedEmployeeIds, supervisedStationIds } = useAuth()
   const role        = profile?.role
   const isSupervisor = role === 'station_admin' || role === 'shift_supervisor' || role === 'area_supervisor'
-  const canSupervise = isAdmin || isSupervisor
+  const canSupervise = isAdmin || isSupervisor || actsAsSupervisor || grantCap('assigned_employees') || grantCap('all_dispatchers')
+  // حساب مقيّد: يشوف طلبات موظفيه المحددين والمرحّلين فقط
+  const restrictedScope = q => {
+    const parts = []
+    if (assignedEmployeeIds?.length) parts.push(`employee_id.in.(${assignedEmployeeIds.join(',')})`)
+    if (grantCap('all_dispatchers')) parts.push('job_title.eq.dispatcher')
+    if (actsAsSupervisor && supervisedStationIds?.length) parts.push(`station_id.in.(${supervisedStationIds.join(',')})`)
+    return parts.length ? q.or(parts.join(',')) : q.eq('id', '00000000-0000-0000-0000-000000000000')
+  }
 
   const [searchParams] = useSearchParams()
   const [tab, setTab]       = useState(() => searchParams.get('tab') || 'new')
@@ -1241,7 +1251,9 @@ export default function LeavePage() {
     let q = supabase.from('leaves').select('*, station:station_id(name_ar, name_en)').order('created_at', { ascending: false })
     if (tab === 'mine')    q = q.eq('employee_id', profile.id)
     if (tab === 'pending') {
-      if (isAdmin) {
+      if (isRestricted) {
+        q = restrictedScope(q.eq('supervisor_status', 'pending'))
+      } else if (isAdmin) {
         q = q.eq('status', 'pending')
       } else if ((isAreaSupervisor || role === 'station_admin') && allowedStationIds?.length) {
         q = q.eq('supervisor_status', 'pending').in('station_id', allowedStationIds)
@@ -1250,7 +1262,8 @@ export default function LeavePage() {
       }
     }
     if (tab === 'all' && !isAdmin) {
-      if ((isAreaSupervisor || role === 'station_admin') && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
+      if (isRestricted) q = restrictedScope(q)
+      else if ((isAreaSupervisor || role === 'station_admin') && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
       else q = q.eq('station_id', profile.station_id)
     }
     const { data } = await q

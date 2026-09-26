@@ -461,7 +461,7 @@ const NEW_USER_DRAFT_KEY = 'um_new_draft'
 // إدارة المسميات المخصصة: اسم المسمى + الدور الأساسي (سقف الصلاحيات) + الأقسام + مصفوفة الصلاحيات
 function TitlesManager({ titles, onClose, onChanged, isAr }) {
   useEscapeKey(onClose)
-  const blank = { id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: {}, allowed_modules: null }
+  const blank = { id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: { restricted_mode: true }, allowed_modules: null }
   const [form, setForm] = useState(blank)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -1497,7 +1497,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
 }
 
 /* ─── Main Page ────────────────────────────────────────── */
-export default function UsersPage() {
+function UsersPageFull() {
   const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds } = useAuth()
   const canManageAccounts = isGeneralAdmin && allowCap('users_manage')
   const scopedIds = grantCap('scope_assigned_stations') && supervisedStationIds?.length ? supervisedStationIds : null
@@ -2288,4 +2288,85 @@ export default function UsersPage() {
       )}
     </div>
   )
+}
+
+
+// دليل المرحّلين (للحساب المقيّد): كل من مسماه الوظيفي مرحّل بالمملكة — الاسم والمحطة ورقم الجوال فقط، للعرض بدون أي تعديل
+function DispatchersDirectory() {
+  const { i18n } = useTranslation()
+  const isAr = i18n.language === 'ar'
+  const [rows, setRows] = useState([])
+  const [phones, setPhones] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase.from('users')
+        .select('id, full_name_ar, station:station_id(name_ar, name_en)')
+        .eq('job_title', 'dispatcher').eq('is_active', true).order('full_name_ar')
+      if (cancelled) return
+      const list = data ?? []
+      setRows(list)
+      setLoading(false)
+      const ph = {}
+      await Promise.all(list.map(async u => {
+        try {
+          const { data: d } = await supabase.rpc('get_user_sensitive', { p_id: u.id })
+          ph[u.id] = d?.[0]?.phone ?? null
+        } catch { ph[u.id] = null }
+      }))
+      if (!cancelled) setPhones(ph)
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const term = q.trim().toLowerCase()
+  const shown = rows.filter(u => !term
+    || (u.full_name_ar || '').toLowerCase().includes(term)
+    || (u.station?.name_ar || '').toLowerCase().includes(term)
+    || (u.station?.name_en || '').toLowerCase().includes(term)
+    || String(phones[u.id] || '').includes(term))
+
+  return (
+    <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold text-gray-800">{isAr ? 'المرحّلون' : 'Dispatchers'}</h1>
+        <p className="text-xs text-gray-400 mt-0.5">{isAr ? `${rows.length} مرحّل في كل المحطات` : `${rows.length} dispatchers across all stations`}</p>
+      </div>
+      <input value={q} onChange={e => setQ(e.target.value)}
+        placeholder={isAr ? 'بحث بالاسم أو المحطة أو رقم الجوال…' : 'Search by name, station or phone…'}
+        className="w-full border rounded-lg px-3 py-2 text-sm mb-3 focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-gray-500 text-xs">
+              <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'الاسم' : 'Name'}</th>
+              <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'المحطة' : 'Station'}</th>
+              <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'رقم الجوال' : 'Phone'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-400">…</td></tr>
+            ) : shown.length === 0 ? (
+              <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-400">{isAr ? 'لا يوجد مرحّلون' : 'No dispatchers'}</td></tr>
+            ) : shown.map(u => (
+              <tr key={u.id} className="border-t border-gray-100">
+                <td className="px-4 py-2.5 font-semibold text-gray-800">{u.full_name_ar}</td>
+                <td className="px-4 py-2.5 text-gray-600">{isAr ? u.station?.name_ar : u.station?.name_en}</td>
+                <td className="px-4 py-2.5 font-mono text-gray-700" dir="ltr">{phones[u.id] ?? (u.id in phones ? '—' : '…')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+export default function UsersPage() {
+  const { isRestricted } = useAuth()
+  return isRestricted ? <DispatchersDirectory /> : <UsersPageFull />
 }

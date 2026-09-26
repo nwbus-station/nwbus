@@ -403,7 +403,7 @@ function NavTab({ item, isAr }) {
 
 export default function AppLayout() {
   const { i18n } = useTranslation()
-  const { profile, signOut, customTitle, allowCap } = useAuth()
+  const { profile, signOut, customTitle, allowCap, isRestricted } = useAuth()
   const navigate = useNavigate()
   const isAr = i18n.language === 'ar'
   const { settings } = useAppSettings()
@@ -475,7 +475,7 @@ export default function AppLayout() {
       if (n.roles && !n.roles.includes(profile?.role)) return false
       if (n.module && mods && !mods.includes(n.module)) return false
       if (n.requireFlag && !profile?.[n.requireFlag]) return false
-      if (n.capKey && !allowCap(n.capKey)) return false
+      if (n.capKey && (!allowCap(n.capKey) || isRestricted)) return false
       return true
     })
   })).filter(g => g.items.length > 0)

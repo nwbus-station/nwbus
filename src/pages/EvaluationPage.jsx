@@ -842,7 +842,7 @@ function PrintDropdown({ isAr, onSelect }) {
 }
 
 export default function EvaluationPage() {
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap, assignedEmployeeIds } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap, assignedEmployeeIds, isRestricted } = useAuth()
   const assignedOnly = grantCap('assigned_employees')
   const allDispatchers = grantCap('all_dispatchers')
   // مسمى "مشرف المرحّلين": يقيّم من مسماهم الوظيفي مرحّل فقط، بدون تقييم المحطات أو المشرفين
@@ -864,7 +864,7 @@ export default function EvaluationPage() {
   const isEvalAdmin = isGeneralAdmin
   // مصدر تقييم المستخدم الحالي عندما يقيّم موظفاً بنفسه (وردية/محطة) — الأدمن والمدير التنفيذي يختارون المصدر يدوياً
   const myEvalSource = profile?.role === 'shift_supervisor' ? 'shift_supervisor'
-    : (profile?.role === 'station_admin' || profile?.role === 'area_supervisor') ? 'station_admin' : null
+    : (profile?.role === 'station_admin' || profile?.role === 'area_supervisor' || isRestricted) ? 'station_admin' : null
 
   const now = new Date()
   const [selMonth, setSelMonth] = useState(now.getMonth() + 1)
@@ -910,7 +910,9 @@ export default function EvaluationPage() {
         q = q.eq('role', 'station_employee')
         // مشرف المحطة له نفس معاملة مشرف المنطقة بالضبط لو معه أكثر من محطة مخصصة —
         // الفرق بينهم مسمى فقط، مو نطاق صلاحية
-        if (allowedStationIds?.length) {
+        if (assignedOnly || allDispatchers) {
+          // موظفون محددون / كل المرحّلين بالمملكة: بدون قيد محطة (يُفلتَرون بعد الجلب)
+        } else if (allowedStationIds?.length) {
           q = q.in('station_id', allowedStationIds)
         } else {
           const stationId = profile?.station_id || profile?.station?.id

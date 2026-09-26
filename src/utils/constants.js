@@ -64,6 +64,7 @@ export const TITLE_CAPABILITIES = [
   { group: 'الموظفون المحددون', key: 'assigned_employees', kind: 'grant', ar: 'موظفون محددون بالاسم أو الرقم الوظيفي: يقيّمهم ويوافق على إجازاتهم كمشرف (تحددهم من تعديل حسابه)', en: 'Specific employees he evaluates and approves leaves for' },
   { group: 'الموظفون المحددون', key: 'all_dispatchers', kind: 'grant', ar: 'كل من مسماه الوظيفي مرحّل في المملكة (يقيّمهم ويوافق على إجازاتهم بدون تحديدهم واحداً واحداً)', en: 'Every employee titled dispatcher in the Kingdom' },
   // الصفحات والنطاق
+  { group: 'الصفحات والنطاق', key: 'restricted_mode', kind: 'grant', ar: 'حساب مقيّد: ما يُعامل كأدمن أبداً — يظهر له فقط اللي فعّلته', en: 'Restricted account: never treated as admin' },
   { group: 'الصفحات والنطاق', key: 'scope_assigned_stations', kind: 'grant', ar: 'يقتصر على المحطات المخصصة له (التقارير والترحيل)', en: 'Limit to his assigned stations' },
   { group: 'الصفحات والنطاق', key: 'users_manage',   kind: 'allow', adminOnly: true, ar: 'إضافة وتعديل وحذف الحسابات', en: 'Create / edit / delete accounts' },
   { group: 'الصفحات والنطاق', key: 'stations_page',    kind: 'allow', adminOnly: true, ar: 'صفحة المحطات', en: 'Stations page' },

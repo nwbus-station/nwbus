@@ -212,16 +212,18 @@ export function AuthProvider({ children }) {
 
   // Permission helpers
   // stations_executive_director له نفس صلاحيات general_admin بالضبط — فقط مسمى وظيفي مختلف
-  const isGeneralAdmin    = ADMIN_ROLE_VALUES.includes(profile?.role)
   const isAssistantDirector = profile?.role === ASSISTANT_DIRECTOR_ROLE
   // مصفوفة صلاحيات المسمى المخصص: grantCap تمنح قدرة إضافية، allowCap تقيّد قدرة الدور الأساسي
   const titlePerms = customTitle?.permissions ?? null
   const grantCap = key => !!titlePerms?.[key]
   const allowCap = key => !titlePerms || titlePerms[key] !== false
+  // حساب مقيّد (مثل مشرف المرحلين): أساسه أدمن في قاعدة البيانات لكن التطبيق يعامله كمشرف — لا يُعامل كأدمن أبداً
+  const isRestricted = ADMIN_ROLE_VALUES.includes(profile?.role) && grantCap('restricted_mode')
+  const isGeneralAdmin    = ADMIN_ROLE_VALUES.includes(profile?.role) && !isRestricted
   const actsAsSupervisor = isAssistantDirector || grantCap('leaves_supervisor_stage')
   const evaluatesOwnEmployees = isAssistantDirector || grantCap('evaluation_my_employees')
   const isShiftSupervisor = profile?.role === 'shift_supervisor'
-  const isStationAdmin    = profile?.role === 'station_admin' || isShiftSupervisor
+  const isStationAdmin    = profile?.role === 'station_admin' || isShiftSupervisor || isRestricted
   const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true
   const isEmployee        = profile?.role === 'station_employee'
   const isAreaSupervisor  = profile?.display_role === 'area_supervisor'
@@ -239,6 +241,7 @@ export function AuthProvider({ children }) {
       signIn,
       signOut,
       isGeneralAdmin,
+      isRestricted,
       isAssistantDirector,
       customTitle,
       grantCap,
