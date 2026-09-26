@@ -844,6 +844,7 @@ function PrintDropdown({ isAr, onSelect }) {
 export default function EvaluationPage() {
   const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap, assignedEmployeeIds } = useAuth()
   const assignedOnly = grantCap('assigned_employees')
+  const allDispatchers = grantCap('all_dispatchers')
   // مسمى "مشرف المرحّلين": يقيّم من مسماهم الوظيفي مرحّل فقط، بدون تقييم المحطات أو المشرفين
   const dispatchersOnly = grantCap('evaluation_dispatchers_only')
   const { i18n }   = useTranslation()
@@ -932,7 +933,7 @@ export default function EvaluationPage() {
         } else {
           setEmpListErr('')
           // مسمى بموظفين محددين بالاسم: يقيّم هؤلاء فقط
-          if (assignedOnly) list = list.filter(e => assignedEmployeeIds.includes(e.id))
+          if (assignedOnly || allDispatchers) list = list.filter(e => (assignedOnly && assignedEmployeeIds.includes(e.id)) || (allDispatchers && e.job_title === 'dispatcher'))
         }
         setEmployees(list)
       }))
@@ -1016,7 +1017,7 @@ export default function EvaluationPage() {
 
     await Promise.all(promises)
     setLoading(false)
-  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor, dispatchersOnly, assignedOnly, assignedEmployeeIds])
+  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor, dispatchersOnly, assignedOnly, allDispatchers, assignedEmployeeIds])
 
   useEffect(() => { load() }, [load])
 

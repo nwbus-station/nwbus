@@ -62,6 +62,7 @@ export const TITLE_CAPABILITIES = [
   { group: 'الإجازات', key: 'leaves_final_approve',    kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval' },
   // الموظفون المحددون
   { group: 'الموظفون المحددون', key: 'assigned_employees', kind: 'grant', ar: 'موظفون محددون بالاسم أو الرقم الوظيفي: يقيّمهم ويوافق على إجازاتهم كمشرف (تحددهم من تعديل حسابه)', en: 'Specific employees he evaluates and approves leaves for' },
+  { group: 'الموظفون المحددون', key: 'all_dispatchers', kind: 'grant', ar: 'كل من مسماه الوظيفي مرحّل في المملكة (يقيّمهم ويوافق على إجازاتهم بدون تحديدهم واحداً واحداً)', en: 'Every employee titled dispatcher in the Kingdom' },
   // الصفحات والنطاق
   { group: 'الصفحات والنطاق', key: 'scope_assigned_stations', kind: 'grant', ar: 'يقتصر على المحطات المخصصة له (التقارير والترحيل)', en: 'Limit to his assigned stations' },
   { group: 'الصفحات والنطاق', key: 'users_manage',   kind: 'allow', adminOnly: true, ar: 'إضافة وتعديل وحذف الحسابات', en: 'Create / edit / delete accounts' },
