@@ -4,10 +4,27 @@ import { registerSW } from 'virtual:pwa-register'
 // عمل غير محفوظ برجوع تلقائي مفاجئ، وبدل ما يحتاج يسأل الأدمن "أسوي تحديث كامل؟"
 let updateSWFn = null
 let listeners = []
+let pending = false
+let lastActivity = Date.now()
+
+// تحديث تلقائي بدون ما يضطر الموظف يضغط شي: لو رجع للتطبيق بعد ما كان بالخلفية، أو ما لمس الشاشة
+// دقيقتين — نطبّق النسخة الجديدة. (لو كان يكتب ويشتغل، يبقى الإشعار بالأعلى لين يضغط أو يهدأ)
+const IDLE_APPLY_MS = 2 * 60 * 1000
+function autoApplyWatch() {
+  ;['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+    window.addEventListener(ev, () => { lastActivity = Date.now() }, { passive: true }))
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && pending) applyPwaUpdate()
+  })
+  setInterval(() => {
+    if (pending && document.visibilityState === 'visible' && Date.now() - lastActivity > IDLE_APPLY_MS) applyPwaUpdate()
+  }, 30 * 1000)
+}
 
 export function initPwaUpdate() {
+  autoApplyWatch()
   updateSWFn = registerSW({
-    onNeedRefresh() { listeners.forEach(cb => cb()) },
+    onNeedRefresh() { pending = true; listeners.forEach(cb => cb()); if (document.visibilityState === 'hidden') applyPwaUpdate() },
     onRegisteredSW(_url, registration) {
       if (!registration) return
       // فحص فوري عند كل تحميل (مو بس كل ١٠ دقايق) — عشان تحديث الصفحة العادي يكتشف
