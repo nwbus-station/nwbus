@@ -127,7 +127,7 @@ const MODULE_ROLE_LIMITS = {
   reports:          ['station_admin', 'area_supervisor', 'accountant'],
   evaluation:       ['station_admin', 'area_supervisor', 'shift_supervisor'],
   users:            ['station_admin', 'area_supervisor'],
-  map:              ['station_admin', 'area_supervisor'],
+  // الخريطة: عامة لكل الأدوار — تظهر لمن يُضاف له القسم
   customer_ratings: [],
   stations:         [],
   settings:         [],

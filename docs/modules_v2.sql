@@ -8,7 +8,7 @@ returns boolean language sql immutable as $$
   select case
     when p_mod = 'reports'    then p_role in ('station_admin','area_supervisor','accountant')
     when p_mod = 'evaluation' then p_role in ('station_admin','area_supervisor','shift_supervisor')
-    when p_mod in ('users','map') then p_role in ('station_admin','area_supervisor')
+    when p_mod = 'users' then p_role in ('station_admin','area_supervisor')
     when p_mod in ('customer_ratings','stations','settings','magazine') then false
     else true
   end
