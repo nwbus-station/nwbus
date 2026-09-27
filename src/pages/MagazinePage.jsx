@@ -273,11 +273,21 @@ function PageSidebar({ posts, activeIndex, onSelect, onClose, isAr }) {
 }
 
 export default function MagazinePage() {
-  const { isGeneralAdmin } = useAuth()
+  const { profile } = useAuth()
+  const mods = profile?.allowed_modules
+  // الاطلاع على Event متاح للكل ما لم يُقفل عن الحساب صراحة (قسم "Event (اطلاع)")
+  if (mods && !mods.includes('event') && !mods.includes('magazine')) {
+    return <div className="p-10 text-center text-gray-500" dir="rtl">ما عندك صلاحية الاطلاع على Event</div>
+  }
+  return <MagazineInner />
+}
+
+function MagazineInner() {
+  const { isGeneralAdmin, profile } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  // حصري للأدمن العام حالياً — لاحقاً ممكن نفتحها لحسابات ثانية عبر قسم "مجلة NW"
-  const canEdit = isGeneralAdmin
+  // النشر والإدارة: الأدمن العام أو حساب عنده قسم "Event (نشر وإدارة)" (يتطابق مع صلاحيات قاعدة البيانات)
+  const canEdit = isGeneralAdmin || !!profile?.allowed_modules?.includes('magazine')
 
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)

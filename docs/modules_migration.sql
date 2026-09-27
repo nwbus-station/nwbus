@@ -20,14 +20,15 @@ update users set allowed_modules = allowed_modules || array['settings']
    and not ('settings' = any(allowed_modules));
 
 -- 3) القسم ما يسمح فيه الدور = ممنوع من القاعدة (يُشال تلقائياً عند أي حفظ)
-create or replace function module_allowed_for(p_role text, p_mod text, p_row jsonb)
+create or replace function module_allowed_for(p_role text, p_mod text, p_row jsonb, p_has_title boolean default false)
 returns boolean language sql immutable as $$
   select (case
       when p_role in ('general_admin','stations_executive_director','assistant_stations_executive_director') then true
       when p_mod = 'reports'    then p_role in ('station_admin','area_supervisor','accountant')
       when p_mod = 'evaluation' then p_role in ('station_admin','area_supervisor','shift_supervisor')
       when p_mod in ('users','map') then p_role in ('station_admin','area_supervisor')
-      when p_mod in ('customer_ratings','stations','settings','magazine') then false
+      when p_mod in ('customer_ratings','stations','settings') then false
+      when p_mod = 'magazine' then p_has_title   -- نشر Event: للأدمن أو لحساب عليه مسمى مخصص
       else true
     end)
     and (p_row is null
@@ -43,7 +44,7 @@ begin
   select permissions into rp from role_permissions where role = new.role::text;
   if new.custom_title_id is not null then rp := null; end if;
   new.allowed_modules := coalesce(
-    (select array_agg(m) from unnest(new.allowed_modules) m where module_allowed_for(new.role::text, m, rp)),
+    (select array_agg(m) from unnest(new.allowed_modules) m where module_allowed_for(new.role::text, m, rp, new.custom_title_id is not null)),
     '{}'::text[]);
   return new;
 end $$;
@@ -52,3 +53,10 @@ drop trigger if exists trg_enforce_role_modules on users;
 create trigger trg_enforce_role_modules
   before insert or update of allowed_modules, role, custom_title_id on users
   for each row execute function enforce_role_modules();
+
+-- ─── قسم "Event (اطلاع)" منفصل عن "Event (نشر وإدارة)" ───
+update users set allowed_modules = allowed_modules || array['event']
+ where allowed_modules is not null and not ('event' = any(allowed_modules));
+update custom_titles set allowed_modules = allowed_modules || array['event']
+ where allowed_modules is not null and not ('event' = any(allowed_modules));
+drop function if exists module_allowed_for(text, text, jsonb);

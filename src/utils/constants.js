@@ -106,15 +106,16 @@ const MODULE_ROLE_LIMITS = {
   customer_ratings: [],
   stations:         [],
   settings:         [],
-  magazine:         [],   // إدارة Event: للأدمن فقط حالياً (لاحقاً تُفتح لقسم التسويق)
+  magazine:         [],   // نشر وإدارة Event: للأدمن أو لحساب عليه مسمى مخصص (مثل التسويق)
 }
 const ADMIN_LIKE_ROLES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
 // هل القسم متاح لهذا الدور أصلاً؟ (السقف الافتراضي)
-export const moduleDefaultForRole = (mod, role) =>
-  ADMIN_LIKE_ROLES.includes(role) || !(mod in MODULE_ROLE_LIMITS) || MODULE_ROLE_LIMITS[mod].includes(role)
+// hasTitle: الحساب عليه مسمى مخصص — "نشر Event" يُمنح فقط عبر مسمى (مثل مسمى قسم التسويق) أو للأدمن
+export const moduleDefaultForRole = (mod, role, hasTitle = false) =>
+  ADMIN_LIKE_ROLES.includes(role) || (mod === 'magazine' && hasTitle) || !(mod in MODULE_ROLE_LIMITS) || MODULE_ROLE_LIMITS[mod].includes(role)
 // السقف الفعلي: الافتراضي + اللي عدّله الأدمن من "الأدوار الأساسية" (permissions.modules)
-export const roleModuleAllowed = (mod, role, rolePerms) =>
-  moduleDefaultForRole(mod, role) && (!Array.isArray(rolePerms?.modules) || rolePerms.modules.includes(mod))
+export const roleModuleAllowed = (mod, role, rolePerms, hasTitle = false) =>
+  moduleDefaultForRole(mod, role, hasTitle) && (!Array.isArray(rolePerms?.modules) || rolePerms.modules.includes(mod))
 
 // أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف
 export const ADMIN_ROLE_VALUES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
@@ -135,7 +136,8 @@ export const MODULES = [
   { value: 'map',            ar: 'الخريطة',          en: 'Map' },
   { value: 'customer_ratings', ar: 'تقييمات العملاء', en: 'Customer Ratings' },
   { value: 'live_board',     ar: 'شاشة العرض',       en: 'Live Board' },
-  { value: 'magazine',       ar: 'إدارة Event',      en: 'Event Editor' },
+  { value: 'event',          ar: 'Event (اطلاع)',      en: 'Event (view)' },
+  { value: 'magazine',       ar: 'Event (نشر وإدارة)', en: 'Event (publish & manage)' },
 ]
 
 // Departure accuracy thresholds (minutes)

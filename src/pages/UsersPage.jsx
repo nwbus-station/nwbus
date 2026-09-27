@@ -943,7 +943,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   }, [])
   const titleObj = form.custom_title_id ? customTitles.find(t => t.id === form.custom_title_id) : null
   const effRole = titleObj?.base_role ?? form.role
-  const modAllowed = m => roleModuleAllowed(m, effRole, titleObj ? null : rolePermRows[effRole])
+  const modAllowed = m => roleModuleAllowed(m, effRole, titleObj ? null : rolePermRows[effRole], !!titleObj)
   const effRoleLabel = (() => { const r = USER_ROLES.find(x => x.value === effRole); return r ? (isAr ? r.ar : r.en) : '' })()
   // لو غيّرت الدور وفيه أقسام صار ما يسمح فيها، نشيلها ونبلغك
   useEffect(() => {
