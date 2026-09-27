@@ -555,7 +555,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
         {/* الرأس */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="font-bold text-gray-900 text-base">{isAr ? 'المسميات الوظيفية والصلاحيات' : 'Job Titles & Permissions'}</h2>
+            <h2 className="font-bold text-gray-900 text-base">{isAr ? 'إدارة الصلاحيات' : 'Permissions Management'}</h2>
             <p className="text-xs text-gray-500 mt-0.5">{isAr ? 'أنشئ مسمى وحدد بالضبط ما يقدر يشوفه ويسويه. القيود تسري على حسابات هذا المسمى فقط، والأدمن العام لا يتأثر.' : 'Create a title and control exactly what it can see and do. The general admin is never affected.'}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-lg leading-none">✕</button>
@@ -567,7 +567,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
             <div className="p-3 shrink-0">
               <button onClick={() => pick(null)}
                 className={`w-full text-sm font-semibold rounded-lg py-2.5 transition-colors ${!form.id && !isRole ? 'bg-nwbus-primary text-white' : 'border border-gray-300 text-gray-700 hover:bg-white'}`}>
-                + {isAr ? 'مسمى جديد' : 'New title'}
+                + {isAr ? 'صلاحية جديدة' : 'New permission'}
               </button>
             </div>
             <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-1.5">
@@ -612,7 +612,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                 </div>
               ) : (
               <div>
-                <h3 className="text-sm font-bold text-gray-900 mb-3">{form.id ? (isAr ? 'تعديل المسمى' : 'Edit title') : (isAr ? 'مسمى جديد' : 'New title')}</h3>
+                <h3 className="text-sm font-bold text-gray-900 mb-3">{form.id ? (isAr ? 'تعديل الصلاحية' : 'Edit permission') : (isAr ? 'صلاحية جديدة' : 'New permission')}</h3>
                 <div className="grid sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم بالعربي *' : 'Arabic name *'}</label>
@@ -735,7 +735,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
               {!isRole && form.id && <button onClick={remove} className="px-4 py-2 rounded-lg text-sm text-red-600 border border-red-200 hover:bg-red-50">{isAr ? 'حذف المسمى' : 'Delete'}</button>}
               <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-700 hover:bg-gray-50">{isAr ? 'إغلاق' : 'Close'}</button>
               <button onClick={save} disabled={busy} className="px-6 py-2 rounded-lg text-sm font-semibold bg-nwbus-primary text-white disabled:opacity-60">
-                {busy ? '…' : ((form.id || isRole) ? (isAr ? 'حفظ التعديلات' : 'Save changes') : (isAr ? 'إضافة المسمى' : 'Add title'))}
+                {busy ? '…' : ((form.id || isRole) ? (isAr ? 'حفظ التعديلات' : 'Save changes') : (isAr ? 'إضافة الصلاحية' : 'Add permission'))}
               </button>
             </div>
           </section>
@@ -2168,7 +2168,7 @@ function UsersPageFull() {
           {isGeneralAdmin && (
             <button onClick={() => setShowTitles(true)}
               className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap">
-              {isAr ? 'إضافة مسمى' : 'Add Title'}
+              {isAr ? 'إدارة الصلاحيات' : 'Permissions'}
             </button>
           )}
           {canManageAccounts && (
