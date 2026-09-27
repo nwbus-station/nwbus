@@ -382,7 +382,7 @@ async function findSupervisorIds(stationId, directSupervisorId, employeeId, empl
   if (directSupervisorId) return [...new Set([directSupervisorId, ...assignedSups])]
   if (!stationId) return assignedSups
   const { data: sups } = await supabase.from('users')
-    .select('id').in('role', ['station_admin', 'area_supervisor', 'shift_supervisor'])
+    .select('id').in('role', ['station_admin', 'area_supervisor'])   // موافقة الإجازات لمشرف المحطة فقط (مشرف الوردية يقيّم موظفيه المحددين ولا يوافق على إجازات)
     .eq('station_id', stationId).eq('is_active', true)
   const { data: us } = await supabase.from('user_stations').select('user_id').eq('station_id', stationId)
   let assistants = []
@@ -499,7 +499,8 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
       }
     }
 
-    const isEmployeeRole = profile?.role === 'station_employee'
+    // من يحتاج موافقة مشرف المحطة: الموظف والمحاسب ومشرف الوردية (ما يعتمد لنفسه أبداً)
+    const isEmployeeRole = ['station_employee', 'accountant', 'shift_supervisor'].includes(profile?.role)
     const autoApproved   = NO_APPROVAL_TYPES.includes(form.leave_type)
     const nowIso         = new Date().toISOString()
     const { error: err } = await supabase.from('leaves').insert({
@@ -934,7 +935,7 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
   const role        = profile?.role
   const { isRestricted: restrictedTitle } = useAuth()
   const isAdmin     = ADMIN_ROLE_VALUES.includes(role) && !restrictedTitle
-  const isSupervisor = role === 'station_admin' || role === 'shift_supervisor'
+  const isSupervisor = role === 'station_admin' || role === 'area_supervisor'
   const isOwn       = leave.employee_id === profile?.id
   const { supervisedStationIds, actsAsSupervisor, allowCap, grantCap, assignedEmployeeIds } = useAuth()
   // مساعد المدير أو مسمى مخصص بصلاحية "يوافق كمشرف": مرحلة المشرف لموظفي محطاته المخصصة (يوافق أولاً ثم الأدمن)
@@ -1217,7 +1218,7 @@ export default function LeavePage() {
   const isAr = i18n.language === 'ar'
   const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, isRestricted, grantCap, allowCap, actsAsSupervisor, assignedEmployeeIds, supervisedStationIds } = useAuth()
   const role        = profile?.role
-  const isSupervisor = (role === 'station_admin' || role === 'shift_supervisor' || role === 'area_supervisor') && allowCap('leaves_supervise')
+  const isSupervisor = (role === 'station_admin' || role === 'area_supervisor') && allowCap('leaves_supervise')
   const canSupervise = isAdmin || isSupervisor || actsAsSupervisor || grantCap('assigned_employees') || grantCap('all_dispatchers')
   // حساب مقيّد: يشوف طلبات موظفيه المحددين والمرحّلين فقط
   const restrictedScope = q => {

@@ -676,6 +676,8 @@ export default function TransportationPage() {
   const { profile, isGeneralAdmin, isRestricted, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds } = useAuth()
   // الحساب المقيّد (مسمى مخصص) يستخدم أزرار الأدمن حسب المفاتيح المفعّلة له فقط
   const adminLike = isGeneralAdmin || isRestricted
+  // الرحلة الإضافية RF: للأدمن ومشرف المحطة/المنطقة فقط — مو مشرف الوردية ولا الموظف
+  const canManageRf = adminLike || profile?.role === 'station_admin'
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const scopedIds = grantCap('scope_assigned_stations') && supervisedStationIds?.length ? supervisedStationIds : null
@@ -1224,7 +1226,7 @@ export default function TransportationPage() {
             </button>
           )}
           {/* Add extra trip (RF) — supervisor & admin */}
-          {((adminLike || isStationAdmin) && allowCap('transport_manage_trips')) && (
+          {(canManageRf && allowCap('transport_manage_trips')) && (
             <button onClick={() => setShowExtra(true)}
               className="h-9 flex items-center bg-white border border-gray-300 text-gray-700 rounded-lg px-3.5 text-xs font-semibold hover:border-gray-400 transition-colors">
               {isAr ? 'رحلة إضافية (RF)' : 'Extra Trip (RF)'}
@@ -1508,7 +1510,7 @@ export default function TransportationPage() {
                     {/* إجراءات */}
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1.5">
-                        {trip.is_rf && (isGeneralAdmin || isStationAdmin) && allowCap('transport_delete_rf') && (
+                        {trip.is_rf && canManageRf && allowCap('transport_delete_rf') && (
                           <button onClick={() => deleteRfTrip(trip.id)}
                             title={isAr ? 'حذف الرحلة الإضافية' : 'Delete extra trip'}
                             className="text-[11px] border border-gray-300 text-gray-400 rounded-sm px-1.5 py-1 hover:border-red-400 hover:text-red-500">
