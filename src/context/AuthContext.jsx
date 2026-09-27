@@ -219,13 +219,14 @@ export function AuthProvider({ children }) {
   // stations_executive_director له نفس صلاحيات general_admin بالضبط — فقط مسمى وظيفي مختلف
   const isAssistantDirector = profile?.role === ASSISTANT_DIRECTOR_ROLE
   // مصفوفة صلاحيات المسمى المخصص: grantCap تمنح قدرة إضافية، allowCap تقيّد قدرة الدور الأساسي
-  const titlePerms = customTitle?.permissions ?? rolePerms ?? null
+  // نفس أولوية القاعدة: قيمة المسمى لو موجودة، وإلا قيمة الدور الأساسي، وإلا الافتراضي
+  const permOf = key => customTitle?.permissions?.[key] ?? rolePerms?.[key]
   // سقف الأقسام للدور الأساسي (الحساب اللي عليه مسمى مخصص ما ينطبق عليه)
   const roleAllowsModule = mod => roleModuleAllowed(mod, profile?.display_role ?? profile?.role, rolePerms, !!customTitle)
   // المصدر الوحيد لظهور أي قسم: قسم الحساب نفسه + سقف دوره/مسماه
   const canSeeModule = mod => (!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod)
-  const grantCap = key => !!titlePerms?.[key]
-  const allowCap = key => !titlePerms || titlePerms[key] !== false
+  const grantCap = key => permOf(key) === true
+  const allowCap = key => permOf(key) !== false
   // حساب مقيّد (مثل مشرف المرحلين): أساسه أدمن في قاعدة البيانات لكن التطبيق يعامله كمشرف — لا يُعامل كأدمن أبداً
   const isRestricted = ADMIN_ROLE_VALUES.includes(profile?.role) && grantCap('restricted_mode')
   const isGeneralAdmin    = ADMIN_ROLE_VALUES.includes(profile?.role) && !isRestricted

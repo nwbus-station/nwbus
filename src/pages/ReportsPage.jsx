@@ -374,6 +374,8 @@ export default function ReportsPage() {
 
   const runReport = useCallback(async () => {
     const cacheKey = `reports_${dateFrom}_${dateTo}_${station}`
+    // غير الأدمن: ما نجيب أي بيانات قبل ما تتحدد محطاته (وإلا يطلع الاستعلام بدون تقييد نطاق)
+    if (!seesAll && !scopedIds && !myStationIds.length) return
     const cached = getCached(cacheKey)
     if (cached) {
       setData(cached)
@@ -1488,7 +1490,7 @@ export default function ReportsPage() {
           )}
 
           {/* Sales summary — للأدمن العام فقط */}
-          {isGeneralAdmin && show('sales') && (
+          {(isGeneralAdmin || isAccountant || isStationAdmin) && show('sales') && (
           <section>
             <h2 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
               {isAr ? 'ملخص المبيعات' : 'Sales Summary'}

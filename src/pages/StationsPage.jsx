@@ -343,7 +343,7 @@ export default function StationsPage() {
   useEffect(() => { fetch() }, [fetch])
 
   const filtered = stations.filter(s =>
-    s.name_ar.includes(search) || s.name_en.toLowerCase().includes(search.toLowerCase())
+    (s.name_ar || '').includes(search) || (s.name_en || '').toLowerCase().includes(search.toLowerCase())
   )
 
   const mainCount    = stations.filter(s => s.type === 'main').length
@@ -362,10 +362,12 @@ export default function StationsPage() {
           <input placeholder={isAr ? 'بحث...' : 'Search...'}
             value={search} onChange={e => setSearch(e.target.value)}
             className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none" />
+          {isGeneralAdmin && (
           <button onClick={() => setModal('new')}
             className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors">
             + {isAr ? 'محطة جديدة' : 'New Station'}
           </button>
+          )}
           {isGeneralAdmin && (
             <button onClick={() => setShowMerge(true)}
               className="bg-white border border-amber-600 text-amber-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-50 transition-colors">
@@ -416,10 +418,12 @@ export default function StationsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
+                    {isGeneralAdmin && (
                     <button onClick={() => setModal(s)}
                       className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1 hover:bg-nwbus-primary hover:text-white transition-colors">
                       {isAr ? 'تعديل' : 'Edit'}
                     </button>
+                    )}
                   </td>
                 </tr>
               ))}

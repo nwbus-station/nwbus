@@ -276,7 +276,7 @@ function MagazineFeed({ posts, isAr, onNavigate }) {
 }
 
 export default function DashboardPage() {
-  const { profile, isAdmin, isGeneralAdmin, allowedStationIds, customTitle } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, allowedStationIds, customTitle, canSeeModule } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const navigate = useNavigate()
@@ -424,9 +424,9 @@ export default function DashboardPage() {
 
   /* ── وصلات سريعة ── */
   const quickLinks = [
-    ...(!mods || mods.includes('transportation') ? [{ to: '/transportation', ar: 'الترحيل',    en: 'Transportation', icon: 'bus',     desc_ar: 'تتبع الرحلات والمغادرات', desc_en: 'Trips & departures' }] : []),
-    ...(isAdmin || profile?.role === 'accountant' ? [{ to: '/reports',       ar: 'التقارير',    en: 'Reports',        icon: 'report',  desc_ar: 'تقارير تشغيلية شاملة',    desc_en: 'Operational reports' }] : []),
-    ...(!mods || mods.includes('event') || mods.includes('magazine') ? [{ to: '/magazine', ar: 'Event', en: 'Event', icon: 'magazine', desc_ar: 'إعلانات وموظفون متميزون', desc_en: 'Announcements & spotlights' }] : []),
+    ...(canSeeModule('transportation') ? [{ to: '/transportation', ar: 'الترحيل',    en: 'Transportation', icon: 'bus',     desc_ar: 'تتبع الرحلات والمغادرات', desc_en: 'Trips & departures' }] : []),
+    ...(canSeeModule('reports') ? [{ to: '/reports',       ar: 'التقارير',    en: 'Reports',        icon: 'report',  desc_ar: 'تقارير تشغيلية شاملة',    desc_en: 'Operational reports' }] : []),
+    ...(canSeeModule('event') || canSeeModule('magazine') ? [{ to: '/magazine', ar: 'Event', en: 'Event', icon: 'magazine', desc_ar: 'إعلانات وموظفون متميزون', desc_en: 'Announcements & spotlights' }] : []),
   ]
 
   /* ── المعلومات ── */

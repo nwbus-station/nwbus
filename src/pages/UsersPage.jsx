@@ -1809,9 +1809,11 @@ function UsersPageFull() {
       // مسمى محصور بمحطاته المخصصة: يشوف موظفي محطاته فقط
       usersQuery = usersQuery.in('station_id', scopedIds)
       stationsQuery = stationsQuery.in('id', scopedIds)
-    } else if (isStationAdmin && !isGeneralAdmin) {
-      usersQuery = usersQuery.eq('station_id', profile.station_id)
-      stationsQuery = stationsQuery.eq('id', profile.station_id)
+    } else if (!isGeneralAdmin) {
+      // أي دور غير الأدمن (مشرف/محاسب/موظف عند فتح القسم له): محطته الأساسية فقط
+      const sid = profile?.station_id
+      usersQuery = sid ? usersQuery.eq('station_id', sid) : usersQuery.eq('id', profile.id)
+      stationsQuery = sid ? stationsQuery.eq('id', sid) : stationsQuery.eq('id', '00000000-0000-0000-0000-000000000000')
     }
 
     const [{ data: u }, { data: s }] = await Promise.all([
