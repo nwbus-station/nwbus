@@ -137,7 +137,7 @@ export default function MapPage() {
   const [kindFilter, setKindFilter] = useState('all')
   const [regionFilter, setRegionFilter] = useState('all')
   const [tab, setTab] = useState('list')            // list | noloc | route
-  const [base, setBase] = useState('map')
+  const [base, setBase] = useState('sat')   // الافتراضي: صور الأقمار الصناعية لكل الحسابات
   const [zoom, setZoom] = useState(6)
   const [flyTarget, setFlyTarget] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
