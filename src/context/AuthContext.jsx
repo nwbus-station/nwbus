@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE, roleModuleAllowed } from '../utils/constants'
+import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE, roleModuleAllowed, jobsForAction } from '../utils/constants'
 
 const AuthContext = createContext(null)
 
@@ -60,14 +60,14 @@ export function AuthProvider({ children }) {
         const { data: rp } = await supabase.from('role_permissions').select('permissions').eq('role', data.role).maybeSingle()  // data.role = الدور الأصلي (مشرف المنطقة مستقل)
         setRolePerms(rp?.permissions ?? null)
       }
-      if (title?.permissions?.assigned_employees) {
+      if (title?.permissions?.assigned_evaluate || title?.permissions?.assigned_leaves) {
         const { data: asg } = await supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', data.id)
         setAssignedEmployeeIds((asg ?? []).map(r => r.employee_id))
       } else {
         setAssignedEmployeeIds([])
       }
       // مشرف منطقة / مشرف محطة — نجلب محطاته المخصصة من user_stations
-      if (data.role === ASSISTANT_DIRECTOR_ROLE || title?.permissions?.leaves_supervisor_stage || title?.permissions?.evaluation_my_employees || title?.permissions?.scope_assigned_stations) {
+      if (data.role === ASSISTANT_DIRECTOR_ROLE || title?.permissions?.leaves_supervisor_stage || title?.permissions?.evaluation_my_employees || title?.permissions?.scope_assigned_stations || title?.permissions?.stations_manage_assigned) {
         const { data: us } = await supabase.from('user_stations').select('station_id').eq('user_id', data.id)
         setSupervisedStationIds((us ?? []).map(r => r.station_id))
       } else {
@@ -227,6 +227,8 @@ export function AuthProvider({ children }) {
   const canSeeModule = mod => (!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod)
   const grantCap = key => permOf(key) === true
   const allowCap = key => permOf(key) !== false
+  // المسميات الوظيفية اللي له عليها هذا الإجراء (view / evaluate / leaves) بحسب المجموعات الوظيفية
+  const jobsFor = action => jobsForAction(action, grantCap)
   // حساب مقيّد (مثل مشرف المرحلين): أساسه أدمن في قاعدة البيانات لكن التطبيق يعامله كمشرف — لا يُعامل كأدمن أبداً
   const isRestricted = ADMIN_ROLE_VALUES.includes(profile?.role) && grantCap('restricted_mode')
   const isGeneralAdmin    = ADMIN_ROLE_VALUES.includes(profile?.role) && !isRestricted
@@ -256,6 +258,7 @@ export function AuthProvider({ children }) {
       customTitle,
       grantCap,
       allowCap,
+      jobsFor,
       roleAllowsModule,
       canSeeModule,
       actsAsSupervisor,

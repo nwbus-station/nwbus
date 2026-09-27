@@ -39,6 +39,18 @@ export const ASSISTANT_DIRECTOR_ROLE = 'assistant_stations_executive_director'
 // تفاصيل حساب الأدمن مجمّعة بالصفحات — يختار منها كل مسمى ما يظهر له:
 //  grant: تمنح قدرة إضافية للمسمى فقط لو فُعّلت (افتراضياً لا)
 //  allow: تقيّد ما يملكه الأدمن أصلاً، تُقفل فقط لو أُلغيت (افتراضياً مسموحة)
+// مجموعات وظيفية (بالمسمى الوظيفي job_title) — تُمنح صلاحياتها على مستوى المملكة
+export const JOB_GROUPS = [
+  { id: 'dispatchers',      ar: 'المرحّلون',            jobs: ['dispatcher'],                                              actions: ['view', 'evaluate', 'leaves'] },
+  { id: 'customer_service', ar: 'موظفو خدمة العملاء',   jobs: ['customer_service'],                                        actions: ['view', 'evaluate', 'leaves'] },
+  { id: 'supervisors',      ar: 'المشرفون',              jobs: ['station_supervisor', 'shift_supervisor', 'area_supervisor'], actions: ['view', 'leaves'] },
+]
+// المسميات الوظيفية اللي يملك الحساب عليها إجراءً معيناً (has = دالة تفحص مفتاح الصلاحية)
+export const jobsForAction = (action, has) =>
+  JOB_GROUPS.filter(g => g.actions.includes(action) && has(`jg_${g.id}_${action}`)).flatMap(g => g.jobs)
+// مجموعة المسمى الوظيفي
+export const jobGroupOf = job => JOB_GROUPS.find(g => g.jobs.includes(job))
+
 export const TITLE_CAPABILITIES = [
   // التقارير
   { group: 'التقارير', key: 'reports_movements',  kind: 'allow', ar: 'تقرير الوصول والمغادرة', en: 'Arrivals & departures report' },
@@ -85,15 +97,22 @@ export const TITLE_CAPABILITIES = [
   { group: 'الإجازات', key: 'leaves_supervise', kind: 'allow', ar: 'الموافقة على إجازات الموظفين (مرحلة المشرف) وتبويباتها', en: 'Approve leaves as supervisor' },
   { group: 'الإجازات', key: 'leaves_print', kind: 'allow', ar: 'طباعة نموذج الإجازة', en: 'Print leave form' },
   { group: 'الإجازات', key: 'leaves_final_approve',    db: true, kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval' },
-  // الموظفون المحددون
-  { group: 'الموظفون المحددون', key: 'assigned_employees', db: true, kind: 'grant', ar: 'موظفون محددون بالاسم أو الرقم الوظيفي: يقيّمهم ويوافق على إجازاتهم كمشرف (تحددهم من تعديل حسابه)', en: 'Specific employees he evaluates and approves leaves for' },
-  { group: 'الموظفون المحددون', key: 'all_dispatchers', db: true, kind: 'grant', ar: 'كل من مسماه الوظيفي مرحّل في المملكة (يقيّمهم ويوافق على إجازاتهم بدون تحديدهم واحداً واحداً)', en: 'Every employee titled dispatcher in the Kingdom' },
+  // الموظفون المحددون بالاسم (تحددهم من تعديل حسابه) — كل إجراء مستقل
+  { group: 'الموظفون المحددون بالاسم', key: 'assigned_evaluate', db: true, kind: 'grant', ar: 'تقييمهم وظيفياً', en: 'Evaluate them' },
+  { group: 'الموظفون المحددون بالاسم', key: 'assigned_leaves',   db: true, kind: 'grant', ar: 'الموافقة على إجازاتهم', en: 'Approve their leaves' },
+  // مجموعات وظيفية على مستوى المملكة — كل إجراء مستقل
+  ...JOB_GROUPS.flatMap(g => g.actions.map(a => ({
+    group: `نطاق المملكة — ${g.ar}`, key: `jg_${g.id}_${a}`, db: true, kind: 'grant',
+    ar: { view: 'الاطلاع على الأسماء والمحطات وأرقام الجوالات', evaluate: 'تقييمهم وظيفياً', leaves: 'الموافقة على إجازاتهم' }[a],
+    en: { view: 'View names, stations & phones', evaluate: 'Evaluate them', leaves: 'Approve their leaves' }[a],
+  }))),
   // الصفحات والنطاق
   { group: 'الصفحات والنطاق', key: 'restricted_mode', kind: 'grant', ar: 'حساب مقيّد: ما يُعامل كأدمن أبداً — يظهر له فقط اللي فعّلته', en: 'Restricted account: never treated as admin' },
   { group: 'الصفحات والنطاق', key: 'scope_assigned_stations', db: true, kind: 'grant', ar: 'يقتصر على المحطات المخصصة له (التقارير والترحيل)', en: 'Limit to his assigned stations' },
   { group: 'الصفحات والنطاق', key: 'users_manage',   db: true, kind: 'allow', adminOnly: true, ar: 'إضافة وتعديل وحذف الحسابات', en: 'Create / edit / delete accounts' },
   { group: 'الصفحات والنطاق', key: 'stations_page',    db: true, kind: 'allow', adminOnly: true, ar: 'صفحة المحطات', en: 'Stations page' },
   { group: 'الصفحات والنطاق', key: 'settings_access',  db: true, kind: 'allow', adminOnly: true, ar: 'صفحة الإعدادات', en: 'Settings page' },
+  { group: 'الصفحات والنطاق', key: 'stations_manage_assigned', db: true, kind: 'grant', ar: 'صفحة المحطات: تعديل محطاته المخصصة له فقط (بدون إضافة أو دمج)', en: 'Stations page: edit only his assigned stations' },
   { group: 'الصفحات والنطاق', key: 'lostfound_manage', kind: 'allow', adminOnly: true, ar: 'حذف وإهداء الموجودات', en: 'Delete / donate lost & found items' },
 ]
 

@@ -7,7 +7,7 @@ import { getCached, setCached, clearCached } from '../lib/pageCache'
 import DatePicker from '../components/shared/DatePicker'
 import { notifyMany } from '../utils/notifications'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
-import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE } from '../utils/constants'
+import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE, jobGroupOf } from '../utils/constants'
 import { yearsOfService, annualEntitlement, accruedBalance, leaveRemaining } from '../utils/leaveBalance'
 
 /* ─── ثوابت ─── */
@@ -359,7 +359,7 @@ async function findSupervisorIds(stationId, directSupervisorId, employeeId, empl
   // مسمى بموظفين محددين: يصله إشعار إجازة موظفيه المحددين له
   let assignedSups = []
   if (employeeId) {
-    const { data: titles } = await supabase.from('custom_titles').select('id').contains('permissions', { assigned_employees: true })
+    const { data: titles } = await supabase.from('custom_titles').select('id').contains('permissions', { assigned_leaves: true })
     const tids = (titles ?? []).map(t => t.id)
     if (tids.length) {
       const { data: asg } = await supabase.from('shift_supervisor_assignments').select('supervisor_id').eq('employee_id', employeeId)
@@ -370,9 +370,10 @@ async function findSupervisorIds(stationId, directSupervisorId, employeeId, empl
       }
     }
   }
-  // مسمى "كل المرحّلين بالمملكة": يصله إشعار إجازة أي موظف مسماه مرحّل
-  if (employeeJobTitle === 'dispatcher') {
-    const { data: dtitles } = await supabase.from('custom_titles').select('id').contains('permissions', { all_dispatchers: true })
+  // مجموعة وظيفية (مرحّلون/خدمة عملاء/مشرفون): يصله إشعار إجازة أي موظف من مجموعته لو عنده صلاحية الموافقة عليها
+  const grp = jobGroupOf(employeeJobTitle)
+  if (grp && grp.actions.includes('leaves')) {
+    const { data: dtitles } = await supabase.from('custom_titles').select('id').contains('permissions', { [`jg_${grp.id}_leaves`]: true })
     const dids = (dtitles ?? []).map(t => t.id)
     if (dids.length) {
       const { data } = await supabase.from('users').select('id').eq('is_active', true).in('custom_title_id', dids)
@@ -937,13 +938,14 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
   const isAdmin     = ADMIN_ROLE_VALUES.includes(role) && !restrictedTitle
   const isSupervisor = role === 'station_admin' || role === 'area_supervisor'
   const isOwn       = leave.employee_id === profile?.id
-  const { supervisedStationIds, actsAsSupervisor, allowCap, grantCap, assignedEmployeeIds } = useAuth()
+  const { supervisedStationIds, actsAsSupervisor, allowCap, grantCap, assignedEmployeeIds, jobsFor } = useAuth()
+  const leaveJobs = jobsFor('leaves')
   // مساعد المدير أو مسمى مخصص بصلاحية "يوافق كمشرف": مرحلة المشرف لموظفي محطاته المخصصة (يوافق أولاً ثم الأدمن)
-  const isAssistant = actsAsSupervisor || grantCap('assigned_employees') || grantCap('all_dispatchers')
+  const isAssistant = actsAsSupervisor || grantCap('assigned_leaves') || leaveJobs.length > 0
   // موافقة كمشرف: لموظفي محطاته المخصصة، أو لموظفين محددين له بالاسم
   const inMySupervisedStations = (actsAsSupervisor && !!supervisedStationIds?.includes(leave.station_id))
-    || (grantCap('assigned_employees') && !!assignedEmployeeIds?.includes(leave.employee_id))
-    || (grantCap('all_dispatchers') && leave.job_title === 'dispatcher')
+    || (grantCap('assigned_leaves') && !!assignedEmployeeIds?.includes(leave.employee_id))
+    || leaveJobs.includes(leave.job_title)
 
   const typeLabel   = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
   const typeIcon    = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.icon ?? ''
@@ -1224,15 +1226,16 @@ const TABS_CFG = [
 export default function LeavePage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, isRestricted, grantCap, allowCap, actsAsSupervisor, assignedEmployeeIds, supervisedStationIds } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, isRestricted, grantCap, allowCap, actsAsSupervisor, assignedEmployeeIds, supervisedStationIds, jobsFor } = useAuth()
+  const leaveJobs   = jobsFor('leaves')
   const role        = profile?.role
   const isSupervisor = (role === 'station_admin' || role === 'area_supervisor') && allowCap('leaves_supervise')
-  const canSupervise = isAdmin || isSupervisor || actsAsSupervisor || grantCap('assigned_employees') || grantCap('all_dispatchers')
+  const canSupervise = isAdmin || isSupervisor || actsAsSupervisor || grantCap('assigned_leaves') || leaveJobs.length > 0
   // حساب مقيّد: يشوف طلبات موظفيه المحددين والمرحّلين فقط
   const restrictedScope = q => {
     const parts = []
-    if (assignedEmployeeIds?.length) parts.push(`employee_id.in.(${assignedEmployeeIds.join(',')})`)
-    if (grantCap('all_dispatchers')) parts.push('job_title.eq.dispatcher')
+    if (grantCap('assigned_leaves') && assignedEmployeeIds?.length) parts.push(`employee_id.in.(${assignedEmployeeIds.join(',')})`)
+    if (leaveJobs.length) parts.push(`job_title.in.(${leaveJobs.join(',')})`)
     if (actsAsSupervisor && supervisedStationIds?.length) parts.push(`station_id.in.(${supervisedStationIds.join(',')})`)
     return parts.length ? q.or(parts.join(',')) : q.eq('id', '00000000-0000-0000-0000-000000000000')
   }

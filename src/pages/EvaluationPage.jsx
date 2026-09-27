@@ -842,9 +842,10 @@ function PrintDropdown({ isAr, onSelect }) {
 }
 
 export default function EvaluationPage() {
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap, assignedEmployeeIds, isRestricted } = useAuth()
-  const assignedOnly = grantCap('assigned_employees')
-  const allDispatchers = grantCap('all_dispatchers')
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap, assignedEmployeeIds, isRestricted, jobsFor } = useAuth()
+  const assignedOnly = grantCap('assigned_evaluate')
+  const evalJobs = jobsFor('evaluate')          // مسميات وظيفية يقيّمها على مستوى المملكة (مرحّلون/خدمة عملاء)
+  const allDispatchers = evalJobs.length > 0
   // مسمى "مشرف المرحّلين": يقيّم من مسماهم الوظيفي مرحّل فقط، بدون تقييم المحطات أو المشرفين
   const dispatchersOnly = grantCap('evaluation_dispatchers_only')
   const { i18n }   = useTranslation()
@@ -935,7 +936,7 @@ export default function EvaluationPage() {
         } else {
           setEmpListErr('')
           // مسمى بموظفين محددين بالاسم: يقيّم هؤلاء فقط
-          if (assignedOnly || allDispatchers) list = list.filter(e => (assignedOnly && assignedEmployeeIds.includes(e.id)) || (allDispatchers && e.job_title === 'dispatcher'))
+          if (assignedOnly || allDispatchers) list = list.filter(e => (assignedOnly && assignedEmployeeIds.includes(e.id)) || evalJobs.includes(e.job_title))
         }
         setEmployees(list)
       }))
@@ -1019,7 +1020,7 @@ export default function EvaluationPage() {
 
     await Promise.all(promises)
     setLoading(false)
-  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor, dispatchersOnly, assignedOnly, allDispatchers, assignedEmployeeIds])
+  }, [selMonth, selYear, profile?.id, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, canEvalEmp, canEvalStn, canEvalSup, isShiftSupervisor, dispatchersOnly, assignedOnly, allDispatchers, evalJobs.join(','), assignedEmployeeIds])
 
   useEffect(() => { load() }, [load])
 

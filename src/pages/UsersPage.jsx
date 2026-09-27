@@ -1586,7 +1586,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             )}
 
 
-            {isGeneralAdmin && selectedTitle?.permissions?.assigned_employees && (
+            {isGeneralAdmin && (selectedTitle?.permissions?.assigned_evaluate || selectedTitle?.permissions?.assigned_leaves) && (
               user?.id ? (
                 <AssignedEmployeesPicker userId={user.id} isAr={isAr} />
               ) : (
@@ -2497,9 +2497,14 @@ function UsersPageFull() {
 
 
 // دليل المرحّلين (للحساب المقيّد): كل من مسماه الوظيفي مرحّل بالمملكة — الاسم والمحطة ورقم الجوال فقط، للعرض بدون أي تعديل
+const DIR_JOB_LABEL = { dispatcher: 'مرحّل', customer_service: 'خدمة عملاء', station_supervisor: 'مشرف محطة', shift_supervisor: 'مشرف وردية', area_supervisor: 'مشرف منطقة' }
+
 function DispatchersDirectory() {
-  const { allowCap } = useAuth()
+  const { allowCap, jobsFor } = useAuth()
   const canPhones = allowCap('users_view_phones')
+  // المسميات الوظيفية اللي له عليها اطلاع أو تقييم أو موافقة إجازات (بحسب المجموعات الوظيفية)
+  const jobs = [...new Set([...jobsFor('view'), ...jobsFor('evaluate'), ...jobsFor('leaves')])]
+  const viewJobs = jobsFor('view')
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const [rows, setRows] = useState([])
@@ -2510,9 +2515,10 @@ function DispatchersDirectory() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      if (!jobs.length) { setRows([]); setLoading(false); return }
       const { data } = await supabase.from('users')
-        .select('id, full_name_ar, is_active, station:station_id(name_ar, name_en)')
-        .eq('job_title', 'dispatcher').order('full_name_ar')
+        .select('id, full_name_ar, job_title, is_active, station:station_id(name_ar, name_en)')
+        .in('job_title', jobs).order('full_name_ar')
       if (cancelled) return
       const list = data ?? []
       setRows(list)
@@ -2521,8 +2527,9 @@ function DispatchersDirectory() {
       if (!canPhones) { setPhones(Object.fromEntries(list.map(u => [u.id, null]))); return }
       await Promise.all(list.map(async u => {
         try {
-          // دالة مخصصة: ترجع الجوال للمرحّلين فقط ولمن عنده صلاحية "كل المرحّلين" — بدون بيانات حساسة أخرى
-          const { data: d } = await supabase.rpc('get_dispatcher_phone', { p_id: u.id })
+          if (!viewJobs.includes(u.job_title)) { ph[u.id] = null; return }
+          // دالة مخصصة: ترجع الجوال لمن مجموعته الوظيفية له عليها صلاحية الاطلاع — بدون بيانات حساسة أخرى
+          const { data: d } = await supabase.rpc('get_staff_phone', { p_id: u.id })
           ph[u.id] = d ?? null
         } catch { ph[u.id] = null }
       }))
@@ -2541,8 +2548,8 @@ function DispatchersDirectory() {
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="mb-4">
-        <h1 className="text-xl font-bold text-gray-800">{isAr ? 'المرحّلون' : 'Dispatchers'}</h1>
-        <p className="text-xs text-gray-400 mt-0.5">{isAr ? `${rows.length} مرحّل في كل المحطات — ${rows.filter(u => u.is_active !== false).length} نشط` : `${rows.length} dispatchers across all stations — ${rows.filter(u => u.is_active !== false).length} active`}</p>
+        <h1 className="text-xl font-bold text-gray-800">{isAr ? 'الموظفون' : 'Staff'}</h1>
+        <p className="text-xs text-gray-400 mt-0.5">{isAr ? `${rows.length} موظف ضمن نطاقك — ${rows.filter(u => u.is_active !== false).length} نشط` : `${rows.length} staff in your scope — ${rows.filter(u => u.is_active !== false).length} active`}</p>
       </div>
       <input value={q} onChange={e => setQ(e.target.value)}
         placeholder={isAr ? 'بحث بالاسم أو المحطة أو رقم الجوال…' : 'Search by name, station or phone…'}
@@ -2552,6 +2559,7 @@ function DispatchersDirectory() {
           <thead>
             <tr className="bg-gray-50 text-gray-500 text-xs">
               <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'الاسم' : 'Name'}</th>
+              <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'الوظيفة' : 'Job'}</th>
               <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'المحطة' : 'Station'}</th>
               <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'الحالة' : 'Status'}</th>
               {canPhones && <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'رقم الجوال' : 'Phone'}</th>}
@@ -2559,12 +2567,13 @@ function DispatchersDirectory() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">…</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">…</td></tr>
             ) : shown.length === 0 ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{isAr ? 'لا يوجد مرحّلون' : 'No dispatchers'}</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">{isAr ? 'لا يوجد موظفون ضمن نطاقك' : 'No staff in your scope'}</td></tr>
             ) : shown.map(u => (
               <tr key={u.id} className="border-t border-gray-100">
                 <td className="px-4 py-2.5 font-semibold text-gray-800">{u.full_name_ar}</td>
+                <td className="px-4 py-2.5 text-gray-600">{DIR_JOB_LABEL[u.job_title] ?? u.job_title ?? '—'}</td>
                 <td className="px-4 py-2.5 text-gray-600">{isAr ? u.station?.name_ar : u.station?.name_en}</td>
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ${u.is_active === false ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>

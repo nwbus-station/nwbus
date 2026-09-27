@@ -403,7 +403,7 @@ function NavTab({ item, isAr }) {
 
 export default function AppLayout() {
   const { i18n } = useTranslation()
-  const { profile, signOut, customTitle, allowCap, isRestricted, canSeeModule } = useAuth()
+  const { profile, signOut, customTitle, allowCap, grantCap, isRestricted, canSeeModule } = useAuth()
   const navigate = useNavigate()
   const isAr = i18n.language === 'ar'
   const { settings } = useAppSettings()
@@ -476,7 +476,7 @@ export default function AppLayout() {
       if (n.module) { if (!canSeeModule(n.module)) return false }
       else if (n.roles && !n.roles.includes(profile?.role)) return false
       if (n.requireFlag && !profile?.[n.requireFlag]) return false
-      if (n.capKey && (!allowCap(n.capKey) || isRestricted)) return false
+      if (n.capKey && (!allowCap(n.capKey) || (isRestricted && !(n.capKey === 'stations_page' && grantCap('stations_manage_assigned'))))) return false
       if (n.allowKey && !allowCap(n.allowKey)) return false
       return true
     })

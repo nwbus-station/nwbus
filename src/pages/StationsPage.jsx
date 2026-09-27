@@ -325,7 +325,10 @@ function StationModal({ station, onClose, onSaved }) {
 export default function StationsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const { isGeneralAdmin, allowCap, isRestricted } = useAuth()
+  const { isGeneralAdmin, allowCap, isRestricted, grantCap, supervisedStationIds } = useAuth()
+  // مشرف المرحلين (حساب مقيّد) بصلاحية "تعديل محطاته المخصصة": يشوف ويعدّل محطاته فقط بدون إضافة أو دمج
+  const restrictedManager = isRestricted && grantCap('stations_manage_assigned')
+  const canEditStation = s => isGeneralAdmin || (restrictedManager && (supervisedStationIds ?? []).includes(s.id))
   const [stations, setStations] = useState(() => getCached('stations_all') ?? [])
   const [loading, setLoading]   = useState(() => !getCached('stations_all'))
   const [modal, setModal]       = useState(null)
@@ -342,7 +345,7 @@ export default function StationsPage() {
 
   useEffect(() => { fetch() }, [fetch])
 
-  const filtered = stations.filter(s =>
+  const filtered = stations.filter(s => (!isRestricted || (supervisedStationIds ?? []).includes(s.id))).filter(s =>
     (s.name_ar || '').includes(search) || (s.name_en || '').toLowerCase().includes(search.toLowerCase())
   )
 
@@ -350,7 +353,7 @@ export default function StationsPage() {
   const transitCount = stations.filter(s => s.type === 'transit').length
   const activeCount  = stations.filter(s => s.is_active).length
 
-  if (!allowCap('stations_page') || isRestricted) {
+  if (!allowCap('stations_page') || (isRestricted && !restrictedManager)) {
     return <div className="flex items-center justify-center text-sm text-gray-400" style={{ minHeight: 'calc(100vh - 58px)' }}>{isAr ? 'غير مصرح' : 'Access denied'}</div>
   }
 
@@ -418,7 +421,7 @@ export default function StationsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    {isGeneralAdmin && (
+                    {canEditStation(s) && (
                     <button onClick={() => setModal(s)}
                       className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1 hover:bg-nwbus-primary hover:text-white transition-colors">
                       {isAr ? 'تعديل' : 'Edit'}

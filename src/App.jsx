@@ -44,8 +44,8 @@ import MagazinePage     from './pages/MagazinePage'
 import AppLayout        from './components/layout/AppLayout'
 import LoadingSpinner   from './components/shared/LoadingSpinner'
 
-function RequireAuth({ children, allowedRoles, module, adminOnly }) {
-  const { session, profile, loading, signOut, isRestricted, customTitle, canSeeModule } = useAuth()
+function RequireAuth({ children, allowedRoles, module, adminOnly, restrictedCap }) {
+  const { session, profile, loading, signOut, isRestricted, customTitle, canSeeModule, grantCap } = useAuth()
   if (loading) return <LoadingSpinner />
 
   // Not authenticated
@@ -74,7 +74,7 @@ function RequireAuth({ children, allowedRoles, module, adminOnly }) {
     return <Navigate to="/" replace />
   }
   // حساب مقيّد (أساسه أدمن): صفحات الأدمن فقط ممنوعة عليه حتى لو كتب رابطها
-  if (isRestricted && ((allowedRoles && !allowedRoles.includes('station_admin')) || adminOnly)) {
+  if (isRestricted && ((allowedRoles && !allowedRoles.includes('station_admin')) || (adminOnly && !(restrictedCap && grantCap(restrictedCap))))) {
     return <Navigate to="/" replace />
   }
   // القسم لازم يكون مفتوحاً للحساب (قسم الحساب + سقف دوره/مسماه) — نفس مصدر القائمة الجانبية
@@ -147,7 +147,7 @@ export default function App() {
           </RequireAuth>
         } />
         <Route path="stations" element={
-          <RequireAuth module="stations" adminOnly>
+          <RequireAuth module="stations" adminOnly restrictedCap="stations_manage_assigned">
             <StationsPage />
           </RequireAuth>
         } />
