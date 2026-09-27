@@ -210,11 +210,28 @@ function CityFormModal({ city, isNew, isAr, busy, error, onCancel, onSave }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const inputCls = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: '0.82rem', outline: 'none', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit', color: '#0f172a' }
   const lbl = { display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }
+
+  // ربط محطات بهذي المدينة من القاعدة (stations.survey_city) — الموظف بهذي المحطة يفتح
+  // استبيانها تلقائياً بدون ما يُحدَّد يدوياً من حساب كل موظف
+  const [allStations, setAllStations] = useState(null)   // null = جارٍ التحميل
+  const [selected, setSelected] = useState(new Set())
+  const [stationSearch, setStationSearch] = useState('')
+  useEffect(() => {
+    supabase.from('stations').select('id, name_ar, name_en, survey_city, is_active').order('name_ar')
+      .then(({ data }) => {
+        setAllStations(data ?? [])
+        setSelected(new Set((data ?? []).filter(s => s.survey_city === city.city).map(s => s.id)))
+      })
+  }, [])
+  const toggleStation = id => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const q = stationSearch.trim().toLowerCase()
+  const shownStations = (allStations ?? []).filter(s => !q || (s.name_ar || '').toLowerCase().includes(q) || (s.name_en || '').toLowerCase().includes(q))
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} dir={isAr ? 'rtl' : 'ltr'}
       onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
-      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 420, boxShadow: '0 12px 40px rgba(0,0,0,.3)', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
+      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,.3)' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
           <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>{isNew ? (isAr ? 'إضافة مدينة' : 'Add city') : (isAr ? 'تعديل المدينة' : 'Edit city')}</h3>
         </div>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -240,9 +257,36 @@ function CityFormModal({ city, isNew, isAr, busy, error, onCancel, onSave }) {
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: '#334155', cursor: 'pointer' }}>
             <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} />{isAr ? 'مدينة نشطة' : 'Active'}
           </label>
+
+          {/* ربط المحطات — من القاعدة، بدون تحديد يدوي بحساب كل موظف */}
+          <div>
+            <label style={lbl}>{isAr ? `المحطات المرتبطة (${selected.size} محددة)` : `Linked stations (${selected.size})`}</label>
+            <p style={{ margin: '0 0 6px', fontSize: '0.7rem', color: 'var(--text-3)' }}>
+              {isAr ? 'موظف أي محطة محددة هنا يفتح استبيان هذي المدينة تلقائياً.' : 'Employees of a checked station open this city\'s survey automatically.'}
+            </p>
+            <input style={{ ...inputCls, marginBottom: 6 }} value={stationSearch} onChange={e => setStationSearch(e.target.value)}
+              placeholder={isAr ? 'بحث عن محطة…' : 'Search stations…'} />
+            <div style={{ border: '1.5px solid var(--border)', borderRadius: 8, maxHeight: 180, overflowY: 'auto' }}>
+              {allStations === null ? (
+                <p style={{ margin: 0, padding: 10, fontSize: '0.76rem', color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</p>
+              ) : shownStations.length === 0 ? (
+                <p style={{ margin: 0, padding: 10, fontSize: '0.76rem', color: 'var(--text-3)' }}>{isAr ? 'لا نتائج' : 'No results'}</p>
+              ) : shownStations.map(s => {
+                const otherCity = s.survey_city && s.survey_city !== city.city ? s.survey_city : null
+                return (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: '0.78rem', color: '#334155', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                    <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleStation(s.id)} />
+                    <span style={{ flex: 1 }}>{isAr ? (s.name_ar || s.name_en) : (s.name_en || s.name_ar)}{s.is_active === false ? (isAr ? ' (معطّلة)' : ' (inactive)') : ''}</span>
+                    {otherCity && <span style={{ fontSize: '0.65rem', color: '#b45309' }}>{isAr ? `مرتبطة بـ ${otherCity}` : `linked to ${otherCity}`}</span>}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
           {error && <p style={{ margin: 0, fontSize: '0.76rem', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '7px 10px' }}>{error}</p>}
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <button disabled={busy} onClick={() => onSave(form)} style={{ flex: 1, background: '#1C2B36', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 0', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy ? '…' : (isAr ? 'حفظ' : 'Save')}</button>
+            <button disabled={busy} onClick={() => onSave(form, [...selected])} style={{ flex: 1, background: '#1C2B36', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 0', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy ? '…' : (isAr ? 'حفظ' : 'Save')}</button>
             <button onClick={onCancel} style={{ padding: '9px 16px', borderRadius: 9, border: '1.5px solid var(--border)', background: '#fff', color: '#334155', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
           </div>
         </div>
@@ -300,7 +344,7 @@ export default function SurveyPage() {
   const handleClose = useCallback(() => setActiveCity(null), [])
   const activeCityData = cities.find(s => s.city === activeCity) ?? null
 
-  async function saveCity(payload, isNew) {
+  async function saveCity(payload, isNew, stationIds) {
     setManageErr('')
     const row = {
       city_key: payload.city.trim(),
@@ -315,8 +359,20 @@ export default function SurveyPage() {
     const { error } = isNew
       ? await supabase.from('survey_cities').insert(row)
       : await supabase.from('survey_cities').update(row).eq('city_key', row.city_key)
+    if (error) { setBusyKey(null); setManageErr(error.message); return false }
+
+    // ربط/فك ربط المحطات بهذي المدينة من القاعدة (stations.survey_city) — بدل ما يُحدَّد يدوياً لكل موظف
+    const ids = stationIds ?? []
+    const unlink = ids.length
+      ? supabase.from('stations').update({ survey_city: null }).eq('survey_city', row.city_key).not('id', 'in', `(${ids.join(',')})`)
+      : supabase.from('stations').update({ survey_city: null }).eq('survey_city', row.city_key)
+    const results = await Promise.all([
+      unlink,
+      ids.length ? supabase.from('stations').update({ survey_city: row.city_key }).in('id', ids) : Promise.resolve({ error: null }),
+    ])
     setBusyKey(null)
-    if (error) { setManageErr(error.message); return false }
+    const linkErr = results.find(r => r.error)?.error
+    if (linkErr) { setManageErr(linkErr.message); return false }
     reloadCities()
     return true
   }
@@ -343,7 +399,7 @@ export default function SurveyPage() {
       {editingCity && (
         <CityFormModal city={editingCity} isNew={!editingCity.city} isAr={isAr} busy={busyKey != null}
           onCancel={() => { setEditingCity(null); setManageErr('') }}
-          onSave={async payload => { if (await saveCity(payload, !editingCity.city)) setEditingCity(null) }}
+          onSave={async (payload, stationIds) => { if (await saveCity(payload, !editingCity.city, stationIds)) setEditingCity(null) }}
           error={manageErr} />
       )}
 
