@@ -181,7 +181,7 @@ export function AuthProvider({ children }) {
           setAllowedStationIds(null)
           return
         }
-        setProfile(data)
+        setProfile(data.role === 'area_supervisor' ? { ...data, role: 'station_admin', display_role: 'area_supervisor' } : data)
       })
       .subscribe()
     return () => supabase.removeChannel(channel)
@@ -221,7 +221,9 @@ export function AuthProvider({ children }) {
   // مصفوفة صلاحيات المسمى المخصص: grantCap تمنح قدرة إضافية، allowCap تقيّد قدرة الدور الأساسي
   const titlePerms = customTitle?.permissions ?? rolePerms ?? null
   // سقف الأقسام للدور الأساسي (الحساب اللي عليه مسمى مخصص ما ينطبق عليه)
-  const roleAllowsModule = mod => customTitle ? true : roleModuleAllowed(mod, profile?.display_role ?? profile?.role, rolePerms)
+  const roleAllowsModule = mod => roleModuleAllowed(mod, profile?.display_role ?? profile?.role, rolePerms, !!customTitle)
+  // المصدر الوحيد لظهور أي قسم: قسم الحساب نفسه + سقف دوره/مسماه
+  const canSeeModule = mod => (!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod)
   const grantCap = key => !!titlePerms?.[key]
   const allowCap = key => !titlePerms || titlePerms[key] !== false
   // حساب مقيّد (مثل مشرف المرحلين): أساسه أدمن في قاعدة البيانات لكن التطبيق يعامله كمشرف — لا يُعامل كأدمن أبداً
@@ -254,6 +256,7 @@ export function AuthProvider({ children }) {
       grantCap,
       allowCap,
       roleAllowsModule,
+      canSeeModule,
       actsAsSupervisor,
       evaluatesOwnEmployees,
       supervisedStationIds,

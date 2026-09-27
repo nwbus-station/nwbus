@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
-import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed } from '../utils/constants'
+import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, MODULE_LOCKED_FOR_ROLES } from '../utils/constants'
 import { toLatinDigits, escapeHtml } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -489,9 +489,9 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   const setModule = (m, v) => {
     setSaved(false)
     setForm(f => {
-      const cur = MODULES.map(x => x.value).filter(x => roleModuleAllowed(x, f.role, f.permissions))
-      const next = v ? [...new Set([...cur, m])] : cur.filter(x => x !== m)
-      return { ...f, permissions: { ...f.permissions, modules: next } }
+      const acc = Object.fromEntries(MODULES.map(x => [x.value, roleModuleAllowed(x.value, f.role, f.permissions)]))
+      acc[m] = v
+      return { ...f, permissions: { ...f.permissions, module_access: acc } }
     })
   }
   const capList = isRole ? roleCapabilities() : TITLE_CAPABILITIES
@@ -515,7 +515,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
     if (isRole) {
       setBusy(true); setErr('')
       const permissions = Object.fromEntries(capList.map(c => [c.key, permValue(c)]))
-      permissions.modules = MODULES.map(x => x.value).filter(x => roleModuleAllowed(x, form.role, form.permissions))
+      permissions.module_access = Object.fromEntries(MODULES.map(x => [x.value, roleModuleAllowed(x.value, form.role, form.permissions)]))
       const { error } = await supabase.from('role_permissions').upsert({ role: form.role, permissions, updated_at: new Date().toISOString() })
       setBusy(false)
       if (error) { setErr(error.message); return }
@@ -674,16 +674,21 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                         </div>
                         <div className="divide-y divide-gray-100">
                           {MODULES.map(m => {
-                            const possible = moduleDefaultForRole(m.value, form.role)
+                            const locked = MODULE_LOCKED_FOR_ROLES.includes(m.value) || m.value === 'magazine'
+                            const on = modEnabled(m.value)
+                            const beyondDefault = !locked && on && !moduleDefaultForRole(m.value, form.role)
                             return (
-                              <div key={m.value} className={`flex items-center justify-between gap-4 px-4 py-3 ${possible ? '' : 'opacity-50'}`}>
+                              <div key={m.value} className={`flex items-center justify-between gap-4 px-4 py-3 ${locked ? 'opacity-50' : ''}`}>
                                 <div className="min-w-0">
                                   <p className="text-sm text-gray-800">{isAr ? m.ar : m.en}</p>
-                                  {!possible && <p className="text-[11px] text-gray-400 mt-0.5">{isAr ? 'غير متاح لهذا الدور في النظام' : 'Not available to this role'}</p>}
+                                  {locked && <p className="text-[11px] text-gray-400 mt-0.5">{m.value === 'magazine'
+                                    ? (isAr ? 'النشر يُمنح عبر مسمى مخصص (مثل التسويق) أو للأدمن' : 'Granted via a custom title or admin')
+                                    : (isAr ? 'بياناته للأدمن فقط في قاعدة البيانات' : 'Data is admin-only in the database')}</p>}
+                                  {beyondDefault && <p className="text-[11px] text-amber-600 mt-0.5">{isAr ? 'القسم يفتح، لكن البيانات تظل محدودة بصلاحيات قاعدة البيانات لهذا الدور (قد تظهر فاضية أو لنطاقه فقط)' : 'Section opens; data stays limited by database permissions for this role'}</p>}
                                 </div>
-                                {possible
-                                  ? <PermSwitch checked={modEnabled(m.value)} onChange={v => setModule(m.value, v)} />
-                                  : <span className="text-[11px] text-gray-400">{isAr ? 'مقفول' : 'Locked'}</span>}
+                                {locked
+                                  ? <span className="text-[11px] text-gray-400">{isAr ? 'مقفول' : 'Locked'}</span>
+                                  : <PermSwitch checked={on} onChange={v => setModule(m.value, v)} />}
                               </div>
                             )
                           })}

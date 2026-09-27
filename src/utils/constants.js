@@ -113,9 +113,22 @@ const ADMIN_LIKE_ROLES = ['general_admin', 'stations_executive_director', 'assis
 // hasTitle: الحساب عليه مسمى مخصص — "نشر Event" يُمنح فقط عبر مسمى (مثل مسمى قسم التسويق) أو للأدمن
 export const moduleDefaultForRole = (mod, role, hasTitle = false) =>
   ADMIN_LIKE_ROLES.includes(role) || (mod === 'magazine' && hasTitle) || !(mod in MODULE_ROLE_LIMITS) || MODULE_ROLE_LIMITS[mod].includes(role)
-// السقف الفعلي: الافتراضي + اللي عدّله الأدمن من "الأدوار الأساسية" (permissions.modules)
-export const roleModuleAllowed = (mod, role, rolePerms, hasTitle = false) =>
-  moduleDefaultForRole(mod, role, hasTitle) && (!Array.isArray(rolePerms?.modules) || rolePerms.modules.includes(mod))
+// أقسام ما تنفتح للأدوار الأساسية أبداً: بياناتها في القاعدة للأدمن فقط، ففتحها يعطي صفحة فاضية/مرفوضة
+export const MODULE_LOCKED_FOR_ROLES = ['settings', 'customer_ratings']
+// أقسام كانت موجودة قبل ما نحفظ الإعداد كخريطة (صيغة قديمة: مصفوفة permissions.modules)
+const LEGACY_MODULES = ['transportation', 'lost_found', 'sales', 'reports', 'leaves', 'survey', 'evaluation', 'users', 'map', 'customer_ratings', 'live_board', 'magazine']
+
+// هل القسم مفتوح لهذا الدور؟ الأولوية: 1) قفل ثابت 2) إعداد الأدمن الصريح (permissions.module_access) 3) الصيغة القديمة 4) الافتراضي
+export function roleModuleAllowed(mod, role, rolePerms, hasTitle = false) {
+  if (ADMIN_LIKE_ROLES.includes(role)) return true
+  if (MODULE_LOCKED_FOR_ROLES.includes(mod)) return false
+  if (mod === 'magazine') return hasTitle           // النشر عبر مسمى مخصص فقط (RLS يعتمد على قسم الحساب)
+  if (hasTitle) return moduleDefaultForRole(mod, role, true)   // الحساب اللي عليه مسمى: صلاحياته من مسماه
+  const acc = rolePerms?.module_access
+  if (acc && typeof acc === 'object' && typeof acc[mod] === 'boolean') return acc[mod]
+  if (Array.isArray(rolePerms?.modules) && LEGACY_MODULES.includes(mod)) return rolePerms.modules.includes(mod)
+  return moduleDefaultForRole(mod, role, false)
+}
 
 // أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف
 export const ADMIN_ROLE_VALUES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']

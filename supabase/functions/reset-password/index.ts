@@ -35,6 +35,10 @@ serve(async (req) => {
     const callerIsStationAdmin = profile?.role === 'station_admin'
     if (!callerIsAdmin && !callerIsStationAdmin) return json({ error: 'Forbidden' }, 403)
 
+    // حساب مقيّد (مسمى مخصص بوضع مقيّد): ما يُعامل كأدمن أبداً — منع من الخادم
+    const { data: restricted } = await caller.rpc('is_restricted')
+    if (restricted === true) return json({ error: 'Forbidden' }, 403)
+
     const { auth_id, new_password } = await req.json()
     if (!auth_id || !new_password || new_password.length < 6) {
       return json({ error: 'Invalid parameters' }, 400)

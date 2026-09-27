@@ -34,6 +34,9 @@ serve(async (req) => {
       return json({ error: 'Forbidden' }, 403)
     }
 
+    const { data: restricted } = await caller.rpc('is_restricted')
+    if (restricted === true) return json({ error: 'Forbidden' }, 403)
+
     const { employee_id, redirect_to } = await req.json()
     if (!employee_id || !redirect_to) return json({ error: 'Invalid parameters' }, 400)
 

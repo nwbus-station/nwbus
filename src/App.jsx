@@ -44,8 +44,8 @@ import MagazinePage     from './pages/MagazinePage'
 import AppLayout        from './components/layout/AppLayout'
 import LoadingSpinner   from './components/shared/LoadingSpinner'
 
-function RequireAuth({ children, allowedRoles }) {
-  const { session, profile, loading, signOut, isRestricted, customTitle } = useAuth()
+function RequireAuth({ children, allowedRoles, module, adminOnly }) {
+  const { session, profile, loading, signOut, isRestricted, customTitle, canSeeModule } = useAuth()
   if (loading) return <LoadingSpinner />
 
   // Not authenticated
@@ -74,7 +74,11 @@ function RequireAuth({ children, allowedRoles }) {
     return <Navigate to="/" replace />
   }
   // حساب مقيّد (أساسه أدمن): صفحات الأدمن فقط ممنوعة عليه حتى لو كتب رابطها
-  if (isRestricted && allowedRoles && !allowedRoles.includes('station_admin')) {
+  if (isRestricted && ((allowedRoles && !allowedRoles.includes('station_admin')) || adminOnly)) {
+    return <Navigate to="/" replace />
+  }
+  // القسم لازم يكون مفتوحاً للحساب (قسم الحساب + سقف دوره/مسماه) — نفس مصدر القائمة الجانبية
+  if (module && !canSeeModule(module)) {
     return <Navigate to="/" replace />
   }
   return children
@@ -120,16 +124,16 @@ export default function App() {
         </RequireAuth>
       }>
         <Route index element={<DashboardPage />} />
-        <Route path="transportation" element={<TransportationPage />} />
-        <Route path="lost-found"     element={<LostFoundPage />} />
-        <Route path="sales"          element={<SalesPage />} />
+        <Route path="transportation" element={<RequireAuth module="transportation"><TransportationPage /></RequireAuth>} />
+        <Route path="lost-found"     element={<RequireAuth module="lost_found"><LostFoundPage /></RequireAuth>} />
+        <Route path="sales"          element={<RequireAuth module="sales"><SalesPage /></RequireAuth>} />
         <Route path="reports"        element={
-          <RequireAuth allowedRoles={[...ADMIN_ROLE_VALUES, 'station_admin', 'accountant']}>
+          <RequireAuth module="reports">
             <ReportsPage />
           </RequireAuth>
         } />
         <Route path="map" element={
-          <RequireAuth allowedRoles={[...ADMIN_ROLE_VALUES, 'station_admin']}>
+          <RequireAuth module="map">
             <MapErrorBoundary>
               <Suspense fallback={<LoadingSpinner />}>
                 <MapPage />
@@ -138,20 +142,20 @@ export default function App() {
           </RequireAuth>
         } />
         <Route path="users"    element={
-          <RequireAuth allowedRoles={[...ADMIN_ROLE_VALUES, 'station_admin']}>
+          <RequireAuth module="users">
             <UsersPage />
           </RequireAuth>
         } />
         <Route path="stations" element={
-          <RequireAuth allowedRoles={ADMIN_ROLE_VALUES}>
+          <RequireAuth module="stations" adminOnly>
             <StationsPage />
           </RequireAuth>
         } />
-        <Route path="leaves"     element={<LeavePage />} />
+        <Route path="leaves"     element={<RequireAuth module="leaves"><LeavePage /></RequireAuth>} />
         <Route path="evaluation" element={<EvaluationPage />} />
         <Route path="my-rating" element={<EmployeeRatingPage />} />
         <Route path="customer-ratings" element={
-          <RequireAuth allowedRoles={ADMIN_ROLE_VALUES}>
+          <RequireAuth module="customer_ratings" adminOnly>
             <CustomerRatingsAdminPage />
           </RequireAuth>
         } />
