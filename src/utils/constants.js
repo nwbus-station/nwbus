@@ -79,6 +79,8 @@ export const TITLE_CAPABILITIES = [
   // بيانات الموظفين
   { group: 'بيانات الموظفين', key: 'users_view_phones', db: true, kind: 'allow', ar: 'يشوف أرقام جوالات الموظفين المتاحين له', en: 'See employee phone numbers' },
   { group: 'بيانات الموظفين', key: 'users_export', kind: 'allow', ar: 'تصدير وطباعة قائمة الموظفين', en: 'Export / print staff roster' },
+  // الخريطة
+  { group: 'الخريطة', key: 'map_manage', db: true, kind: 'grant', roleOk: true, ar: 'إدارة الخريطة: تعديل مواقع المحطات وإضافة محطات ونقاط توقف بمواقعها', en: 'Manage map: relocate & add stations/stops' },
   // التقييم الوظيفي
   { group: 'التقييم الوظيفي', key: 'evaluation_dispatchers_only', db: true, kind: 'grant', ar: 'يقيّم المرحّلين فقط (من مسماهم الوظيفي مرحّل)', en: 'Evaluate dispatchers only' },
   { group: 'التقييم الوظيفي', key: 'evaluation_employees_tab', kind: 'allow', ar: 'تبويب تقييم الموظفين', en: 'Employee evaluation tab' },
@@ -120,7 +122,7 @@ export const TITLE_CAPABILITIES = [
 export const EDITABLE_ROLES = ['station_employee', 'accountant', 'station_admin', 'shift_supervisor', 'area_supervisor']
 // البنود اللي تنطبق على الأدوار الأساسية: قيود فقط (allow) وما هي للأدمن وحده
 export const ROLE_CAPABILITY_EXCLUDE = ['customer_ratings_view', 'users_view_phones', 'transport_upload_schedule']
-export const roleCapabilities = () => TITLE_CAPABILITIES.filter(c => c.kind === 'allow' && !c.adminOnly && !ROLE_CAPABILITY_EXCLUDE.includes(c.key))
+export const roleCapabilities = () => TITLE_CAPABILITIES.filter(c => (c.kind === 'allow' || c.roleOk) && !c.adminOnly && !ROLE_CAPABILITY_EXCLUDE.includes(c.key))
 
 // الأقسام اللي ما هي متاحة لكل الأدوار أصلاً (بحسب تصميم التطبيق) — الباقي متاح للكل
 const MODULE_ROLE_LIMITS = {
@@ -141,7 +143,7 @@ export const moduleDefaultForRole = (mod, role, hasTitle = false) =>
 // كل مجموعة صلاحيات تتبع قسماً — تُعرض بإدارة الصلاحيات تحت بطاقة قسمها (وبدون قسم: عامة)
 export const GROUP_MODULE = {
   'التقارير': 'reports', 'الإيرادات': 'sales', 'الموجودات': 'lost_found', 'الترحيل': 'transportation',
-  'الإجازات': 'leaves', 'التقييم الوظيفي': 'evaluation', 'بيانات الموظفين': 'users', 'تقييمات العملاء': 'customer_ratings',
+  'الإجازات': 'leaves', 'التقييم الوظيفي': 'evaluation', 'بيانات الموظفين': 'users', 'تقييمات العملاء': 'customer_ratings', 'الخريطة': 'map',
 }
 
 // أقسام ما تنفتح للأدوار الأساسية أبداً: بياناتها في القاعدة للأدمن فقط، ففتحها يعطي صفحة فاضية/مرفوضة
