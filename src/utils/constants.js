@@ -106,6 +106,7 @@ const MODULE_ROLE_LIMITS = {
   customer_ratings: [],
   stations:         [],
   settings:         [],
+  magazine:         [],   // إدارة Event: للأدمن فقط حالياً (لاحقاً تُفتح لقسم التسويق)
 }
 const ADMIN_LIKE_ROLES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
 // هل القسم متاح لهذا الدور أصلاً؟ (السقف الافتراضي)
