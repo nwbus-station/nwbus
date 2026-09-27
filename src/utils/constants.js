@@ -104,6 +104,8 @@ const MODULE_ROLE_LIMITS = {
   users:            ['station_admin', 'area_supervisor'],
   map:              ['station_admin', 'area_supervisor'],
   customer_ratings: [],
+  stations:         [],
+  settings:         [],
 }
 const ADMIN_LIKE_ROLES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
 // هل القسم متاح لهذا الدور أصلاً؟ (السقف الافتراضي)
@@ -118,17 +120,20 @@ export const ADMIN_ROLE_VALUES = ['general_admin', 'stations_executive_director'
 
 // Modules (sections of the system)
 export const MODULES = [
+  { value: 'home',           ar: 'الرئيسية',         en: 'Dashboard' },
   { value: 'transportation', ar: 'الترحيل',          en: 'Transportation' },
-  { value: 'sales',          ar: 'المبيعات',         en: 'Sales' },
   { value: 'lost_found',     ar: 'الموجودات',        en: 'Lost & Found' },
+  { value: 'sales',          ar: 'الإيرادات',        en: 'Sales' },
   { value: 'reports',        ar: 'التقارير',         en: 'Reports' },
   { value: 'leaves',         ar: 'الإجازات',         en: 'Leaves' },
-  { value: 'live_board',     ar: 'شاشة العرض',       en: 'Live Board' },
   { value: 'survey',         ar: 'تقييم الركاب',     en: 'Passenger Survey' },
   { value: 'evaluation',     ar: 'التقييم الوظيفي',  en: 'Staff Evaluation' },
   { value: 'users',          ar: 'الموظفون',         en: 'Staff' },
+  { value: 'stations',       ar: 'المحطات',          en: 'Stations' },
+  { value: 'settings',       ar: 'الإعدادات',        en: 'Settings' },
   { value: 'map',            ar: 'الخريطة',          en: 'Map' },
-  { value: 'customer_ratings', ar: 'تقييم العملاء', en: 'Customer Ratings' },
+  { value: 'customer_ratings', ar: 'تقييمات العملاء', en: 'Customer Ratings' },
+  { value: 'live_board',     ar: 'شاشة العرض',       en: 'Live Board' },
   { value: 'magazine',       ar: 'إدارة Event',      en: 'Event Editor' },
 ]
 

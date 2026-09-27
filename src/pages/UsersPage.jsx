@@ -2498,8 +2498,8 @@ function DispatchersDirectory() {
     let cancelled = false
     ;(async () => {
       const { data } = await supabase.from('users')
-        .select('id, full_name_ar, station:station_id(name_ar, name_en)')
-        .eq('job_title', 'dispatcher').eq('is_active', true).order('full_name_ar')
+        .select('id, full_name_ar, is_active, station:station_id(name_ar, name_en)')
+        .eq('job_title', 'dispatcher').order('full_name_ar')
       if (cancelled) return
       const list = data ?? []
       setRows(list)
@@ -2529,7 +2529,7 @@ function DispatchersDirectory() {
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="mb-4">
         <h1 className="text-xl font-bold text-gray-800">{isAr ? 'المرحّلون' : 'Dispatchers'}</h1>
-        <p className="text-xs text-gray-400 mt-0.5">{isAr ? `${rows.length} مرحّل في كل المحطات` : `${rows.length} dispatchers across all stations`}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{isAr ? `${rows.length} مرحّل في كل المحطات — ${rows.filter(u => u.is_active !== false).length} نشط` : `${rows.length} dispatchers across all stations — ${rows.filter(u => u.is_active !== false).length} active`}</p>
       </div>
       <input value={q} onChange={e => setQ(e.target.value)}
         placeholder={isAr ? 'بحث بالاسم أو المحطة أو رقم الجوال…' : 'Search by name, station or phone…'}
@@ -2540,18 +2540,25 @@ function DispatchersDirectory() {
             <tr className="bg-gray-50 text-gray-500 text-xs">
               <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'الاسم' : 'Name'}</th>
               <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'المحطة' : 'Station'}</th>
+              <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'الحالة' : 'Status'}</th>
               {canPhones && <th className="px-4 py-2.5 text-start font-semibold">{isAr ? 'رقم الجوال' : 'Phone'}</th>}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-400">…</td></tr>
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">…</td></tr>
             ) : shown.length === 0 ? (
-              <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-400">{isAr ? 'لا يوجد مرحّلون' : 'No dispatchers'}</td></tr>
+              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{isAr ? 'لا يوجد مرحّلون' : 'No dispatchers'}</td></tr>
             ) : shown.map(u => (
               <tr key={u.id} className="border-t border-gray-100">
                 <td className="px-4 py-2.5 font-semibold text-gray-800">{u.full_name_ar}</td>
                 <td className="px-4 py-2.5 text-gray-600">{isAr ? u.station?.name_ar : u.station?.name_en}</td>
+                <td className="px-4 py-2.5">
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ${u.is_active === false ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${u.is_active === false ? 'bg-red-500' : 'bg-green-500'}`} />
+                    {u.is_active === false ? (isAr ? 'معطّل' : 'Disabled') : (isAr ? 'نشط' : 'Active')}
+                  </span>
+                </td>
                 {canPhones && <td className="px-4 py-2.5 font-mono text-gray-700" dir="ltr">{phones[u.id] ?? (u.id in phones ? '—' : '…')}</td>}
               </tr>
             ))}
