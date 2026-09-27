@@ -495,6 +495,15 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
     })
   }
   const capList = isRole ? roleCapabilities() : TITLE_CAPABILITIES
+  // نسخ صلاحيات دور أو مسمى آخر (ما يمس اسم المسمى ولا نوع حسابه)
+  const copyFrom = v => {
+    if (!v) return
+    const [kind, id] = v.split(':')
+    const src = kind === 'role' ? rolePerms[id] : titles.find(t => t.id === id)?.permissions
+    if (!src) { setErr(isAr ? 'المصدر ما فيه إعدادات محفوظة' : 'Source has no saved settings'); return }
+    setSaved(false); setErr('')
+    setForm(f => ({ ...f, permissions: isRole ? { ...JSON.parse(JSON.stringify(src)) } : { ...JSON.parse(JSON.stringify(src)), restricted_mode: f.permissions.restricted_mode ?? false } }))
+  }
   const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary/40 focus:border-nwbus-primary focus:outline-none"
   const isAdminBase = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(form.base_role)
 
@@ -643,13 +652,23 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div>
                     <h3 className="text-sm font-bold text-gray-900">{isAr ? 'الصلاحيات' : 'Permissions'}</h3>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? `${onCount} مفعّلة من ${capList.length}` : `${onCount} of ${capList.length} enabled`}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? `${onCount} إجراء مفعّل من ${capList.length}` : `${onCount} of ${capList.length} actions enabled`}
+                      {isRole && ` — ${isAr ? `${MODULES.filter(m => modEnabled(m.value)).length} قسم مفعّل من ${MODULES.length}` : `${MODULES.filter(m => modEnabled(m.value)).length} of ${MODULES.length} sections`}`}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <input value={q} onChange={e => setQ(e.target.value)} placeholder={isAr ? 'بحث في الصلاحيات…' : 'Search permissions…'}
                       className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs w-48 focus:ring-2 focus:ring-nwbus-primary/40 focus:outline-none" />
+                    <select value="" onChange={e => { copyFrom(e.target.value); e.target.value = '' }}
+                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-gray-700 max-w-[150px]" title={isAr ? 'نسخ الصلاحيات من دور أو مسمى آخر' : 'Copy from'}>
+                      <option value="">{isAr ? 'نسخ من…' : 'Copy from…'}</option>
+                      {EDITABLE_ROLES.filter(r => !(isRole && form.role === r)).map(r => <option key={r} value={`role:${r}`}>{isAr ? USER_ROLES.find(x => x.value === r)?.ar : r}</option>)}
+                      {titles.filter(t => t.id !== form.id).map(t => <option key={t.id} value={`title:${t.id}`}>{t.name_ar}</option>)}
+                    </select>
+                    {isRole && <button type="button" onClick={() => { if (window.confirm(isAr ? 'استعادة الإعدادات الافتراضية لهذا الدور؟' : 'Restore defaults for this role?')) { setSaved(false); setForm(f => ({ ...f, permissions: {} })) } }}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">{isAr ? 'الافتراضي' : 'Defaults'}</button>}
                     <button type="button" onClick={() => setMany(capList, true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-green-700 hover:bg-green-50">{isAr ? 'تفعيل الكل' : 'Enable all'}</button>
-                    <button type="button" onClick={() => setMany(capList, false)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-red-600 hover:bg-red-50">{isAr ? 'قفل الكل' : 'Disable all'}</button>
+                    <button type="button" onClick={() => setMany(capList, false)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-red-600 hover:bg-red-50">{isAr ? 'تعطيل الكل' : 'Disable all'}</button>
                   </div>
                 </div>
 
@@ -677,7 +696,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                   <div className="flex-1 min-w-0 space-y-4">
                     {isRole && (
                       <p className="text-[11px] text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                        {isAr ? 'كل قسم له مفتاح وصول وتحته إجراءاته. إذا قفلت القسم يختفي عن كل حسابات هذا الدور ويطلع "غير مسموح" عند إضافة موظف.' : 'Each section has an access switch with its actions below it.'}
+                        {isAr ? 'كل قسم له مفتاح وصول وتحته إجراءاته. إذا عطّلت القسم يختفي عن كل حسابات هذا الدور ويظهر "غير مسموح" عند إضافة موظف.' : 'Each section has an access switch with its actions below it.'}
                       </p>
                     )}
                     {cards.map(card => {
@@ -704,12 +723,12 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                               {card.caps.length > 0 && !bodyOff && (
                                 <div className="flex gap-3 text-[11px]">
                                   <button type="button" onClick={() => setMany(card.caps, true)} className="text-green-700 hover:underline">{isAr ? 'تفعيل الكل' : 'All on'}</button>
-                                  <button type="button" onClick={() => setMany(card.caps, false)} className="text-red-600 hover:underline">{isAr ? 'قفل الكل' : 'All off'}</button>
+                                  <button type="button" onClick={() => setMany(card.caps, false)} className="text-red-600 hover:underline">{isAr ? 'تعطيل الكل' : 'All off'}</button>
                                 </div>
                               )}
                               {m && (locked
-                                ? <span className="text-[11px] text-gray-400">{isAr ? 'مقفول' : 'Locked'}</span>
-                                : <div className="flex items-center gap-2"><span className="text-[11px] text-gray-500">{secOn ? (isAr ? 'القسم مفتوح' : 'Open') : (isAr ? 'القسم مقفول' : 'Closed')}</span><PermSwitch checked={secOn} onChange={v => setModule(m.value, v)} /></div>)}
+                                ? <span className="text-[11px] text-gray-400">{isAr ? 'غير متاح' : 'Unavailable'}</span>
+                                : <div className="flex items-center gap-2"><span className="text-[11px] text-gray-500">{secOn ? (isAr ? 'القسم مفعّل' : 'Enabled') : (isAr ? 'القسم معطّل' : 'Disabled')}</span><PermSwitch checked={secOn} onChange={v => setModule(m.value, v)} /></div>)}
                             </div>
                           </div>
                           {list.length > 0 && (
