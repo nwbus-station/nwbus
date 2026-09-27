@@ -1295,10 +1295,10 @@ export default function TransportationPage() {
           className={`px-4 py-2 text-xs font-semibold transition-colors border-e border-gray-300 ${viewMode === 'station' ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
           {isAr ? 'المحطة' : 'Station'}
         </button>
-        <button onClick={() => setViewMode('schedule')}
+        {allowCap('transport_schedule_view') && <button onClick={() => setViewMode('schedule')}
           className={`px-4 py-2 text-xs font-semibold transition-colors ${viewMode === 'schedule' ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
           {isAr ? 'الجدول الشامل' : 'Schedule'}
-        </button>
+        </button>}
       </div>
 
       {viewMode === 'station' && (

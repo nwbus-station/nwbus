@@ -55,6 +55,7 @@ export const TITLE_CAPABILITIES = [
   { group: 'تقييمات العملاء', key: 'customer_ratings_view', db: true, kind: 'allow', ar: 'يشوف تقييمات العملاء (الصفحة والبيانات)', en: 'See customer ratings' },
   // الإيرادات
   { group: 'الإيرادات', key: 'sales_add', kind: 'allow', ar: 'إدخال إيرادات جديدة', en: 'Add sales entries' },
+  { group: 'الإيرادات', key: 'sales_print', kind: 'allow', ar: 'طباعة سجل الإيراد', en: 'Print sales record' },
   // الموجودات
   { group: 'الموجودات', key: 'lostfound_report_tab',   kind: 'allow', ar: 'تبويب بلاغ مفقودات', en: 'Lost report tab' },
   { group: 'الموجودات', key: 'lostfound_handover_tab', kind: 'allow', ar: 'تبويب تسليم موجودات', en: 'Handover tab' },
@@ -74,10 +75,12 @@ export const TITLE_CAPABILITIES = [
   { group: 'الترحيل', key: 'transport_manage_trips',    db: true, kind: 'allow', ar: 'رحلة جديدة والرحلات المضافة وتفعيل رحلات المحطة والرحلة الإضافية', en: 'Manage trips (new, added, activate, extra)' },
   { group: 'الترحيل', key: 'transport_record_edit', kind: 'allow', ar: 'إدخال وتعديل سجلات الرحلات (الوصول والمغادرة)', en: 'Enter / edit trip records' },
   { group: 'الترحيل', key: 'transport_delete_rf',   kind: 'allow', ar: 'حذف الرحلة الإضافية', en: 'Delete extra trips' },
+  { group: 'الترحيل', key: 'transport_schedule_view', kind: 'allow', ar: 'عرض تبويب الجدول الشامل', en: 'Comprehensive schedule tab' },
   // الإجازات
   { group: 'الإجازات', key: 'leaves_supervisor_stage', db: true, kind: 'grant', ar: 'يوافق على الإجازات كمشرف (لموظفي محطاته المخصصة) قبل الأدمن', en: 'Approve leaves as supervisor for his stations' },
   { group: 'الإجازات', key: 'leaves_request',   kind: 'allow', ar: 'تقديم طلب إجازة', en: 'Submit leave requests' },
   { group: 'الإجازات', key: 'leaves_supervise', kind: 'allow', ar: 'الموافقة على إجازات الموظفين (مرحلة المشرف) وتبويباتها', en: 'Approve leaves as supervisor' },
+  { group: 'الإجازات', key: 'leaves_print', kind: 'allow', ar: 'طباعة نموذج الإجازة', en: 'Print leave form' },
   { group: 'الإجازات', key: 'leaves_final_approve',    db: true, kind: 'allow', adminOnly: true, ar: 'الاعتماد النهائي للإجازات (مرحلة الأدمن)', en: 'Final leave approval' },
   // الموظفون المحددون
   { group: 'الموظفون المحددون', key: 'assigned_employees', db: true, kind: 'grant', ar: 'موظفون محددون بالاسم أو الرقم الوظيفي: يقيّمهم ويوافق على إجازاتهم كمشرف (تحددهم من تعديل حسابه)', en: 'Specific employees he evaluates and approves leaves for' },
@@ -113,6 +116,12 @@ const ADMIN_LIKE_ROLES = ['general_admin', 'stations_executive_director', 'assis
 // hasTitle: الحساب عليه مسمى مخصص — "نشر Event" يُمنح فقط عبر مسمى (مثل مسمى قسم التسويق) أو للأدمن
 export const moduleDefaultForRole = (mod, role, hasTitle = false) =>
   ADMIN_LIKE_ROLES.includes(role) || (mod === 'magazine' && hasTitle) || !(mod in MODULE_ROLE_LIMITS) || MODULE_ROLE_LIMITS[mod].includes(role)
+// كل مجموعة صلاحيات تتبع قسماً — تُعرض بإدارة الصلاحيات تحت بطاقة قسمها (وبدون قسم: عامة)
+export const GROUP_MODULE = {
+  'التقارير': 'reports', 'الإيرادات': 'sales', 'الموجودات': 'lost_found', 'الترحيل': 'transportation',
+  'الإجازات': 'leaves', 'التقييم الوظيفي': 'evaluation', 'بيانات الموظفين': 'users', 'تقييمات العملاء': 'customer_ratings',
+}
+
 // أقسام ما تنفتح للأدوار الأساسية أبداً: بياناتها في القاعدة للأدمن فقط، ففتحها يعطي صفحة فاضية/مرفوضة
 export const MODULE_LOCKED_FOR_ROLES = ['settings', 'customer_ratings']
 // أقسام كانت موجودة قبل ما نحفظ الإعداد كخريطة (صيغة قديمة: مصفوفة permissions.modules)

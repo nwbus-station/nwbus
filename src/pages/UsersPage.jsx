@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
-import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, MODULE_LOCKED_FOR_ROLES } from '../utils/constants'
+import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE } from '../utils/constants'
 import { toLatinDigits, escapeHtml } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -460,10 +460,10 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
 const NEW_USER_DRAFT_KEY = 'um_new_draft'
 
 // إدارة المسميات المخصصة: اسم المسمى + الدور الأساسي (سقف الصلاحيات) + الأقسام + مصفوفة الصلاحيات
-function PermSwitch({ checked, onChange }) {
+function PermSwitch({ checked, onChange, disabled = false }) {
   return (
-    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
-      className={`relative shrink-0 w-10 h-[22px] rounded-full transition-colors ${checked ? 'bg-nwbus-primary' : 'bg-gray-300'}`}>
+    <button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)}
+      className={`relative shrink-0 w-10 h-[22px] rounded-full transition-colors ${checked ? 'bg-nwbus-primary' : 'bg-gray-300'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
       <span className="absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-all"
         style={{ insetInlineStart: checked ? 21 : 3 }} />
     </button>
@@ -504,6 +504,11 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   const setMany = (caps, v) => { setSaved(false); setForm(f => ({ ...f, permissions: { ...f.permissions, ...Object.fromEntries(caps.filter(c => c.key !== 'restricted_mode').map(c => [c.key, v])) } })) }
 
   const groups = [...new Set(capList.map(c => c.group))]
+  // بطاقات العرض: للدور = بطاقة لكل قسم (مفتاح وصول + إجراءاته)، وللمسمى = بطاقة لكل مجموعة (الأقسام تُحدد عند إضافة الموظف)
+  const cards = isRole
+    ? [...MODULES.map(m => ({ id: m.value, title: isAr ? m.ar : m.en, module: m, caps: capList.filter(c => GROUP_MODULE[c.group] === m.value) })),
+       ...groups.filter(g => !GROUP_MODULE[g]).map(g => ({ id: g, title: g, module: null, caps: capList.filter(c => c.group === g) }))]
+    : groups.map(g => ({ id: g, title: g, module: null, caps: capList.filter(c => c.group === g) }))
   const term = q.trim().toLowerCase()
   const matches = c => !term || c.ar.toLowerCase().includes(term) || c.en.toLowerCase().includes(term) || c.group.includes(term)
   const onCount = capList.filter(permValue).length
@@ -649,16 +654,20 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                 </div>
 
                 <div className="flex gap-5">
-                  {/* فهرس المجموعات */}
-                  <nav className="hidden lg:block w-44 shrink-0">
+                  {/* فهرس الأقسام */}
+                  <nav className="hidden lg:block w-48 shrink-0">
                     <div className="sticky top-0 space-y-0.5">
-                      {groups.map(g => {
-                        const caps = capList.filter(c => c.group === g)
+                      {cards.map(card => {
+                        const onN = card.caps.filter(permValue).length
+                        const secOn = isRole && card.module ? modEnabled(card.module.value) : true
                         return (
-                          <button key={g} type="button" onClick={() => groupRefs.current[g]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                            className="w-full flex items-center justify-between text-start text-xs px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
-                            <span className="truncate">{g}</span>
-                            <span className="text-[10px] text-gray-400 tabular-nums">{caps.filter(permValue).length}/{caps.length}</span>
+                          <button key={card.id} type="button" onClick={() => groupRefs.current[card.id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                            className="w-full flex items-center justify-between gap-2 text-start text-xs px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100">
+                            <span className="flex items-center gap-2 min-w-0">
+                              {isRole && card.module && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${secOn ? 'bg-green-500' : 'bg-gray-300'}`} />}
+                              <span className={`truncate ${secOn ? '' : 'text-gray-400'}`}>{card.title}</span>
+                            </span>
+                            {card.caps.length > 0 && <span className="text-[10px] text-gray-400 tabular-nums">{onN}/{card.caps.length}</span>}
                           </button>
                         )
                       })}
@@ -667,65 +676,65 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
 
                   <div className="flex-1 min-w-0 space-y-4">
                     {isRole && (
-                      <div className="border border-gray-200 rounded-xl overflow-hidden">
-                        <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                          <p className="text-xs font-bold text-gray-800">{isAr ? 'الأقسام المتاحة لهذا الدور' : 'Sections available to this role'}</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? 'أي قسم مقفول هنا ما تقدر تعطيه لموظف من هذا الدور — يطلع لك "غير مسموح" عند إضافة الموظف.' : 'A section turned off here cannot be granted to a user of this role.'}</p>
-                        </div>
-                        <div className="divide-y divide-gray-100">
-                          {MODULES.map(m => {
-                            const locked = MODULE_LOCKED_FOR_ROLES.includes(m.value) || m.value === 'magazine'
-                            const on = modEnabled(m.value)
-                            const beyondDefault = !locked && on && !moduleDefaultForRole(m.value, form.role)
-                            return (
-                              <div key={m.value} className={`flex items-center justify-between gap-4 px-4 py-3 ${locked ? 'opacity-50' : ''}`}>
-                                <div className="min-w-0">
-                                  <p className="text-sm text-gray-800">{isAr ? m.ar : m.en}</p>
-                                  {locked && <p className="text-[11px] text-gray-400 mt-0.5">{m.value === 'magazine'
-                                    ? (isAr ? 'النشر يُمنح عبر مسمى مخصص (مثل التسويق) أو للأدمن' : 'Granted via a custom title or admin')
-                                    : (isAr ? 'بياناته للأدمن فقط في قاعدة البيانات' : 'Data is admin-only in the database')}</p>}
-                                  {beyondDefault && <p className="text-[11px] text-amber-600 mt-0.5">{isAr ? 'القسم يفتح، لكن البيانات تظل محدودة بصلاحيات قاعدة البيانات لهذا الدور (قد تظهر فاضية أو لنطاقه فقط)' : 'Section opens; data stays limited by database permissions for this role'}</p>}
-                                </div>
-                                {locked
-                                  ? <span className="text-[11px] text-gray-400">{isAr ? 'مقفول' : 'Locked'}</span>
-                                  : <PermSwitch checked={on} onChange={v => setModule(m.value, v)} />}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
+                      <p className="text-[11px] text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                        {isAr ? 'كل قسم له مفتاح وصول وتحته إجراءاته. إذا قفلت القسم يختفي عن كل حسابات هذا الدور ويطلع "غير مسموح" عند إضافة موظف. الأقسام المقفلة بالنظام بياناتها للأدمن فقط.' : 'Each section has an access switch with its actions below it.'}
+                      </p>
                     )}
-                    {groups.map(g => {
-                      const caps = capList.filter(c => c.group === g)
-                      const shown = caps.filter(matches)
-                      if (!shown.length) return null
+                    {cards.map(card => {
+                      const shown = card.caps.filter(matches)
+                      const nameMatch = !term || card.title.toLowerCase().includes(term)
+                      if (term && !shown.length && !nameMatch) return null
+                      const m = isRole ? card.module : null
+                      const locked = !!m && (MODULE_LOCKED_FOR_ROLES.includes(m.value) || m.value === 'magazine')
+                      const secOn = m ? modEnabled(m.value) : true
+                      const beyondDefault = !!m && !locked && secOn && !moduleDefaultForRole(m.value, form.role)
+                      const list = term ? shown : card.caps
+                      const bodyOff = !!m && !secOn
                       return (
-                        <div key={g} ref={el => { groupRefs.current[g] = el }} className="border border-gray-200 rounded-xl overflow-hidden scroll-mt-2">
-                          <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                            <p className="text-xs font-bold text-gray-800">{g}</p>
-                            <div className="flex gap-3 text-[11px]">
-                              <button type="button" onClick={() => setMany(caps, true)} className="text-green-700 hover:underline">{isAr ? 'تفعيل الكل' : 'All on'}</button>
-                              <button type="button" onClick={() => setMany(caps, false)} className="text-red-600 hover:underline">{isAr ? 'قفل الكل' : 'All off'}</button>
+                        <div key={card.id} ref={el => { groupRefs.current[card.id] = el }} className="border border-gray-200 rounded-xl overflow-hidden scroll-mt-2">
+                          <div className={`flex items-center justify-between gap-3 px-4 py-3 ${card.caps.length ? 'bg-gray-50 border-b border-gray-200' : ''}`}>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-bold text-gray-900">{card.title}</p>
+                                {card.caps.length > 0 && <span className="text-[10px] text-gray-500 bg-white border border-gray-200 rounded-full px-2 py-0.5 tabular-nums">{card.caps.filter(permValue).length}/{card.caps.length}</span>}
+                              </div>
+                              {locked && <p className="text-[11px] text-gray-400 mt-0.5">{m.value === 'magazine'
+                                ? (isAr ? 'النشر يُمنح عبر مسمى مخصص (مثل التسويق) أو للأدمن' : 'Granted via a custom title or admin')
+                                : (isAr ? 'بياناته للأدمن فقط في قاعدة البيانات' : 'Data is admin-only in the database')}</p>}
+                              {beyondDefault && <p className="text-[11px] text-amber-600 mt-0.5">{isAr ? 'القسم يفتح، لكن البيانات تظل محدودة بصلاحيات قاعدة البيانات لهذا الدور (قد تظهر فاضية أو لنطاقه فقط)' : 'Section opens; data stays limited by database permissions'}</p>}
+                            </div>
+                            <div className="flex items-center gap-4 shrink-0">
+                              {card.caps.length > 0 && !bodyOff && (
+                                <div className="flex gap-3 text-[11px]">
+                                  <button type="button" onClick={() => setMany(card.caps, true)} className="text-green-700 hover:underline">{isAr ? 'تفعيل الكل' : 'All on'}</button>
+                                  <button type="button" onClick={() => setMany(card.caps, false)} className="text-red-600 hover:underline">{isAr ? 'قفل الكل' : 'All off'}</button>
+                                </div>
+                              )}
+                              {m && (locked
+                                ? <span className="text-[11px] text-gray-400">{isAr ? 'مقفول' : 'Locked'}</span>
+                                : <div className="flex items-center gap-2"><span className="text-[11px] text-gray-500">{secOn ? (isAr ? 'القسم مفتوح' : 'Open') : (isAr ? 'القسم مقفول' : 'Closed')}</span><PermSwitch checked={secOn} onChange={v => setModule(m.value, v)} /></div>)}
                             </div>
                           </div>
-                          <div className="divide-y divide-gray-100">
-                            {shown.map(c => {
-                              const meaningful = c.kind === 'grant' || !c.adminOnly || isAdminBase
-                              return (
-                                <div key={c.key} className={`flex items-center justify-between gap-4 px-4 py-3 ${meaningful ? '' : 'opacity-50'}`}>
-                                  <div className="min-w-0">
-                                    <p className="text-sm text-gray-800">{isAr ? c.ar : c.en}</p>
-                                    {!meaningful && <p className="text-[11px] text-gray-400 mt-0.5">{isAr ? 'تحتاج نوع حساب أساسي أدمن لتأثيرها' : 'Needs an admin base type to take effect'}</p>}
+                          {list.length > 0 && (
+                            <div className={`divide-y divide-gray-100 ${bodyOff ? 'opacity-40' : ''}`}>
+                              {list.map(c => {
+                                const meaningful = c.kind === 'grant' || !c.adminOnly || isAdminBase
+                                return (
+                                  <div key={c.key} className={`flex items-center justify-between gap-4 px-4 py-3 ${meaningful ? '' : 'opacity-50'}`}>
+                                    <div className="min-w-0">
+                                      <p className="text-sm text-gray-800">{isAr ? c.ar : c.en}</p>
+                                      {!meaningful && <p className="text-[11px] text-gray-400 mt-0.5">{isAr ? 'تحتاج نوع حساب أساسي أدمن لتأثيرها' : 'Needs an admin base type to take effect'}</p>}
+                                    </div>
+                                    <PermSwitch checked={permValue(c)} disabled={bodyOff} onChange={v => setPerm(c.key, v)} />
                                   </div>
-                                  <PermSwitch checked={permValue(c)} onChange={v => setPerm(c.key, v)} />
-                                </div>
-                              )
-                            })}
-                          </div>
+                                )
+                              })}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
-                    {term && !capList.some(matches) && <p className="text-xs text-gray-400 text-center py-8">{isAr ? 'ما فيه نتائج' : 'No results'}</p>}
+                    {term && !cards.some(card => card.caps.some(matches) || card.title.toLowerCase().includes(term)) && <p className="text-xs text-gray-400 text-center py-8">{isAr ? 'ما فيه نتائج' : 'No results'}</p>}
                   </div>
                 </div>
               </div>

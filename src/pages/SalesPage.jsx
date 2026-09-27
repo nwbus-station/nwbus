@@ -37,7 +37,7 @@ const parseRefsArr = raw => {
 /* ─── Sales Modal ───────────────────────────────────────── */
 function SalesModal({ sale, stations, onClose, onSaved }) {
   useEscapeKey(onClose)
-  const { profile, isAccountant, isGeneralAdmin } = useAuth()
+  const { profile, isAccountant, isGeneralAdmin, allowCap } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -681,7 +681,7 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
                 {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
               </button>
             )}
-            {sale && (
+            {sale && allowCap('sales_print') && (
               <button type="button" onClick={handlePrint}
                 className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
                 {isAr ? 'طباعة' : 'Print'}

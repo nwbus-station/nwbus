@@ -1031,7 +1031,7 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
 
         {/* أزرار الطباعة/الحذف */}
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-          {(fullyApproved || isOwn) && (
+          {(fullyApproved || isOwn) && allowCap('leaves_print') && (
             <button onClick={() => onPrint(leave)} style={{
               padding: '5px 12px', borderRadius: 7,
               border: '1px solid var(--border)', background: 'var(--card)',
