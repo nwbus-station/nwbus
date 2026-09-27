@@ -354,7 +354,7 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
       ...(!sale && { created_by: profile.id, created_by_name: profile.full_name_ar }),
     }
 
-    if (isAccountant && form.is_confirmed) {
+    if (isAccountant && form.is_confirmed && allowCap('sales_confirm')) {
       payload.is_confirmed        = true
       payload.confirmed_by        = profile.id
       payload.confirmed_by_name   = profile.full_name_ar
@@ -629,12 +629,12 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
           </div>
 
           {/* ⑥ تأكيد المحاسب */}
-          {isAccountant && sale && (
+          {isAccountant && sale && (allowCap('sales_confirm') || allowCap('sales_deficit_ack') || allowCap('sales_notes')) && (
             <div className="bg-yellow-50 rounded-xl p-4 space-y-3 border border-yellow-200">
               <p className="text-xs font-bold text-yellow-700">{isAr ? 'تأكيد المحاسب' : 'Accountant Confirmation'}</p>
 
               {/* تنبيه العجز */}
-              {diff < 0 && (
+              {diff < 0 && allowCap('sales_deficit_ack') && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
                   <p className="text-xs font-bold text-red-700">
                     ⚠ {isAr ? 'يوجد عجز بمقدار' : 'Deficit of'} {fmt(Math.abs(diff))} {isAr ? 'ر.س' : 'SAR'}
@@ -655,14 +655,16 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
                 </div>
               )}
 
+              {allowCap('sales_confirm') && (
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" className="rounded"
                   checked={form.is_confirmed} onChange={e => set('is_confirmed', e.target.checked)} />
                 {isAr ? 'تأكيد وإغلاق السجل' : 'Confirm and close this record'}
               </label>
-              <textarea rows={2} placeholder={isAr ? 'ملاحظات...' : 'Notes...'}
+              )}
+              {allowCap('sales_notes') && <textarea rows={2} placeholder={isAr ? 'ملاحظات...' : 'Notes...'}
                 className="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
-                value={form.accountant_notes} onChange={e => set('accountant_notes', e.target.value)} />
+                value={form.accountant_notes} onChange={e => set('accountant_notes', e.target.value)} />}
             </div>
           )}
 

@@ -677,7 +677,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                   <div className="flex-1 min-w-0 space-y-4">
                     {isRole && (
                       <p className="text-[11px] text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                        {isAr ? 'كل قسم له مفتاح وصول وتحته إجراءاته. إذا قفلت القسم يختفي عن كل حسابات هذا الدور ويطلع "غير مسموح" عند إضافة موظف. الأقسام المقفلة بالنظام بياناتها للأدمن فقط.' : 'Each section has an access switch with its actions below it.'}
+                        {isAr ? 'كل قسم له مفتاح وصول وتحته إجراءاته. إذا قفلت القسم يختفي عن كل حسابات هذا الدور ويطلع "غير مسموح" عند إضافة موظف.' : 'Each section has an access switch with its actions below it.'}
                       </p>
                     )}
                     {cards.map(card => {
@@ -698,10 +698,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                                 <p className="text-sm font-bold text-gray-900">{card.title}</p>
                                 {card.caps.length > 0 && <span className="text-[10px] text-gray-500 bg-white border border-gray-200 rounded-full px-2 py-0.5 tabular-nums">{card.caps.filter(permValue).length}/{card.caps.length}</span>}
                               </div>
-                              {locked && <p className="text-[11px] text-gray-400 mt-0.5">{m.value === 'magazine'
-                                ? (isAr ? 'النشر يُمنح عبر مسمى مخصص (مثل التسويق) أو للأدمن' : 'Granted via a custom title or admin')
-                                : (isAr ? 'بياناته للأدمن فقط في قاعدة البيانات' : 'Data is admin-only in the database')}</p>}
-                              {beyondDefault && <p className="text-[11px] text-amber-600 mt-0.5">{isAr ? 'القسم يفتح، لكن البيانات تظل محدودة بصلاحيات قاعدة البيانات لهذا الدور (قد تظهر فاضية أو لنطاقه فقط)' : 'Section opens; data stays limited by database permissions'}</p>}
+                              {beyondDefault && <p className="text-[11px] text-amber-600 mt-0.5">{isAr ? 'القسم يفتح، لكن بيانات هذا الدور فيه تظل محدودة بنطاقه (قد تظهر فاضية أو لمحطته فقط)' : 'Section opens; data stays limited to the role scope'}</p>}
                             </div>
                             <div className="flex items-center gap-4 shrink-0">
                               {card.caps.length > 0 && !bodyOff && (

@@ -977,9 +977,10 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
     setUploadingProof(true)
     try {
       const url = await uploadProof(file, leave.employee_id)
-      const { error } = await supabase.from('leaves')
-        .update({ attachment_url: url }).eq('id', leave.id)
+      // الموظف ما يقدر يعدّل إجازته مباشرة (سياسة القاعدة) — نحفظ المرفق عبر دالة تتحقق أنه صاحب الطلب
+      const { data: saved, error } = await supabase.rpc('add_leave_proof', { p_leave_id: leave.id, p_url: url })
       if (error) throw error
+      if (saved !== true) throw new Error('تعذّر حفظ المرفق على الطلب (قد تكون مهلة الرفع انتهت أو سبق رفع مرفق)')
       onProofUploaded?.()
     } catch (err) {
       alert('فشل رفع المرفق: ' + err.message)
@@ -990,11 +991,14 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
   const ST = STATUS_STYLE[leave.status] ?? STATUS_STYLE.pending
   const statusText = leave.status === 'approved' ? (isAr ? 'مقبولة' : 'Approved') : leave.status === 'rejected' ? (isAr ? 'مرفوضة' : 'Rejected') : (isAr ? 'قيد المراجعة' : 'Pending')
 
+  const isRejected = leave.status === 'rejected'
+
   return (
     <div dir="rtl" style={{
       borderRadius: 10,
-      border: '1px solid var(--border)',
-      background: 'var(--card)',
+      border: `1px solid ${isRejected ? '#fca5a5' : 'var(--border)'}`,
+      borderInlineStart: isRejected ? '5px solid #dc2626' : undefined,
+      background: isRejected ? '#fff7f7' : 'var(--card)',
       overflow: 'hidden',
     }}>
 
@@ -1003,7 +1007,11 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-1)' }}>{typeLabel}</span>
-            {!NO_APPROVAL_TYPES.includes(leave.leave_type) && (
+            {isRejected ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.72rem', fontWeight: 800, color: '#fff', background: '#dc2626', borderRadius: 99, padding: '2px 10px' }}>
+                <span aria-hidden="true">✕</span>{isAr ? 'مرفوضة' : 'Rejected'}
+              </span>
+            ) : !NO_APPROVAL_TYPES.includes(leave.leave_type) && (
               <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-3)' }}>— {statusText}</span>
             )}
           </div>

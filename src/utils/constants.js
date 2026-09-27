@@ -56,6 +56,9 @@ export const TITLE_CAPABILITIES = [
   // الإيرادات
   { group: 'الإيرادات', key: 'sales_add', kind: 'allow', ar: 'إدخال إيرادات جديدة', en: 'Add sales entries' },
   { group: 'الإيرادات', key: 'sales_print', kind: 'allow', ar: 'طباعة سجل الإيراد', en: 'Print sales record' },
+  { group: 'الإيرادات', key: 'sales_confirm',     kind: 'allow', ar: 'مهام المحاسب: تأكيد وإغلاق سجل الإيراد', en: 'Accountant: confirm & close a record' },
+  { group: 'الإيرادات', key: 'sales_deficit_ack', kind: 'allow', ar: 'مهام المحاسب: إقرار العجز وتحميله على الموظف', en: 'Accountant: acknowledge deficit' },
+  { group: 'الإيرادات', key: 'sales_notes',       kind: 'allow', ar: 'مهام المحاسب: كتابة ملاحظات المحاسب', en: 'Accountant: write notes' },
   // الموجودات
   { group: 'الموجودات', key: 'lostfound_report_tab',   kind: 'allow', ar: 'تبويب بلاغ مفقودات', en: 'Lost report tab' },
   { group: 'الموجودات', key: 'lostfound_handover_tab', kind: 'allow', ar: 'تبويب تسليم موجودات', en: 'Handover tab' },
