@@ -10,6 +10,7 @@ import SearchSelect from '../components/shared/SearchSelect'
 import StatStrip from '../components/shared/StatStrip'
 import { toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
+import { USER_ROLES } from '../utils/constants'
 
 const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA', { minimumFractionDigits: 2 })
 const fmtN = n => Number(n ?? 0).toLocaleString('ar-SA')
@@ -36,6 +37,11 @@ const AUDIT_FIELD_LABELS = {
   // الإجازات
   employee_name: 'الموظف', leave_type: 'نوع الإجازة', start_date: 'تاريخ البداية', end_date: 'تاريخ النهاية',
   supervisor_status: 'حالة المشرف', manager_status: 'حالة المدير',
+  // المحطات والمسميات والصلاحيات وأقسام أخرى
+  color: 'اللون', url: 'الرابط', base_role: 'الدور الأساسي', permissions: 'الصلاحيات',
+  city_key: 'الرمز', sort_order: 'الترتيب', title: 'العنوان', body: 'المحتوى',
+  is_published: 'منشور', message: 'الرسالة', file_name: 'اسم الملف', region: 'المنطقة',
+  rating: 'التقييم', comment: 'الملاحظة', type: 'النوع', combined_arr_dep: 'دمج الوصول والمغادرة',
 }
 const AUDIT_TRACKED_KEYS = Object.keys(AUDIT_FIELD_LABELS)
 // ترجمة القيم النصية الشائعة (حالات، أنواع) لعرضها بالعربي بدل رموزها بالإنجليزي
@@ -130,12 +136,88 @@ function auditSummary(row, stations, tripLookup, userLookup) {
     }
     return 'عدّل طلب إجازة' + (name ? `: ${name}` : '')
   }
-  return TABLE_LABELS_AR[row.table_name] ?? row.table_name
+  if (row.table_name === 'stations') {
+    const name = d.name_ar || d.name_en
+    const verb = row.action === 'INSERT' ? 'أضاف محطة' : row.action === 'DELETE' ? 'حذف محطة' : 'عدّل محطة'
+    return verb + (name ? `: ${name}` : '')
+  }
+  if (row.table_name === 'custom_titles') {
+    const name = d.name_ar || d.name_en
+    const verb = row.action === 'INSERT' ? 'أضاف مسمى صلاحيات' : row.action === 'DELETE' ? 'حذف مسمى صلاحيات' : 'عدّل مسمى صلاحيات'
+    return verb + (name ? `: ${name}` : '')
+  }
+  if (row.table_name === 'role_permissions') {
+    const roleName = USER_ROLES.find(r => r.value === d.role)?.ar ?? d.role
+    return 'عدّل صلاحيات دور' + (roleName ? `: ${roleName}` : '')
+  }
+  if (row.table_name === 'shift_supervisor_assignments') {
+    const emp = userLookup[d.employee_id], sup = userLookup[d.supervisor_id]
+    const verb = row.action === 'DELETE' ? 'ألغى تعيين موظف لمشرف' : 'عيّن موظفاً لمشرف'
+    return verb + (emp ? `: ${emp}` : '') + (sup ? ` ← ${sup}` : '')
+  }
+  if (row.table_name === 'user_stations') {
+    return row.action === 'DELETE' ? 'ألغى ربط مستخدم بمحطة' : 'ربط مستخدماً بمحطة'
+  }
+  if (row.table_name === 'schedule_uploads') {
+    return 'رفع جدول رحلات' + (d.file_name ? `: ${d.file_name}` : '')
+  }
+  if (row.table_name === 'trip_schedule') {
+    const verb = row.action === 'INSERT' ? 'أضاف رحلة بالجدول' : row.action === 'DELETE' ? 'حذف رحلة من الجدول' : 'عدّل رحلة بالجدول'
+    return verb + (d.trip_number ? `: ${d.trip_number}` : '')
+  }
+  if (row.table_name === 'trip_schedule_stops') {
+    return 'عدّل محطات توقف رحلة'
+  }
+  if (row.table_name === 'magazine_posts') {
+    const verb = row.action === 'INSERT' ? 'أضاف منشور Event' : row.action === 'DELETE' ? 'حذف منشور Event' : 'عدّل منشور Event'
+    return verb + (d.title ? `: ${d.title}` : '')
+  }
+  if (row.table_name === 'survey_cities') {
+    const name = d.name_ar || d.name_en
+    const verb = row.action === 'INSERT' ? 'أضاف مدينة استبيان' : row.action === 'DELETE' ? 'حذف مدينة استبيان' : 'عدّل مدينة استبيان'
+    return verb + (name ? `: ${name}` : '')
+  }
+  if (row.table_name === 'station_rating_messages') {
+    return 'حدّث رسالة تقييم' + (stationName ? `: ${stationName}` : '')
+  }
+  if (row.table_name === 'customer_ratings') {
+    return 'إدراج تقييم عميل' + (d.rating ? ` (${d.rating}★)` : '')
+  }
+  if (row.table_name === 'app_settings') {
+    return 'عدّل إعداد النظام' + (d.key ? `: ${d.key}` : '')
+  }
+  // قسم غير مصنّف — نعرض اسم القسم بالعربي بدل الاسم التقني، ونحاول التقاط اسم مفيد من البيانات
+  const generic = d.name_ar || d.name_en || d.title || d.message || d.file_name
+  const verb = row.action === 'INSERT' ? 'إضافة' : row.action === 'DELETE' ? 'حذف' : 'تعديل'
+  return `${verb} — ${auditTableMeta(row.table_name).label}` + (generic ? `: ${generic}` : '')
 }
-const TABLE_LABELS_AR = {
-  trip_records: 'سجلات الرحلات', sales_records: 'سجلات المبيعات', lost_found_items: 'المفقودات', users: 'المستخدمون',
-  employee_evaluations: 'تقييم الموظفين', supervisor_evaluations: 'تقييم المشرفين', station_evaluations: 'تقييم المحطات',
-  leaves: 'الإجازات',
+
+// شارة القسم (لون + تسمية عربية) — تغطي كل جداول النظام حتى ما يطلع اسم جدول تقني بالواجهة
+const AUDIT_TABLE_META = {
+  trip_records:            { label: 'سجلات الرحلات',      color: '#2563EB' },
+  sales_records:           { label: 'الإيرادات',          color: '#16A34A' },
+  lost_found_items:        { label: 'الموجودات',          color: '#D97706' },
+  users:                   { label: 'الموظفون',           color: '#7C3AED' },
+  employee_evaluations:    { label: 'تقييم الموظفين',      color: '#0891B2' },
+  supervisor_evaluations:  { label: 'تقييم المشرفين',      color: '#0891B2' },
+  station_evaluations:     { label: 'تقييم المحطات',       color: '#0891B2' },
+  leaves:                  { label: 'الإجازات',           color: '#DC2626' },
+  stations:                { label: 'المحطات',            color: '#1C2B36' },
+  custom_titles:           { label: 'المسميات والصلاحيات', color: '#475569' },
+  role_permissions:        { label: 'صلاحيات الأدوار',      color: '#475569' },
+  user_stations:           { label: 'محطات المستخدمين',    color: '#334155' },
+  shift_supervisor_assignments: { label: 'تعيين المشرفين', color: '#334155' },
+  schedule_uploads:        { label: 'رفع الجداول',         color: '#0EA5E9' },
+  trip_schedule:           { label: 'جدول الرحلات',        color: '#2563EB' },
+  trip_schedule_stops:     { label: 'محطات الرحلة',        color: '#2563EB' },
+  magazine_posts:          { label: 'Event',               color: '#9333EA' },
+  survey_cities:           { label: 'مدن الاستبيان',        color: '#5B5BD6' },
+  customer_ratings:        { label: 'تقييمات العملاء',      color: '#BE185D' },
+  station_rating_messages: { label: 'رسائل تقييم المحطة',   color: '#BE185D' },
+  app_settings:            { label: 'الإعدادات',           color: '#64748B' },
+}
+function auditTableMeta(name) {
+  return AUDIT_TABLE_META[name] ?? { label: name, color: '#64748B' }
 }
 
 // إحصائيات الالتزام لمجموعة حركات (وصول أو مغادرة)
@@ -1531,16 +1613,12 @@ export default function ReportsPage() {
 
       {/* ─── سجل التدقيق ─── */}
       {canSeeAudit && (() => {
-        const TABLE_LABELS = {
-          trip_records:   isAr ? 'سجلات الرحلات'  : 'Trip records',
-          sales_records:  isAr ? 'سجلات المبيعات' : 'Sales records',
-          lost_found_items: isAr ? 'المفقودات'    : 'Lost & Found',
-          users:          isAr ? 'المستخدمون'     : 'Users',
-          employee_evaluations:   isAr ? 'تقييم الموظفين'  : 'Employee evaluations',
-          supervisor_evaluations: isAr ? 'تقييم المشرفين'  : 'Supervisor evaluations',
-          station_evaluations:    isAr ? 'تقييم المحطات'   : 'Station evaluations',
-          leaves:                 isAr ? 'الإجازات'        : 'Leaves',
-        }
+        // فلتر القسم — من نفس شارة القسم (AUDIT_TABLE_META) حتى تبقى القائمة والشارات متطابقة
+        const AUDIT_FILTER_TABLES = [
+          'trip_records', 'sales_records', 'lost_found_items', 'users',
+          'employee_evaluations', 'supervisor_evaluations', 'station_evaluations', 'leaves',
+          'stations', 'custom_titles', 'magazine_posts', 'survey_cities',
+        ]
         const totalPages = Math.ceil(auditTotal / PAGE_SIZE)
         // نخفي حركات التحديث اللي ما فيها أي تغيير بحقل ذي معنى (مثل last_login عند كل تسجيل دخول)
         const visibleAuditRows = auditRows.filter(row => row.action !== 'UPDATE' || computeAuditDiff(row).length > 0)
@@ -1571,15 +1649,10 @@ export default function ReportsPage() {
 
               <select value={auditTable} onChange={e => setAuditTable(e.target.value)}
                 style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
-                <option value="all">{isAr ? 'كل الجداول' : 'All tables'}</option>
-                <option value="trip_records">{TABLE_LABELS.trip_records}</option>
-                <option value="sales_records">{TABLE_LABELS.sales_records}</option>
-                <option value="lost_found_items">{TABLE_LABELS.lost_found_items}</option>
-                <option value="users">{TABLE_LABELS.users}</option>
-                <option value="employee_evaluations">{TABLE_LABELS.employee_evaluations}</option>
-                <option value="supervisor_evaluations">{TABLE_LABELS.supervisor_evaluations}</option>
-                <option value="station_evaluations">{TABLE_LABELS.station_evaluations}</option>
-                <option value="leaves">{TABLE_LABELS.leaves}</option>
+                <option value="all">{isAr ? 'كل الأقسام' : 'All sections'}</option>
+                {AUDIT_FILTER_TABLES.map(t => (
+                  <option key={t} value={t}>{auditTableMeta(t).label}</option>
+                ))}
               </select>
 
               {/* فلتر المحطة — الأدمن يشوف كل الشبكة، وغيره يقتصر على محطاته المخصصة فقط */}
@@ -1620,6 +1693,7 @@ export default function ReportsPage() {
                     <tr style={{ background: 'var(--surface)' }}>
                       {[
                         isAr ? 'التاريخ والوقت' : 'Date & Time',
+                        isAr ? 'القسم'          : 'Section',
                         isAr ? 'المستخدم'       : 'User',
                         isAr ? 'الحدث'          : 'Event',
                         '',
@@ -1630,7 +1704,10 @@ export default function ReportsPage() {
                   </thead>
                   <tbody>
                     {visibleAuditRows.map((row, i) => {
-                      const ac = row.action === 'INSERT' ? 'var(--success)' : row.action === 'DELETE' ? 'var(--danger)' : 'var(--warning)'
+                      const actionMeta = row.action === 'INSERT' ? { color: 'var(--success)', bg: 'var(--success-bg)', label: isAr ? 'أضاف' : 'Added' }
+                        : row.action === 'DELETE' ? { color: 'var(--danger)', bg: 'var(--danger-bg)', label: isAr ? 'حذف' : 'Deleted' }
+                        : { color: 'var(--warning)', bg: 'var(--warning-bg, #fef3c7)', label: isAr ? 'عدّل' : 'Updated' }
+                      const section = auditTableMeta(row.table_name)
                       const dt = new Date(row.created_at)
                       const isOpen = auditExpanded === row.id
                       const diff = isOpen ? computeAuditDiff(row) : []
@@ -1647,10 +1724,17 @@ export default function ReportsPage() {
                               {dt.toLocaleTimeString(isAr ? 'ar-SA' : 'en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             </div>
                           </td>
+                          <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: `${section.color}18`, color: section.color, border: `1px solid ${section.color}30` }}>
+                              {section.label}
+                            </span>
+                          </td>
                           <td style={{ padding: '8px 14px', color: 'var(--text-1)', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{row.actor_name ?? '—'}</td>
                           <td style={{ padding: '8px 14px' }}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text-1)' }}>
-                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: ac, flexShrink: 0 }} />
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: actionMeta.bg, color: actionMeta.color, flexShrink: 0 }}>
+                                {actionMeta.label}
+                              </span>
                               {summary}
                             </span>
                           </td>
@@ -1660,7 +1744,7 @@ export default function ReportsPage() {
                         </tr>
                         {isOpen && (
                           <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-                            <td colSpan={4} style={{ padding: '0 14px 16px' }}>
+                            <td colSpan={5} style={{ padding: '0 14px 16px' }}>
                               {diff.length === 0 ? (
                                 <div style={{ fontSize: '0.76rem', color: 'var(--text-3)', padding: '10px 4px' }}>
                                   {isAr ? 'لا تفاصيل إضافية لهذا السجل' : 'No further details for this record'}
@@ -1668,8 +1752,19 @@ export default function ReportsPage() {
                               ) : (
                                 <div style={{
                                   background: 'var(--card)', border: '1px solid var(--border)',
-                                  borderInlineStart: `3px solid ${ac}`, borderRadius: 10, overflow: 'hidden',
+                                  borderInlineStart: `3px solid ${actionMeta.color}`, borderRadius: 10, overflow: 'hidden',
                                 }}>
+                                  {/* عنوان مصغّر: قبل / بعد — يوضّح اتجاه القيم تحته */}
+                                  {row.action === 'UPDATE' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '7px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+                                      <span style={{ minWidth: 130 }} />
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--danger)', minWidth: 62, textAlign: 'center' }}>{isAr ? 'قبل' : 'Before'}</span>
+                                        <span style={{ width: 14 }} />
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--success)', minWidth: 62, textAlign: 'center' }}>{isAr ? 'بعد' : 'After'}</span>
+                                      </div>
+                                    </div>
+                                  )}
                                   {diff.map((d, di) => (
                                     <div key={d.key} style={{
                                       display: 'flex', alignItems: 'center', gap: 16, padding: '10px 16px',
