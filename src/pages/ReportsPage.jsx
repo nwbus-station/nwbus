@@ -255,6 +255,7 @@ export default function ReportsPage() {
   const [reportTypes, _setReportTypes] = useState(() => { try { return JSON.parse(localStorage.getItem('rpt_types') ?? '[]') } catch { return [] } })
   const setReportTypes = v => { const next = typeof v === 'function' ? v(reportTypes) : v; localStorage.setItem('rpt_types', JSON.stringify(next)); _setReportTypes(next) }
   const [stations, setStations]     = useState([])
+  const myStationIds = stations.map(s => s.id)   // محطاته المخصصة (لو غير أدمن) — منقولة هنا عشان fetchAudit يستخدمها
   const [station,  _setStation]      = useState(() => localStorage.getItem('rpt_station') || 'all')
   const setStation = v => { localStorage.setItem('rpt_station', v); _setStation(v) }
   const [printStationIds, _setPrintStationIds] = useState(() => {
@@ -331,10 +332,14 @@ export default function ReportsPage() {
         const sid = auditStation === 'mine' ? profile?.station?.id : auditStation
         if (sid) q = q.eq('station_id', sid)
       }
-    } else {
-      // المشرف: محطته فقط دائماً
-      const sid = profile?.station?.id
-      if (sid) q = q.eq('station_id', sid)
+    } else if (auditStation !== 'all' && auditStation !== 'mine' && myStationIds.includes(auditStation)) {
+      // اختار محطة معيّنة من محطاته المخصصة
+      q = q.eq('station_id', auditStation)
+    } else if (myStationIds.length) {
+      // غير الأدمن: يقتصر دايماً على محطاته المخصصة فقط (وليس كل الشبكة)
+      q = q.in('station_id', myStationIds)
+    } else if (profile?.station?.id) {
+      q = q.eq('station_id', profile.station.id)
     }
 
     const { data: rows, error, count } = await q
@@ -342,7 +347,7 @@ export default function ReportsPage() {
     if (error && withDiff) { setAuditLoading(false); return fetchAudit(page, false) }
     if (!error) { setAuditRows(rows ?? []); setAuditTotal(count ?? 0); setAuditPage(page) }
     setAuditLoading(false)
-  }, [auditFrom, auditTo, auditTable, auditStation, isGeneralAdmin, profile?.station?.id])
+  }, [auditFrom, auditTo, auditTable, auditStation, isGeneralAdmin, profile?.station?.id, myStationIds.join(',')])
 
   useEffect(() => { if (canSeeAudit) fetchAudit(0) }, [canSeeAudit, fetchAudit])
 
@@ -371,7 +376,6 @@ export default function ReportsPage() {
     }
   }, [seesAll, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, profile?.id, scopedIds?.join(',')])
 
-  const myStationIds = stations.map(s => s.id)
 
   const runReport = useCallback(async () => {
     const cacheKey = `reports_${dateFrom}_${dateTo}_${station}`
@@ -1578,12 +1582,20 @@ export default function ReportsPage() {
                 <option value="leaves">{TABLE_LABELS.leaves}</option>
               </select>
 
-              {/* فلتر المحطة — للأدمن فقط */}
-              {isGeneralAdmin && (
+              {/* فلتر المحطة — الأدمن يشوف كل الشبكة، وغيره يقتصر على محطاته المخصصة فقط */}
+              {isGeneralAdmin ? (
                 <select value={auditStation} onChange={e => setAuditStation(e.target.value)}
                   style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
                   <option value="all">{isAr ? 'كل المحطات' : 'All stations'}</option>
                   <option value="mine">{isAr ? 'محطتي' : 'My station'}</option>
+                  {stations.map(s => (
+                    <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
+                  ))}
+                </select>
+              ) : myStationIds.length > 1 && (
+                <select value={auditStation} onChange={e => setAuditStation(e.target.value)}
+                  style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
+                  <option value="mine">{isAr ? 'كل محطاتي' : 'All my stations'}</option>
                   {stations.map(s => (
                     <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
                   ))}
