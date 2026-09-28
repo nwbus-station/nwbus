@@ -195,13 +195,29 @@ export default function MapPage() {
     rest: stations.filter(s => kindOf(s) === 'rest').length,
   }), [stations])
 
+  // كشف المواقع المشبوهة: نفس إحداثيات محطة ثانية (نسخ بالغلط)، أو رقم "مدوّر" تماماً
+  // بدون أي كسور دقيقة (يدل غالباً إنه تقدير تقريبي على الخريطة مو موقع GPS حقيقي)
+  const suspectIds = useMemo(() => {
+    const byCoord = {}
+    located.forEach(s => { const k = `${s.lat.toFixed(4)},${s.lng.toFixed(4)}`; (byCoord[k] ??= []).push(s.id) })
+    const dup = new Set(Object.values(byCoord).filter(ids => ids.length > 1).flat())
+    const round = new Set(located.filter(s => Math.round(s.lat * 100) === s.lat * 100 && Math.round(s.lng * 100) === s.lng * 100).map(s => s.id))
+    return new Set([...dup, ...round])
+  }, [located])
+  const suspectReason = s => {
+    const key = `${s.lat.toFixed(4)},${s.lng.toFixed(4)}`
+    const isDup = located.some(o => o.id !== s.id && `${o.lat.toFixed(4)},${o.lng.toFixed(4)}` === key)
+    if (isDup) return { ar: 'نفس موقع محطة ثانية بالضبط', en: 'Exact same location as another station' }
+    return { ar: 'إحداثيات مدوّرة — يبدو موقعاً تقديرياً لا GPS دقيق', en: 'Rounded coordinates — looks approximate, not a precise GPS pin' }
+  }
+
   const matches = s => {
     const q = search.trim().toLowerCase()
     return (kindFilter === 'all' || kindOf(s) === kindFilter)
       && (regionFilter === 'all' || s.region === regionFilter)
       && (!q || (s.name_ar || '').toLowerCase().includes(q) || (s.name_en || '').toLowerCase().includes(q) || (s.region || '').toLowerCase().includes(q))
   }
-  const listRows = (tab === 'noloc' ? unlocated : (canManage ? stations : located)).filter(matches)
+  const listRows = (tab === 'noloc' ? unlocated : tab === 'suspect' ? located.filter(st => suspectIds.has(st.id)) : (canManage ? stations : located)).filter(matches)
   const mapRows = located.filter(matches)
 
   /* ── اختيار نقطة ── */
@@ -420,6 +436,7 @@ export default function MapPage() {
           {[
             ['list', isAr ? 'النقاط' : 'Points'],
             ...(canManage ? [['noloc', `${isAr ? 'بدون موقع' : 'No location'} (${unlocated.length})`]] : []),
+            ...(canManage && suspectIds.size ? [['suspect', `${isAr ? 'قد تحتاج تحقق' : 'Needs review'} (${suspectIds.size})`]] : []),
             ['route', isAr ? 'مسار' : 'Route'],
           ].map(([id, label]) => (
             <button key={id} onClick={() => { setTab(id); if (id !== 'route') { setRouteFrom(null); setRouteTo(null) } }}
@@ -471,23 +488,31 @@ export default function MapPage() {
           {loading ? <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>
             : listRows.length === 0 ? (
               <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>
-                {tab === 'noloc' ? (isAr ? 'كل المحطات لها مواقع' : 'All stations have locations') : (isAr ? 'لا نتائج' : 'No results')}
+                {tab === 'noloc' ? (isAr ? 'كل المحطات لها مواقع' : 'All stations have locations')
+                  : tab === 'suspect' ? (isAr ? 'ما فيه مواقع مشبوهة حالياً' : 'No suspicious locations right now')
+                  : (isAr ? 'لا نتائج' : 'No results')}
               </div>
             ) : listRows.map(s => {
               const isSel = selectedId === s.id
               const isFrom = routeFrom?.id === s.id, isTo = routeTo?.id === s.id
               const on = isSel || isFrom || isTo
               const noLoc = !hasCoords(s)
+              const isSuspect = canManage && suspectIds.has(s.id)
               return (
                 <div key={s.id} onClick={() => !noLoc && pick(s)}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 10, marginBottom: 2, cursor: noLoc ? 'default' : 'pointer',
-                    background: isFrom ? '#1C2B36' : isTo ? '#E8930C' : isSel ? '#eef2f7' : 'transparent', color: isFrom || isTo ? '#fff' : '#0f172a' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: colorOf(s), flexShrink: 0, boxShadow: on ? `0 0 0 3px ${colorOf(s)}33` : 'none' }} />
+                    background: isFrom ? '#1C2B36' : isTo ? '#E8930C' : isSel ? '#eef2f7' : isSuspect ? '#fffbeb' : 'transparent', color: isFrom || isTo ? '#fff' : '#0f172a' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: isSuspect ? '#D97706' : colorOf(s), flexShrink: 0, boxShadow: on ? `0 0 0 3px ${colorOf(s)}33` : 'none' }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: '0.82rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf(s, isAr)}</div>
                     <div style={{ fontSize: '0.68rem', color: isFrom || isTo ? 'rgba(255,255,255,.75)' : '#94a3b8', marginTop: 1 }}>
                       {isAr ? KINDS[kindOf(s)].ar : KINDS[kindOf(s)].en}{s.region ? ` · ${s.region}` : ''}{s.is_active === false ? (isAr ? ' · غير نشطة' : ' · inactive') : ''}
                     </div>
+                    {isSuspect && (
+                      <div style={{ fontSize: '0.66rem', color: '#B45309', marginTop: 2, fontWeight: 600 }}>
+                        ⚠ {isAr ? suspectReason(s).ar : suspectReason(s).en}
+                      </div>
+                    )}
                   </div>
                   {manageMode && canManage && (
                     noLoc
@@ -522,11 +547,12 @@ export default function MapPage() {
 
           {mapRows.filter(s => !(editing?.mode === 'relocate' && editing.id === s.id)).map(s => {
             const isSel = selectedId === s.id || routeFrom?.id === s.id || routeTo?.id === s.id
+            const isSuspect = canManage && suspectIds.has(s.id)
             return (
               <Marker key={`${s.id}-${showLabels}-${isSel}`} position={[s.lat, s.lng]}
-                icon={makeIcon(routeTo?.id === s.id ? '#E8930C' : colorOf(s), { size: isSel ? 19 : 13, selected: isSel })}
+                icon={makeIcon(routeTo?.id === s.id ? '#E8930C' : isSuspect ? '#D97706' : colorOf(s), { size: isSel ? 19 : isSuspect ? 15 : 13, selected: isSel })}
                 eventHandlers={{ click: () => pick(s) }}>
-                <Tooltip className="st-label" direction="top" offset={[0, -8]} permanent={showLabels || isSel}>{nameOf(s, isAr)}</Tooltip>
+                <Tooltip className="st-label" direction="top" offset={[0, -8]} permanent={showLabels || isSel}>{nameOf(s, isAr)}{isSuspect ? ' ⚠' : ''}</Tooltip>
               </Marker>
             )
           })}
