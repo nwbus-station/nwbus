@@ -322,6 +322,7 @@ const ICONS = {
   monitor: ['M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3'],
   leave:   ['M8 2v4','M16 2v4','M3 10h18','M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z','M8 14h.01','M12 14h.01','M16 14h.01','M8 18h.01','M12 18h.01'],
   refresh: ['M21 2v6h-6','M3 22v-6h6','M3.51 9a9 9 0 0114.85-3.36L21 8','M21 16l-2.64 2.36A9 9 0 013.51 15'],
+  up:      ['M12 19V5','M5 12l7-7 7 7'],
 }
 
 const NAV_GROUPS = [
@@ -398,6 +399,30 @@ function NavTab({ item, isAr }) {
       })}>
       {isAr ? item.labelAr : item.labelEn}
     </NavLink>
+  )
+}
+
+// زر عائم "الرجوع للأعلى" — يظهر بعد التمرير لأسفل بأي صفحة، ويرجع بسلاسة لأعلى الصفحة
+function ScrollToTopButton() {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 400)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  if (!show) return null
+  return (
+    <button className="no-print" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      title="أعلى الصفحة" aria-label="أعلى الصفحة"
+      style={{
+        position: 'fixed', bottom: 20, insetInlineStart: 20, zIndex: 55,
+        width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--border-2)',
+        background: 'var(--card)', color: 'var(--text-2)', boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+      }}>
+      <Icon d={ICONS.up} size={17} />
+    </button>
   )
 }
 
@@ -684,6 +709,8 @@ export default function AppLayout() {
       <main style={{ flex: 1, minWidth: 0 }}>
         <Outlet />
       </main>
+
+      <ScrollToTopButton />
 
       {/* شارة ثابتة دايماً — تصير مرئية بدون تمرير، على أي صفحة */}
       <div className="no-print app-version-badge">

@@ -278,8 +278,9 @@ export default function ReportsPage() {
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [showUnenteredWarn, setShowUnenteredWarn] = useState(false)
 
-  // سجل النشاط — للأدمن العام فقط
-  const canSeeAudit = isGeneralAdmin && allowCap('reports_activity_log')
+  // سجل النشاط — الأدمن دائماً، وأي دور/مسمى ثاني فعّل له الأدمن الصلاحية
+  // (القاعدة نفسها تحصر النتائج بمحطته إن لم يكن أدمن، عبر سياسة audit_select)
+  const canSeeAudit = (isGeneralAdmin || isStationAdmin) && allowCap('reports_activity_log')
   const PAGE_SIZE = 50
   const [auditRows,    setAuditRows]    = useState([])
   const [auditLoading, setAuditLoading] = useState(false)
