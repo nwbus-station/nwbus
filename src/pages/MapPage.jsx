@@ -152,6 +152,8 @@ export default function MapPage() {
   const [routeTo, setRouteTo] = useState(null)
   const [routeInfo, setRouteInfo] = useState(null)  // { km, points }
   const [routeLoading, setRouteLoading] = useState(false)
+  const [placeStationId, setPlaceStationId] = useState(null)   // وضع "تحديد نقطة ← اختيار محطة"
+  const [placeSearch, setPlaceSearch] = useState('')
   const mapRef = useRef(null)
 
   const say = (msg, kind = 'ok') => { setToast({ msg, kind }); setTimeout(() => setToast(null), 3200) }
@@ -270,11 +272,17 @@ export default function MapPage() {
     setForm({ id: null, name_ar: '', name_en: '', kind: 'main', region: '', is_active: true })
     setDrawerOpen(false)
   }
+  function startPlace() {
+    setSelectedId(null); setLinkText(''); setForm(null)
+    setEditing({ mode: 'place', lat: null, lng: null })
+    setPlaceStationId(null); setPlaceSearch('')
+    setDrawerOpen(false)
+  }
   function startEditInfo(s) {
     setEditing(null); setLinkText('')
     setForm({ id: s.id, name_ar: s.name_ar || '', name_en: s.name_en || '', kind: kindOf(s), region: s.region || '', is_active: s.is_active !== false })
   }
-  function cancelEdit() { setEditing(null); setForm(null); setLinkText('') }
+  function cancelEdit() { setEditing(null); setForm(null); setLinkText(''); setPlaceStationId(null); setPlaceSearch('') }
 
   function onMapClick(latlng) {
     if (!editing) return
@@ -295,15 +303,18 @@ export default function MapPage() {
 
   async function saveLocation() {
     if (!editing || !validCoords(editing.lat, editing.lng)) { say(isAr ? 'حدد موقعاً صحيحاً على الخريطة' : 'Pick a valid location', 'err'); return }
+    const targetId = editing.mode === 'place' ? placeStationId : editing.id
+    if (!targetId) { say(isAr ? 'اختر المحطة اللي تخص هذا الموقع' : 'Choose the station this location belongs to', 'err'); return }
     setSaving(true)
     const { error } = await supabase.from('stations')
-      .update({ lat: editing.lat, lng: editing.lng, maps_url: null }).eq('id', editing.id)
+      .update({ lat: editing.lat, lng: editing.lng, maps_url: null }).eq('id', targetId)
     setSaving(false)
     if (error) { say(error.message, 'err'); return }
     clearCached('stations_all')
     await load()
     say(isAr ? 'تم تحديث موقع المحطة' : 'Location updated')
-    setEditing(null)
+    setSelectedId(targetId)
+    cancelEdit()
   }
 
   async function saveForm() {
@@ -349,7 +360,7 @@ export default function MapPage() {
   }
 
   const picking = !!editing
-  const editingStation = editing?.id ? stations.find(s => s.id === editing.id) : null
+  const editingStation = editing?.mode === 'place' ? (stations.find(s => s.id === placeStationId) ?? null) : editing?.id ? stations.find(s => s.id === editing.id) : null
   const showLabels = zoom >= 10
 
   /* ══ الواجهة ══════════════════════════════════════════ */
@@ -425,9 +436,14 @@ export default function MapPage() {
             )}
           </div>
           {manageMode && (
-            <button onClick={startAdd} style={{ ...btn('primary'), width: '100%', marginTop: 10 }}>
-              <Ico d={ICONS.plus} size={14} sw={2.5} />{isAr ? 'إضافة محطة أو نقطة توقف' : 'Add station / stop'}
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+              <button onClick={startAdd} style={{ ...btn('primary'), width: '100%' }}>
+                <Ico d={ICONS.plus} size={14} sw={2.5} />{isAr ? 'إضافة محطة أو نقطة توقف' : 'Add station / stop'}
+              </button>
+              <button onClick={startPlace} style={{ ...btn('ghost'), width: '100%' }}>
+                <Ico d={ICONS.pin} size={14} sw={2.5} />{isAr ? 'تحديد نقطة على الخريطة لمحطة موجودة' : 'Pick a map point for an existing station'}
+              </button>
+            </div>
           )}
         </div>
 
@@ -595,6 +611,7 @@ export default function MapPage() {
             <div style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff7ed', borderRadius: '14px 14px 0 0' }}>
               <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#9a3412' }}>
                 {editing?.mode === 'relocate' ? (isAr ? `تعديل موقع: ${editingStation ? nameOf(editingStation, isAr) : ''}` : 'Relocate')
+                  : editing?.mode === 'place' ? (isAr ? 'تحديد موقع لمحطة موجودة' : 'Place point for a station')
                   : form?.id == null ? (isAr ? 'إضافة محطة / نقطة توقف' : 'Add station / stop') : (isAr ? 'تعديل بيانات النقطة' : 'Edit point')}
               </div>
               <button onClick={cancelEdit} style={{ ...btn(), padding: 5 }}><Ico d={ICONS.x} size={13} sw={2.5} /></button>
@@ -630,7 +647,9 @@ export default function MapPage() {
                 <>
                   <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 10, padding: '9px 11px', fontSize: '0.76rem', color: '#475569', lineHeight: 1.7 }}>
                     {validCoords(editing.lat, editing.lng)
-                      ? (isAr ? 'اسحب النقطة البرتقالية أو اضغط على الخريطة لتغيير الموقع.' : 'Drag the orange point or click the map to move it.')
+                      ? (editing.mode === 'place'
+                          ? (isAr ? 'تم تحديد الموقع. اسحب النقطة لتعديلها، واختر تحت أي محطة تخصها.' : 'Location set. Drag to adjust, then choose which station it belongs to below.')
+                          : (isAr ? 'اسحب النقطة البرتقالية أو اضغط على الخريطة لتغيير الموقع.' : 'Drag the orange point or click the map to move it.'))
                       : (isAr ? 'اضغط على الخريطة لتحديد الموقع، أو الصق رابط Google Maps / الإحداثيات تحت.' : 'Click the map to set the location, or paste a Google Maps link / coordinates below.')}
                   </div>
                   <div>
@@ -650,11 +669,33 @@ export default function MapPage() {
                   {validCoords(editing.lat, editing.lng) && outsideKsa(editing.lat, editing.lng) && (
                     <div style={{ fontSize: '0.74rem', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '6px 9px' }}>{isAr ? 'الموقع خارج نطاق المملكة — تأكد من الإحداثيات.' : 'Location is outside Saudi Arabia — check the coordinates.'}</div>
                   )}
+                  {editing.mode === 'place' && (
+                    <div>
+                      <label style={lbl}>{isAr ? 'اختر المحطة' : 'Choose station'}{placeStationId ? ` — ${nameOf(stations.find(s => s.id === placeStationId) ?? {}, isAr)}` : ''}</label>
+                      <input style={{ ...input, marginBottom: 6 }} value={placeSearch} onChange={e => setPlaceSearch(e.target.value)}
+                        placeholder={isAr ? 'ابحث عن محطة…' : 'Search stations…'} />
+                      <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, maxHeight: 170, overflowY: 'auto' }}>
+                        {stations
+                          .filter(s => { const q = placeSearch.trim().toLowerCase(); return !q || (s.name_ar || '').toLowerCase().includes(q) || (s.name_en || '').toLowerCase().includes(q) })
+                          .sort((a, b) => (hasCoords(a) ? 1 : 0) - (hasCoords(b) ? 1 : 0))
+                          .map(s => (
+                            <div key={s.id} onClick={() => setPlaceStationId(s.id)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: '0.78rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', background: placeStationId === s.id ? '#eef2f7' : 'transparent' }}>
+                              <span style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${placeStationId === s.id ? '#1C2B36' : '#cbd5e1'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                                {placeStationId === s.id && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#1C2B36' }} />}
+                              </span>
+                              <span style={{ flex: 1, fontWeight: placeStationId === s.id ? 700 : 500 }}>{nameOf(s, isAr)}</span>
+                              {!hasCoords(s) && <span style={{ fontSize: '0.64rem', color: '#94a3b8' }}>{isAr ? 'بدون موقع' : 'no location'}</span>}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
               <div style={{ display: 'flex', gap: 8 }}>
-                <button disabled={saving} onClick={form ? saveForm : saveLocation} style={{ ...btn('primary'), flex: 1, opacity: saving ? .6 : 1 }}>
+                <button disabled={saving || (editing?.mode === 'place' && !placeStationId)} onClick={form ? saveForm : saveLocation} style={{ ...btn('primary'), flex: 1, opacity: (saving || (editing?.mode === 'place' && !placeStationId)) ? .6 : 1 }}>
                   <Ico d={ICONS.check} size={14} sw={2.6} />{saving ? '…' : (isAr ? 'حفظ' : 'Save')}
                 </button>
                 <button onClick={cancelEdit} style={btn()}>{isAr ? 'إلغاء' : 'Cancel'}</button>
