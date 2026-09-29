@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
 import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE } from '../utils/constants'
-import { toLatinDigits, escapeHtml } from '../utils/digits'
+import { toLatinDigits, escapeHtml, matchesSearch } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
@@ -1914,12 +1914,11 @@ function UsersPageFull() {
   // كل الفلاتر إلا فلتر المحطة — نحتاجها لوحدها عشان منتقي محطات الطباعة (متعدد) يشتغل
   // فوق نفس الفلاتر الظاهرة بدون ما يتقيّد بفلتر المحطة الأحادي بأعلى الصفحة
   function matchesNonStationFilters(u) {
-    const q = search.toLowerCase()
     const matchSearch = !search ||
-      (u.full_name_ar ?? '').toLowerCase().includes(q) ||
-      (u.username     ?? '').toLowerCase().includes(q) ||
-      (u.full_name_en ?? '').toLowerCase().includes(q) ||
-      (u.job_number   ?? '').includes(q)
+      matchesSearch(u.full_name_ar, search) ||
+      matchesSearch(u.username, search) ||
+      matchesSearch(u.full_name_en, search) ||
+      matchesSearch(u.job_number, search)
     const matchRole    = !roleFilter    || u.role       === roleFilter
     const matchStatus  = !statusFilter  || (statusFilter === 'active' ? u.is_active : !u.is_active)
     const matchJob     = !jobFilter     || u.job_title  === jobFilter

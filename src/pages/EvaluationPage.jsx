@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
-import { escapeHtml } from '../utils/digits'
+import { escapeHtml, matchesSearch } from '../utils/digits'
 import { ADMIN_ROLE_VALUES } from '../utils/constants'
 import { createNotification } from '../utils/notifications'
 
@@ -1040,10 +1040,10 @@ export default function EvaluationPage() {
     .filter(e => !(isAssistantDirector && onlyMine) || e.supervisor_id === profile?.id || !!supervisedStationIds?.includes(e.station_id))
     .filter(e => filterStation === 'all' || e.station_id === filterStation)
     .filter(e => !searchQuery ||
-      (e.full_name_ar || '').includes(searchQuery) ||
-      (e.job_number   || '').includes(searchQuery) ||
-      (e.username     || '').includes(searchQuery) ||
-      (e.station?.name_ar || '').includes(searchQuery)
+      matchesSearch(e.full_name_ar, searchQuery) ||
+      matchesSearch(e.job_number, searchQuery) ||
+      matchesSearch(e.username, searchQuery) ||
+      matchesSearch(e.station?.name_ar, searchQuery)
     )
     .sort((a, b) =>
       (a.station?.name_ar || '').localeCompare(b.station?.name_ar || '', 'ar') ||
@@ -2103,8 +2103,8 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
                 <div style={{ display:'flex', flexDirection:'column', maxHeight:200, overflowY:'auto', overflowX:'hidden', borderRadius:12, border:'1px solid var(--border)' }}>
                   {employees
                     .filter(e => !empRangeSearch ||
-                      (e.full_name_ar||'').includes(empRangeSearch) ||
-                      (e.job_number||'').includes(empRangeSearch))
+                      matchesSearch(e.full_name_ar, empRangeSearch) ||
+                      matchesSearch(e.job_number, empRangeSearch))
                     .map((e, i, arr) => (
                       <label key={e.id} className="nw-row-lbl" style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', padding:'9px 16px', background:'transparent', borderBottom: i < arr.length-1 ? '1px solid var(--border)' : 'none' }}>
                         <input type="checkbox" checked={selEmpSet.has(e.id)} onChange={() => toggleEmp(e.id)} style={{ width:16, height:16, accentColor:'#4A6FA5', cursor:'pointer', flexShrink:0 }} />

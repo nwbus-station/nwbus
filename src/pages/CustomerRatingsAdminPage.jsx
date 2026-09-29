@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { todayStr } from '../utils/dates'
-import { escapeHtml, toLatinDigits } from '../utils/digits'
+import { escapeHtml, toLatinDigits, matchesSearch } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
 import { useAuth } from '../context/AuthContext'
 
@@ -28,9 +28,9 @@ function EmployeePicker({ employees, value, onChange, defaultLabel }) {
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
-  const q = toLatinDigits(query).trim().toLowerCase()
+  const q = query.trim()
   const filtered = !q ? employees : employees.filter(e =>
-    (e.full_name_ar || '').toLowerCase().includes(q) || toLatinDigits(e.job_number || '').includes(q)
+    matchesSearch(e.full_name_ar, q) || matchesSearch(e.job_number, q)
   )
 
   return (

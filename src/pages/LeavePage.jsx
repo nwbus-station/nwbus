@@ -8,6 +8,7 @@ import DatePicker from '../components/shared/DatePicker'
 import { notifyMany } from '../utils/notifications'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE, jobGroupOf } from '../utils/constants'
+import { matchesSearch } from '../utils/digits'
 import { yearsOfService, annualEntitlement, accruedBalance, leaveRemaining } from '../utils/leaveBalance'
 
 /* ─── ثوابت ─── */
@@ -1489,11 +1490,8 @@ export default function LeavePage() {
                   </thead>
                   <tbody>
                     {balances
-                      .filter(b => {
-                        if (!balanceSearch) return true
-                        const q = balanceSearch.toLowerCase()
-                        return b.full_name_ar?.toLowerCase().includes(q) || b.job_number?.toLowerCase().includes(q)
-                      })
+                      .filter(b => !balanceSearch ||
+                        matchesSearch(b.full_name_ar, balanceSearch) || matchesSearch(b.job_number, balanceSearch))
                       .map(b => (
                       <tr key={b.id} style={{ borderBottom: '1px solid var(--border)' }}>
                         <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-1)' }}>{b.full_name_ar}</td>
