@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import { useAppSettings } from '../../context/AppSettingsContext'
@@ -323,6 +323,8 @@ const ICONS = {
   leave:   ['M8 2v4','M16 2v4','M3 10h18','M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z','M8 14h.01','M12 14h.01','M16 14h.01','M8 18h.01','M12 18h.01'],
   refresh: ['M21 2v6h-6','M3 22v-6h6','M3.51 9a9 9 0 0114.85-3.36L21 8','M21 16l-2.64 2.36A9 9 0 013.51 15'],
   up:      ['M12 19V5','M5 12l7-7 7 7'],
+  menu:    ['M4 7h16','M4 12h16','M4 17h16'],
+  x:       ['M18 6L6 18','M6 6l12 12'],
 }
 
 const NAV_GROUPS = [
@@ -402,6 +404,51 @@ function NavTab({ item, isAr }) {
   )
 }
 
+// قائمة الجوال (الدرج الجانبي) — تعرض كل الأقسام المتاحة دفعة وحدة، بدل الاكتفاء بأول 5
+// بالشريط السفلي أو الاضطرار لتدوير الشاشة لعرض الشريط العلوي (نفس محتوى top-nav بالضبط)
+function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, stationName }) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
+  }, [open, onClose])
+
+  return (
+    <>
+      <div className={`mobile-menu-overlay${open ? ' open' : ''}`} onClick={onClose} />
+      <aside className={`mobile-menu-drawer${open ? ' open' : ''}`} dir={isAr ? 'rtl' : 'ltr'} role="dialog" aria-modal="true">
+        <div className="mobile-menu-head">
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name_ar}</p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {roleLabel}{stationName && <span> · {stationName}</span>}
+            </p>
+          </div>
+          <button onClick={onClose} aria-label={isAr ? 'إغلاق القائمة' : 'Close menu'}
+            style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--surface)', color: 'var(--text-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
+            <Icon d={ICONS.x} size={14} />
+          </button>
+        </div>
+        <nav className="mobile-menu-body">
+          {visibleGroups.map((group, gi) => (
+            <div key={gi} className="mobile-menu-group">
+              {group.items.map(item => (
+                <NavLink key={item.to} to={item.to} end={item.to === '/'} onClick={onClose}
+                  className={({ isActive }) => `mobile-menu-item${isActive ? ' active' : ''}`}>
+                  <span className="mobile-menu-item-ico"><Icon d={ICONS[item.icon]} size={17} /></span>
+                  <span>{isAr ? item.labelAr : item.labelEn}</span>
+                </NavLink>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </aside>
+    </>
+  )
+}
+
 // زر عائم "الرجوع للأعلى" — يظهر بعد التمرير لأسفل بأي صفحة، ويرجع بسلاسة لأعلى الصفحة
 function ScrollToTopButton() {
   const [show, setShow] = useState(false)
@@ -445,6 +492,9 @@ export default function AppLayout() {
   }, [dark])
 
   const [showChangePwd, setShowChangePwd] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const location = useLocation()
+  useEffect(() => { setMobileMenuOpen(false) }, [location.pathname])
 
   // تنبيه لطيف بعد فترة قصيرة من فتح الجلسة — لأي حساب لسا يستخدم كلمة المرور اللي حطها الأدمن ولا غيّرها بنفسه
   const [showPwdNudge, setShowPwdNudge] = useState(false)
@@ -547,6 +597,12 @@ export default function AppLayout() {
         position: 'sticky', top: 0, zIndex: 40,
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
       }}>
+        {/* زر القائمة — جوال فقط */}
+        <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)} aria-label={isAr ? 'فتح القائمة' : 'Open menu'}
+          style={{ width: 34, height: 34, borderRadius: 8, border: 'none', background: 'var(--surface)', color: 'var(--text-1)', display: 'none', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
+          <Icon d={ICONS.menu} size={17} />
+        </button>
+
         {/* Wordmark */}
         <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, color: 'var(--text-1)' }}>
           <NWLogo height={26} />
@@ -624,6 +680,9 @@ export default function AppLayout() {
           </button>
         </div>
       </header>
+
+      <MobileMenu open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}
+        visibleGroups={visibleGroups} isAr={isAr} profile={profile} roleLabel={roleLabel} stationName={stationName} />
 
       {showChangePwd && (
         <ChangePasswordModal isAr={isAr} onClose={() => setShowChangePwd(false)} />
@@ -715,7 +774,7 @@ export default function AppLayout() {
       {/* شارة ثابتة دايماً — تصير مرئية بدون تمرير، على أي صفحة */}
       <div className="no-print app-version-badge">
         {isAr ? 'آخر تحديث: ' : 'Updated: '}
-        {new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+        {new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA-u-ca-gregory' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
         {' · '}v{__APP_VERSION__}
       </div>
 
