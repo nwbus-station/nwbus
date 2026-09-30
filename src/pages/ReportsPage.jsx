@@ -1641,6 +1641,13 @@ export default function ReportsPage() {
 
             {/* فلاتر */}
             <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+              <button onClick={() => { const t = toLocalDateStr(); setAuditFrom(t); setAuditTo(t) }}
+                title={isAr ? 'إعادة التاريخ لليوم' : 'Reset to today'}
+                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-2)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 2v6h-6"/><path d="M3 22v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L21 8"/><path d="M21 16l-2.64 2.36A9 9 0 013.51 15"/>
+                </svg>
+              </button>
               <input type="date" value={auditFrom} onChange={e => { setAuditFrom(e.target.value); if (e.target.value) setAuditTo(e.target.value) }}
                 style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }} />
               <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>—</span>
