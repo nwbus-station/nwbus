@@ -2003,6 +2003,8 @@ function UsersPageFull() {
     return { phoneById, emailById }
   }
 
+  const jobTitleLabelOf = jt => jt ? (JOB_TITLES.find(j => j.value === jt)?.[isAr ? 'ar' : 'en'] ?? jt) : '—'
+
   async function printRoster() {
     if (printTargets.length === 0 || printingRoster) return
     setPrintingRoster(true)
@@ -2016,6 +2018,7 @@ function UsersPageFull() {
         <th style="width:36px;text-align:center">#</th>
         <th>${isAr ? 'الاسم' : 'Name'}</th>
         <th>${isAr ? 'الرقم الوظيفي' : 'Emp #'}</th>
+        <th>${isAr ? 'المسمى الوظيفي' : 'Job Title'}</th>
         <th>${isAr ? 'رقم الجوال' : 'Mobile'}</th>
         <th>${isAr ? 'البريد الإلكتروني' : 'Email'}</th>
         <th>${isAr ? 'تاريخ المباشرة' : 'Hire Date'}</th>
@@ -2028,6 +2031,7 @@ function UsersPageFull() {
         <td style="padding:10px 12px;text-align:center;color:#6B7280;font-size:12.5px;border:1px solid #E5E7EB">${i + 1}</td>
         <td style="padding:10px 12px;text-align:${cellAlign};font-weight:600;color:#111827;font-size:14px;border:1px solid #E5E7EB">${escapeHtml(u.full_name_ar)}</td>
         <td style="padding:10px 12px;text-align:${cellAlign};color:#1F2937;font-size:13.5px;font-weight:500;border:1px solid #E5E7EB"><span class="num">${escapeHtml(u.job_number || '—')}</span></td>
+        <td style="padding:10px 12px;text-align:${cellAlign};color:#1F2937;font-size:13.5px;font-weight:500;border:1px solid #E5E7EB">${escapeHtml(jobTitleLabelOf(u.job_title))}</td>
         <td style="padding:10px 12px;text-align:${cellAlign};color:#1F2937;font-size:13.5px;font-weight:500;border:1px solid #E5E7EB"><span class="num" dir="ltr">${escapeHtml(phoneById[u.id] || '—')}</span></td>
         <td style="padding:10px 12px;text-align:${cellAlign};color:#1F2937;font-size:12.5px;font-weight:500;border:1px solid #E5E7EB"><span class="num" dir="ltr">${escapeHtml(emailById[u.id] || '—')}</span></td>
         <td style="padding:10px 12px;text-align:${cellAlign};color:#1F2937;font-size:13.5px;font-weight:500;border:1px solid #E5E7EB"><span class="num" dir="ltr">${escapeHtml(u.hire_date || '—')}</span></td>
@@ -2110,18 +2114,18 @@ function UsersPageFull() {
 
     const { title: stationTitleX, showStationCol: showStationColX } = printScopeLabel()
     const header = [
-      '#', isAr ? 'الاسم' : 'Name', isAr ? 'الرقم الوظيفي' : 'Emp #',
+      '#', isAr ? 'الاسم' : 'Name', isAr ? 'الرقم الوظيفي' : 'Emp #', isAr ? 'المسمى الوظيفي' : 'Job Title',
       isAr ? 'رقم الجوال' : 'Mobile', isAr ? 'البريد الإلكتروني' : 'Email', isAr ? 'تاريخ المباشرة' : 'Hire Date',
       ...(showStationColX ? [isAr ? 'المحطة' : 'Station'] : []),
       isAr ? 'الحالة' : 'Status',
     ]
     const data = printTargets.map((u, i) => [
-      i + 1, u.full_name_ar, u.job_number || '', phoneById[u.id] || '', emailById[u.id] || '', u.hire_date || '',
+      i + 1, u.full_name_ar, u.job_number || '', jobTitleLabelOf(u.job_title), phoneById[u.id] || '', emailById[u.id] || '', u.hire_date || '',
       ...(showStationColX ? [u.station ? (isAr ? u.station.name_ar : u.station.name_en) : ''] : []),
       u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive'),
     ])
     const ws = XLSX.utils.aoa_to_sheet([header, ...data])
-    ws['!cols'] = [{ wch: 4 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, ...(showStationColX ? [{ wch: 16 }] : []), { wch: 10 }]
+    ws['!cols'] = [{ wch: 4 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, ...(showStationColX ? [{ wch: 16 }] : []), { wch: 10 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, isAr ? 'الموظفون' : 'Staff')
     XLSX.writeFile(wb, `${isAr ? 'قائمة_الموظفين' : 'staff_roster'}_${stationTitleX}_${new Date().toISOString().slice(0, 10)}.xlsx`)
