@@ -1560,7 +1560,9 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                             ${on ? 'bg-nwbus-primary border-nwbus-primary text-white' : 'border-gray-300'}`}>
                             {on && '✓'}
                           </span>
-                          <span className="truncate">{isAr ? s.name_ar : s.name_en}</span>
+                          {/* dir="auto" — أسماء المحطات كثير منها إنجليزية داخل عمود عربي، وبدونها
+                              القص (truncate) يقصّ من أول الاسم بدل آخره ("...dinah Train Station") */}
+                          <span className="truncate" dir="auto">{isAr ? s.name_ar : s.name_en}</span>
                         </button>
                         {on && (
                           <button type="button" onClick={() => setPrimaryStationId(s.id)}
