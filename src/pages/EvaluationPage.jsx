@@ -465,15 +465,16 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
       .join('\n')
     const isStar = complete && final >= STAR_THRESHOLD
     const monthLabel = `${MONTHS_AR[month - 1]} ${year}`
-    const { error: notifyErr } = await createNotification({
-      userId: employee.id,
-      type: isStar ? 'success' : 'info',
-      title: complete
-        ? (isStar ? `تقييمك ${(final / 10).toFixed(1)}/10 ⭐ — ممتاز! (${monthLabel})` : `صدر تقييمك النهائي لشهر ${monthLabel}`)
-        : `قيّمك ${EVAL_SOURCE_LABELS[sourceRole]} لشهر ${monthLabel}`,
-      body: `شهر ${monthLabel}\n\n${lines}\n\nالنتيجة ${complete ? 'النهائية' : 'الحالية'}: ${(final / 10).toFixed(1)}/10`,
-    })
-    if (notifyErr) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr.message}`)
+    // إشعار فقط لما يصير "موظف مميز" (نتيجة نهائية ≥ 98) — بدون إزعاج بإشعار لكل تقييم جزئي أو عادي
+    if (isStar) {
+      const { error: notifyErr } = await createNotification({
+        userId: employee.id,
+        type: 'success',
+        title: `تقييمك ${(final / 10).toFixed(1)}/10 ⭐ — ممتاز! (${monthLabel})`,
+        body: `شهر ${monthLabel}\n\n${lines}\n\nالنتيجة النهائية: ${(final / 10).toFixed(1)}/10`,
+      })
+      if (notifyErr) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr.message}`)
+    }
     if (complete) {
       try {
         const now = new Date()
@@ -614,15 +615,16 @@ function SupervisorEvalModal({ supervisor, month, year, existing, sourceRole, on
       .join('\n')
     const isStar = complete && final >= STAR_THRESHOLD
     const monthLabel = `${MONTHS_AR[month - 1]} ${year}`
-    const { error: notifyErr } = await createNotification({
-      userId: supervisor.id,
-      type: isStar ? 'success' : 'info',
-      title: complete
-        ? (isStar ? `تقييمك ${(final / 10).toFixed(1)}/10 ⭐ — ممتاز! (${monthLabel})` : `صدر تقييمك النهائي لشهر ${monthLabel}`)
-        : `قيّمك ${SUP_EVAL_LABELS[sourceRole]} لشهر ${monthLabel}`,
-      body: `شهر ${monthLabel}\n\n${lines}\n\nالنتيجة ${complete ? 'النهائية' : 'الحالية'}: ${(final / 10).toFixed(1)}/10`,
-    })
-    if (notifyErr) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr.message}`)
+    // إشعار فقط لما يصير "مشرف مميز" (نتيجة نهائية ≥ 98) — بدون إزعاج بإشعار لكل تقييم جزئي أو عادي
+    if (isStar) {
+      const { error: notifyErr } = await createNotification({
+        userId: supervisor.id,
+        type: 'success',
+        title: `تقييمك ${(final / 10).toFixed(1)}/10 ⭐ — ممتاز! (${monthLabel})`,
+        body: `شهر ${monthLabel}\n\n${lines}\n\nالنتيجة النهائية: ${(final / 10).toFixed(1)}/10`,
+      })
+      if (notifyErr) alert(`تم حفظ التقييم لكن تعذّر إرسال الإشعار: ${notifyErr.message}`)
+    }
     if (complete) {
       try {
         const now = new Date()
