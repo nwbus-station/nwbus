@@ -30,19 +30,27 @@ function playChime() {
   })
 }
 
-function pickArabicVoice() {
-  const voices = window.speechSynthesis?.getVoices?.() || []
-  return voices.find(v => v.lang?.toLowerCase().startsWith('ar-sa')) || voices.find(v => v.lang?.toLowerCase().startsWith('ar'))
+function listArabicVoices() {
+  return (window.speechSynthesis?.getVoices?.() || []).filter(v => v.lang?.toLowerCase().startsWith('ar'))
 }
 
-function speak(text) {
+// ترتيب الأصوات المتاحة من الأقرب لصوت بشري طبيعي — المتصفح/الجهاز هو اللي يحدد جودتها فعلياً،
+// هذا بس تفضيل أفضل المتاح (أصوات Google/Online عادة طبيعية أكثر من الأصوات المحلية الأساسية)
+function rankVoice(v) {
+  const n = v.name.toLowerCase()
+  if (n.includes('google')) return 4
+  if (n.includes('online') || n.includes('natural') || n.includes('neural')) return 3
+  if (v.lang?.toLowerCase() === 'ar-sa') return 2
+  return 1
+}
+
+function speak(text, voice) {
   return new Promise(resolve => {
     if (!window.speechSynthesis || !text.trim()) return resolve()
     const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'ar-SA'
-    u.rate = 0.9
+    u.lang = voice?.lang || 'ar-SA'
+    u.rate = 0.88
     u.pitch = 1
-    const voice = pickArabicVoice()
     if (voice) u.voice = voice
     u.onend = resolve
     u.onerror = resolve
@@ -60,9 +68,9 @@ const REPEAT_OPTIONS = [
   { value: 300, ar: 'كل 5 دقائق' },
 ]
 
-function buildAnnouncement(trip, stop) {
-  const line = trip.route ? ` – خط ${trip.route}` : ''
-  return `نداء لركاب الرحلة رقم ${trip.trip_number}${line}، المتجهة إلى ${stop.name}. يُرجى التوجه إلى صالة الانتظار استعداداً لصعود الحافلة.`
+function buildAnnouncement(destName, viaNames) {
+  const via = viaNames.length ? ` مروراً بـ ${viaNames.join('، ')}` : ''
+  return `نداء على الركاب المسافرين إلى ${destName}${via}.`
 }
 
 export default function CallPage() {
@@ -73,14 +81,34 @@ export default function CallPage() {
   const [selectedTripId, setSelectedTripId] = useState('')
   const [stops, setStops] = useState([])
   const [loadingStops, setLoadingStops] = useState(false)
-  const [selectedStopId, setSelectedStopId] = useState('')
+  const [destStopId, setDestStopId] = useState('')
+  const [viaOff, setViaOff] = useState({}) // {stopId: true} = مستبعدة من النداء
   const [text, setText] = useState('')
   const [playing, setPlaying] = useState(false)
   const [repeatEvery, setRepeatEvery] = useState(0)
   const [repeating, setRepeating] = useState(false)
+  const [chimeOn, setChimeOn] = useState(true)
+  const [voices, setVoices] = useState([])
+  const [voiceURI, setVoiceURI] = useState('')
   const intervalRef = useRef(null)
 
   const selectedTrip = trips.find(t => t.id === selectedTripId)
+  const destIndex = stops.findIndex(s => s.id === destStopId)
+  const viaCandidates = destIndex > 0 ? stops.slice(1, destIndex) : []
+  const viaChosen = viaCandidates.filter(s => !viaOff[s.id])
+  const selectedVoice = voices.find(v => v.voiceURI === voiceURI) || null
+
+  useEffect(() => {
+    function loadVoices() {
+      const list = listArabicVoices()
+      if (!list.length) return
+      setVoices(list)
+      setVoiceURI(prev => prev || [...list].sort((a, b) => rankVoice(b) - rankVoice(a))[0].voiceURI)
+    }
+    loadVoices()
+    window.speechSynthesis?.addEventListener?.('voiceschanged', loadVoices)
+    return () => window.speechSynthesis?.removeEventListener?.('voiceschanged', loadVoices)
+  }, [])
 
   useEffect(() => {
     (async () => {
@@ -99,10 +127,11 @@ export default function CallPage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedTrip) { setStops([]); setSelectedStopId(''); return }
+    if (!selectedTrip) { setStops([]); setDestStopId(''); return }
     (async () => {
       setLoadingStops(true)
-      setSelectedStopId('')
+      setDestStopId('')
+      setViaOff({})
       const { data } = await supabase
         .from('trip_schedule_stops')
         .select('station_id, stop_order, arrival_time, departure_time, status, station:station_id(id,name_ar)')
@@ -123,10 +152,11 @@ export default function CallPage() {
   }, [selectedTripId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!selectedTrip) return
-    const stop = stops.find(s => s.id === selectedStopId)
-    if (stop) setText(buildAnnouncement(selectedTrip, stop))
-  }, [selectedStopId, selectedTrip, stops])
+    if (mode !== 'trip' || !destStopId) return
+    const dest = stops.find(s => s.id === destStopId)
+    if (dest) setText(buildAnnouncement(dest.name, viaChosen.map(s => s.name)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destStopId, viaOff, stops, mode])
 
   const stopRepeat = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
@@ -138,10 +168,11 @@ export default function CallPage() {
   const doCall = useCallback(async (t) => {
     if (!t?.trim()) return
     setPlaying(true)
-    await playChime()
-    await speak(t)
+    if (chimeOn) await playChime()
+    await speak(t, selectedVoice)
     setPlaying(false)
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chimeOn, selectedVoice])
 
   async function onCallClick() {
     if (playing) return
@@ -162,7 +193,7 @@ export default function CallPage() {
   return (
     <div className="max-w-3xl mx-auto p-6" dir="rtl">
       <h1 className="text-xl font-bold text-gray-800 mb-1">نداء الركاب</h1>
-      <p className="text-sm text-gray-500 mb-5">نداء صوتي بنغمة مطار لركاب رحلة معينة أو نص حر — يظهر حالياً للأدمن فقط</p>
+      <p className="text-sm text-gray-500 mb-5">نداء صوتي لركاب رحلة معينة أو نص حر — يظهر حالياً للأدمن فقط</p>
 
       {!SUPPORTED && (
         <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl p-4 mb-5">
@@ -202,14 +233,14 @@ export default function CallPage() {
 
           {selectedTrip && (
             <div className="mt-4">
-              <label className="text-xs font-semibold text-gray-500 mb-1.5 block">نقطة التوقف المطلوب النداء لها</label>
+              <label className="text-xs font-semibold text-gray-500 mb-1.5 block">الوجهة المُعلن عنها</label>
               {loadingStops ? (
                 <p className="text-sm text-gray-400 py-3 text-center">جاري التحميل...</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {stops.map(s => (
-                    <button key={s.id} type="button" onClick={() => setSelectedStopId(s.id)}
-                      className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${selectedStopId === s.id ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}>
+                  {stops.map((s, i) => (
+                    <button key={s.id} type="button" disabled={i === 0} onClick={() => setDestStopId(s.id)}
+                      className={`px-3 py-1.5 rounded-full text-sm border transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${destStopId === s.id ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}>
                       {s.name}{s.rest ? ' (استراحة)' : ''}
                     </button>
                   ))}
@@ -218,22 +249,71 @@ export default function CallPage() {
               )}
             </div>
           )}
+
+          {destStopId && viaCandidates.length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-gray-500">نقاط المرور المذكورة بالنداء (مروراً بـ...)</label>
+                <div className="flex gap-2 text-[11px]">
+                  <button type="button" onClick={() => setViaOff({})} className="text-nwbus-primary hover:underline">الكل</button>
+                  <button type="button" onClick={() => setViaOff(Object.fromEntries(viaCandidates.map(s => [s.id, true])))} className="text-gray-400 hover:underline">لا شيء</button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {viaCandidates.map(s => (
+                  <label key={s.id}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border cursor-pointer transition-colors ${!viaOff[s.id] ? 'bg-nwbus-primary/10 border-nwbus-primary/40 text-nwbus-primary' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                    <input type="checkbox" className="accent-nwbus-primary" checked={!viaOff[s.id]}
+                      onChange={() => setViaOff(p => ({ ...p, [s.id]: !p[s.id] }))} />
+                    {s.name}{s.rest ? ' (استراحة)' : ''}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       <div className="bg-white border rounded-xl p-4 mb-4">
         <label className="text-xs font-semibold text-gray-500 mb-1.5 block">نص النداء</label>
         <textarea value={text} onChange={e => setText(e.target.value)} rows={3}
-          placeholder={mode === 'free' ? 'اكتب نص النداء هنا...' : 'اختر رحلة ونقطة توقف ليتم تعبئة النص تلقائياً، وتقدر تعدّله'}
+          placeholder={mode === 'free' ? 'اكتب نص النداء هنا...' : 'اختر رحلة ووجهة ليتم تعبئة النص تلقائياً، وتقدر تعدّله'}
           className="w-full border rounded-lg px-3 py-2 text-sm" />
 
-        <div className="flex flex-wrap items-center gap-3 mt-3">
-          <label className="text-xs text-gray-500">تكرار النداء:</label>
-          <select value={repeatEvery} onChange={e => setRepeatEvery(Number(e.target.value))}
-            disabled={repeating} className="border rounded-lg px-2 py-1.5 text-sm">
-            {REPEAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.ar}</option>)}
-          </select>
+        <div className="flex flex-wrap items-center gap-4 mt-3">
+          <label className="flex items-center gap-1.5 text-xs text-gray-600">
+            <input type="checkbox" className="accent-nwbus-primary" checked={chimeOn} onChange={e => setChimeOn(e.target.checked)} />
+            نغمة قبل النداء
+          </label>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">تكرار النداء:</label>
+            <select value={repeatEvery} onChange={e => setRepeatEvery(Number(e.target.value))}
+              disabled={repeating} className="border rounded-lg px-2 py-1.5 text-sm">
+              {REPEAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.ar}</option>)}
+            </select>
+          </div>
         </div>
+
+        {voices.length > 0 && (
+          <div className="flex items-center gap-1.5 mt-3">
+            <label className="text-xs text-gray-500 shrink-0">صوت النداء:</label>
+            <select value={voiceURI} onChange={e => setVoiceURI(e.target.value)}
+              className="border rounded-lg px-2 py-1.5 text-sm flex-1 min-w-0">
+              {[...voices].sort((a, b) => rankVoice(b) - rankVoice(a)).map(v => (
+                <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
+              ))}
+            </select>
+            <button type="button" onClick={() => speak('هذا تجربة لصوت النداء', selectedVoice)}
+              className="px-3 py-1.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-xs hover:bg-gray-100 shrink-0">
+              تجربة
+            </button>
+          </div>
+        )}
+        {voices.length === 0 && SUPPORTED && (
+          <p className="text-[11px] text-amber-600 mt-3">
+            ما وجدنا صوت عربي مثبّت بهذا الجهاز/المتصفح — النداء بيستخدم الصوت الافتراضي وجودته قد تكون أقل.
+          </p>
+        )}
 
         <div className="flex gap-2 mt-4">
           <button type="button" onClick={onCallClick} disabled={!SUPPORTED || !text.trim() || playing || repeating}
@@ -246,10 +326,12 @@ export default function CallPage() {
               إيقاف
             </button>
           )}
-          <button type="button" onClick={() => playChime()} disabled={!SUPPORTED}
-            className="px-4 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm hover:bg-gray-100 disabled:opacity-40">
-            تجربة النغمة
-          </button>
+          {chimeOn && (
+            <button type="button" onClick={() => playChime()} disabled={!SUPPORTED}
+              className="px-4 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm hover:bg-gray-100 disabled:opacity-40">
+              تجربة النغمة
+            </button>
+          )}
         </div>
       </div>
     </div>
