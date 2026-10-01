@@ -268,37 +268,64 @@ function RatingsTab() {
         ) : sorted.length === 0 ? (
           <div className="text-center py-10 text-gray-400 text-sm">لا توجد تقييمات بهذي الفلاتر</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-xs">
-              <tr>
-                <th className="px-4 py-2 text-right">الموظف</th>
-                <th className="px-4 py-2 text-right">المحطة</th>
-                <th className="px-4 py-2 text-right">الشباك</th>
-                <th className="px-4 py-2 text-right">التقييم</th>
-                <th className="px-4 py-2 text-right">التذكرة</th>
-                <th className="px-4 py-2 text-right">المرجع</th>
-                <th className="px-4 py-2 text-right">تاريخ التذكرة</th>
-                <th className="px-4 py-2 text-right">تاريخ التقييم</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+          <>
+            {/* جدول — من md فأعلى فقط، بدون داعي للتمرير الأفقي أو تدوير الشاشة بالجوال */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-500 text-xs">
+                  <tr>
+                    <th className="px-4 py-2 text-right">الموظف</th>
+                    <th className="px-4 py-2 text-right">المحطة</th>
+                    <th className="px-4 py-2 text-right">الشباك</th>
+                    <th className="px-4 py-2 text-right">التقييم</th>
+                    <th className="px-4 py-2 text-right">التذكرة</th>
+                    <th className="px-4 py-2 text-right">المرجع</th>
+                    <th className="px-4 py-2 text-right">تاريخ التذكرة</th>
+                    <th className="px-4 py-2 text-right">تاريخ التقييم</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sorted.map(r => (
+                    <tr key={r.id}>
+                      <td className="px-4 py-2.5 font-semibold text-gray-800">{r.employee?.full_name_ar || '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-500">{r.station?.name_ar || '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-500 font-mono">{r.window_number || '—'}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`font-bold ${r.rating >= 4 ? 'text-green-600' : r.rating === 3 ? 'text-amber-500' : 'text-red-500'}`}>{r.rating} / 5</span>
+                        {r.comment && <p className="text-xs text-gray-400 mt-0.5">{r.comment}</p>}
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-500 font-mono">{r.ticket_number || '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">{r.reference_number || '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-400 text-xs">{r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA-u-ca-gregory') : '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-400 text-xs">{new Date(r.created_at).toLocaleDateString('ar-SA-u-ca-gregory')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* بطاقات — بالجوال فقط، نفس بيانات الجدول بدون تمرير أفقي ولا تدوير الشاشة */}
+            <div className="md:hidden divide-y divide-gray-100">
               {sorted.map(r => (
-                <tr key={r.id}>
-                  <td className="px-4 py-2.5 font-semibold text-gray-800">{r.employee?.full_name_ar || '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-500">{r.station?.name_ar || '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-500 font-mono">{r.window_number || '—'}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`font-bold ${r.rating >= 4 ? 'text-green-600' : r.rating === 3 ? 'text-amber-500' : 'text-red-500'}`}>{r.rating} / 5</span>
-                    {r.comment && <p className="text-xs text-gray-400 mt-0.5">{r.comment}</p>}
-                  </td>
-                  <td className="px-4 py-2.5 text-gray-500 font-mono">{r.ticket_number || '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">{r.reference_number || '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA-u-ca-gregory') : '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{new Date(r.created_at).toLocaleDateString('ar-SA-u-ca-gregory')}</td>
-                </tr>
+                <div key={r.id} className="p-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-800 truncate">{r.employee?.full_name_ar || '—'}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{r.station?.name_ar || '—'}{r.window_number ? ` · شباك ${r.window_number}` : ''}</p>
+                    </div>
+                    <span className={`shrink-0 font-bold text-sm px-2 py-0.5 rounded-full ${r.rating >= 4 ? 'bg-green-50 text-green-600' : r.rating === 3 ? 'bg-amber-50 text-amber-500' : 'bg-red-50 text-red-500'}`}>{r.rating} / 5</span>
+                  </div>
+                  {r.comment && <p className="text-xs text-gray-500 mt-2 bg-gray-50 rounded-lg px-2.5 py-1.5">{r.comment}</p>}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5 text-[11px] text-gray-400">
+                    {r.ticket_number && <span>تذكرة: <span className="font-mono text-gray-500">{r.ticket_number}</span></span>}
+                    {r.reference_number && <span>مرجع: <span className="font-mono text-gray-500">{r.reference_number}</span></span>}
+                    {r.ticket_date && <span>تاريخ التذكرة: {new Date(r.ticket_date).toLocaleDateString('ar-SA-u-ca-gregory')}</span>}
+                    <span>تاريخ التقييم: {new Date(r.created_at).toLocaleDateString('ar-SA-u-ca-gregory')}</span>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
     </div>
