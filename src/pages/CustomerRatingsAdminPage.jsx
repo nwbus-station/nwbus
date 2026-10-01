@@ -158,8 +158,8 @@ function RatingsTab() {
         </td>
         <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(r.ticket_number) || '—'}</td>
         <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#9CA3AF;font-size:11px;border:1px solid #EEF0F3">${escapeHtml(r.reference_number) || '—'}</td>
-        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA') : '—'}</td>
-        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${new Date(r.created_at).toLocaleDateString('ar-SA')}</td>
+        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA-u-ca-gregory') : '—'}</td>
+        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${new Date(r.created_at).toLocaleDateString('ar-SA-u-ca-gregory')}</td>
         <td style="padding:9px 12px;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${escapeHtml(r.comment) || ''}</td>
       </tr>`).join('')
 
@@ -180,7 +180,7 @@ function RatingsTab() {
       <div style="background:#1C2B36;color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
         <div>
           <div style="font-size:15px;font-weight:800">تقرير تقييم العملاء${selectedStation ? ` — ${escapeHtml(selectedStation.name_ar)}` : ''}</div>
-          <div style="font-size:10px;opacity:0.7;margin-top:3px">${rows.length} تقييم · المتوسط ${avg} / 5 · ${new Date().toLocaleDateString('ar-SA')}</div>
+          <div style="font-size:10px;opacity:0.7;margin-top:3px">${rows.length} تقييم · المتوسط ${avg} / 5 · ${new Date().toLocaleDateString('ar-SA-u-ca-gregory')}</div>
         </div>
         <div style="font-size:12px;font-weight:800;letter-spacing:1px">NORTH WEST BUS</div>
       </div>`
@@ -293,8 +293,8 @@ function RatingsTab() {
                   </td>
                   <td className="px-4 py-2.5 text-gray-500 font-mono">{r.ticket_number || '—'}</td>
                   <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">{r.reference_number || '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA') : '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-400 text-xs">{new Date(r.created_at).toLocaleDateString('ar-SA')}</td>
+                  <td className="px-4 py-2.5 text-gray-400 text-xs">{r.ticket_date ? new Date(r.ticket_date).toLocaleDateString('ar-SA-u-ca-gregory') : '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-400 text-xs">{new Date(r.created_at).toLocaleDateString('ar-SA-u-ca-gregory')}</td>
                 </tr>
               ))}
             </tbody>

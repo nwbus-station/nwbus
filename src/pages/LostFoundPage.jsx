@@ -978,7 +978,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                               <p style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '0 0 4px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                                 <DetailIcon name="calendar" color="var(--text-3)" /> {isAr ? 'تسليم الجمعية' : 'Donated on'}
                               </p>
-                              <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{new Date(item.donated_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</p>
+                              <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{new Date(item.donated_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB')}</p>
                             </div>
                           )}
                         </div>

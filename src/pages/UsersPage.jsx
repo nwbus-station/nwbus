@@ -61,7 +61,7 @@ function RatingActivationAdmin({ userId, isAr }) {
         <span className={`w-2 h-2 rounded-full ${effectivelyActive ? 'bg-green-500' : 'bg-gray-300'}`} />
         <span className="text-xs text-gray-500">
           {effectivelyActive
-            ? (isAr ? `مفعّل${activeUntil ? ` — حتى ${activeUntil.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}` : isAr ? 'غير مفعّل' : 'Not active')
+            ? (isAr ? `مفعّل${activeUntil ? ` — حتى ${activeUntil.toLocaleTimeString('ar-SA-u-ca-gregory', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}` : isAr ? 'غير مفعّل' : 'Not active')
             : (isAr ? 'غير مفعّل' : 'Not active')}
         </span>
       </div>
@@ -413,7 +413,7 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
       </div>
       <div class="footer">
         <span class="footer-brand">NWB STATIONS SYSTEM</span>
-        <span class="footer-date">${new Date().toLocaleDateString('ar-SA')}</span>
+        <span class="footer-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory')}</span>
       </div>
     </div>
     <script>window.onload=()=>{window.print()}</script>
@@ -1363,7 +1363,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                   <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'آخر تسجيل دخول' : 'Last Login'}</p>
                   <p className="text-sm font-semibold text-gray-700">
                     {user.last_login
-                      ? new Date(user.last_login).toLocaleString(isAr ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })
+                      ? new Date(user.last_login).toLocaleString(isAr ? 'ar-SA-u-ca-gregory' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })
                       : (isAr ? 'لم يسجل دخول' : 'Never logged in')}
                   </p>
                 </div>
@@ -2095,7 +2095,7 @@ function UsersPageFull() {
         <div style="background:#1C2B36;color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
           <div>
             <div style="font-size:15px;font-weight:800">${isAr ? 'قائمة الموظفين' : 'Staff Roster'} — ${escapeHtml(stationTitle)}</div>
-            <div style="font-size:10px;opacity:0.7;margin-top:3px">${printTargets.length} ${isAr ? 'موظف' : 'staff'} · ${new Date().toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}</div>
+            <div style="font-size:10px;opacity:0.7;margin-top:3px">${printTargets.length} ${isAr ? 'موظف' : 'staff'} · ${new Date().toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB')}</div>
           </div>
           <div style="font-size:12px;font-weight:800;letter-spacing:1px">NORTH WEST BUS</div>
         </div>

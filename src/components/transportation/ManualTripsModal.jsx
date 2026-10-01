@@ -168,11 +168,11 @@ export default function ManualTripsModal({ isAr, onClose, onChanged }) {
                           <div className="text-xs text-gray-500 pt-2 border-t border-gray-200 space-y-1">
                             <div className="flex items-center justify-between">
                               <span>{t('Valid from', 'تاريخ البداية')}</span>
-                              <span className="font-mono">{tr.start_date ? new Date(tr.start_date).toLocaleDateString(isAr ? 'ar-SA' : 'en-US') : '—'}</span>
+                              <span className="font-mono">{tr.start_date ? new Date(tr.start_date).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-US') : '—'}</span>
                             </div>
                             <div className="flex items-center justify-between">
                               <span>{t('Valid until', 'تاريخ النهاية')}</span>
-                              <span className="font-mono">{tr.end_date ? new Date(tr.end_date).toLocaleDateString(isAr ? 'ar-SA' : 'en-US') : t('No end date — ongoing', 'بدون نهاية — مستمرة')}</span>
+                              <span className="font-mono">{tr.end_date ? new Date(tr.end_date).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-US') : t('No end date — ongoing', 'بدون نهاية — مستمرة')}</span>
                             </div>
                             <div className="flex items-center justify-between">
                               <span>{t('Runs on', 'التكرار')}</span>

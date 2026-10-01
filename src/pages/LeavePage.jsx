@@ -177,7 +177,7 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
   const isCasual    = leave.leave_type === 'casual'
   const durationStr = isCasual ? formatHoursAr((leave.days_count ?? 0) * 24) : `${leave.days_count} يوم`
   const printDate  = new Date().toLocaleDateString('ar-SA-u-ca-gregory')
-  const printTime  = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })
+  const printTime  = new Date().toLocaleTimeString('ar-SA-u-ca-gregory', { hour: '2-digit', minute: '2-digit' })
   // بيانات الموظف تُقرأ من بطاقة الموظف (جدول users) — مصدر الحقيقة الوحيد
   const hireStr    = profile?.hire_date ?? null
   const entitlement = annualEntitlement(hireStr)
@@ -1034,8 +1034,8 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
           {leave.created_at && (
             <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: 3 }}>
               {isAr ? 'تاريخ الرفع:' : 'Submitted:'}{' '}
-              {new Date(leave.created_at).toLocaleDateString(isAr ? 'ar-SA' : 'en-GB')}{' — '}
-              {new Date(leave.created_at).toLocaleTimeString(isAr ? 'ar-SA' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(leave.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB')}{' — '}
+              {new Date(leave.created_at).toLocaleTimeString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}
             </div>
           )}
         </div>
