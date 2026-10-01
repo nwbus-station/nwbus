@@ -65,7 +65,7 @@ const ELEVENLABS_VOICE_ID = '__elevenlabs__'
 async function speakElevenLabs(text) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error('لا توجد جلسة دخول')
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts-call`, {
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/swift-responder`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
