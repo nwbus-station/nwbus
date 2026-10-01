@@ -116,8 +116,7 @@ export default function CallPage() {
   const [selectedTripId, setSelectedTripId] = useState('')
   const [stops, setStops] = useState([])
   const [loadingStops, setLoadingStops] = useState(false)
-  const [destStopId, setDestStopId] = useState('')
-  const [viaOff, setViaOff] = useState({}) // {stopId: true} = مستبعدة من النداء
+  const [stopOff, setStopOff] = useState({}) // {stopId: true} = مستبعدة من النداء — نفس أسلوب اختيار المحطات بنافذة الرحلة الإضافية (RF)
   const [text, setText] = useState('')
   const [playing, setPlaying] = useState(false)
   const [repeatEvery, setRepeatEvery] = useState(0)
@@ -129,9 +128,10 @@ export default function CallPage() {
   const intervalRef = useRef(null)
 
   const selectedTrip = trips.find(t => t.id === selectedTripId)
-  const destIndex = stops.findIndex(s => s.id === destStopId)
-  const viaCandidates = destIndex > 0 ? stops.slice(1, destIndex) : []
-  const viaChosen = viaCandidates.filter(s => !viaOff[s.id])
+  const checkedStops = stops.filter(s => !stopOff[s.id])
+  const destStop = checkedStops.length ? checkedStops[checkedStops.length - 1] : null
+  const destIndex = destStop ? stops.findIndex(s => s.id === destStop.id) : -1
+  const viaChosen = destIndex > 0 ? stops.slice(1, destIndex).filter(s => !stopOff[s.id]) : []
   const selectedVoice = voices.find(v => v.voiceURI === voiceURI) || null
 
   useEffect(() => {
@@ -163,11 +163,10 @@ export default function CallPage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedTrip) { setStops([]); setDestStopId(''); return }
+    if (!selectedTrip) { setStops([]); setStopOff({}); return }
     (async () => {
       setLoadingStops(true)
-      setDestStopId('')
-      setViaOff({})
+      setStopOff({})
       const { data } = await supabase
         .from('trip_schedule_stops')
         .select('station_id, stop_order, arrival_time, departure_time, status, station:station_id(id,name_ar)')
@@ -188,11 +187,10 @@ export default function CallPage() {
   }, [selectedTripId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (mode !== 'trip' || !destStopId) return
-    const dest = stops.find(s => s.id === destStopId)
-    if (dest) setText(buildAnnouncement(dest.name, viaChosen.map(s => s.name)))
+    if (mode !== 'trip' || !destStop) return
+    setText(buildAnnouncement(destStop.name, viaChosen.map(s => s.name)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [destStopId, viaOff, stops, mode])
+  }, [destStop, stopOff, stops, mode])
 
   const stopRepeat = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
@@ -281,42 +279,33 @@ export default function CallPage() {
 
           {selectedTrip && (
             <div className="mt-4">
-              <label className="text-xs font-semibold text-gray-500 mb-1.5 block">الوجهة المُعلن عنها</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-gray-500">المحطات والتوقفات (آخر محطة مفعّلة هي الوجهة المُعلن عنها)</label>
+                <div className="flex gap-2 text-[11px]">
+                  <button type="button" onClick={() => setStopOff({})} className="text-nwbus-primary hover:underline">الكل</button>
+                  <button type="button" onClick={() => setStopOff(Object.fromEntries(stops.map(s => [s.id, true])))} className="text-gray-400 hover:underline">لا شيء</button>
+                </div>
+              </div>
               {loadingStops ? (
                 <p className="text-sm text-gray-400 py-3 text-center">جاري التحميل...</p>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <div className="border rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
                   {stops.map((s, i) => (
-                    <button key={s.id} type="button" disabled={i === 0} onClick={() => setDestStopId(s.id)}
-                      className={`px-3 py-1.5 rounded-full text-sm border transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${destStopId === s.id ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}>
-                      {s.name}{s.rest ? ' (استراحة)' : ''}
-                    </button>
+                    <label key={s.id}
+                      className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${!stopOff[s.id] ? 'bg-nwbus-primary/5' : ''}`}>
+                      <input type="checkbox" className="accent-nwbus-primary" checked={!stopOff[s.id]}
+                        onChange={() => setStopOff(p => ({ ...p, [s.id]: !p[s.id] }))} />
+                      <span className="flex-1 text-sm text-gray-700">
+                        {s.name}{s.rest ? ' (استراحة)' : ''}
+                        {i === 0 && <span className="text-[10px] text-green-600 ms-2">المنشأ</span>}
+                        {s.id === destStop?.id && <span className="text-[10px] text-blue-600 ms-2">الوجهة</span>}
+                      </span>
+                      <span className="text-xs text-gray-400 font-mono">{s.time ? s.time.slice(0, 5) : ''}</span>
+                    </label>
                   ))}
-                  {stops.length === 0 && <p className="text-sm text-gray-400">لا توجد نقاط توقف مسجّلة لهذه الرحلة</p>}
+                  {stops.length === 0 && <p className="text-sm text-gray-400 py-3 text-center">لا توجد نقاط توقف مسجّلة لهذه الرحلة</p>}
                 </div>
               )}
-            </div>
-          )}
-
-          {destStopId && viaCandidates.length > 0 && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-gray-500">نقاط المرور المذكورة بالنداء (مروراً بـ...)</label>
-                <div className="flex gap-2 text-[11px]">
-                  <button type="button" onClick={() => setViaOff({})} className="text-nwbus-primary hover:underline">الكل</button>
-                  <button type="button" onClick={() => setViaOff(Object.fromEntries(viaCandidates.map(s => [s.id, true])))} className="text-gray-400 hover:underline">لا شيء</button>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {viaCandidates.map(s => (
-                  <label key={s.id}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border cursor-pointer transition-colors ${!viaOff[s.id] ? 'bg-nwbus-primary/10 border-nwbus-primary/40 text-nwbus-primary' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                    <input type="checkbox" className="accent-nwbus-primary" checked={!viaOff[s.id]}
-                      onChange={() => setViaOff(p => ({ ...p, [s.id]: !p[s.id] }))} />
-                    {s.name}{s.rest ? ' (استراحة)' : ''}
-                  </label>
-                ))}
-              </div>
             </div>
           )}
         </div>
