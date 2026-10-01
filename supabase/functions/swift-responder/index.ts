@@ -42,9 +42,13 @@ serve(async (req) => {
     }
     if (!allowed) return json({ error: 'Forbidden' }, 403)
 
-    const { text } = await req.json()
+    const { text, savePath } = await req.json()
     if (!text || typeof text !== 'string' || !text.trim()) return json({ error: 'Missing text' }, 400)
     if (text.length > 500) return json({ error: 'Text too long' }, 400)
+    // savePath: لتوليد مقطع ثابت وحفظه بمكتبة النداء — يُقيَّد بمجلدين محدّدين لمنع الكتابة بأي مسار آخر
+    if (savePath !== undefined && (typeof savePath !== 'string' || !/^(stations|phrases)\/[\w.-]+\.mp3$/.test(savePath))) {
+      return json({ error: 'Invalid savePath' }, 400)
+    }
 
     const apiKey = Deno.env.get('ELEVENLABS_API_KEY')
     if (!apiKey) return json({ error: 'TTS not configured' }, 500)
@@ -72,6 +76,21 @@ serve(async (req) => {
     }
 
     const audio = await ttsRes.arrayBuffer()
+
+    if (savePath) {
+      const admin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { auth: { persistSession: false } }
+      )
+      const { error: upErr } = await admin.storage.from('audio-clips').upload(savePath, audio, {
+        contentType: 'audio/mpeg', upsert: true,
+      })
+      if (upErr) return json({ error: upErr.message }, 500)
+      const { data } = admin.storage.from('audio-clips').getPublicUrl(savePath)
+      return json({ url: data.publicUrl })
+    }
+
     return new Response(audio, { status: 200, headers: { ...CORS, 'Content-Type': 'audio/mpeg' } })
   } catch (err) {
     return json({ error: err.message }, 500)

@@ -72,6 +72,24 @@ function clipUrl(path) {
   return supabase.storage.from(AUDIO_BUCKET).getPublicUrl(path).data.publicUrl
 }
 
+// توليد مقطع صوت وحفظه مباشرة بمكتبة النداء (بدل تنزيله ورفعه يدوياً) — نفس الـEdge Function بوضع الحفظ
+async function generateClip(text, savePath) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('لا توجد جلسة دخول')
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/swift-responder`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ text, savePath }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.error || 'تعذّر توليد المقطع')
+  return body.url
+}
+
 // صوت بشري واقعي عبر Edge Function (ElevenLabs) — المفتاح بالخادم فقط، ما يوصل للمتصفح
 async function speakElevenLabs(text, controller) {
   const { data: { session } } = await supabase.auth.getSession()
@@ -163,6 +181,7 @@ export default function CallPage() {
   const [allStations, setAllStations] = useState([])
   const [stationSearch, setStationSearch] = useState('')
   const [uploadingId, setUploadingId] = useState('')
+  const [bulkProgress, setBulkProgress] = useState(null) // { done, total } | null
 
   const selectedTrip = trips.find(t => t.id === selectedTripId)
   const checkedStops = stops.filter(s => !stopOff[s.id])
@@ -209,6 +228,43 @@ export default function CallPage() {
       await refreshClipsIndex()
     } catch (err) { setCallError(err.message || 'تعذّر رفع المقطع') }
     setUploadingId('')
+  }
+
+  async function generatePhraseClip(kind, text) {
+    setUploadingId(kind); setCallError('')
+    try {
+      await generateClip(text, `phrases/${kind}.mp3`)
+      await refreshClipsIndex()
+    } catch (err) { setCallError(err.message || 'تعذّر توليد المقطع') }
+    setUploadingId('')
+  }
+
+  async function generateStationClip(station) {
+    setUploadingId(station.id); setCallError('')
+    try {
+      await generateClip(station.name_ar, `stations/${station.id}.mp3`)
+      await refreshClipsIndex()
+    } catch (err) { setCallError(err.message || 'تعذّر توليد المقطع') }
+    setUploadingId('')
+  }
+
+  async function generateAllMissing() {
+    const missing = allStations.filter(s => !clipsIndex.has(s.id))
+    if (!missing.length) return
+    setCallError('')
+    setBulkProgress({ done: 0, total: missing.length })
+    for (let i = 0; i < missing.length; i++) {
+      try {
+        await generateClip(missing[i].name_ar, `stations/${missing[i].id}.mp3`)
+        setClipsIndex(prev => new Set(prev).add(missing[i].id))
+      } catch (err) {
+        setCallError(`توقف التوليد عند "${missing[i].name_ar}": ${err.message}`)
+        break
+      }
+      setBulkProgress({ done: i + 1, total: missing.length })
+      await new Promise(r => setTimeout(r, 350)) // تجنّب تجاوز حد الطلبات بـElevenLabs
+    }
+    setBulkProgress(null)
   }
 
   useEffect(() => {
@@ -507,29 +563,33 @@ export default function CallPage() {
         {showClipsLibrary && (
           <div className="mt-4 space-y-4">
             <p className="text-xs text-gray-500">
-              ارفع هنا مقاطع mp3 (ولّدتها بالذكاء الاصطناعي أو سجّلتها) — عبارتين ثابتتين + اسم كل محطة، مرة وحدة بس، وتُستخدم
-              دايماً بنفس الجودة بدل التوليد الحي كل نداء.
+              اضغط "توليد" يسوّي الصوت تلقائياً عبر ElevenLabs ويحفظه مباشرة (نفس صوت صفحة النداء) — أو ارفع ملف mp3 جاهز
+              بنفسك لو تبي تستبدله بتسجيل يدوي. عبارتين ثابتتين + اسم كل محطة، مرة وحدة بس، وتُستخدم دايماً بنفس الجودة.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { key: 'intro', label: 'عبارة المقدمة ("نداء على الركاب المسافرين إلى")' },
-                { key: 'via', label: 'عبارة "مروراً بـ"' },
+                { key: 'intro', label: 'عبارة المقدمة', text: 'نداء على الركاب المسافرين إلى' },
+                { key: 'via', label: 'عبارة "مروراً بـ"', text: 'مروراً بـ' },
               ].map(p => (
                 <div key={p.key} className="border rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1.5 gap-2">
-                    <span className="text-xs text-gray-600">{p.label}</span>
+                    <span className="text-xs text-gray-600">{p.label} ("{p.text}")</span>
                     <span className={`text-[10px] shrink-0 ${phraseClips[p.key] ? 'text-green-600' : 'text-amber-600'}`}>
                       {phraseClips[p.key] ? '✓ مرفوع' : 'غير مرفوع'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button type="button" onClick={() => generatePhraseClip(p.key, p.text)} disabled={uploadingId === p.key}
+                      className="text-xs px-2.5 py-1 bg-nwbus-primary text-white rounded-lg disabled:opacity-40">
+                      {uploadingId === p.key ? 'جارٍ...' : 'توليد'}
+                    </button>
                     <input type="file" accept="audio/*" disabled={uploadingId === p.key}
                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhraseClip(p.key, f); e.target.value = '' }}
                       className="text-xs flex-1 min-w-0" />
                     {phraseClips[p.key] && (
                       <button type="button" onClick={() => new Audio(clipUrl(`phrases/${p.key}.mp3`)).play()}
-                        className="text-xs text-nwbus-primary shrink-0">▶ تشغيل</button>
+                        className="text-xs text-nwbus-primary shrink-0">▶</button>
                     )}
                   </div>
                 </div>
@@ -537,22 +597,32 @@ export default function CallPage() {
             </div>
 
             <div>
-              <input value={stationSearch} onChange={e => setStationSearch(e.target.value)} placeholder="ابحث عن محطة..."
-                className="w-full border rounded-lg px-3 py-2 text-sm mb-2" />
+              <div className="flex items-center gap-3 mb-2">
+                <input value={stationSearch} onChange={e => setStationSearch(e.target.value)} placeholder="ابحث عن محطة..."
+                  className="flex-1 border rounded-lg px-3 py-2 text-sm" />
+                <button type="button" onClick={generateAllMissing} disabled={!!bulkProgress || allStations.length === 0}
+                  className="text-xs px-3 py-2 bg-nwbus-primary text-white rounded-lg disabled:opacity-40 shrink-0 whitespace-nowrap">
+                  {bulkProgress ? `جارٍ التوليد ${bulkProgress.done}/${bulkProgress.total}...` : 'توليد كل الناقص'}
+                </button>
+              </div>
               <div className="border rounded-lg divide-y divide-gray-100 max-h-72 overflow-y-auto">
                 {allStations.filter(s => matchesSearch(s.name_ar, stationSearch)).map(s => (
                   <div key={s.id} className="flex items-center gap-2 px-3 py-2">
                     <span className="flex-1 text-sm text-gray-700 truncate">{s.name_ar}</span>
                     <span className={`text-[10px] shrink-0 ${clipsIndex.has(s.id) ? 'text-green-600' : 'text-gray-400'}`}>
-                      {clipsIndex.has(s.id) ? '✓ مرفوع' : 'غير مرفوع'}
+                      {clipsIndex.has(s.id) ? '✓' : '—'}
                     </span>
                     {clipsIndex.has(s.id) && (
                       <button type="button" onClick={() => new Audio(clipUrl(`stations/${s.id}.mp3`)).play()}
                         className="text-xs text-nwbus-primary shrink-0">▶</button>
                     )}
+                    <button type="button" onClick={() => generateStationClip(s)} disabled={uploadingId === s.id || !!bulkProgress}
+                      className="text-xs px-2 py-1 bg-nwbus-primary text-white rounded-lg disabled:opacity-40 shrink-0">
+                      {uploadingId === s.id ? '...' : 'توليد'}
+                    </button>
                     <input type="file" accept="audio/*" disabled={uploadingId === s.id}
                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadStationClip(s.id, f); e.target.value = '' }}
-                      className="text-xs w-28 sm:w-36 shrink-0" />
+                      className="text-xs w-20 sm:w-28 shrink-0" />
                   </div>
                 ))}
                 {allStations.length === 0 && <p className="text-sm text-gray-400 py-3 text-center">جاري التحميل...</p>}
