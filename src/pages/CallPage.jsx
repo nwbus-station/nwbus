@@ -3,11 +3,14 @@ import { supabase } from '../lib/supabase'
 import { matchesSearch } from '../utils/digits'
 
 // نغمة نداء المطار (دينغ-دونغ تنازلي) — مُولّدة بالكامل بالمتصفح (Web Audio)، بدون ملف صوتي خارجي
-function playChime() {
+// controller اختياري: يخزّن AudioContext الحالي عشان زر "إيقاف" يقدر يسكّته فوراً
+function playChime(controller) {
   return new Promise(resolve => {
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext
       const ctx = new Ctx()
+      if (controller) controller.ctx = ctx
+      if (controller?.stopped) { ctx.close().catch(() => {}); return resolve() }
       const now = ctx.currentTime
       const notes = [988, 784, 659, 523] // Si-Sol-Mi-Do — نفس نمط نغمة النداء بالمطارات
       notes.forEach((freq, i) => {
@@ -23,7 +26,7 @@ function playChime() {
         osc.start(start)
         osc.stop(start + 0.48)
       })
-      setTimeout(() => { ctx.close(); resolve() }, notes.length * 460 + 250)
+      setTimeout(() => { try { ctx.close() } catch { /* already closed by stop */ } resolve() }, notes.length * 460 + 250)
     } catch {
       resolve()
     }
@@ -44,9 +47,10 @@ function rankVoice(v) {
   return 1
 }
 
-function speak(text, voice) {
+// controller اختياري: {stopped, audio} — إيقاف فوري بالضغط على "إيقاف"
+function speak(text, voice, controller) {
   return new Promise(resolve => {
-    if (!window.speechSynthesis || !text.trim()) return resolve()
+    if (!window.speechSynthesis || !text.trim() || controller?.stopped) return resolve()
     const u = new SpeechSynthesisUtterance(text)
     u.lang = voice?.lang || 'ar-SA'
     u.rate = 0.88
@@ -54,17 +58,25 @@ function speak(text, voice) {
     if (voice) u.voice = voice
     u.onend = resolve
     u.onerror = resolve
+    if (controller) controller.cancelSpeech = () => window.speechSynthesis.cancel()
     window.speechSynthesis.cancel()
     window.speechSynthesis.speak(u)
   })
 }
 
 const ELEVENLABS_VOICE_ID = '__elevenlabs__'
+const CLIPS_VOICE_ID = '__clips__'
+const AUDIO_BUCKET = 'audio-clips'
+
+function clipUrl(path) {
+  return supabase.storage.from(AUDIO_BUCKET).getPublicUrl(path).data.publicUrl
+}
 
 // صوت بشري واقعي عبر Edge Function (ElevenLabs) — المفتاح بالخادم فقط، ما يوصل للمتصفح
-async function speakElevenLabs(text) {
+async function speakElevenLabs(text, controller) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error('لا توجد جلسة دخول')
+  if (controller?.stopped) return
   const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/swift-responder`, {
     method: 'POST',
     headers: {
@@ -78,23 +90,39 @@ async function speakElevenLabs(text) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || 'تعذّر توليد الصوت')
   }
+  if (controller?.stopped) return
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
   try {
-    const audio = new Audio(url)
-    await new Promise((resolve, reject) => {
-      audio.onended = resolve
-      audio.onerror = () => reject(new Error('تعذّر تشغيل الصوت'))
-      audio.play().catch(reject)
-    })
+    await playAudioUrl(url, controller)
   } finally {
     URL.revokeObjectURL(url)
   }
 }
 
+// تشغيل رابط صوت وحيد مع دعم الإيقاف الفوري عبر controller.audio + controller.stopped
+function playAudioUrl(url, controller) {
+  return new Promise((resolve, reject) => {
+    if (controller?.stopped) return resolve()
+    const audio = new Audio(url)
+    if (controller) controller.audio = audio
+    audio.onended = resolve
+    audio.onpause = resolve // زر "إيقاف" يستدعي audio.pause() فيتحرر الانتظار فوراً
+    audio.onerror = () => reject(new Error('تعذّر تشغيل الصوت'))
+    audio.play().catch(reject)
+  })
+}
+
+// تشغيل سلسلة مقاطع صوتية جاهزة (مسجّلة/مولّدة مسبقاً) وحدة ورا وحدة — نفس أسلوب المطارات
+async function playClipSequence(urls, controller) {
+  for (const url of urls) {
+    if (controller?.stopped) return
+    await playAudioUrl(url, controller)
+  }
+}
+
 const CHIME_SUPPORTED = typeof window !== 'undefined' && !!(window.AudioContext || window.webkitAudioContext)
 const BROWSER_TTS_SUPPORTED = typeof window !== 'undefined' && !!window.speechSynthesis
-const SUPPORTED = CHIME_SUPPORTED && BROWSER_TTS_SUPPORTED
 
 const REPEAT_OPTIONS = [
   { value: 0, ar: 'بدون تكرار' },
@@ -123,9 +151,18 @@ export default function CallPage() {
   const [repeating, setRepeating] = useState(false)
   const [chimeOn, setChimeOn] = useState(true)
   const [voices, setVoices] = useState([])
-  const [voiceURI, setVoiceURI] = useState(ELEVENLABS_VOICE_ID)
+  const [voiceURI, setVoiceURI] = useState(CLIPS_VOICE_ID)
   const [callError, setCallError] = useState('')
   const intervalRef = useRef(null)
+  const controllerRef = useRef(null)
+
+  // مكتبة المقاطع الصوتية الجاهزة
+  const [showClipsLibrary, setShowClipsLibrary] = useState(false)
+  const [clipsIndex, setClipsIndex] = useState(new Set())
+  const [phraseClips, setPhraseClips] = useState({ intro: false, via: false })
+  const [allStations, setAllStations] = useState([])
+  const [stationSearch, setStationSearch] = useState('')
+  const [uploadingId, setUploadingId] = useState('')
 
   const selectedTrip = trips.find(t => t.id === selectedTripId)
   const checkedStops = stops.filter(s => !stopOff[s.id])
@@ -134,12 +171,51 @@ export default function CallPage() {
   const viaChosen = destIndex > 0 ? stops.slice(1, destIndex).filter(s => !stopOff[s.id]) : []
   const selectedVoice = voices.find(v => v.voiceURI === voiceURI) || null
 
+  const refreshClipsIndex = useCallback(async () => {
+    const [{ data: stationFiles }, { data: phraseFiles }] = await Promise.all([
+      supabase.storage.from(AUDIO_BUCKET).list('stations', { limit: 1000 }),
+      supabase.storage.from(AUDIO_BUCKET).list('phrases', { limit: 10 }),
+    ])
+    setClipsIndex(new Set((stationFiles || []).map(f => f.name.replace(/\.mp3$/, ''))))
+    const names = new Set((phraseFiles || []).map(f => f.name))
+    setPhraseClips({ intro: names.has('intro.mp3'), via: names.has('via.mp3') })
+  }, [])
+
+  useEffect(() => { refreshClipsIndex() }, [refreshClipsIndex])
+
+  useEffect(() => {
+    if (!showClipsLibrary || allStations.length) return
+    (async () => {
+      const { data } = await supabase.from('stations').select('id,name_ar').order('name_ar')
+      setAllStations(data || [])
+    })()
+  }, [showClipsLibrary]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function uploadPhraseClip(kind, file) {
+    setUploadingId(kind); setCallError('')
+    try {
+      const { error } = await supabase.storage.from(AUDIO_BUCKET).upload(`phrases/${kind}.mp3`, file, { upsert: true, contentType: file.type || 'audio/mpeg' })
+      if (error) throw error
+      await refreshClipsIndex()
+    } catch (err) { setCallError(err.message || 'تعذّر رفع المقطع') }
+    setUploadingId('')
+  }
+
+  async function uploadStationClip(stationId, file) {
+    setUploadingId(stationId); setCallError('')
+    try {
+      const { error } = await supabase.storage.from(AUDIO_BUCKET).upload(`stations/${stationId}.mp3`, file, { upsert: true, contentType: file.type || 'audio/mpeg' })
+      if (error) throw error
+      await refreshClipsIndex()
+    } catch (err) { setCallError(err.message || 'تعذّر رفع المقطع') }
+    setUploadingId('')
+  }
+
   useEffect(() => {
     function loadVoices() {
       const list = listArabicVoices()
       if (!list.length) return
       setVoices(list)
-      setVoiceURI(prev => prev || [...list].sort((a, b) => rankVoice(b) - rankVoice(a))[0].voiceURI)
     }
     loadVoices()
     window.speechSynthesis?.addEventListener?.('voiceschanged', loadVoices)
@@ -195,25 +271,51 @@ export default function CallPage() {
   const stopRepeat = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
     setRepeating(false)
+    if (controllerRef.current) {
+      controllerRef.current.stopped = true
+      controllerRef.current.audio?.pause()
+      controllerRef.current.ctx?.close?.().catch(() => {})
+      controllerRef.current.cancelSpeech?.()
+    }
     window.speechSynthesis?.cancel()
     setPlaying(false)
   }, [])
 
   const doCall = useCallback(async (t) => {
-    if (!t?.trim()) return
+    if (voiceURI !== CLIPS_VOICE_ID && !t?.trim()) return
+    const controller = { stopped: false, audio: null, ctx: null }
+    controllerRef.current = controller
     setPlaying(true)
     setCallError('')
     try {
-      if (chimeOn) await playChime()
-      if (voiceURI === ELEVENLABS_VOICE_ID) await speakElevenLabs(t)
-      else await speak(t, selectedVoice)
+      if (chimeOn) await playChime(controller)
+      if (controller.stopped) { setPlaying(false); return }
+      if (voiceURI === CLIPS_VOICE_ID) {
+        if (mode !== 'trip' || !destStop) throw new Error('وضع المقاطع الجاهزة يحتاج اختيار رحلة ووجهة أول')
+        const missing = []
+        if (!phraseClips.intro) missing.push('عبارة المقدمة')
+        if (!clipsIndex.has(destStop.id)) missing.push(destStop.name)
+        if (viaChosen.length && !phraseClips.via) missing.push('عبارة "مروراً بـ"')
+        viaChosen.forEach(s => { if (!clipsIndex.has(s.id)) missing.push(s.name) })
+        if (missing.length) throw new Error(`ناقص مقاطع صوت: ${missing.join('، ')} — ارفعها من مكتبة المقاطع بالأسفل`)
+        const urls = [clipUrl('phrases/intro.mp3'), clipUrl(`stations/${destStop.id}.mp3`)]
+        if (viaChosen.length) {
+          urls.push(clipUrl('phrases/via.mp3'))
+          viaChosen.forEach(s => urls.push(clipUrl(`stations/${s.id}.mp3`)))
+        }
+        await playClipSequence(urls, controller)
+      } else if (voiceURI === ELEVENLABS_VOICE_ID) {
+        await speakElevenLabs(t, controller)
+      } else {
+        await speak(t, selectedVoice, controller)
+      }
     } catch (err) {
       setCallError(err.message || 'تعذّر تشغيل النداء')
       stopRepeat()
     }
     setPlaying(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chimeOn, selectedVoice, voiceURI])
+  }, [chimeOn, selectedVoice, voiceURI, mode, destStop, viaChosen, clipsIndex, phraseClips])
 
   async function onCallClick() {
     if (playing) return
@@ -231,14 +333,16 @@ export default function CallPage() {
     matchesSearch(t.from_station?.name_ar, tripQuery) || matchesSearch(t.to_station?.name_ar, tripQuery)
   )
 
+  const needsBrowserTts = voiceURI !== ELEVENLABS_VOICE_ID && voiceURI !== CLIPS_VOICE_ID
+
   return (
     <div className="max-w-3xl mx-auto p-6" dir="rtl">
       <h1 className="text-xl font-bold text-gray-800 mb-1">نداء الركاب</h1>
       <p className="text-sm text-gray-500 mb-5">نداء صوتي لركاب رحلة معينة أو نص حر — يظهر حالياً للأدمن فقط</p>
 
-      {voiceURI !== ELEVENLABS_VOICE_ID && !SUPPORTED && (
+      {needsBrowserTts && !BROWSER_TTS_SUPPORTED && (
         <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl p-4 mb-5">
-          المتصفح الحالي ما يدعم تحويل النص لصوت. جرّب على كروم أو سفاري بأحدث إصدار، أو استخدم صوت ElevenLabs من القائمة.
+          المتصفح الحالي ما يدعم تحويل النص لصوت. جرّب على كروم أو سفاري بأحدث إصدار، أو استخدم مقاطع جاهزة/ElevenLabs من القائمة.
         </div>
       )}
       {callError && (
@@ -249,7 +353,10 @@ export default function CallPage() {
 
       <div className="flex gap-2 mb-5">
         {[{ id: 'trip', label: 'نداء حسب الرحلة' }, { id: 'free', label: 'نص حر' }].map(m => (
-          <button key={m.id} onClick={() => { setMode(m.id); stopRepeat() }}
+          <button key={m.id} onClick={() => {
+            setMode(m.id); stopRepeat()
+            if (m.id === 'free' && voiceURI === CLIPS_VOICE_ID) setVoiceURI(ELEVENLABS_VOICE_ID)
+          }}
             className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${mode === m.id ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
             {m.label}
           </button>
@@ -299,6 +406,11 @@ export default function CallPage() {
                         {s.name}{s.rest ? ' (استراحة)' : ''}
                         {i === 0 && <span className="text-[10px] text-green-600 ms-2">المنشأ</span>}
                         {s.id === destStop?.id && <span className="text-[10px] text-blue-600 ms-2">الوجهة</span>}
+                        {voiceURI === CLIPS_VOICE_ID && (
+                          <span className={`text-[10px] ms-2 ${clipsIndex.has(s.id) ? 'text-green-600' : 'text-amber-600'}`}>
+                            {clipsIndex.has(s.id) ? '✓ صوت جاهز' : '— بدون صوت'}
+                          </span>
+                        )}
                       </span>
                       <span className="text-xs text-gray-400 font-mono">{s.time ? s.time.slice(0, 5) : ''}</span>
                     </label>
@@ -315,7 +427,11 @@ export default function CallPage() {
         <label className="text-xs font-semibold text-gray-500 mb-1.5 block">نص النداء</label>
         <textarea value={text} onChange={e => setText(e.target.value)} rows={3}
           placeholder={mode === 'free' ? 'اكتب نص النداء هنا...' : 'اختر رحلة ووجهة ليتم تعبئة النص تلقائياً، وتقدر تعدّله'}
-          className="w-full border rounded-lg px-3 py-2 text-sm" />
+          disabled={voiceURI === CLIPS_VOICE_ID}
+          className="w-full border rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400" />
+        {voiceURI === CLIPS_VOICE_ID && (
+          <p className="text-[11px] text-gray-400 mt-1">وضع المقاطع الجاهزة ما يستخدم هذا النص — يشغّل مقاطع المحطات المختارة فوق مباشرة.</p>
+        )}
 
         <div className="flex flex-wrap items-center gap-4 mt-3">
           <label className="flex items-center gap-1.5 text-xs text-gray-600">
@@ -335,33 +451,36 @@ export default function CallPage() {
           <label className="text-xs text-gray-500 shrink-0">صوت النداء:</label>
           <select value={voiceURI} onChange={e => { setVoiceURI(e.target.value); setCallError('') }}
             className="border rounded-lg px-2 py-1.5 text-sm flex-1 min-w-0">
-            <option value={ELEVENLABS_VOICE_ID}>صوت بشري واقعي (ElevenLabs)</option>
+            {mode === 'trip' && <option value={CLIPS_VOICE_ID}>مقاطع مسجّلة جاهزة (الأفضل والأثبت)</option>}
+            <option value={ELEVENLABS_VOICE_ID}>صوت بشري واقعي حي (ElevenLabs)</option>
             {[...voices].sort((a, b) => rankVoice(b) - rankVoice(a)).map(v => (
               <option key={v.voiceURI} value={v.voiceURI}>{v.name} (صوت الجهاز)</option>
             ))}
           </select>
-          <button type="button"
-            onClick={async () => {
-              setCallError('')
-              try {
-                if (voiceURI === ELEVENLABS_VOICE_ID) await speakElevenLabs('هذا تجربة لصوت النداء')
-                else await speak('هذا تجربة لصوت النداء', selectedVoice)
-              } catch (err) { setCallError(err.message || 'تعذّر تشغيل الصوت') }
-            }}
-            disabled={voiceURI !== ELEVENLABS_VOICE_ID && !BROWSER_TTS_SUPPORTED}
-            className="px-3 py-1.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-xs hover:bg-gray-100 shrink-0 disabled:opacity-40">
-            تجربة
-          </button>
+          {voiceURI !== CLIPS_VOICE_ID && (
+            <button type="button"
+              onClick={async () => {
+                setCallError('')
+                try {
+                  if (voiceURI === ELEVENLABS_VOICE_ID) await speakElevenLabs('هذا تجربة لصوت النداء')
+                  else await speak('هذا تجربة لصوت النداء', selectedVoice)
+                } catch (err) { setCallError(err.message || 'تعذّر تشغيل الصوت') }
+              }}
+              disabled={needsBrowserTts && !BROWSER_TTS_SUPPORTED}
+              className="px-3 py-1.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-xs hover:bg-gray-100 shrink-0 disabled:opacity-40">
+              تجربة
+            </button>
+          )}
         </div>
         {voices.length === 0 && BROWSER_TTS_SUPPORTED && (
           <p className="text-[11px] text-gray-400 mt-2">
-            ما وجدنا صوت عربي إضافي مثبّت بهذا الجهاز — استخدم صوت ElevenLabs، أو ثبّت صوت عربي من إعدادات الجهاز.
+            ما وجدنا صوت عربي إضافي مثبّت بهذا الجهاز — استخدم مقاطع جاهزة أو ElevenLabs، أو ثبّت صوت عربي من إعدادات الجهاز.
           </p>
         )}
 
         <div className="flex gap-2 mt-4">
           <button type="button" onClick={onCallClick}
-            disabled={!text.trim() || playing || repeating || (chimeOn && !CHIME_SUPPORTED) || (voiceURI !== ELEVENLABS_VOICE_ID && !BROWSER_TTS_SUPPORTED)}
+            disabled={(voiceURI !== CLIPS_VOICE_ID && !text.trim()) || playing || repeating || (chimeOn && !CHIME_SUPPORTED) || (needsBrowserTts && !BROWSER_TTS_SUPPORTED)}
             className="flex-1 bg-nwbus-primary text-white rounded-lg py-2.5 text-sm font-bold disabled:opacity-40 hover:opacity-90 transition-opacity">
             {repeating ? 'جارٍ النداء المتكرر...' : playing ? 'جارٍ النداء...' : 'نداء'}
           </button>
@@ -378,6 +497,69 @@ export default function CallPage() {
             </button>
           )}
         </div>
+      </div>
+
+      <div className="bg-white border rounded-xl p-4 mb-4">
+        <button type="button" onClick={() => setShowClipsLibrary(o => !o)} className="flex items-center justify-between w-full text-right">
+          <span className="text-sm font-semibold text-gray-700">مكتبة المقاطع الصوتية الجاهزة</span>
+          <span className="text-xs text-gray-400">{showClipsLibrary ? 'إخفاء' : 'إظهار'}</span>
+        </button>
+        {showClipsLibrary && (
+          <div className="mt-4 space-y-4">
+            <p className="text-xs text-gray-500">
+              ارفع هنا مقاطع mp3 (ولّدتها بالذكاء الاصطناعي أو سجّلتها) — عبارتين ثابتتين + اسم كل محطة، مرة وحدة بس، وتُستخدم
+              دايماً بنفس الجودة بدل التوليد الحي كل نداء.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { key: 'intro', label: 'عبارة المقدمة ("نداء على الركاب المسافرين إلى")' },
+                { key: 'via', label: 'عبارة "مروراً بـ"' },
+              ].map(p => (
+                <div key={p.key} className="border rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-1.5 gap-2">
+                    <span className="text-xs text-gray-600">{p.label}</span>
+                    <span className={`text-[10px] shrink-0 ${phraseClips[p.key] ? 'text-green-600' : 'text-amber-600'}`}>
+                      {phraseClips[p.key] ? '✓ مرفوع' : 'غير مرفوع'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="file" accept="audio/*" disabled={uploadingId === p.key}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhraseClip(p.key, f); e.target.value = '' }}
+                      className="text-xs flex-1 min-w-0" />
+                    {phraseClips[p.key] && (
+                      <button type="button" onClick={() => new Audio(clipUrl(`phrases/${p.key}.mp3`)).play()}
+                        className="text-xs text-nwbus-primary shrink-0">▶ تشغيل</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <input value={stationSearch} onChange={e => setStationSearch(e.target.value)} placeholder="ابحث عن محطة..."
+                className="w-full border rounded-lg px-3 py-2 text-sm mb-2" />
+              <div className="border rounded-lg divide-y divide-gray-100 max-h-72 overflow-y-auto">
+                {allStations.filter(s => matchesSearch(s.name_ar, stationSearch)).map(s => (
+                  <div key={s.id} className="flex items-center gap-2 px-3 py-2">
+                    <span className="flex-1 text-sm text-gray-700 truncate">{s.name_ar}</span>
+                    <span className={`text-[10px] shrink-0 ${clipsIndex.has(s.id) ? 'text-green-600' : 'text-gray-400'}`}>
+                      {clipsIndex.has(s.id) ? '✓ مرفوع' : 'غير مرفوع'}
+                    </span>
+                    {clipsIndex.has(s.id) && (
+                      <button type="button" onClick={() => new Audio(clipUrl(`stations/${s.id}.mp3`)).play()}
+                        className="text-xs text-nwbus-primary shrink-0">▶</button>
+                    )}
+                    <input type="file" accept="audio/*" disabled={uploadingId === s.id}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadStationClip(s.id, f); e.target.value = '' }}
+                      className="text-xs w-28 sm:w-36 shrink-0" />
+                  </div>
+                ))}
+                {allStations.length === 0 && <p className="text-sm text-gray-400 py-3 text-center">جاري التحميل...</p>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
