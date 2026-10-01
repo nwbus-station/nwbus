@@ -59,7 +59,42 @@ function speak(text, voice) {
   })
 }
 
-const SUPPORTED = typeof window !== 'undefined' && !!window.speechSynthesis && !!(window.AudioContext || window.webkitAudioContext)
+const ELEVENLABS_VOICE_ID = '__elevenlabs__'
+
+// صوت بشري واقعي عبر Edge Function (ElevenLabs) — المفتاح بالخادم فقط، ما يوصل للمتصفح
+async function speakElevenLabs(text) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('لا توجد جلسة دخول')
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts-call`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || 'تعذّر توليد الصوت')
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  try {
+    const audio = new Audio(url)
+    await new Promise((resolve, reject) => {
+      audio.onended = resolve
+      audio.onerror = () => reject(new Error('تعذّر تشغيل الصوت'))
+      audio.play().catch(reject)
+    })
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+const CHIME_SUPPORTED = typeof window !== 'undefined' && !!(window.AudioContext || window.webkitAudioContext)
+const BROWSER_TTS_SUPPORTED = typeof window !== 'undefined' && !!window.speechSynthesis
+const SUPPORTED = CHIME_SUPPORTED && BROWSER_TTS_SUPPORTED
 
 const REPEAT_OPTIONS = [
   { value: 0, ar: 'بدون تكرار' },
@@ -89,7 +124,8 @@ export default function CallPage() {
   const [repeating, setRepeating] = useState(false)
   const [chimeOn, setChimeOn] = useState(true)
   const [voices, setVoices] = useState([])
-  const [voiceURI, setVoiceURI] = useState('')
+  const [voiceURI, setVoiceURI] = useState(ELEVENLABS_VOICE_ID)
+  const [callError, setCallError] = useState('')
   const intervalRef = useRef(null)
 
   const selectedTrip = trips.find(t => t.id === selectedTripId)
@@ -168,11 +204,18 @@ export default function CallPage() {
   const doCall = useCallback(async (t) => {
     if (!t?.trim()) return
     setPlaying(true)
-    if (chimeOn) await playChime()
-    await speak(t, selectedVoice)
+    setCallError('')
+    try {
+      if (chimeOn) await playChime()
+      if (voiceURI === ELEVENLABS_VOICE_ID) await speakElevenLabs(t)
+      else await speak(t, selectedVoice)
+    } catch (err) {
+      setCallError(err.message || 'تعذّر تشغيل النداء')
+      stopRepeat()
+    }
     setPlaying(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chimeOn, selectedVoice])
+  }, [chimeOn, selectedVoice, voiceURI])
 
   async function onCallClick() {
     if (playing) return
@@ -195,9 +238,14 @@ export default function CallPage() {
       <h1 className="text-xl font-bold text-gray-800 mb-1">نداء الركاب</h1>
       <p className="text-sm text-gray-500 mb-5">نداء صوتي لركاب رحلة معينة أو نص حر — يظهر حالياً للأدمن فقط</p>
 
-      {!SUPPORTED && (
+      {voiceURI !== ELEVENLABS_VOICE_ID && !SUPPORTED && (
         <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl p-4 mb-5">
-          المتصفح الحالي ما يدعم تحويل النص لصوت. جرّب على كروم أو سفاري بأحدث إصدار.
+          المتصفح الحالي ما يدعم تحويل النص لصوت. جرّب على كروم أو سفاري بأحدث إصدار، أو استخدم صوت ElevenLabs من القائمة.
+        </div>
+      )}
+      {callError && (
+        <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl p-4 mb-5">
+          {callError}
         </div>
       )}
 
@@ -294,29 +342,37 @@ export default function CallPage() {
           </div>
         </div>
 
-        {voices.length > 0 && (
-          <div className="flex items-center gap-1.5 mt-3">
-            <label className="text-xs text-gray-500 shrink-0">صوت النداء:</label>
-            <select value={voiceURI} onChange={e => setVoiceURI(e.target.value)}
-              className="border rounded-lg px-2 py-1.5 text-sm flex-1 min-w-0">
-              {[...voices].sort((a, b) => rankVoice(b) - rankVoice(a)).map(v => (
-                <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
-              ))}
-            </select>
-            <button type="button" onClick={() => speak('هذا تجربة لصوت النداء', selectedVoice)}
-              className="px-3 py-1.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-xs hover:bg-gray-100 shrink-0">
-              تجربة
-            </button>
-          </div>
-        )}
-        {voices.length === 0 && SUPPORTED && (
-          <p className="text-[11px] text-amber-600 mt-3">
-            ما وجدنا صوت عربي مثبّت بهذا الجهاز/المتصفح — النداء بيستخدم الصوت الافتراضي وجودته قد تكون أقل.
+        <div className="flex items-center gap-1.5 mt-3">
+          <label className="text-xs text-gray-500 shrink-0">صوت النداء:</label>
+          <select value={voiceURI} onChange={e => { setVoiceURI(e.target.value); setCallError('') }}
+            className="border rounded-lg px-2 py-1.5 text-sm flex-1 min-w-0">
+            <option value={ELEVENLABS_VOICE_ID}>صوت بشري واقعي (ElevenLabs)</option>
+            {[...voices].sort((a, b) => rankVoice(b) - rankVoice(a)).map(v => (
+              <option key={v.voiceURI} value={v.voiceURI}>{v.name} (صوت الجهاز)</option>
+            ))}
+          </select>
+          <button type="button"
+            onClick={async () => {
+              setCallError('')
+              try {
+                if (voiceURI === ELEVENLABS_VOICE_ID) await speakElevenLabs('هذا تجربة لصوت النداء')
+                else await speak('هذا تجربة لصوت النداء', selectedVoice)
+              } catch (err) { setCallError(err.message || 'تعذّر تشغيل الصوت') }
+            }}
+            disabled={voiceURI !== ELEVENLABS_VOICE_ID && !BROWSER_TTS_SUPPORTED}
+            className="px-3 py-1.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-xs hover:bg-gray-100 shrink-0 disabled:opacity-40">
+            تجربة
+          </button>
+        </div>
+        {voices.length === 0 && BROWSER_TTS_SUPPORTED && (
+          <p className="text-[11px] text-gray-400 mt-2">
+            ما وجدنا صوت عربي إضافي مثبّت بهذا الجهاز — استخدم صوت ElevenLabs، أو ثبّت صوت عربي من إعدادات الجهاز.
           </p>
         )}
 
         <div className="flex gap-2 mt-4">
-          <button type="button" onClick={onCallClick} disabled={!SUPPORTED || !text.trim() || playing || repeating}
+          <button type="button" onClick={onCallClick}
+            disabled={!text.trim() || playing || repeating || (chimeOn && !CHIME_SUPPORTED) || (voiceURI !== ELEVENLABS_VOICE_ID && !BROWSER_TTS_SUPPORTED)}
             className="flex-1 bg-nwbus-primary text-white rounded-lg py-2.5 text-sm font-bold disabled:opacity-40 hover:opacity-90 transition-opacity">
             {repeating ? 'جارٍ النداء المتكرر...' : playing ? 'جارٍ النداء...' : 'نداء'}
           </button>
@@ -327,7 +383,7 @@ export default function CallPage() {
             </button>
           )}
           {chimeOn && (
-            <button type="button" onClick={() => playChime()} disabled={!SUPPORTED}
+            <button type="button" onClick={() => playChime()} disabled={!CHIME_SUPPORTED}
               className="px-4 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm hover:bg-gray-100 disabled:opacity-40">
               تجربة النغمة
             </button>
