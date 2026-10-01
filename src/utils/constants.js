@@ -81,6 +81,8 @@ export const TITLE_CAPABILITIES = [
   { group: 'بيانات الموظفين', key: 'users_export', kind: 'allow', ar: 'تصدير وطباعة قائمة الموظفين', en: 'Export / print staff roster' },
   // الخريطة
   { group: 'الخريطة', key: 'map_manage', db: true, kind: 'grant', roleOk: true, ar: 'إدارة الخريطة: تعديل مواقع المحطات وإضافة محطات ونقاط توقف بمواقعها', en: 'Manage map: relocate & add stations/stops' },
+  // نداء الركاب
+  { group: 'نداء الركاب', key: 'pa_calls_manage', kind: 'grant', roleOk: true, ar: 'الوصول لصفحة نداء الركاب', en: 'Access the passenger call page' },
   // التقييم الوظيفي
   { group: 'التقييم الوظيفي', key: 'evaluation_dispatchers_only', db: true, kind: 'grant', ar: 'يقيّم المرحّلين فقط (من مسماهم الوظيفي مرحّل)', en: 'Evaluate dispatchers only' },
   { group: 'التقييم الوظيفي', key: 'evaluation_employees_tab', kind: 'allow', ar: 'تبويب تقييم الموظفين', en: 'Employee evaluation tab' },
@@ -134,6 +136,7 @@ const MODULE_ROLE_LIMITS = {
   stations:         [],
   settings:         [],
   magazine:         [],   // نشر وإدارة Event: للأدمن أو لحساب عليه مسمى مخصص (مثل التسويق)
+  pa_calls:         [],   // نداء الركاب: للأدمن فقط لحين الترتيب والتطوير — يُفتح لاحقاً من إدارة الصلاحيات
 }
 const ADMIN_LIKE_ROLES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
 // هل القسم متاح لهذا الدور أصلاً؟ (السقف الافتراضي)
@@ -144,6 +147,7 @@ export const moduleDefaultForRole = (mod, role, hasTitle = false) =>
 export const GROUP_MODULE = {
   'التقارير': 'reports', 'الإيرادات': 'sales', 'الموجودات': 'lost_found', 'الترحيل': 'transportation',
   'الإجازات': 'leaves', 'التقييم الوظيفي': 'evaluation', 'بيانات الموظفين': 'users', 'تقييمات العملاء': 'customer_ratings', 'الخريطة': 'map',
+  'نداء الركاب': 'pa_calls',
 }
 
 // أقسام ما تنفتح للأدوار الأساسية أبداً: بياناتها في القاعدة للأدمن فقط، ففتحها يعطي صفحة فاضية/مرفوضة
@@ -182,6 +186,7 @@ export const MODULES = [
   { value: 'map',            ar: 'الخريطة',          en: 'Map' },
   { value: 'customer_ratings', ar: 'تقييمات العملاء', en: 'Customer Ratings' },
   { value: 'live_board',     ar: 'شاشة العرض',       en: 'Live Board' },
+  { value: 'pa_calls',       ar: 'نداء الركاب',      en: 'Passenger Calls' },
   { value: 'event',          ar: 'Event (اطلاع)',      en: 'Event (view)' },
   { value: 'magazine',       ar: 'Event (نشر وإدارة)', en: 'Event (publish & manage)' },
 ]

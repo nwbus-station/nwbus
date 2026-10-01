@@ -323,6 +323,7 @@ const ICONS = {
   leave:   ['M8 2v4','M16 2v4','M3 10h18','M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z','M8 14h.01','M12 14h.01','M16 14h.01','M8 18h.01','M12 18h.01'],
   refresh: ['M21 2v6h-6','M3 22v-6h6','M3.51 9a9 9 0 0114.85-3.36L21 8','M21 16l-2.64 2.36A9 9 0 013.51 15'],
   up:      ['M12 19V5','M5 12l7-7 7 7'],
+  call:    ['M11 5L6 9H2v6h4l5 4V5z','M19.07 4.93a10 10 0 010 14.14','M15.54 8.46a5 5 0 010 7.07'],
   menu:    ['M4 7h16','M4 12h16','M4 17h16'],
   x:       ['M18 6L6 18','M6 6l12 12'],
 }
@@ -348,6 +349,7 @@ const NAV_GROUPS = [
       { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ADMIN_ROLE_VALUES,               module: 'settings', capKey: 'settings_access' },
       { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'map' },
       { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings', allowKey: 'customer_ratings_view' },
+      { to: '/calls', labelAr: 'نداء الركاب', labelEn: 'Passenger Calls', icon: 'call', roles: ADMIN_ROLE_VALUES, module: 'pa_calls' },
     ]
   },
 ]

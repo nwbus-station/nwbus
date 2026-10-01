@@ -39,6 +39,7 @@ import PublicRatingPage from './pages/PublicRatingPage'
 import SetPasswordPage  from './pages/SetPasswordPage'
 import CustomerRatingsAdminPage from './pages/CustomerRatingsAdminPage'
 import MagazinePage     from './pages/MagazinePage'
+import CallPage         from './pages/CallPage'
 
 // Layout
 import AppLayout        from './components/layout/AppLayout'
@@ -161,6 +162,11 @@ export default function App() {
         } />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="magazine" element={<MagazinePage />} />
+        <Route path="calls" element={
+          <RequireAuth module="pa_calls" adminOnly restrictedCap="pa_calls_manage">
+            <CallPage />
+          </RequireAuth>
+        } />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
