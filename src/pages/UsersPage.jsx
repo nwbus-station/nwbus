@@ -2411,8 +2411,9 @@ function UsersPageFull() {
                 {isGeneralAdmin && (
                 <th className="px-4 py-3 w-8">
                   <input type="checkbox" className="rounded accent-nwbus-primary"
-                    checked={filtered.length > 0 && filtered.every(u => selectedIds.has(u.id))}
-                    onChange={e => setSelectedIds(e.target.checked ? new Set(filtered.map(u => u.id)) : new Set())} />
+                    title={isAr ? 'تحديد النشطين فقط' : 'Select active only'}
+                    checked={filtered.some(u => u.is_active) && filtered.filter(u => u.is_active).every(u => selectedIds.has(u.id))}
+                    onChange={e => setSelectedIds(e.target.checked ? new Set(filtered.filter(u => u.is_active).map(u => u.id)) : new Set())} />
                 </th>
                 )}
                 {[
