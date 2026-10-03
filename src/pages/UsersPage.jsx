@@ -818,6 +818,8 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
     is_accountant:   user?.is_accountant   ?? false,
     is_agent:        user?.is_agent        ?? false,
     can_rate_customers: user?.can_rate_customers ?? false,
+    rating_window_number: '',
+    rating_shift:    'A',
     language:        user?.language        ?? 'ar',
     is_active:       user?.is_active       ?? true,
     allowed_modules: user?.allowed_modules ?? null,
@@ -1051,6 +1053,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             hire_date: form.hire_date || null,
             ...(isGeneralAdmin ? {
               is_accountant: !!form.is_accountant, is_agent: !!form.is_agent, can_rate_customers: !!form.can_rate_customers,
+              ...(form.can_rate_customers ? { rating_window_number: (form.rating_window_number ?? '').trim() || null, rating_shift: form.rating_shift || 'A' } : {}),
               custom_title_id: form.custom_title_id || null,
               leave_balance_override: newOverride,
               leave_balance_override_date: newOverride != null ? new Date().toISOString().slice(0, 10) : null,
@@ -1487,6 +1490,20 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
 
             {isGeneralAdmin && user?.id && form.can_rate_customers && (
               <RatingActivationAdmin userId={user.id} isAr={isAr} />
+            )}
+
+            {isGeneralAdmin && !user && form.can_rate_customers && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 mt-2 space-y-2">
+                <p className="text-xs font-semibold text-gray-600">{isAr ? 'إعداد تقييم العميل' : 'Customer rating setup'}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={form.rating_window_number ?? ''} onChange={e => set('rating_window_number', e.target.value)} dir="ltr"
+                    placeholder={isAr ? 'رقم الشباك' : 'Window #'} className="border rounded-lg px-2 py-1.5 text-xs" />
+                  <select value={form.rating_shift ?? 'A'} onChange={e => set('rating_shift', e.target.value)} className="border rounded-lg px-2 py-1.5 text-xs">
+                    {SHIFTS.map(s => <option key={s.value} value={s.value}>{s.ar} ({s.range})</option>)}
+                  </select>
+                </div>
+                <p className="text-[10px] text-gray-400">{isAr ? 'التفعيل الفوري يظهر بعد الحفظ عند تعديل الموظف — الموظف نفسه يفعّل تقييمه من صفحة "تقييم العميل"' : 'Instant activation is available after saving, when editing the employee'}</p>
+              </div>
             )}
           </Section>
 
