@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
 import { todayStr } from '../../utils/dates'
 import { AR_LABELS, AR_O, AR_A, TRIP_ASPECTS, STATION_ASPECTS } from '../../utils/feedbackConfig'
+import { POSTER_SIZES, buildPosterSvg, downloadPosterPng, printPoster } from '../../utils/qrPoster'
 
 const lbl = k => AR_LABELS[k] || k
 const lblO = k => AR_O[k] || k
@@ -192,10 +193,17 @@ export default function FeedbackReport() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [qrUrl, setQrUrl] = useState('')
+  const [posterQr, setPosterQr] = useState('')
+  const [sizeId, setSizeId] = useState('4x6')
   const link = `${window.location.origin}/feedback`
 
   useEffect(() => { supabase.rpc('survey_stations').then(({ data: d }) => setStations(d ?? [])) }, [])
-  useEffect(() => { QRCode.toDataURL(link, { width: 1024, margin: 2 }).then(setQrUrl) }, [link])
+  useEffect(() => {
+    QRCode.toDataURL(link, { width: 1024, margin: 2 }).then(setQrUrl)
+    QRCode.toDataURL(link, { width: 1400, margin: 0, errorCorrectionLevel: 'H' }).then(setPosterQr)
+  }, [link])
+  const size = POSTER_SIZES.find(x => x.id === sizeId) ?? POSTER_SIZES[0]
+  const posterSvg = useMemo(() => (posterQr ? buildPosterSvg({ w: size.w, h: size.h, qr: posterQr }) : ''), [posterQr, size])
 
   const args = useMemo(() => ({ p_kind: kind === 'all' ? null : kind, p_station: stationFilter || null }), [kind, stationFilter])
 
@@ -499,19 +507,40 @@ export default function FeedbackReport() {
       )}
 
       {tab === 'qr' && (
-        <Card title="رمز الاستبيان الموحّد للحافلات" hint="يفتح الاستبيان بالعربي أو English أو اردو حسب لغة جوال العميل">
-          <div className="flex flex-wrap items-center gap-6">
-            {qrUrl && <img src={qrUrl} alt="QR" className="w-44 h-44 border border-gray-100 rounded-xl" />}
-            <div className="flex-1 min-w-[220px]">
-              <p className="text-xs font-mono text-gray-600 break-all bg-gray-50 rounded-lg p-3" dir="ltr">{link}</p>
-              <div className="flex gap-2 mt-4">
-                <a href={qrUrl} download="nwbus-feedback-qr.png" className="text-xs bg-slate-900 text-white rounded-lg px-4 py-2 font-bold">تحميل PNG</a>
-                <button type="button" onClick={() => navigator.clipboard?.writeText(link)} className="text-xs border border-gray-200 rounded-lg px-4 py-2 text-gray-700 font-semibold">نسخ الرابط</button>
-                <a href={link} target="_blank" rel="noreferrer" className="text-xs border border-gray-200 rounded-lg px-4 py-2 text-gray-700 font-semibold">معاينة</a>
+        <div className="grid lg:grid-cols-5 gap-4">
+          <Card title="ملصق الاستبيان للطباعة" hint="اختر المقاس ثم حمّل أو اطبع — الملصق ثلاثي اللغة (عربي · English · اردو)" className="lg:col-span-3">
+            <div className="flex flex-wrap items-end gap-3 mb-4">
+              <div>
+                <p className="text-[11px] font-semibold text-gray-500 mb-1.5">المقاس</p>
+                <select value={sizeId} onChange={e => setSizeId(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-64">
+                  {POSTER_SIZES.map(z => <option key={z.id} value={z.id}>{z.label}</option>)}
+                </select>
               </div>
+              <button type="button" disabled={!posterSvg} onClick={() => downloadPosterPng(posterSvg, size.w, size.h, `nwbus-qr-${size.id}.png`)}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white disabled:opacity-40">تحميل PNG (300 DPI)</button>
+              <button type="button" disabled={!posterSvg} onClick={() => printPoster(posterSvg, size.w, size.h)}
+                className="px-4 py-2 rounded-lg text-xs font-bold border border-gray-200 text-gray-800 bg-white disabled:opacity-40">طباعة / حفظ PDF</button>
             </div>
-          </div>
-        </Card>
+            <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
+              عند الطباعة اختر الحجم الفعلي (100%) وبدون هوامش. لو بتطبع بمطبعة أرسل لهم ملف PNG بالمقاس نفسه. الرمز بمستوى تصحيح أخطاء عالٍ (H) فيبقى مقروءاً حتى لو اتّسخ الملصق أو انخدش جزء منه.
+            </p>
+            <div className="bg-gray-50 rounded-2xl p-5 flex justify-center">
+              {posterSvg
+                ? <img alt="معاينة الملصق" className="shadow-lg bg-white" style={{ maxHeight: 460, maxWidth: '100%', aspectRatio: `${size.w} / ${size.h}` }}
+                    src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(posterSvg)}`} />
+                : <p className="text-sm text-gray-400 py-10">جاري التجهيز…</p>}
+            </div>
+          </Card>
+          <Card title="الرمز والرابط" hint="يفتح الاستبيان بلغة جوال العميل" className="lg:col-span-2 self-start">
+            {qrUrl && <img src={qrUrl} alt="QR" className="w-44 h-44 border border-gray-100 rounded-xl mx-auto" />}
+            <p className="text-xs font-mono text-gray-600 break-all bg-gray-50 rounded-lg p-3 mt-4" dir="ltr">{link}</p>
+            <div className="flex gap-2 mt-4 flex-wrap">
+              <a href={qrUrl} download="nwbus-feedback-qr.png" className="text-xs bg-slate-900 text-white rounded-lg px-4 py-2 font-bold">الرمز فقط PNG</a>
+              <button type="button" onClick={() => navigator.clipboard?.writeText(link)} className="text-xs border border-gray-200 rounded-lg px-4 py-2 text-gray-700 font-semibold">نسخ الرابط</button>
+              <a href={link} target="_blank" rel="noreferrer" className="text-xs border border-gray-200 rounded-lg px-4 py-2 text-gray-700 font-semibold">معاينة</a>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   )
