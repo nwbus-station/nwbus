@@ -51,7 +51,7 @@ export const T = {
     improveTitle: 'ما أكثر شي نحتاج نحسّنه؟ (اختر حتى اثنين)',
     lowTitle: 'نعتذر عن تجربتك — وش السبب؟',
     commentLabel: 'ملاحظاتك (اختياري)', commentPh: 'اكتب ما تحب أن نعرفه…',
-    aboutYou: 'عنك (اختياري)', aboutHint: 'يساعدنا نفهم عملاءنا ونخدمهم أفضل — بدون اسم',
+    aboutYou: 'عرّفنا عليك', aboutHint: 'اختياري — تساعدنا نفهم عملاءنا ونخدمهم أفضل، ولا نطلب اسمك',
     age: 'الفئة العمرية', traveler: 'أنت', purpose: 'غرض الرحلة', frequency: 'كم مرة تسافر معنا؟',
     contactTitle: 'تبي نتواصل معك لحل المشكلة؟ (اختياري)', contactPh: 'رقم الجوال',
     thanks: 'شكراً لك!', thanksSub: 'رأيك يصلنا مباشرة ويساعدنا نطوّر خدماتنا',
@@ -90,7 +90,7 @@ export const T = {
     improveTitle: 'What should we improve most? (up to 2)',
     lowTitle: 'Sorry about your experience — what went wrong?',
     commentLabel: 'Your comments (optional)', commentPh: 'Tell us anything you would like us to know…',
-    aboutYou: 'About you (optional)', aboutHint: 'Helps us understand our customers — no name needed',
+    aboutYou: 'A little about you', aboutHint: 'Optional — helps us understand our customers; we never ask your name',
     age: 'Age group', traveler: 'I am a', purpose: 'Purpose of trip', frequency: 'How often do you travel with us?',
     contactTitle: 'Would you like us to contact you to fix this? (optional)', contactPh: 'Mobile number',
     thanks: 'Thank you!', thanksSub: 'Your feedback reaches us directly and helps us improve',
@@ -129,7 +129,7 @@ export const T = {
     improveTitle: 'ہمیں سب سے زیادہ کیا بہتر کرنا چاہیے؟ (زیادہ سے زیادہ دو)',
     lowTitle: 'معذرت — کیا مسئلہ ہوا؟',
     commentLabel: 'آپ کی رائے (اختیاری)', commentPh: 'جو آپ ہمیں بتانا چاہیں لکھیں…',
-    aboutYou: 'آپ کے بارے میں (اختیاری)', aboutHint: 'ہمیں اپنے مسافروں کو سمجھنے میں مدد ملتی ہے — نام کی ضرورت نہیں',
+    aboutYou: 'اپنا مختصر تعارف', aboutHint: 'اختیاری — ہمیں مسافروں کو سمجھنے میں مدد ملتی ہے، ہم آپ کا نام نہیں پوچھتے',
     age: 'عمر کا گروپ', traveler: 'میں ہوں', purpose: 'سفر کا مقصد', frequency: 'آپ ہمارے ساتھ کتنی بار سفر کرتے ہیں؟',
     contactTitle: 'کیا ہم مسئلہ حل کرنے کے لیے آپ سے رابطہ کریں؟ (اختیاری)', contactPh: 'موبائل نمبر',
     thanks: 'شکریہ!', thanksSub: 'آپ کی رائے ہم تک براہ راست پہنچتی ہے اور خدمات بہتر بنانے میں مدد دیتی ہے',
@@ -157,3 +157,5 @@ export const T = {
 
 // تسميات عربية للتقارير (أدمن)
 export const AR_LABELS = { ...T.ar.o, ...T.ar.a }
+export const AR_O = T.ar.o
+export const AR_A = T.ar.a

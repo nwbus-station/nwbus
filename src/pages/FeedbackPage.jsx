@@ -25,11 +25,11 @@ function deviceId() {
 function StationPicker({ label, value, onChange, stations, t, lang }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
-  const nm = s => (lang === 'ar' ? (s.name_ar || s.name_en) : (s.name_en || s.name_ar)) || ''
+  const nm = s => (lang === 'ar' ? (s.survey_name_ar || s.name_ar || s.name_en) : (s.name_en || s.name_ar)) || ''
   const selected = stations.find(s => s.id === value)
   const list = useMemo(() => {
     const k = q.trim().toLowerCase()
-    return stations.filter(s => !k || (s.name_ar || '').toLowerCase().includes(k) || (s.name_en || '').toLowerCase().includes(k))
+    return stations.filter(s => !k || (s.survey_name_ar || '').toLowerCase().includes(k) || (s.name_ar || '').toLowerCase().includes(k) || (s.name_en || '').toLowerCase().includes(k))
   }, [q, stations])
 
   return (
@@ -136,7 +136,6 @@ export default function FeedbackPage() {
   const [comment, setComment] = useState('')
   const [phone, setPhone] = useState('')
   const [demo, setDemo] = useState({ age: '', traveler: '', purpose: '', freq: '' })
-  const [showAbout, setShowAbout] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
 
@@ -285,8 +284,8 @@ export default function FeedbackPage() {
                     )
                   })}
                 </div>
-                <div className="flex justify-between text-[11px] text-slate-400 mt-2">
-                  <span>{t.npsLow}</span><span>{t.npsHigh}</span>
+                <div className="flex justify-between text-[11px] text-slate-400 mt-2" dir="ltr">
+                  <span dir="auto">{t.npsLow}</span><span dir="auto">{t.npsHigh}</span>
                 </div>
               </Card>
             )}
@@ -312,22 +311,14 @@ export default function FeedbackPage() {
               </div>
             </Card>
 
-            <Card>
-              <button type="button" onClick={() => setShowAbout(o => !o)} className="w-full flex items-center justify-between text-start">
-                <span>
-                  <span className="block text-sm font-bold">{t.aboutYou}</span>
-                  <span className="block text-[11px] text-slate-400 mt-0.5">{t.aboutHint}</span>
-                </span>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 shrink-0" style={{ transform: showAbout ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg>
-              </button>
-              {showAbout && (
-                <div className="space-y-5 mt-4">
-                  <Chips title={t.age} options={AGE_GROUPS} selected={[demo.age]} t={t} onToggle={k => setDemo(d => ({ ...d, age: d.age === k ? '' : k }))} />
-                  <Chips title={t.traveler} options={TRAVELER_TYPES} selected={[demo.traveler]} t={t} onToggle={k => setDemo(d => ({ ...d, traveler: d.traveler === k ? '' : k }))} />
-                  <Chips title={t.purpose} options={TRIP_PURPOSES} selected={[demo.purpose]} t={t} onToggle={k => setDemo(d => ({ ...d, purpose: d.purpose === k ? '' : k }))} />
-                  <Chips title={t.frequency} options={FREQUENCIES} selected={[demo.freq]} t={t} onToggle={k => setDemo(d => ({ ...d, freq: d.freq === k ? '' : k }))} />
-                </div>
-              )}
+            <Card title={t.aboutYou}>
+              <p className="text-xs text-slate-400 -mt-2 mb-4">{t.aboutHint}</p>
+              <div className="space-y-5">
+                <Chips title={t.age} options={AGE_GROUPS} selected={[demo.age]} t={t} onToggle={k => setDemo(d => ({ ...d, age: d.age === k ? '' : k }))} />
+                <Chips title={t.traveler} options={TRAVELER_TYPES} selected={[demo.traveler]} t={t} onToggle={k => setDemo(d => ({ ...d, traveler: d.traveler === k ? '' : k }))} />
+                <Chips title={t.purpose} options={TRIP_PURPOSES} selected={[demo.purpose]} t={t} onToggle={k => setDemo(d => ({ ...d, purpose: d.purpose === k ? '' : k }))} />
+                <Chips title={t.frequency} options={FREQUENCIES} selected={[demo.freq]} t={t} onToggle={k => setDemo(d => ({ ...d, freq: d.freq === k ? '' : k }))} />
+              </div>
             </Card>
 
             {error && <p className="text-sm text-red-600 font-semibold text-center">{error}</p>}
