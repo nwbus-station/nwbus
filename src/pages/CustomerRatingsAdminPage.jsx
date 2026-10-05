@@ -4,6 +4,7 @@ import { todayStr } from '../utils/dates'
 import { escapeHtml, toLatinDigits, matchesSearch } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
 import { useAuth } from '../context/AuthContext'
+import FeedbackReport from '../components/feedback/FeedbackReport'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ' },
@@ -77,7 +78,7 @@ export default function CustomerRatingsAdminPage() {
       <p className="text-sm text-gray-500 mb-5">تقييم العملاء لموظفي خدمة العملاء والمرحّلين عبر رمز QR</p>
 
       <div className="flex gap-2 mb-5">
-        {[{ id: 'ratings', label: 'التقييمات' }, { id: 'messages', label: 'رسائل المحطات' }].map(t => (
+        {[{ id: 'ratings', label: 'التقييمات' }, { id: 'messages', label: 'رسائل المحطات' }, { id: 'survey', label: 'استبيان العملاء' }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${tab === t.id ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
             {t.label}
@@ -85,7 +86,7 @@ export default function CustomerRatingsAdminPage() {
         ))}
       </div>
 
-      {tab === 'ratings' ? <RatingsTab /> : <MessagesTab />}
+      {tab === 'ratings' ? <RatingsTab /> : tab === 'messages' ? <MessagesTab /> : <FeedbackReport />}
     </div>
   )
 }

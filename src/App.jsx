@@ -40,6 +40,7 @@ import SetPasswordPage  from './pages/SetPasswordPage'
 import CustomerRatingsAdminPage from './pages/CustomerRatingsAdminPage'
 import MagazinePage     from './pages/MagazinePage'
 import CallPage         from './pages/CallPage'
+import FeedbackPage     from './pages/FeedbackPage'
 
 // Layout
 import AppLayout        from './components/layout/AppLayout'
@@ -112,6 +113,9 @@ export default function App() {
       {/* صفحة التقييم — عامة بدون تسجيل دخول */}
       <Route path="/survey/:city" element={<SurveyPage />} />
       <Route path="/survey"       element={<SurveyPage />} />
+
+      {/* استبيان العملاء (QR موحّد بالحافلات) — عام بدون تسجيل دخول */}
+      <Route path="/feedback" element={<FeedbackPage />} />
 
       {/* تقييم العميل للموظف — عامة بدون تسجيل دخول */}
       <Route path="/rate/:token" element={<PublicRatingPage />} />
