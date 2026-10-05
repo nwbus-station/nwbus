@@ -118,7 +118,10 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   // تذاكر المتخلفين
   const [missedTickets, setMissedTickets] = useState(draft?.missedTickets ?? record?.missed_tickets ?? [])
   const [ticketInput, setTicketInput]     = useState('')
-  const [ticketStation, setTicketStation] = useState(trip?.from_station?.name_ar || trip?.from_station?.name_en || '')
+  // المحطة الحالية (اللي يدخل منها الموظف السجل) هي الافتراضية — مو بداية الرحلة، عشان محطات العبور (مثل الحوية) تُسجَّل باسمها
+  const curStationRow = stations.find(s => s.id === stationId)
+  const curStationNames = [curStationRow?.name_ar, curStationRow?.name_en, stationName].filter(Boolean)
+  const [ticketStation, setTicketStation] = useState(curStationNames[0] || trip?.from_station?.name_ar || trip?.from_station?.name_en || '')
   const [showTicketScanner, setShowTicketScanner] = useState(false)
 
   // مطابقة الكشف — يجب أن تكون قبل useEffect الذي يستخدمها
@@ -471,7 +474,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
               <div style={{ display:'flex', flexDirection:'column', gap:6, width:176, flexShrink:0 }}>
                 <select value={ticketStation} onChange={e => setTicketStation(e.target.value)}
                   style={{ ...S.input, padding:'7px 10px', fontSize:'0.75rem' }}>
-                  {[trip?.from_station?.name_ar, trip?.from_station?.name_en, trip?.to_station?.name_ar, trip?.to_station?.name_en]
+                  {[...curStationNames, trip?.from_station?.name_ar, trip?.from_station?.name_en, trip?.to_station?.name_ar, trip?.to_station?.name_en]
                     .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i)
                     .map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
