@@ -31,7 +31,7 @@ export function AuthProvider({ children }) {
     setProfileError(null)
     const { data, error } = await supabase
       .from('users')
-      .select('*, station:station_id(id, name_ar, name_en, type)')
+      .select('*, station:station_id(id, name_ar, name_en, type, survey_city)')
       .eq('auth_id', authUser.id)
       .maybeSingle()
     if (data && data.is_active === false) {
@@ -169,7 +169,7 @@ export function AuthProvider({ children }) {
         if (!id || payload.new?.id !== id) return
         const { data } = await supabase
           .from('users')
-          .select('*, station:station_id(id, name_ar, name_en, type)')
+          .select('*, station:station_id(id, name_ar, name_en, type, survey_city)')
           .eq('id', id)
           .maybeSingle()
         if (!data) return
