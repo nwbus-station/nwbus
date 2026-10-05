@@ -533,7 +533,7 @@ export default function ReportsPage() {
       (t.missed_tickets ?? []).forEach(m => {
         missed.push({
           date:    t.record_date,
-          station: m.station || t.station?.name_ar || t.station?.name_en || '—',
+          station: t.station?.name_ar || t.station?.name_en || m.station || '—',
           trip:    t.trip?.trip_number || '—',
           ticket:  m.ticket ?? m,
         })

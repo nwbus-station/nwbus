@@ -121,7 +121,8 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
   // المحطة الحالية (اللي يدخل منها الموظف السجل) هي الافتراضية — مو بداية الرحلة، عشان محطات العبور (مثل الحوية) تُسجَّل باسمها
   const curStationRow = stations.find(s => s.id === stationId)
   const curStationNames = [curStationRow?.name_ar, curStationRow?.name_en, stationName].filter(Boolean)
-  const [ticketStation, setTicketStation] = useState(curStationNames[0] || trip?.from_station?.name_ar || trip?.from_station?.name_en || '')
+  // ثابتة: كل تذاكر المتخلفين بهذا السجل تُنسب لمحطة السجل نفسها (بدون اختيار)
+  const ticketStation = curStationNames[0] || trip?.from_station?.name_ar || trip?.from_station?.name_en || ''
   const [showTicketScanner, setShowTicketScanner] = useState(false)
 
   // مطابقة الكشف — يجب أن تكون قبل useEffect الذي يستخدمها
@@ -265,7 +266,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
       operational_status: form.operational_status,
       is_extra_trip:      !!trip.is_extra,
       missed_count:       isArrival ? 0 : missedTickets.length,
-      missed_tickets:     isArrival ? [] : missedTickets,
+      missed_tickets:     isArrival ? [] : missedTickets.map(m => ({ ...m, station: ticketStation })),
       notes:              form.notes || null,
       created_by:         profile.id,
       created_by_name:    profile.full_name_ar,
@@ -463,7 +464,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
                   <p style={{ textAlign:'center', color:'var(--text-3)', fontSize:'0.75rem', padding:'14px 0' }}>{isAr ? 'لا يوجد متخلفون' : 'No missed passengers'}</p>
                 ) : missedTickets.map((m, i) => (
                   <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 1fr', padding:'6px 12px', fontSize:'0.75rem', borderBottom:'1px solid var(--border)' }}>
-                    <span style={{ color:'var(--text-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.station}</span>
+                    <span style={{ color:'var(--text-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ticketStation}</span>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                       <span style={{ fontFamily:'monospace', color:'var(--text-1)' }}>{m.ticket}</span>
                       <button type="button" onClick={() => removeTicket(i)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.75rem', padding:'0 4px' }}>✕</button>
@@ -472,12 +473,10 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
                 ))}
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6, width:176, flexShrink:0 }}>
-                <select value={ticketStation} onChange={e => setTicketStation(e.target.value)}
-                  style={{ ...S.input, padding:'7px 10px', fontSize:'0.75rem' }}>
-                  {[...curStationNames, trip?.from_station?.name_ar, trip?.from_station?.name_en, trip?.to_station?.name_ar, trip?.to_station?.name_en]
-                    .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i)
-                    .map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <div style={{ ...S.input, padding:'7px 10px', fontSize:'0.75rem', background:'var(--surface-2)', color:'var(--text-2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}
+                  title={isAr ? 'محطة التذاكر ثابتة: محطة هذا السجل' : 'Ticket station is fixed to this record\'s station'}>
+                  {ticketStation}
+                </div>
                 <div style={{ display:'flex', gap:6 }}>
                   <input
                     value={ticketInput}
