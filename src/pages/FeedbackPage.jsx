@@ -178,6 +178,7 @@ export default function FeedbackPage() {
     if (view === 'trip' && (!fromId || !toId)) { setError(t.needStations); return }
     if (view === 'station' && !stationId) { setError(t.needStation); return }
     if (!ratedCount && nps == null) { setError(t.needRating); return }
+    if (phone && phone.replace(/\D/g, '').length < 8) { setError(t.badPhone); return }
     setSending(true)
     const payload = {
       kind: view, lang, device: deviceId(),
@@ -188,7 +189,7 @@ export default function FeedbackPage() {
       nps: view === 'trip' ? nps : null,
       ratings, improve, low_reason: hasLow ? reasons : [], comment,
       age_group: demo.age || null, traveler_type: demo.traveler || null, trip_purpose: demo.purpose || null, frequency: demo.freq || null,
-      contact_phone: hasLow ? phone : null,
+      contact_phone: phone || null,
     }
     const { error: err } = await supabase.rpc('submit_customer_survey', { p: payload })
     setSending(false)
@@ -294,14 +295,7 @@ export default function FeedbackPage() {
               <div className="space-y-5">
                 <Chips title={t.improveTitle} options={improveOpts} selected={improve} t={t} onToggle={k => toggleIn(improve, setImprove, k, 2)} />
                 {hasLow && (
-                  <>
-                    <Chips title={t.lowTitle} options={LOW_REASONS} selected={reasons} t={t} onToggle={k => toggleIn(reasons, setReasons, k)} />
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">{t.contactTitle}</label>
-                      <input value={phone} onChange={e => setPhone(e.target.value.replace(/[^\d+]/g, ''))} dir="ltr" inputMode="tel" maxLength={16} placeholder={t.contactPh}
-                        className="w-full border border-slate-200 rounded-xl px-4 py-3.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-300" />
-                    </div>
-                  </>
+                  <Chips title={t.lowTitle} options={LOW_REASONS} selected={reasons} t={t} onToggle={k => toggleIn(reasons, setReasons, k)} />
                 )}
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1.5">{t.commentLabel}</label>
@@ -309,6 +303,12 @@ export default function FeedbackPage() {
                     className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-300" />
                 </div>
               </div>
+            </Card>
+
+            <Card title={hasLow ? t.contactLowTitle : t.contactTitle}>
+              <p className="text-xs text-slate-400 -mt-2 mb-3 leading-relaxed">{t.contactHint}</p>
+              <input value={phone} onChange={e => setPhone(e.target.value.replace(/[^\d+]/g, ''))} dir="ltr" inputMode="tel" maxLength={16} placeholder={t.contactPh}
+                className="w-full border border-slate-200 rounded-xl px-4 py-3.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-300" />
             </Card>
 
             <Card title={t.aboutYou}>
