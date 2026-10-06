@@ -1766,6 +1766,18 @@ function UsersPageFull() {
     setCustomTitles(data ?? [])
   }, [])
   useEffect(() => { loadTitles() }, [loadTitles])
+  const [rolePermMap, setRolePermMap] = useState({})
+  useEffect(() => {
+    supabase.from('role_permissions').select('role, permissions')
+      .then(({ data }) => setRolePermMap(Object.fromEntries((data ?? []).map(r => [r.role, r.permissions ?? {}]))))
+  }, [])
+  // الأقسام الفعلية للموظف: من المخزّن عنده، بدون "الرئيسية" (مفتوحة للكل)، وبما يسمح به سقف دوره/مسماه
+  const effectiveModules = u => {
+    const t = u.custom_title_id ? customTitles.find(x => x.id === u.custom_title_id) : null
+    const role = t?.base_role ?? u.role
+    const list = u.allowed_modules ?? MODULES.map(m => m.value)
+    return list.filter(m => m !== 'home' && roleModuleAllowed(m, role, t ? null : rolePermMap[role], !!t))
+  }
   const [users,    setUsers]    = useState(() => getCached(usersCacheKey)?.users ?? [])
   const hasLoadedRef = useRef(users.length > 0)
   const [stations, setStations] = useState(() => getCached(usersCacheKey)?.stations ?? [])
@@ -2484,7 +2496,9 @@ function UsersPageFull() {
                     {u.allowed_modules === null ? (
                       <span className="text-xs text-green-600 font-medium">{isAr ? 'جميع الأقسام' : 'All sections'}</span>
                     ) : (
-                      <span className="text-xs text-gray-400">{u.allowed_modules?.length ?? 0} {isAr ? 'قسم' : 'sections'}</span>
+                      <span className="text-xs text-gray-400" title={effectiveModules(u).map(m => { const x = MODULES.find(y => y.value === m); return isAr ? x?.ar : x?.en }).filter(Boolean).join('، ')}>
+                        {effectiveModules(u).length} {isAr ? 'قسم' : 'sections'}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
