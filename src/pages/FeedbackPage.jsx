@@ -326,7 +326,7 @@ export default function FeedbackPage() {
             <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
               <input tabIndex={-1} autoComplete="off" name="website" value={trap} onChange={e => setTrap(e.target.value)} />
             </div>
-            <p className="text-[11px] text-slate-400 text-center leading-relaxed px-2">{t.privacy}</p>
+            <p className="text-[11px] text-slate-400 text-center leading-relaxed px-2">{t.privacy} <a href={`/privacy?lang=${lang === 'ar' ? 'ar' : 'en'}`} target="_blank" rel="noreferrer" className="underline font-semibold text-slate-500">{t.privacyLink}</a></p>
             {error && <p className="text-sm text-red-600 font-semibold text-center">{error}</p>}
           </>
         )}

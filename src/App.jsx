@@ -41,6 +41,7 @@ import CustomerRatingsAdminPage from './pages/CustomerRatingsAdminPage'
 import MagazinePage     from './pages/MagazinePage'
 import CallPage         from './pages/CallPage'
 import FeedbackPage     from './pages/FeedbackPage'
+import PrivacyPage      from './pages/PrivacyPage'
 
 // Layout
 import AppLayout        from './components/layout/AppLayout'
@@ -116,6 +117,7 @@ export default function App() {
 
       {/* استبيان العملاء (QR موحّد بالحافلات) — عام بدون تسجيل دخول */}
       <Route path="/feedback" element={<FeedbackPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
 
       {/* تقييم العميل للموظف — عامة بدون تسجيل دخول */}
       <Route path="/rate/:token" element={<PublicRatingPage />} />
