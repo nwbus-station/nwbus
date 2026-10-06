@@ -48,8 +48,8 @@ serve(async (req) => {
     const { error: updateErr } = await admin.auth.admin.updateUserById(user.id, { password: new_password })
     if (updateErr) throw updateErr
 
-    // كلمة المرور صارت من اختيار الموظف نفسه — تُمسح النسخة اللي كان الأدمن يقدر يشوفها
-    await admin.from('users').update({ login_password: null }).eq('id', callerProfile.id)
+    // كلمة المرور صارت من اختيار الموظف نفسه
+    await admin.from('users').update({ password_changed: true, login_password: null }).eq('id', callerProfile.id)
 
     // إشعار للموظف نفسه يؤكد إن كلمة مروره تغيّرت
     await admin.from('notifications').insert({

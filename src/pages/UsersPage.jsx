@@ -241,6 +241,21 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
   )
 }
 
+async function createAuthUserViaEdge(username, password) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  if (!token) return { error: 'No active session' }
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-auth-user`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+    body: JSON.stringify({ username, password }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (res.ok) return { auth_id: body.auth_id }
+  if (res.status === 409) return { exists: true }
+  return { error: body.error || 'Failed to create account' }
+}
+
 async function resetPasswordViaEdge(authId, newPassword) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
@@ -828,7 +843,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   const [error,     setError]     = useState('')
   const [showPass,  setShowPass]  = useState(false)
   const [credential, setCredential] = useState(null) // { username, password, nameAr }
-  const [sensitive, setSensitive] = useState(null) // { phone, national_id, login_password } — أدمن فقط، تُجلب عند فتح التعديل
+  const [sensitive, setSensitive] = useState(null) // { phone, national_id } — أدمن فقط، تُجلب عند فتح التعديل
   const [jobNumberCheck, setJobNumberCheck] = useState(null) // { status: 'checking'|'taken'|'free', name? } — موظف جديد فقط
 
   // تحقق فوري (مع تأخير بسيط) هل الرقم الوظيفي مستخدم من قبل — قبل ما يكمل الأدمن باقي النموذج
@@ -1004,19 +1019,21 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
         )
         const email = `${form.username.toLowerCase()}@nwbus.sa`
         let authId
-        const { data: authData, error: authErr } = await tempClient.auth.signUp({ email, password: form.password })
-        if (authErr) {
+        // إنشاء حساب المصادقة من الخادم (التسجيل العام مقفول بـSupabase Auth)
+        const createRes = await createAuthUserViaEdge(form.username, form.password)
+        if (createRes.auth_id) {
+          authId = createRes.auth_id
+        } else if (createRes.exists) {
           // حساب مصادقة يتيم من محاولة سابقة فشلت قبل حفظ الموظف: نعيد استخدامه لو كلمة المرور مطابقة ومافيه موظف مربوط به
-          if (!/already registered|already been registered/i.test(authErr.message || '')) throw authErr
+          const existsErr = new Error(isAr ? 'هذا الحساب موجود مسبقاً في نظام المصادقة' : 'This account already exists in the auth system')
           const { data: si, error: siErr } = await tempClient.auth.signInWithPassword({ email, password: form.password })
-          if (siErr || !si?.user?.id) throw authErr
+          if (siErr || !si?.user?.id) throw existsErr
           const { data: linked } = await supabase.from('users').select('id').eq('auth_id', si.user.id).maybeSingle()
-          if (linked) throw authErr
+          if (linked) throw existsErr
           authId = si.user.id
         } else {
-          authId = authData?.user?.id
+          throw new Error(createRes.error || (isAr ? 'فشل إنشاء حساب المصادقة' : 'Auth account creation failed'))
         }
-        if (!authId) throw new Error(isAr ? 'فشل إنشاء حساب المصادقة — تأكد من تعطيل Email Confirmation في Supabase' : 'Auth account creation failed — disable Email Confirmation in Supabase')
 
         const { data: inserted, error: insertErr } = await supabase.from('users').insert({
           username:     form.username.toLowerCase(),
@@ -1041,8 +1058,6 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             const { error: extrasErr } = await supabase.from('users').update(extras).eq('id', inserted.id)
             if (extrasErr) throw extrasErr
           }
-          const { error: pwErr } = await supabase.from('users').update({ login_password: form.password }).eq('id', inserted.id)
-          if (pwErr) throw pwErr
 
           const newOverride = form.leave_balance_override === '' ? null : Number(form.leave_balance_override)
           const { error: nErr } = await supabase.from('users').update({
@@ -1350,15 +1365,13 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                     <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'اسم المستخدم' : 'Username'}</p>
                     <p className="font-mono text-sm text-nwbus-primary font-bold">{user.username}</p>
                   </div>
-                  {sensitive?.login_password ? (
-                    <button type="button"
-                      onClick={() => setCredential({ username: user.username, password: sensitive.login_password, nameAr: user.full_name_ar, jobNumber: user.job_number, phone: sensitive.phone, hireDate: user.hire_date, stationName: stations.find(s => s.id === user.station_id)?.name_ar ?? '' })}
-                      className="text-xs text-nwbus-primary underline shrink-0">
-                      {isAr ? 'عرض البطاقة' : 'Show Card'}
-                    </button>
-                  ) : sensitive && (
+                  {user.password_changed ? (
                     <span className="text-[11px] text-green-600 font-medium shrink-0">
                       {isAr ? '✓ غيّرها الموظف بنفسه' : '✓ Changed by employee'}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-amber-600 font-medium shrink-0" title={isAr ? 'لإصدار بطاقة جديدة أعد تعيين كلمة المرور من الأسفل' : 'Reset the password below to issue a new card'}>
+                      {isAr ? 'لم يغيّرها بعد' : 'Not changed yet'}
                     </span>
                   )}
                 </div>
@@ -1836,10 +1849,10 @@ function UsersPageFull() {
     if (cached) { setUsers(cached.users); setStations(cached.stations); setLoading(false); hasLoadedRef.current = true }
     // ما نطلّع شاشة التحميل لو أصلاً عندنا قائمة معروضة (تحديث بالخلفية بعد الحفظ) — كانت تطيح الجدول وترجع سكرول الصفحة لأعلى
     else if (!hasLoadedRef.current) setLoading(true)
-    // بدون phone/national_id/login_password — حقول حساسة تُجلب فقط عند الحاجة عبر get_user_sensitive (أدمن فقط)
+    // بدون phone/national_id — حقول حساسة تُجلب فقط عند الحاجة عبر get_user_sensitive (أدمن فقط)
     let usersQuery = supabase
       .from('users')
-      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, peer_supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, custom_title_id, hire_date, is_accountant, is_agent, can_rate_customers, leave_balance_override, leave_balance_override_date, created_at, last_login, station:station_id(name_ar, name_en)')
+      .select('id, username, full_name_ar, full_name_en, role, station_id, supervisor_id, peer_supervisor_id, language, is_active, auth_id, job_number, allowed_modules, job_title, custom_title_id, hire_date, is_accountant, is_agent, can_rate_customers, password_changed, leave_balance_override, leave_balance_override_date, created_at, last_login, station:station_id(name_ar, name_en)')
       .order('created_at', { ascending: false })
 
     // مشرف المحطة ومشرف المنطقة نفس المعاملة — كل محطاتهم المخصصة بـ user_stations

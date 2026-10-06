@@ -208,10 +208,10 @@ async function changeOwnPassword(currentPassword, newPassword) {
   const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword })
   if (updateErr) throw updateErr
 
-  // كلمة المرور صارت من اختيار الموظف — تُمسح النسخة اللي كان الأدمن يقدر يشوفها، ونُشعره بالتغيير
+  // كلمة المرور صارت من اختيار الموظف — نسجّل ذلك ونُشعره بالتغيير
   const { data: me } = await supabase.from('users').select('id').eq('auth_id', user.id).single()
   if (me?.id) {
-    await supabase.from('users').update({ login_password: null }).eq('id', me.id)
+    await supabase.from('users').update({ password_changed: true }).eq('id', me.id)
     await supabase.from('notifications').insert({
       user_id: me.id,
       type: 'info',
@@ -501,10 +501,10 @@ export default function AppLayout() {
   // تنبيه لطيف بعد فترة قصيرة من فتح الجلسة — لأي حساب لسا يستخدم كلمة المرور اللي حطها الأدمن ولا غيّرها بنفسه
   const [showPwdNudge, setShowPwdNudge] = useState(false)
   useEffect(() => {
-    if (!profile?.login_password) { setShowPwdNudge(false); return }
+    if (profile?.password_changed !== false) { setShowPwdNudge(false); return }
     const t = setTimeout(() => setShowPwdNudge(true), 4000)
     return () => clearTimeout(t)
-  }, [profile?.id, profile?.login_password])
+  }, [profile?.id, profile?.password_changed])
 
   // تنبيه "فيه تحديث جديد" — يظهر لأي موظف مفتوح عنده التطبيق لما ينزل نشر جديد، بدل ما
   // يحتاج يسوي تحديث كامل يدوي أو ننتظره يسأل الأدمن

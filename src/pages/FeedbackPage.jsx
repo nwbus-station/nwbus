@@ -137,6 +137,7 @@ export default function FeedbackPage() {
   const [phone, setPhone] = useState('')
   const [demo, setDemo] = useState({ age: '', traveler: '', purpose: '', freq: '' })
   const [sending, setSending] = useState(false)
+  const [trap, setTrap] = useState('') // حقل مخفي: البوتات تعبّيه والبشر لا
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -179,6 +180,7 @@ export default function FeedbackPage() {
     if (view === 'station' && !stationId) { setError(t.needStation); return }
     if (!ratedCount && nps == null) { setError(t.needRating); return }
     if (phone && phone.replace(/\D/g, '').length < 8) { setError(t.badPhone); return }
+    if (trap) { setDoneKinds(d => (d.includes(view) ? d : [...d, view])); setView('done'); return }
     setSending(true)
     const payload = {
       kind: view, lang, device: deviceId(),
@@ -321,6 +323,10 @@ export default function FeedbackPage() {
               </div>
             </Card>
 
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
+              <input tabIndex={-1} autoComplete="off" name="website" value={trap} onChange={e => setTrap(e.target.value)} />
+            </div>
+            <p className="text-[11px] text-slate-400 text-center leading-relaxed px-2">{t.privacy}</p>
             {error && <p className="text-sm text-red-600 font-semibold text-center">{error}</p>}
           </>
         )}

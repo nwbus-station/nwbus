@@ -60,6 +60,9 @@ serve(async (req) => {
     const { error } = await admin.auth.admin.updateUserById(auth_id, { password: new_password })
     if (error) throw error
 
+    // كلمة مرور جديدة من الإدارة: الموظف لازم يغيّرها بنفسه (يرجع التنبيه عنده)
+    await admin.from('users').update({ password_changed: false }).eq('auth_id', auth_id)
+
     return json({ success: true })
   } catch (err) {
     return json({ error: err.message }, 500)
