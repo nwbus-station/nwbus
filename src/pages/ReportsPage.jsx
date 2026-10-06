@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
+import { exportTableXlsx, XL } from '../utils/excelExport'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached } from '../lib/pageCache'
 import { NWB_LOGO_SVG } from '../utils/logo'
@@ -1093,27 +1094,34 @@ export default function ReportsPage() {
   function exportCompliance() {
     const arrivals = data.movements.filter(m => m.type === 'arrival' && !m.unentered && m.delay !== null)
       .sort((a, b) => (b.delay ?? -9999) - (a.delay ?? -9999))
-    const head = [isAr ? 'التاريخ' : 'Date', isAr ? 'المحطة' : 'Station', isAr ? 'رقم الرحلة' : 'Trip',
-      isAr ? 'رقم الحافلة' : 'Bus', isAr ? 'من' : 'From', isAr ? 'المجدول' : 'Scheduled',
-      isAr ? 'الفعلي' : 'Actual', isAr ? 'التأخير (دقيقة)' : 'Delay (min)', isAr ? 'الحالة' : 'Status']
-    const rows = [head, ...arrivals.map(m => [m.date, m.station, m.trip, m.bus, m.from, m.sched, m.actual, m.delay, m.acc?.label ?? ''])]
-    const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `arrival_compliance_${dateFrom}_${dateTo}.csv`; a.click()
-    URL.revokeObjectURL(url)
+    const delayColor = v => (typeof v !== 'number' ? null : v > 15 ? XL.red : v > 5 ? XL.amber : XL.green)
+    return exportTableXlsx({
+      isAr, filename: `${isAr ? 'الالتزام-بالوصول' : 'arrival-compliance'}_${dateFrom}_${dateTo}`,
+      sheetName: isAr ? 'الالتزام بالوصول' : 'Arrival compliance',
+      title: isAr ? 'تقرير الالتزام بمواعيد الوصول' : 'Arrival Compliance Report',
+      subtitle: `${isAr ? 'الفترة' : 'Period'}: ${dateFrom} → ${dateTo}`,
+      columns: [
+        { header: isAr ? 'التاريخ' : 'Date', w: 13 }, { header: isAr ? 'المحطة' : 'Station', w: 22 }, { header: isAr ? 'رقم الرحلة' : 'Trip', w: 12 },
+        { header: isAr ? 'رقم الحافلة' : 'Bus', w: 12 }, { header: isAr ? 'من' : 'From', w: 20 }, { header: isAr ? 'المجدول' : 'Scheduled', w: 12 },
+        { header: isAr ? 'الفعلي' : 'Actual', w: 12 }, { header: isAr ? 'التأخير (دقيقة)' : 'Delay (min)', w: 14, fmt: '0', color: delayColor }, { header: isAr ? 'الحالة' : 'Status', w: 16 },
+      ],
+      rows: arrivals.map(m => [m.date, m.station, m.trip, m.bus, m.from, m.sched, m.actual, typeof m.delay === 'number' ? m.delay : Number(m.delay), m.acc?.label ?? '']),
+      landscape: true,
+    })
   }
 
   function exportMissed() {
-    const head = [isAr ? 'التاريخ' : 'Date', isAr ? 'المحطة' : 'Station', isAr ? 'رقم الرحلة' : 'Trip', isAr ? 'رقم التذكرة' : 'Ticket']
-    const rows = [head, ...data.missed.map(m => [m.date, m.station, m.trip, m.ticket])]
-    const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `missed_${dateFrom}_${dateTo}.csv`; a.click()
-    URL.revokeObjectURL(url)
+    return exportTableXlsx({
+      isAr, filename: `${isAr ? 'التذاكر-الفائتة' : 'missed-tickets'}_${dateFrom}_${dateTo}`,
+      sheetName: isAr ? 'التذاكر الفائتة' : 'Missed tickets',
+      title: isAr ? 'تقرير التذاكر الفائتة' : 'Missed Tickets Report',
+      subtitle: `${isAr ? 'الفترة' : 'Period'}: ${dateFrom} → ${dateTo}`,
+      columns: [
+        { header: isAr ? 'التاريخ' : 'Date', w: 14 }, { header: isAr ? 'المحطة' : 'Station', w: 26 },
+        { header: isAr ? 'رقم الرحلة' : 'Trip', w: 14 }, { header: isAr ? 'رقم التذكرة' : 'Ticket', w: 18 },
+      ],
+      rows: data.missed.map(m => [m.date, m.station, m.trip, m.ticket]),
+    })
   }
 
 

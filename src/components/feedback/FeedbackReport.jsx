@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import * as XLSX from 'xlsx'
 import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
 import DatePicker from '../shared/DatePicker'
 import { todayStr } from '../../utils/dates'
 import { AR_LABELS, AR_O, AR_A, EN_LABELS, EN_O, EN_A, TRIP_ASPECTS, STATION_ASPECTS } from '../../utils/feedbackConfig'
+import { exportSurveyExcel } from '../../utils/surveyExport'
+import { buildSurveyReportHtml, openPrintWindow, printInto } from '../../utils/surveyPdf'
 import { POSTER_SIZES, buildPosterSvg, downloadPosterPng, printPoster } from '../../utils/qrPoster'
 
 const useIsAr = () => useTranslation().i18n.language === 'ar'
@@ -313,6 +314,30 @@ export default function FeedbackReport() {
     return a.sort((x, y) => y.n - x.n)
   }, [D, sortBy])
 
+  const [busy, setBusy] = useState('')
+  async function runExport(kindOf, fn) {
+    setBusy(kindOf); setErr('')
+    try { await fn() } catch (e) { setErr((isAr ? 'تعذّر إنشاء الملف: ' : 'Could not create the file: ') + (e?.message || e)) }
+    setBusy('')
+  }
+
+  // تقرير PDF: نفتح النافذة فوراً من ضغطة المستخدم ثم نجلب أحدث الملاحظات ونطبع
+  async function printPdf() {
+    const w = openPrintWindow()
+    if (!w) { setErr(isAr ? 'المتصفح منع النافذة — اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة' : 'Pop-ups are blocked — allow pop-ups for this site and try again'); return }
+    let q = supabase.from('customer_surveys').select('id, created_at, kind, station_id, from_station_id, ratings, comment')
+      .not('comment', 'is', null)
+      .gte('created_at', `${from}T00:00:00+03:00`).lte('created_at', `${to}T23:59:59.999+03:00`)
+      .order('created_at', { ascending: false }).limit(12)
+    if (args.p_kind) q = q.eq('kind', args.p_kind)
+    if (args.p_station) q = q.or(`station_id.eq.${args.p_station},from_station_id.eq.${args.p_station},to_station_id.eq.${args.p_station}`)
+    const { data: vrows } = await q
+    printInto(w, buildSurveyReportHtml({
+      isAr, D, prev, summary, from, to, scopeText, stations: D.stationList, voice: vrows ?? [], npsLevel, scoreLevel,
+      fns: { lbl, lblO, lblA, repName, stName, focusId, avgOfRow },
+    }))
+  }
+
   async function exportExcel() {
     let rows = [], page = 0
     for (;;) {
@@ -327,23 +352,11 @@ export default function FeedbackReport() {
       if (chunk.length < 1000 || page >= 9) break
       page++
     }
-    const H = isAr
-      ? { date: 'التاريخ', kind: 'النوع', station: 'المحطة', from: 'من', to: 'إلى', tripNo: 'رقم الرحلة', avg: 'المتوسط', improve: 'أولويات التحسين', low: 'أسباب عدم الرضا', comment: 'ملاحظات', age: 'الفئة العمرية', traveler: 'نوع المسافر', purpose: 'غرض الرحلة', freq: 'تكرار السفر', phone: 'جوال', lang: 'اللغة', trip: 'رحلة', st: 'محطة', sep: '، ' }
-      : { date: 'Date', kind: 'Type', station: 'Station', from: 'From', to: 'To', tripNo: 'Trip number', avg: 'Average', improve: 'Improvement priorities', low: 'Reasons for dissatisfaction', comment: 'Comments', age: 'Age group', traveler: 'Traveler type', purpose: 'Trip purpose', freq: 'Travel frequency', phone: 'Mobile', lang: 'Language', trip: 'Trip', st: 'Station', sep: ', ' }
-    const out = rows.map(r => ({
-      [H.date]: new Date(r.created_at).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB'),
-      [H.kind]: r.kind === 'trip' ? H.trip : H.st,
-      [H.station]: stName(focusId(r)),
-      [H.from]: r.kind === 'trip' ? stName(r.from_station_id) : '', [H.to]: r.kind === 'trip' ? stName(r.to_station_id) : '',
-      [H.tripNo]: r.trip_number ?? '', 'NPS': r.nps ?? '', [H.avg]: avgOfRow(r)?.toFixed(2) ?? '',
-      ...Object.fromEntries(Object.entries(r.ratings ?? {}).map(([k, v]) => [lblA(k), v])),
-      [H.improve]: (r.improve ?? []).map(lblO).join(H.sep), [H.low]: (r.low_reason ?? []).map(lblO).join(H.sep),
-      [H.comment]: r.comment ?? '', [H.age]: lbl(r.age_group ?? ''), [H.traveler]: lbl(r.traveler_type ?? ''),
-      [H.purpose]: lbl(r.trip_purpose ?? ''), [H.freq]: lbl(r.frequency ?? ''), [H.phone]: r.contact_phone ?? '', [H.lang]: r.lang ?? '',
-    }))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), isAr ? 'رضا العملاء' : 'Customer Satisfaction')
-    XLSX.writeFile(wb, isAr ? `رضا-العملاء-${from}_${to}.xlsx` : `customer-satisfaction-${from}_${to}.xlsx`)
+    await exportSurveyExcel({
+      isAr, rows, D, prev, summary, from, to, scopeText,
+      fns: { stName, focusId, lbl, lblO, lblA },
+      filename: isAr ? `رضا-العملاء-${from}_${to}` : `customer-satisfaction-${from}_${to}`,
+    })
   }
 
   const prevScore = prev ? npsScore(prev.nps) : null
@@ -411,8 +424,12 @@ export default function FeedbackReport() {
               {stations.map(s => <option key={s.id} value={s.id}>{stLabel(s)}</option>)}
             </select>
           </div>
-          <button type="button" onClick={exportExcel} disabled={!D?.total}
-            className="ms-auto px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white disabled:opacity-40">{isAr ? 'تصدير Excel' : 'Export Excel'}</button>
+          <div className="ms-auto flex items-center gap-2">
+            <button type="button" onClick={() => runExport('pdf', printPdf)} disabled={!D?.total || !!busy}
+              className="px-4 py-2 rounded-lg text-xs font-bold border border-slate-900 text-slate-900 bg-white disabled:opacity-40">{busy === 'pdf' ? (isAr ? 'جاري التجهيز…' : 'Preparing…') : (isAr ? 'طباعة / PDF' : 'Print / PDF')}</button>
+            <button type="button" onClick={() => runExport('xlsx', exportExcel)} disabled={!D?.total || !!busy}
+              className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white disabled:opacity-40">{busy === 'xlsx' ? (isAr ? 'جاري الإنشاء…' : 'Creating…') : (isAr ? 'تصدير Excel' : 'Export Excel')}</button>
+          </div>
         </div>
       </Card>
 

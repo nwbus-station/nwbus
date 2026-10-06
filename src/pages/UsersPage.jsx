@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import * as XLSX from 'xlsx'
+import { exportTableXlsx } from '../utils/excelExport'
 import { createClient } from '@supabase/supabase-js'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
@@ -14,6 +14,7 @@ import DatePicker from '../components/shared/DatePicker'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { SHIFTS, computeActiveUntil } from '../utils/ratingShifts'
 import { leaveRemaining } from '../utils/leaveBalance'
+const XL_GREEN = 'FF15803D', XL_RED = 'FFB91C1C'
 
 function RatingActivationAdmin({ userId, isAr }) {
   const [row, setRow] = useState(null)
@@ -2239,22 +2240,22 @@ function UsersPageFull() {
     setPrintingRoster(false)
 
     const { title: stationTitleX, showStationCol: showStationColX } = printScopeLabel()
-    const header = [
-      '#', isAr ? 'الاسم' : 'Name', isAr ? 'الرقم الوظيفي' : 'Emp #', isAr ? 'المسمى الوظيفي' : 'Job Title',
-      isAr ? 'رقم الجوال' : 'Mobile', isAr ? 'البريد الإلكتروني' : 'Email', isAr ? 'تاريخ المباشرة' : 'Hire Date',
-      ...(showStationColX ? [isAr ? 'المحطة' : 'Station'] : []),
-      isAr ? 'الحالة' : 'Status',
+    const cols = [
+      { header: '#', w: 6 }, { header: isAr ? 'الاسم' : 'Name', w: 28 }, { header: isAr ? 'الرقم الوظيفي' : 'Emp #', w: 14 }, { header: isAr ? 'المسمى الوظيفي' : 'Job Title', w: 20 },
+      { header: isAr ? 'رقم الجوال' : 'Mobile', w: 16 }, { header: isAr ? 'البريد الإلكتروني' : 'Email', w: 30 }, { header: isAr ? 'تاريخ المباشرة' : 'Hire Date', w: 14 },
+      ...(showStationColX ? [{ header: isAr ? 'المحطة' : 'Station', w: 20 }] : []),
+      { header: isAr ? 'الحالة' : 'Status', w: 12, color: v => (v === (isAr ? 'نشط' : 'Active') ? XL_GREEN : XL_RED) },
     ]
     const data = printTargets.map((u, i) => [
       i + 1, u.full_name_ar, u.job_number || '', jobTitleLabelOf(u.job_title), phoneById[u.id] || '', emailById[u.id] || '', u.hire_date || '',
       ...(showStationColX ? [u.station ? (isAr ? u.station.name_ar : u.station.name_en) : ''] : []),
       u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'غير نشط' : 'Inactive'),
     ])
-    const ws = XLSX.utils.aoa_to_sheet([header, ...data])
-    ws['!cols'] = [{ wch: 4 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, ...(showStationColX ? [{ wch: 16 }] : []), { wch: 10 }]
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, isAr ? 'الموظفون' : 'Staff')
-    XLSX.writeFile(wb, `${isAr ? 'قائمة_الموظفين' : 'staff_roster'}_${stationTitleX}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    await exportTableXlsx({
+      isAr, filename: `${isAr ? 'قائمة_الموظفين' : 'staff_roster'}_${stationTitleX}_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: isAr ? 'الموظفون' : 'Staff', title: isAr ? 'قائمة الموظفين' : 'Staff Roster',
+      subtitle: stationTitleX, columns: cols, rows: data, landscape: cols.length > 7,
+    })
   }
 
   return (
