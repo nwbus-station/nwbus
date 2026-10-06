@@ -187,6 +187,30 @@ export function AuthProvider({ children }) {
     return () => supabase.removeChannel(channel)
   }, [])
 
+  // فحص دوري "هل حسابي لسا نشط؟" عبر دالة بالقاعدة (تعمل حتى بعد التعطيل) — خروج فوري بدون انتظار تحديث الصفحة
+  useEffect(() => {
+    if (!session) return
+    let busy = false
+    const check = async () => {
+      if (busy || !profileIdRef.current) return
+      busy = true
+      const { data, error } = await supabase.rpc('my_account_active')
+      busy = false
+      if (!error && data === false && profileIdRef.current) {
+        profileIdRef.current = null
+        await supabase.auth.signOut()
+        setProfile(null)
+        setAllowedStationIds(null)
+        setProfileError('ACCOUNT_DISABLED')
+      }
+    }
+    const id = setInterval(check, 30 * 1000)
+    const onVisible = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', check)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', check) }
+  }, [session])
+
   async function signIn(username, password) {
     setLoading(true)
     const email = `${username.toLowerCase()}@nwbus.sa`
