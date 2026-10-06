@@ -22,15 +22,52 @@ function deviceId() {
   } catch { return '' }
 }
 
+
+// بحث ذكي بالمحطات: يوحّد الحروف العربية، ويرتّب النتائج بحيث اسم المدينة/المحطة المقصود يطلع فوق
+// (مثلاً "حا" تطلع محطات حائل قبل محطات "محطة حافلات …" اللي كل أسمائها فيها "حا")
+const STOP = new Set(['محطه', 'حافلات', 'station', 'bus', 'terminal', 'al', 'ال'])
+const norm = v => String(v || '').toLowerCase()
+  .replace(/[\u064B-\u0652\u0640]/g, '')
+  .replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/ئ/g, 'ي').replace(/ؤ/g, 'و')
+  .replace(/\s+/g, ' ').trim()
+const WORD_SPLIT = /[\s\-()—–/،,]+/
+
+function rankToken(station, q) {
+  const fields = [station.survey_name_ar, station.name_ar, station.name_en].map(norm).filter(Boolean)
+  const city = norm(station.city_group)
+  let best = 99
+  if (city && city.startsWith(q)) best = 1
+  for (const f of fields) {
+    const words = f.split(WORD_SPLIT).filter(Boolean)
+    const meaningful = words.filter(w => !STOP.has(w) && !STOP.has(w.replace(/^ال/, '')))
+    if (f === q) best = Math.min(best, 0)
+    else if (meaningful[0] && (meaningful[0].startsWith(q) || meaningful[0].replace(/^ال/, '').startsWith(q))) best = Math.min(best, 1)
+    else if (meaningful.some(w => w.startsWith(q) || w.replace(/^ال/, '').startsWith(q))) best = Math.min(best, 2)
+    else if (words.some(w => w.startsWith(q))) best = Math.min(best, 3)
+    else if (f.includes(q)) best = Math.min(best, 4)
+  }
+  return best
+}
+
+function searchStations(stations, query, label) {
+  const tokens = norm(query).split(' ').filter(Boolean)
+  if (!tokens.length) return stations
+  return stations
+    .map(s => {
+      const ranks = tokens.map(t => rankToken(s, t))
+      return { s, score: ranks.some(r => r === 99) ? 99 : ranks.reduce((a, b) => a + b, 0) }
+    })
+    .filter(x => x.score < 99)
+    .sort((a, b) => a.score - b.score || label(a.s).localeCompare(label(b.s)))
+    .map(x => x.s)
+}
+
 function StationPicker({ label, value, onChange, stations, t, lang }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const nm = s => (lang === 'ar' ? (s.survey_name_ar || s.name_ar || s.name_en) : (s.name_en || s.name_ar)) || ''
   const selected = stations.find(s => s.id === value)
-  const list = useMemo(() => {
-    const k = q.trim().toLowerCase()
-    return stations.filter(s => !k || (s.survey_name_ar || '').toLowerCase().includes(k) || (s.name_ar || '').toLowerCase().includes(k) || (s.name_en || '').toLowerCase().includes(k))
-  }, [q, stations])
+  const list = useMemo(() => searchStations(stations, q, nm), [q, stations, lang]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>
