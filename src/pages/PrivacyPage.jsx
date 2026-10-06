@@ -31,7 +31,7 @@ const T = {
         'لا نبيع بياناتك ولا نشاركها مع جهات خارجية لأغراض تسويقية.',
         'نستخدم مزوّدي خدمات تقنية (استضافة وقاعدة بيانات) يعالجون البيانات نيابةً عنا وفق تعليماتنا فقط.',
       ]],
-      ['مدة الاحتفاظ', [`نحتفظ ببيانات الاستبيان حتى ${RETENTION_MONTHS} شهراً من تاريخ إرسالها، ثم تُحذف.`]],
+      ['مدة الاحتفاظ', [`نحتفظ بالبيانات الشخصية في الاستبيان (رقم الجوال، الملاحظات النصية، المعرّفات التقنية) حتى ${RETENTION_MONTHS} شهراً من تاريخ إرسالها، ثم نزيلها نهائياً ونُبقي فقط نتائج إحصائية مجهولة الهوية لا يمكن ربطها بك.`]],
       ['حقوقك', [
         'الاطلاع على بياناتك وطلب نسخة منها.',
         'تصحيحها أو طلب حذفها.',
@@ -74,7 +74,7 @@ const T = {
         'We do not sell your data or share it with third parties for marketing.',
         'We use technical service providers (hosting and database) who process data on our behalf and only on our instructions.',
       ]],
-      ['Retention', [`We keep survey data for up to ${RETENTION_MONTHS} months from submission, then delete it.`]],
+      ['Retention', [`We keep the personal data in a survey (mobile number, free-text comments, technical identifiers) for up to ${RETENTION_MONTHS} months from submission, then permanently remove it and keep only anonymous statistical results that cannot be linked to you.`]],
       ['Your rights', [
         'Access your data and request a copy.',
         'Correct it or request deletion.',
