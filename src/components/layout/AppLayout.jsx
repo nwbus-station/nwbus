@@ -372,6 +372,8 @@ const JOB_TITLES = {
   shift_supervisor:   { ar: 'مشرف وردية',  en: 'Shift Supervisor' },
   customer_service:   { ar: 'خدمة عملاء',  en: 'Customer Service' },
   dispatcher:         { ar: 'مرحّل',        en: 'Dispatcher' },
+  dispatcher_supervisor: { ar: 'مشرف مرحّلين', en: 'Dispatchers Supervisor' },
+  cleaner:            { ar: 'عامل نظافة',   en: 'Cleaner' },
 }
 
 // ── تبويب تنقّل علوي — نصي صافٍ بخط سفلي للنشط ─────────

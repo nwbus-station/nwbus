@@ -340,6 +340,8 @@ const JOB_TITLES = [
   { value: 'shift_supervisor',   ar: 'مشرف وردية',  en: 'Shift Supervisor' },
   { value: 'customer_service',   ar: 'خدمة عملاء',  en: 'Customer Service' },
   { value: 'dispatcher',         ar: 'مرحّل',        en: 'Dispatcher' },
+  { value: 'dispatcher_supervisor', ar: 'مشرف مرحّلين', en: 'Dispatchers Supervisor' },
+  { value: 'cleaner',            ar: 'عامل نظافة',   en: 'Cleaner' },
 ]
 
 const ROLE_COLORS = {
@@ -553,6 +555,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
       return
     }
     if (!form.name_ar.trim()) { setErr(isAr ? 'اسم المسمى بالعربي مطلوب' : 'Arabic name is required'); return }
+    if (!form.job_title) { setErr(isAr ? 'المسمى الوظيفي مطلوب لكل صلاحية' : 'Job title is required for every permission'); return }
     setBusy(true); setErr('')
     const permissions = Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, permValue(c)]))
     const row = { name_ar: form.name_ar.trim(), name_en: form.name_en.trim() || null, base_role: form.base_role, permissions, allowed_modules: form.allowed_modules, job_title: form.job_title || null, can_rate_customers: !!form.can_rate_customers }
@@ -634,7 +637,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                   <button key={t.id} onClick={() => pick(t)}
                     className={`w-full text-start rounded-lg px-3 py-2.5 border transition-colors ${form.id === t.id ? 'border-nwbus-primary bg-white shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
                     <p className="text-sm font-semibold text-gray-900 truncate">{t.name_ar}</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{roleLabel(t.base_role)} · {on}/{TITLE_CAPABILITIES.length}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{roleLabel(t.base_role)} · {on}/{TITLE_CAPABILITIES.length}{!t.job_title && <span className="text-red-500 font-semibold"> · {isAr ? 'بدون مسمى وظيفي' : 'no job title'}</span>}</p>
                   </button>
                 )
               })}
@@ -671,9 +674,9 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                 </div>
                 <div className="grid sm:grid-cols-3 gap-3 mt-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي (اختياري)' : 'Job title (optional)'}</label>
-                    <select className={inputCls} value={form.job_title ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, job_title: e.target.value })) }}>
-                      <option value="">{isAr ? '— بدون —' : '— None —'}</option>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي *' : 'Job title *'}</label>
+                    <select className={`${inputCls} ${!form.job_title ? 'border-red-300' : ''}`} value={form.job_title ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, job_title: e.target.value })) }}>
+                      <option value="">{isAr ? '— اختر المسمى الوظيفي —' : '— Select job title —'}</option>
                       {JOB_TITLES.map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
                     </select>
                   </div>
@@ -1989,7 +1992,7 @@ function UsersPageFull() {
       matchesSearch(u.username, search) ||
       matchesSearch(u.full_name_en, search) ||
       matchesSearch(u.job_number, search)
-    const matchRole    = !roleFilter    || (roleFilter.startsWith('title:') ? u.custom_title_id === roleFilter.slice(6) : u.role === roleFilter)
+    const matchRole    = !roleFilter    || (roleFilter.startsWith('title:') ? u.custom_title_id === roleFilter.slice(6) : (u.role === roleFilter && !u.custom_title_id))
     const matchStatus  = !statusFilter  || (statusFilter === 'active' ? u.is_active : !u.is_active)
     const matchJob     = !jobFilter     || u.job_title  === jobFilter
     const hasModule    = !moduleFilter || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
@@ -2317,7 +2320,7 @@ function UsersPageFull() {
               <option value="">{isAr ? 'كل الصلاحيات' : 'All Roles'}</option>
               {USER_ROLES.map(r => (
                 <option key={r.value} value={r.value}>
-                  {isAr ? r.ar : r.en} ({users.filter(u => u.role === r.value).length})
+                  {isAr ? r.ar : r.en} ({users.filter(u => u.role === r.value && !u.custom_title_id).length})
                 </option>
               ))}
               {customTitles.length > 0 && (
@@ -2519,7 +2522,7 @@ function UsersPageFull() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs rounded-full px-2.5 py-0.5 border font-semibold whitespace-nowrap ${ROLE_COLORS[u.role]}`}>
+                    <span className={`text-xs rounded-full px-2.5 py-0.5 border font-semibold whitespace-nowrap ${u.custom_title_id ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ROLE_COLORS[u.role]}`}>
                       {(() => { const t = customTitles.find(x => x.id === u.custom_title_id); return t ? (isAr ? t.name_ar : (t.name_en || t.name_ar)) : USER_ROLES.find(r => r.value === u.role)?.[isAr ? 'ar' : 'en'] })()}
                     </span>
                   </td>
@@ -2601,7 +2604,7 @@ function UsersPageFull() {
 
 
 // دليل المرحّلين (للحساب المقيّد): كل من مسماه الوظيفي مرحّل بالمملكة — الاسم والمحطة ورقم الجوال فقط، للعرض بدون أي تعديل
-const DIR_JOB_LABEL = { dispatcher: 'مرحّل', customer_service: 'خدمة عملاء', station_supervisor: 'مشرف محطة', shift_supervisor: 'مشرف وردية', area_supervisor: 'مشرف منطقة' }
+const DIR_JOB_LABEL = { dispatcher_supervisor: 'مشرف مرحّلين', cleaner: 'عامل نظافة', dispatcher: 'مرحّل', customer_service: 'خدمة عملاء', station_supervisor: 'مشرف محطة', shift_supervisor: 'مشرف وردية', area_supervisor: 'مشرف منطقة' }
 
 function DispatchersDirectory() {
   const { allowCap, jobsFor } = useAuth()
