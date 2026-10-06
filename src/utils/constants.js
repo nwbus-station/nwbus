@@ -221,3 +221,8 @@ export const ITEM_TYPES = [
   { value: 'document',  ar: 'وثائق',         en: 'Documents' },
   { value: 'other',     ar: 'أخرى',          en: 'Other' },
 ]
+
+// مصادر التقييم الوظيفي (صفة المُقيِّم) ونسبة كل واحد من الدرجة النهائية — مصدر واحد تستخدمه صفحة التقييم وإدارة الصلاحيات
+export const EVAL_SOURCE_ORDER   = ['shift_supervisor', 'station_admin', 'stations_executive_director']
+export const EVAL_SOURCE_WEIGHTS = { shift_supervisor: 25, station_admin: 35, stations_executive_director: 40 }
+export const EVAL_SOURCE_LABELS  = { shift_supervisor: 'مشرف الوردية', station_admin: 'مشرف المحطة', stations_executive_director: 'المدير التنفيذي' }

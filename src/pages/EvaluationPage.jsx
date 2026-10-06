@@ -3,14 +3,11 @@ import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { escapeHtml, matchesSearch } from '../utils/digits'
-import { ADMIN_ROLE_VALUES } from '../utils/constants'
+import { ADMIN_ROLE_VALUES, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS } from '../utils/constants'
 import { createNotification } from '../utils/notifications'
 
 // ── تقييم الموظفين متعدد المصادر: مشرف الوردية + مشرف المحطة + المدير التنفيذي للمحطات ──
 // كل مصدر له وزنه، والنتيجة النهائية تُحسب فقط بعد اكتمال الثلاثة
-const EVAL_SOURCE_ORDER   = ['shift_supervisor', 'station_admin', 'stations_executive_director']
-const EVAL_SOURCE_WEIGHTS = { shift_supervisor: 25, station_admin: 35, stations_executive_director: 40 }
-const EVAL_SOURCE_LABELS  = { shift_supervisor: 'مشرف الوردية', station_admin: 'مشرف المحطة', stations_executive_director: 'المدير التنفيذي' }
 const EVAL_SOURCE_LABELS_EN = { shift_supervisor: 'Shift Supervisor', station_admin: 'Station Supervisor', stations_executive_director: 'Executive Director' }
 const EVAL_SOURCE_SHORT   = { shift_supervisor: 'وردية', station_admin: 'محطة', stations_executive_director: 'مدير' }
 
@@ -844,7 +841,7 @@ function PrintDropdown({ isAr, onSelect }) {
 }
 
 export default function EvaluationPage() {
-  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap, assignedEmployeeIds, isRestricted, jobsFor } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap, assignedEmployeeIds, isRestricted, jobsFor, customTitle } = useAuth()
   const assignedOnly = grantCap('assigned_evaluate')
   const evalJobs = jobsFor('evaluate')          // مسميات وظيفية يقيّمها على مستوى المملكة (مرحّلون/خدمة عملاء)
   const allDispatchers = evalJobs.length > 0
@@ -866,7 +863,9 @@ export default function EvaluationPage() {
   // فقط general_admin/stations_executive_director هم اللي يشوفون الثلاثة مصادر مع النتيجة النهائية.
   const isEvalAdmin = isGeneralAdmin
   // مصدر تقييم المستخدم الحالي عندما يقيّم موظفاً بنفسه (وردية/محطة) — الأدمن والمدير التنفيذي يختارون المصدر يدوياً
-  const myEvalSource = profile?.role === 'shift_supervisor' ? 'shift_supervisor'
+  // الصلاحية المخصصة لها صفة تقييم محددة (مشرف وردية/محطة/المدير التنفيذي) من إدارة الصلاحيات؛ الباقي كما كان
+  const myEvalSource = customTitle?.eval_source ? customTitle.eval_source
+    : profile?.role === 'shift_supervisor' ? 'shift_supervisor'
     : (profile?.role === 'station_admin' || profile?.role === 'area_supervisor' || isRestricted) ? 'station_admin' : null
 
   const now = new Date()

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
-import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE } from '../utils/constants'
+import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS } from '../utils/constants'
 import { toLatinDigits, escapeHtml, matchesSearch } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -490,7 +490,7 @@ function PermSwitch({ checked, onChange, disabled = false }) {
 function TitlesManager({ titles, onClose, onChanged, isAr }) {
   useEscapeKey(onClose)
   useBodyScrollLock()
-  const blank = { kind: 'title', role: null, id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: { restricted_mode: true }, allowed_modules: null, job_title: '', can_rate_customers: false }
+  const blank = { kind: 'title', role: null, id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: { restricted_mode: true }, allowed_modules: null, job_title: '', can_rate_customers: false, eval_source: '' }
   const [form, setForm] = useState(blank)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -540,7 +540,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   const onCount = capList.filter(permValue).length
 
   const pickRole = r => { setForm({ ...blank, kind: 'role', role: r, permissions: rolePerms[r] ?? {} }); setErr(''); setSaved(false); setQ('') }
-  const pick = t => { setForm(t ? { kind: 'title', role: null, id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null, job_title: t.job_title ?? '', can_rate_customers: !!t.can_rate_customers } : blank); setErr(''); setSaved(false); setQ('') }
+  const pick = t => { setForm(t ? { kind: 'title', role: null, id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null, job_title: t.job_title ?? '', can_rate_customers: !!t.can_rate_customers, eval_source: t.eval_source ?? '' } : blank); setErr(''); setSaved(false); setQ('') }
 
   async function save() {
     if (isRole) {
@@ -558,7 +558,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
     if (!form.job_title) { setErr(isAr ? 'المسمى الوظيفي مطلوب لكل صلاحية' : 'Job title is required for every permission'); return }
     setBusy(true); setErr('')
     const permissions = Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, permValue(c)]))
-    const row = { name_ar: form.name_ar.trim(), name_en: form.name_en.trim() || null, base_role: form.base_role, permissions, allowed_modules: form.allowed_modules, job_title: form.job_title || null, can_rate_customers: !!form.can_rate_customers }
+    const row = { name_ar: form.name_ar.trim(), name_en: form.name_en.trim() || null, base_role: form.base_role, permissions, allowed_modules: form.allowed_modules, job_title: form.job_title || null, can_rate_customers: !!form.can_rate_customers, eval_source: form.eval_source || null }
     const { data, error } = form.id
       ? await supabase.from('custom_titles').update(row).eq('id', form.id).select().single()
       : await supabase.from('custom_titles').insert(row).select().single()
@@ -685,6 +685,16 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                       onChange={e => { setSaved(false); setForm(f => ({ ...f, can_rate_customers: e.target.checked })) }} />
                     {isAr ? 'يُقيَّم من العميل (رابط/QR تقييم العميل)' : 'Rated by customers (QR link)'}
                   </label>
+                </div>
+                <div className="mt-3 max-w-md">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'صفة التقييم ونسبته (لو هذي الصلاحية تقيّم موظفين)' : 'Evaluation capacity & weight (if this permission evaluates staff)'}</label>
+                  <select className={inputCls} value={form.eval_source ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, eval_source: e.target.value })) }}>
+                    <option value="">{isAr ? 'تلقائي — مشرف المحطة (35%)' : 'Default — Station supervisor (35%)'}</option>
+                    {EVAL_SOURCE_ORDER.map(k => (
+                      <option key={k} value={k}>{EVAL_SOURCE_LABELS[k]} ({EVAL_SOURCE_WEIGHTS[k]}%)</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-gray-500 mt-1">{isAr ? 'تقييم صاحب هذي الصلاحية يُحسب من الدرجة النهائية بهذي النسبة، ويُعاد توزيع نسبة المصدر الغايب تلقائياً.' : 'This permission\'s evaluations count with this weight in the final score.'}</p>
                 </div>
                 <p className="text-[11px] text-gray-500 mt-2">{isAr ? 'المسمى الوظيفي وتقييم العميل يُطبَّقان تلقائياً على أي موظف تعطيه هذي الصلاحية، فيظهر بالتقييم الوظيفي وبتقييم العملاء.' : 'Job title and customer rating apply automatically to anyone given this permission.'}</p>
                 <p className="text-[11px] text-gray-500 mt-2">{isAr ? 'النوع الأساسي هو سقف الصلاحيات — والصلاحيات تحت تضيّق منه أو تضيف عليه.' : 'The base type is the ceiling; the permissions below narrow or extend it.'}</p>
