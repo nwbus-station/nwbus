@@ -83,6 +83,8 @@ export const TITLE_CAPABILITIES = [
   { group: 'الخريطة', key: 'map_manage', db: true, kind: 'grant', roleOk: true, ar: 'إدارة الخريطة: تعديل مواقع المحطات وإضافة محطات ونقاط توقف بمواقعها', en: 'Manage map: relocate & add stations/stops' },
   // نداء الركاب
   { group: 'نداء الركاب', key: 'pa_calls_manage', kind: 'grant', roleOk: true, ar: 'الوصول لصفحة نداء الركاب', en: 'Access the passenger call page' },
+  // Event: النشر والإدارة تعتمد على قسم "Event (نشر وإدارة)" بحساب الموظف — هذا المفتاح يفعّله من إدارة الصلاحيات (module = القسم المرتبط)
+  { group: 'Event', key: 'event_manage', module: 'magazine', kind: 'grant', ar: 'نشر وإدارة Event: إضافة وتعديل وحذف المنشورات', en: 'Publish & manage Event posts' },
   // التقييم الوظيفي
   { group: 'التقييم الوظيفي', key: 'evaluation_dispatchers_only', db: true, kind: 'grant', ar: 'يقيّم المرحّلين فقط (من مسماهم الوظيفي مرحّل)', en: 'Evaluate dispatchers only' },
   { group: 'التقييم الوظيفي', key: 'evaluation_employees_tab', kind: 'allow', ar: 'تبويب تقييم الموظفين', en: 'Employee evaluation tab' },
@@ -225,4 +227,6 @@ export const ITEM_TYPES = [
 // مصادر التقييم الوظيفي (صفة المُقيِّم) ونسبة كل واحد من الدرجة النهائية — مصدر واحد تستخدمه صفحة التقييم وإدارة الصلاحيات
 export const EVAL_SOURCE_ORDER   = ['shift_supervisor', 'station_admin', 'stations_executive_director']
 export const EVAL_SOURCE_WEIGHTS = { shift_supervisor: 25, station_admin: 35, stations_executive_director: 40 }
-export const EVAL_SOURCE_LABELS  = { shift_supervisor: 'مشرف الوردية', station_admin: 'مشرف المحطة', stations_executive_director: 'المدير التنفيذي' }
+export const EVAL_SOURCE_LABELS  = { shift_supervisor: 'مشرف الوردية', station_admin: 'مشرف المحطة', stations_executive_director: 'المدير التنفيذي', dispatcher_supervisor: 'مشرف المرحّلين' }
+// مشرف المرحّلين: مصدر مرن (مو ضمن EVAL_SOURCE_ORDER) — تقييمه يحل تلقائياً محل مشرف المحطة لو ما قيّم، وإلا محل مشرف الوردية، وإن اكتملا يُهمل
+export const DISPATCHER_SOURCE = 'dispatcher_supervisor'

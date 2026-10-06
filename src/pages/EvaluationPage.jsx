@@ -3,13 +3,13 @@ import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { escapeHtml, matchesSearch } from '../utils/digits'
-import { ADMIN_ROLE_VALUES, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS } from '../utils/constants'
+import { ADMIN_ROLE_VALUES, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS, DISPATCHER_SOURCE } from '../utils/constants'
 import { createNotification } from '../utils/notifications'
 
 // ── تقييم الموظفين متعدد المصادر: مشرف الوردية + مشرف المحطة + المدير التنفيذي للمحطات ──
 // كل مصدر له وزنه، والنتيجة النهائية تُحسب فقط بعد اكتمال الثلاثة
-const EVAL_SOURCE_LABELS_EN = { shift_supervisor: 'Shift Supervisor', station_admin: 'Station Supervisor', stations_executive_director: 'Executive Director' }
-const EVAL_SOURCE_SHORT   = { shift_supervisor: 'وردية', station_admin: 'محطة', stations_executive_director: 'مدير' }
+const EVAL_SOURCE_LABELS_EN = { shift_supervisor: 'Shift Supervisor', station_admin: 'Station Supervisor', stations_executive_director: 'Executive Director', dispatcher_supervisor: 'Dispatchers Supervisor' }
+const EVAL_SOURCE_SHORT   = { shift_supervisor: 'وردية', station_admin: 'محطة', stations_executive_director: 'مدير', dispatcher_supervisor: 'مرحّلين' }
 
 // eval_source يُحدَّد صراحة عند الحفظ (مو مشتقاً من دور المُقيِّم) — لأن الأدمن العام قد
 // يملأ أي مصدر ناقص نيابة عن الجهة المسؤولة عنه.
@@ -18,12 +18,17 @@ const EVAL_SOURCE_SHORT   = { shift_supervisor: 'وردية', station_admin: 'م
 // توزيع الوزن الناقص: كل مصدر غايب يضيف وزنه لأعلى مصدر متوفر رتبة (مو توزيع تناسبي على الكل) —
 // مثال: لو غاب مشرف الوردية (٢٥٪)، ياخذها المدير التنفيذي (يصير ٦٥٪) وتبقى نسبة مشرف المحطة ٣٥٪ ثابتة.
 // لو مصدر واحد بس قيّم، ياخذ الـ100٪ كاملة أياً كان.
+// مشرف المرحّلين مصدر مرن: تقييمه يحل محل مشرف المحطة لو ما قيّم، وإلا محل مشرف الوردية، وإن قيّم الاثنان يُهمل —
+// يُحسب وقت القراءة (مو عند الحفظ) فما يصير تعارض سواء قيّم قبل أو بعد مشرف المحطة والوردية.
 function computeFinalScore(rows) {
   const bySource = {}
   for (const role of EVAL_SOURCE_ORDER) {
     const row = (rows || []).find(r => r.eval_source === role)
     if (row) bySource[role] = row
   }
+  const dispRow = (rows || []).find(r => r.eval_source === DISPATCHER_SOURCE) || null
+  const dispSlot = !dispRow ? null : !bySource.station_admin ? 'station_admin' : !bySource.shift_supervisor ? 'shift_supervisor' : null
+  if (dispRow && dispSlot) bySource[dispSlot] = { ...dispRow, substitute: true }
   const ratedRoles = EVAL_SOURCE_ORDER.filter(role => bySource[role])
   const complete = ratedRoles.length === EVAL_SOURCE_ORDER.length
   const effectiveWeights = {}
@@ -37,7 +42,7 @@ function computeFinalScore(rows) {
     }
     final = Math.round(ratedRoles.reduce((sum, role) => sum + bySource[role].total_score * effectiveWeights[role], 0) / 100 * 10) / 10
   }
-  return { bySource, complete, final, effectiveWeights }
+  return { bySource, complete, final, effectiveWeights, dispatcher: dispRow ? { row: dispRow, slot: dispSlot } : null }
 }
 
 const MONO = "'IBM Plex Mono', monospace"
@@ -877,6 +882,8 @@ export default function EvaluationPage() {
   const [empListErr,   setEmpListErr]   = useState('')
   const [stations,     setStations]     = useState([])
   const [empEvals,     setEmpEvals]     = useState([])
+  // مشرف المرحّلين: من قيّمه من مشرف المحطة/الوردية (لتحديد مكان تقييمه أو إغلاقه)
+  const [presence, setPresence] = useState({})
   const [stnEvals,     setStnEvals]     = useState([])
   const [myEvals,      setMyEvals]      = useState([])
   const [mySupEvals,   setMySupEvals]   = useState([])
@@ -1037,6 +1044,18 @@ export default function EvaluationPage() {
   }, [profile?.id, load])
 
   // ── فلترة ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (myEvalSource !== DISPATCHER_SOURCE || !employees.length) { setPresence({}); return }
+    let dead = false
+    supabase.rpc('employee_eval_presence', { p_month: selMonth, p_year: selYear, p_ids: employees.map(e => e.id) }).then(({ data, error }) => {
+      if (dead || error) return
+      const m = {}
+      for (const r of data || []) (m[r.employee_id] ||= new Set()).add(r.eval_source)
+      setPresence(m)
+    })
+    return () => { dead = true }
+  }, [myEvalSource, employees, selMonth, selYear, empEvals])
+
   const filteredEmployees = employees
     .filter(e => !(isAssistantDirector && onlyMine) || e.supervisor_id === profile?.id || !!supervisedStationIds?.includes(e.station_id))
     .filter(e => filterStation === 'all' || e.station_id === filterStation)
@@ -1226,6 +1245,12 @@ export default function EvaluationPage() {
                 // مشرف الوردية/مشرف المحطة/مشرف المنطقة يشوف بس تقييمه هو، بنفس الشكل السابق
                 if (!isEvalAdmin) {
                   const ev = evRows[0] || null
+                  const dispInfo = myEvalSource !== DISPATCHER_SOURCE ? null : (() => {
+                    const p = presence[emp.id], st = p?.has('station_admin'), sh = p?.has('shift_supervisor')
+                    if (st && sh) return { locked: true, text: isAr ? 'اكتمل تقييمه من مشرف المحطة ومشرف الوردية — لا يُحتسب تقييمك' : 'Already rated by the station and shift supervisors — your rating is not counted' }
+                    if (!st) return { text: isAr ? 'يُحتسب بنسبة مشرف المحطة (35%)' : 'Counts as the station supervisor (35%)' }
+                    return { text: isAr ? 'يُحتسب بنسبة مشرف الوردية (25%)' : 'Counts as the shift supervisor (25%)' }
+                  })()
                   return (
                     <div key={emp.id} style={{
                       display: 'flex', flexDirection: 'row', alignItems: 'center',
@@ -1249,6 +1274,7 @@ export default function EvaluationPage() {
                             <span style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>{emp.station.name_ar}</span>
                           </>}
                         </div>
+                        {dispInfo && <div style={{ marginTop: 4, fontSize: '0.7rem', fontWeight: 600, color: dispInfo.locked ? '#B45309' : '#2563EB' }}>{dispInfo.text}</div>}
                       </div>
                       <div style={{ width: 160, flexShrink: 0, textAlign: 'center' }}>
                         {ev ? (
@@ -1260,19 +1286,19 @@ export default function EvaluationPage() {
                         )}
                       </div>
                       <div style={{ paddingRight: 0, paddingLeft: 0, marginLeft: 16 }}>
-                        <button className="ev-btn" onClick={() => setEmpModal({ employee: emp, existing: ev || null, sourceRole: myEvalSource })} style={{
+                        <button className="ev-btn" disabled={!!dispInfo?.locked} onClick={() => setEmpModal({ employee: emp, existing: ev || null, sourceRole: myEvalSource })} style={{
                           background: ev ? 'var(--surface)' : '#1C2B4A',
                           color: ev ? 'var(--text-2)' : '#fff',
                           border: ev ? '1px solid var(--border)' : 'none',
-                          minWidth: 72,
-                        }}>{ev ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'تقييم' : 'Evaluate')}</button>
+                          minWidth: 72, opacity: dispInfo?.locked ? 0.45 : 1, cursor: dispInfo?.locked ? 'not-allowed' : undefined,
+                        }}>{dispInfo?.locked ? (isAr ? 'مكتمل' : 'Complete') : ev ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'تقييم' : 'Evaluate')}</button>
                       </div>
                     </div>
                   )
                 }
 
                 // الأدمن/المدير التنفيذي/مشرف المنطقة — يشوف الثلاثة مصادر + النتيجة النهائية
-                const { bySource, complete, final, effectiveWeights } = computeFinalScore(evRows)
+                const { bySource, complete, final, effectiveWeights, dispatcher } = computeFinalScore(evRows)
                 const hasStar = complete && final >= STAR_THRESHOLD
                 return (
                   <div key={emp.id} style={{
@@ -1286,6 +1312,11 @@ export default function EvaluationPage() {
                         <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-1)' }}>{emp.full_name_ar || '—'}</span>
                         {hasStar && <StarBadge size={13} />}
                       </div>
+                      {dispatcher && !dispatcher.slot && (
+                        <div style={{ marginTop: 3, fontSize: '0.68rem', fontWeight: 600, color: '#B45309' }}>
+                          {isAr ? 'تقييم مشرف المرحّلين غير محتسب (اكتمل مشرف المحطة والوردية)' : 'Dispatchers supervisor rating not counted (station and shift supervisors both rated)'}
+                        </div>
+                      )}
                       <div style={{ marginTop: 5, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-3)', fontWeight: 500 }}>{getJobTitle(emp, isAr)}</span>
                         {emp.job_number && <>
@@ -1304,7 +1335,7 @@ export default function EvaluationPage() {
                         const s = r?.total_score
                         const color = s == null ? 'var(--text-3)' : s >= 85 ? '#059669' : s >= 70 ? '#3B82F6' : s >= 50 ? '#F59E0B' : '#EF4444'
                         return (
-                          <button key={role} onClick={() => setEmpModal({ employee: emp, existing: r || null, sourceRole: role })}
+                          <button key={role} onClick={() => setEmpModal({ employee: emp, existing: r || null, sourceRole: r?.substitute ? DISPATCHER_SOURCE : role })}
                             style={{
                               display: 'flex', flexDirection: 'column', gap: 3, padding: '7px 12px', borderRadius: 10,
                               border: `1.5px solid ${r ? color + '40' : 'var(--border)'}`, background: r ? color + '0d' : 'var(--surface)',
@@ -1317,6 +1348,7 @@ export default function EvaluationPage() {
                             <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 108 }}>
                               {r?.evaluator?.full_name_ar ?? (isAr ? 'لم يُقيَّم بعد' : 'Not rated yet')}
                             </span>
+                            {r?.substitute && <span style={{ fontSize: '0.6rem', color: '#2563EB', fontWeight: 700 }}>{isAr ? 'بدل: مشرف المرحّلين' : 'via dispatchers supervisor'}</span>}
                             {s != null && (
                               <span style={{ fontSize: '0.88rem', fontWeight: 800, fontFamily: MONO, color }}>{s}%</span>
                             )}

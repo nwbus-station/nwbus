@@ -526,15 +526,34 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   // أقسام المسمى: null = كل الأقسام المسموحة لنوع الحساب الأساسي
   const titleModAllowed = m => roleModuleAllowed(m, form.base_role, null, true)
   const titleMods = MODULES.filter(m => titleModAllowed(m.value))
-  const titleSel = form.allowed_modules ?? titleMods.map(m => m.value)
-  const setTitleMods = list => { setSaved(false); setForm(f => ({ ...f, allowed_modules: list.length === titleMods.length ? null : list })) }
+  const titleNoEvent = titleMods.filter(m => m.value !== 'magazine').map(m => m.value)
+  const titleSel = form.allowed_modules ?? titleNoEvent
+  const setTitleMods = list => { setSaved(false); setForm(f => ({ ...f, allowed_modules: list.length === titleNoEvent.length && titleNoEvent.every(x => list.includes(x)) && !list.includes('magazine') ? null : list })) }
   const toggleTitleMod = m => setTitleMods(titleSel.includes(m) ? titleSel.filter(x => x !== m) : [...titleSel, m])
   const isAdminBase = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(form.base_role)
 
   // قدرات "التقييد" مفتوحة افتراضياً، وقدرات "المنح" مقفلة افتراضياً
-  const permValue = cap => cap.kind === 'allow' ? form.permissions[cap.key] !== false : !!form.permissions[cap.key]
-  const setPerm = (k, v) => { setSaved(false); setForm(f => ({ ...f, permissions: { ...f.permissions, [k]: v } })) }
-  const setMany = (caps, v) => { setSaved(false); setForm(f => ({ ...f, permissions: { ...f.permissions, ...Object.fromEntries(caps.filter(c => c.key !== 'restricted_mode').map(c => [c.key, v])) } })) }
+  // بنود مرتبطة بقسم (مثل Event): قيمتها = هل القسم ضمن أقسام المسمى
+  const modOn = (f, m) => Array.isArray(f.allowed_modules) && f.allowed_modules.includes(m)
+  const withModule = (f, m, v) => {
+    const base = Array.isArray(f.allowed_modules) ? f.allowed_modules : MODULES.filter(x => x.value !== 'magazine' && roleModuleAllowed(x.value, f.base_role, null, true)).map(x => x.value)
+    return { ...f, allowed_modules: v ? [...new Set([...base, m])] : base.filter(x => x !== m) }
+  }
+  const permValue = cap => cap.module ? modOn(form, cap.module) : cap.kind === 'allow' ? form.permissions[cap.key] !== false : !!form.permissions[cap.key]
+  const setPerm = (k, v) => {
+    setSaved(false)
+    const cap = TITLE_CAPABILITIES.find(c => c.key === k)
+    if (cap?.module && !isRole) { setForm(f => withModule(f, cap.module, v)); return }
+    setForm(f => ({ ...f, permissions: { ...f.permissions, [k]: v } }))
+  }
+  const setMany = (caps, v) => {
+    setSaved(false)
+    setForm(f => {
+      let n = { ...f, permissions: { ...f.permissions, ...Object.fromEntries(caps.filter(c => c.key !== 'restricted_mode' && !c.module).map(c => [c.key, v])) } }
+      for (const c of caps.filter(c => c.module)) n = withModule(n, c.module, v)
+      return n
+    })
+  }
 
   const groups = [...new Set(capList.map(c => c.group))]
   // بطاقات العرض: للدور = بطاقة لكل قسم (مفتاح وصول + إجراءاته)، وللمسمى = بطاقة لكل مجموعة (الأقسام تُحدد عند إضافة الموظف)
@@ -707,6 +726,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                     {EVAL_SOURCE_ORDER.map(k => (
                       <option key={k} value={k}>{EVAL_SOURCE_LABELS[k]} ({EVAL_SOURCE_WEIGHTS[k]}%)</option>
                     ))}
+                    <option value="dispatcher_supervisor">{isAr ? 'مشرف المرحّلين — يحل تلقائياً محل مشرف المحطة (35%) أو مشرف الوردية (25%)' : 'Dispatchers supervisor — fills the station (35%) or shift (25%) slot automatically'}</option>
                   </select>
                   <p className="text-[11px] text-gray-500 mt-1">{isAr ? 'تقييم صاحب هذي الصلاحية يُحسب من الدرجة النهائية بهذي النسبة، ويُعاد توزيع نسبة المصدر الغايب تلقائياً.' : 'This permission\'s evaluations count with this weight in the final score.'}</p>
                 </div>
