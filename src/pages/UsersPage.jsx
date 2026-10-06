@@ -488,7 +488,7 @@ function PermSwitch({ checked, onChange, disabled = false }) {
 function TitlesManager({ titles, onClose, onChanged, isAr }) {
   useEscapeKey(onClose)
   useBodyScrollLock()
-  const blank = { kind: 'title', role: null, id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: { restricted_mode: true }, allowed_modules: null }
+  const blank = { kind: 'title', role: null, id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: { restricted_mode: true }, allowed_modules: null, job_title: '', can_rate_customers: false }
   const [form, setForm] = useState(blank)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -538,7 +538,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   const onCount = capList.filter(permValue).length
 
   const pickRole = r => { setForm({ ...blank, kind: 'role', role: r, permissions: rolePerms[r] ?? {} }); setErr(''); setSaved(false); setQ('') }
-  const pick = t => { setForm(t ? { kind: 'title', role: null, id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null } : blank); setErr(''); setSaved(false); setQ('') }
+  const pick = t => { setForm(t ? { kind: 'title', role: null, id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null, job_title: t.job_title ?? '', can_rate_customers: !!t.can_rate_customers } : blank); setErr(''); setSaved(false); setQ('') }
 
   async function save() {
     if (isRole) {
@@ -555,7 +555,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
     if (!form.name_ar.trim()) { setErr(isAr ? 'اسم المسمى بالعربي مطلوب' : 'Arabic name is required'); return }
     setBusy(true); setErr('')
     const permissions = Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, permValue(c)]))
-    const row = { name_ar: form.name_ar.trim(), name_en: form.name_en.trim() || null, base_role: form.base_role, permissions, allowed_modules: form.allowed_modules }
+    const row = { name_ar: form.name_ar.trim(), name_en: form.name_en.trim() || null, base_role: form.base_role, permissions, allowed_modules: form.allowed_modules, job_title: form.job_title || null, can_rate_customers: !!form.can_rate_customers }
     const { data, error } = form.id
       ? await supabase.from('custom_titles').update(row).eq('id', form.id).select().single()
       : await supabase.from('custom_titles').insert(row).select().single()
@@ -564,6 +564,17 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
     if (data) setForm(f => ({ ...f, id: data.id }))
     setSaved(true)
     onChanged()
+    // المسمى الوظيفي/تقييم العميل: نعرض تطبيقها على الموظفين الحاليين اللي عليهم هذي الصلاحية
+    if (data && (row.job_title || row.can_rate_customers)) {
+      const { data: holders } = await supabase.from('users').select('id').eq('custom_title_id', data.id)
+      if (holders?.length && window.confirm(isAr ? `تطبيق المسمى الوظيفي${row.can_rate_customers ? ' وتقييم العميل' : ''} على ${holders.length} موظف عليهم هذي الصلاحية الآن؟` : `Apply to ${holders.length} current holders?`)) {
+        const patch = {}
+        if (row.job_title) patch.job_title = row.job_title
+        if (row.can_rate_customers) patch.can_rate_customers = true
+        const { error: e2 } = await supabase.from('users').update(patch).in('id', holders.map(h => h.id))
+        if (e2) setErr(e2.message)
+      }
+    }
   }
 
   async function remove() {
@@ -658,6 +669,21 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                     </select>
                   </div>
                 </div>
+                <div className="grid sm:grid-cols-3 gap-3 mt-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي (اختياري)' : 'Job title (optional)'}</label>
+                    <select className={inputCls} value={form.job_title ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, job_title: e.target.value })) }}>
+                      <option value="">{isAr ? '— بدون —' : '— None —'}</option>
+                      {JOB_TITLES.map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
+                    </select>
+                  </div>
+                  <label className="sm:col-span-2 flex items-center gap-2 text-sm text-gray-700 mt-5 cursor-pointer">
+                    <input type="checkbox" className="rounded accent-nwbus-primary" checked={!!form.can_rate_customers}
+                      onChange={e => { setSaved(false); setForm(f => ({ ...f, can_rate_customers: e.target.checked })) }} />
+                    {isAr ? 'يُقيَّم من العميل (رابط/QR تقييم العميل)' : 'Rated by customers (QR link)'}
+                  </label>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-2">{isAr ? 'المسمى الوظيفي وتقييم العميل يُطبَّقان تلقائياً على أي موظف تعطيه هذي الصلاحية، فيظهر بالتقييم الوظيفي وبتقييم العملاء.' : 'Job title and customer rating apply automatically to anyone given this permission.'}</p>
                 <p className="text-[11px] text-gray-500 mt-2">{isAr ? 'النوع الأساسي هو سقف الصلاحيات — والصلاحيات تحت تضيّق منه أو تضيف عليه.' : 'The base type is the ceiling; the permissions below narrow or extend it.'}</p>
               </div>
               )}
@@ -1437,7 +1463,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                       const t = customTitles.find(x => x.id === v.slice(6))
                       if (!t) return
                       touchedRef.current.add('role'); touchedRef.current.add('custom_title_id')
-                      setForm(f => ({ ...f, custom_title_id: t.id, role: t.base_role, allowed_modules: t.allowed_modules ?? null }))
+                      setForm(f => ({ ...f, custom_title_id: t.id, role: t.base_role, allowed_modules: t.allowed_modules ?? null, ...(t.job_title ? { job_title: t.job_title } : {}), ...(t.can_rate_customers ? { can_rate_customers: true } : {}) }))
                     } else {
                       touchedRef.current.add('custom_title_id')
                       setForm(f => ({ ...f, custom_title_id: '' }))
@@ -1963,7 +1989,7 @@ function UsersPageFull() {
       matchesSearch(u.username, search) ||
       matchesSearch(u.full_name_en, search) ||
       matchesSearch(u.job_number, search)
-    const matchRole    = !roleFilter    || u.role       === roleFilter
+    const matchRole    = !roleFilter    || (roleFilter.startsWith('title:') ? u.custom_title_id === roleFilter.slice(6) : u.role === roleFilter)
     const matchStatus  = !statusFilter  || (statusFilter === 'active' ? u.is_active : !u.is_active)
     const matchJob     = !jobFilter     || u.job_title  === jobFilter
     const hasModule    = !moduleFilter || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
@@ -2294,6 +2320,15 @@ function UsersPageFull() {
                   {isAr ? r.ar : r.en} ({users.filter(u => u.role === r.value).length})
                 </option>
               ))}
+              {customTitles.length > 0 && (
+                <optgroup label={isAr ? 'الصلاحيات المخصصة' : 'Custom permissions'}>
+                  {customTitles.map(t => (
+                    <option key={t.id} value={`title:${t.id}`}>
+                      {isAr ? t.name_ar : (t.name_en || t.name_ar)} ({users.filter(u => u.custom_title_id === t.id).length})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           )}
 
