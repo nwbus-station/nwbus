@@ -68,8 +68,15 @@ function tick() {
   if (!lock.tryLock(5000)) return;            // تشغيل سابق ما زال شغّالاً
   try {
     let cfg = null;
-    try { cfg = sbGet('backup_settings', '*', 'id=eq.1')[0] || null; } catch (e) { return; }  // الجدول غير مثبّت بعد
-    if (!cfg) return;
+    try {
+      cfg = sbGet('backup_settings', '*', 'id=eq.1')[0] || null;
+    } catch (e) {
+      // الجدول غير مثبّت بعد → نتجاهل بهدوء؛ أي خطأ آخر (مثل مفتاح غلط) نظهره في Executions
+      if (/PGRST205|42P01|does not exist|Could not find/i.test(String(e && e.message))) return;
+      throw e;
+    }
+    if (!cfg) { console.error('backup_settings: لا يوجد صف id=1'); return; }
+    if (String(SERVICE_KEY).indexOf('ضع_هنا') === 0) throw new Error('لم يتم وضع SERVICE_KEY في أعلى السكربت');
 
     const now = new Date();
     const today = Utilities.formatDate(now, TZ, 'yyyy-MM-dd');
