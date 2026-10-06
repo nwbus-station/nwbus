@@ -778,7 +778,7 @@ export default function AppLayout() {
       {/* شارة ثابتة دايماً — تصير مرئية بدون تمرير، على أي صفحة */}
       <div className="no-print app-version-badge">
         {isAr ? 'آخر تحديث: ' : 'Updated: '}
-        {new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA-u-ca-gregory' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+        {new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' })}
         {' · '}v{__APP_VERSION__}
       </div>
 

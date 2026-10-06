@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import * as XLSX from 'xlsx'
 import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
+import DatePicker from '../shared/DatePicker'
 import { todayStr } from '../../utils/dates'
 import { AR_LABELS, AR_O, AR_A, EN_LABELS, EN_O, EN_A, TRIP_ASPECTS, STATION_ASPECTS } from '../../utils/feedbackConfig'
 import { POSTER_SIZES, buildPosterSvg, downloadPosterPng, printPoster } from '../../utils/qrPoster'
@@ -330,7 +331,7 @@ export default function FeedbackReport() {
       ? { date: 'التاريخ', kind: 'النوع', station: 'المحطة', from: 'من', to: 'إلى', tripNo: 'رقم الرحلة', avg: 'المتوسط', improve: 'أولويات التحسين', low: 'أسباب عدم الرضا', comment: 'ملاحظات', age: 'الفئة العمرية', traveler: 'نوع المسافر', purpose: 'غرض الرحلة', freq: 'تكرار السفر', phone: 'جوال', lang: 'اللغة', trip: 'رحلة', st: 'محطة', sep: '، ' }
       : { date: 'Date', kind: 'Type', station: 'Station', from: 'From', to: 'To', tripNo: 'Trip number', avg: 'Average', improve: 'Improvement priorities', low: 'Reasons for dissatisfaction', comment: 'Comments', age: 'Age group', traveler: 'Traveler type', purpose: 'Trip purpose', freq: 'Travel frequency', phone: 'Mobile', lang: 'Language', trip: 'Trip', st: 'Station', sep: ', ' }
     const out = rows.map(r => ({
-      [H.date]: new Date(r.created_at).toLocaleString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB'),
+      [H.date]: new Date(r.created_at).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB'),
       [H.kind]: r.kind === 'trip' ? H.trip : H.st,
       [H.station]: stName(focusId(r)),
       [H.from]: r.kind === 'trip' ? stName(r.from_station_id) : '', [H.to]: r.kind === 'trip' ? stName(r.to_station_id) : '',
@@ -389,9 +390,9 @@ export default function FeedbackReport() {
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${on ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{isAr ? p.ar : p.en}</button>
                 )
               })}
-              <input type="date" value={from} max={to} onChange={e => setFrom(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs" />
+              <DatePicker value={from} onChange={v => { setFrom(v); if (v && to && v > to) setTo(v) }} isAr={isAr} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white" />
               <span className="text-gray-300 text-xs">—</span>
-              <input type="date" value={to} min={from} onChange={e => setTo(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs" />
+              <DatePicker value={to} onChange={v => { setTo(v); if (v && from && v < from) setFrom(v) }} isAr={isAr} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white" />
             </div>
           </div>
           <div>
@@ -585,7 +586,7 @@ export default function FeedbackReport() {
                     <span className={`px-2 py-0.5 rounded-full font-semibold ${r.kind === 'trip' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{r.kind === 'trip' ? (isAr ? 'رحلة' : 'Trip') : (isAr ? 'محطة' : 'Station')}</span>
                     <span className="text-gray-600" dir="auto">{stName(focusId(r))}</span>
                     <ScorePill v={avgOfRow(r)} />
-                    <span>{new Date(r.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB')}</span>
+                    <span>{new Date(r.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB')}</span>
                     {r.contact_phone && <span dir="ltr" className="font-mono text-gray-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded">{isAr ? 'طلب تواصل:' : 'Contact request:'} {r.contact_phone}</span>}
                   </div>
                   {r.comment ? <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{r.comment}</p> : <p className="text-xs text-gray-400">{isAr ? 'بدون ملاحظة نصية' : 'No written comment'}</p>}

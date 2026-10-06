@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
 import DatePicker from '../components/shared/DatePicker'
+import TimePicker from '../components/shared/TimePicker'
 import { notifyMany } from '../utils/notifications'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE, jobGroupOf } from '../utils/constants'
@@ -88,8 +89,8 @@ function timeDiffHours(dateFrom, timeFrom, dateTo, timeTo) {
 function formatHoursAr(totalHours) {
   const h = Math.floor(totalHours)
   const m = Math.round((totalHours - h) * 60)
-  const hStr = h > 0 ? `${h.toLocaleString('ar-EG')} ساعة` : ''
-  const mStr = m > 0 ? `${m.toLocaleString('ar-EG')} دقيقة` : ''
+  const hStr = h > 0 ? `${h.toLocaleString('ar-EG-u-nu-latn')} ساعة` : ''
+  const mStr = m > 0 ? `${m.toLocaleString('ar-EG-u-nu-latn')} دقيقة` : ''
   if (hStr && mStr) return `${hStr} و${mStr}`
   return hStr || mStr || 'صفر'
 }
@@ -176,8 +177,8 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
   const compLabel   = leave.compensatory_reason ? (COMPENSATORY_REASONS.find(r => r.id === leave.compensatory_reason)?.ar ?? '') : ''
   const isCasual    = leave.leave_type === 'casual'
   const durationStr = isCasual ? formatHoursAr((leave.days_count ?? 0) * 24) : `${leave.days_count} يوم`
-  const printDate  = new Date().toLocaleDateString('ar-SA-u-ca-gregory')
-  const printTime  = new Date().toLocaleTimeString('ar-SA-u-ca-gregory', { hour: '2-digit', minute: '2-digit' })
+  const printDate  = new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')
+  const printTime  = new Date().toLocaleTimeString('ar-SA-u-ca-gregory-nu-latn', { hour: '2-digit', minute: '2-digit' })
   // بيانات الموظف تُقرأ من بطاقة الموظف (جدول users) — مصدر الحقيقة الوحيد
   const hireStr    = profile?.hire_date ?? null
   const entitlement = annualEntitlement(hireStr)
@@ -803,10 +804,10 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
               className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white text-right" isAr={true} />
           </Field>
           <Field label={isAr ? 'من الساعة' : 'From'}>
-            <input type="time" value={timeFrom} onChange={e => setTimeFrom(e.target.value)} style={{ ...inp }} />
+            <TimePicker value={timeFrom} onChange={setTimeFrom} style={{ ...inp }} />
           </Field>
           <Field label={isAr ? 'إلى الساعة' : 'To'}>
-            <input type="time" value={timeTo} onChange={e => setTimeTo(e.target.value)} style={{ ...inp }} />
+            <TimePicker value={timeTo} onChange={setTimeTo} style={{ ...inp }} />
           </Field>
         </div>
       ) : (
@@ -1034,8 +1035,8 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
           {leave.created_at && (
             <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: 3 }}>
               {isAr ? 'تاريخ الرفع:' : 'Submitted:'}{' '}
-              {new Date(leave.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB')}{' — '}
-              {new Date(leave.created_at).toLocaleTimeString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(leave.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB')}{' — '}
+              {new Date(leave.created_at).toLocaleTimeString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}
             </div>
           )}
         </div>

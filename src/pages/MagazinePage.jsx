@@ -461,7 +461,7 @@ function MagazineInner() {
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
                   <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.55)', fontFamily: MONO }}>
-                    {new Date(post.created_at).toLocaleString(isAr ? 'ar-SA-u-ca-gregory' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                    {new Date(post.created_at).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
                   </span>
                   {!post.is_published ? (
                     <span style={{ fontSize: '0.65rem', color: '#FCA5A5', fontWeight: 700 }}>{isAr ? 'مسودة' : 'Draft'}</span>
@@ -593,7 +593,7 @@ function ManagePanel({ posts, isAr, onChanged }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#111827' }}>{p.title_ar}</p>
               <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#9CA3AF' }}>
-                {new Date(p.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-US')} · {
+                {new Date(p.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-US')} · {
                   !p.is_published ? (isAr ? 'مسودة' : 'Draft')
                     : p.starts_at && new Date(p.starts_at) > new Date() ? (isAr ? '🕓 مجدول' : '🕓 Scheduled')
                     : p.ends_at && new Date(p.ends_at) < new Date() ? (isAr ? '⏳ منتهي' : '⏳ Expired')

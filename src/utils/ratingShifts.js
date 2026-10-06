@@ -57,5 +57,5 @@ export function computeActiveUntil(shiftValue, now = new Date()) {
 
 export function formatTime(date) {
   if (!date) return ''
-  return date.toLocaleTimeString('ar-SA-u-ca-gregory', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return date.toLocaleTimeString('ar-SA-u-ca-gregory-nu-latn', { hour: '2-digit', minute: '2-digit', hour12: false })
 }

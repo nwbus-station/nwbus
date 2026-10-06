@@ -29,7 +29,7 @@ export function withUpdateAudit(data, profile) {
 export function formatAuditStamp(record, lang = 'ar') {
   const name = record.created_by_name || '—'
   const dt   = record.created_at
-    ? new Date(record.created_at).toLocaleString(lang === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-GB')
+    ? new Date(record.created_at).toLocaleString(lang === 'ar' ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB')
     : '—'
 
   if (lang === 'ar') return `أُدخل بواسطة: ${name} — ${dt}`
@@ -39,7 +39,7 @@ export function formatAuditStamp(record, lang = 'ar') {
 export function formatUpdateStamp(record, lang = 'ar') {
   if (!record.updated_at) return null
   const name = record.updated_by_name || '—'
-  const dt   = new Date(record.updated_at).toLocaleString(lang === 'ar' ? 'ar-SA-u-ca-gregory' : 'en-GB')
+  const dt   = new Date(record.updated_at).toLocaleString(lang === 'ar' ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB')
   if (lang === 'ar') return `عُدِّل بواسطة: ${name} — ${dt}`
   return `Updated by: ${name} — ${dt}`
 }

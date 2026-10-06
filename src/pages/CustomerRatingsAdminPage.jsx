@@ -105,7 +105,7 @@ export default function CustomerRatingsAdminPage() {
 function RatingsTab() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const loc = isAr ? 'ar-SA-u-ca-gregory' : 'en-GB'
+  const loc = isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB'
   const [rows, setRows] = useState([])
   const [stations, setStations] = useState([])
   const [employees, setEmployees] = useState([])

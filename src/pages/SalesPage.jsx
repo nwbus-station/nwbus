@@ -18,8 +18,8 @@ const SHIFTS = [
 ]
 
 const fmt  = n => Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-const fmtD = d => d ? new Date(d).toLocaleDateString('ar-SA-u-ca-gregory', { year:'numeric', month:'short', day:'numeric' }) : '—'
-const fmtT = d => d ? new Date(d).toLocaleTimeString('ar-SA-u-ca-gregory', { hour:'2-digit', minute:'2-digit', hour12: false }) : ''
+const fmtD = d => d ? new Date(d).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn', { year:'numeric', month:'short', day:'numeric' }) : '—'
+const fmtT = d => d ? new Date(d).toLocaleTimeString('ar-SA-u-ca-gregory-nu-latn', { hour:'2-digit', minute:'2-digit', hour12: false }) : ''
 
 const CASHIER_KEY  = 'nwbus_cashier_ref'
 const EMPLOYEE_KEY = 'nwbus_employee_name'
@@ -430,7 +430,7 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
               <p className="text-xs text-amber-600 mt-0.5">
                 {isAr ? 'من تاريخ:' : 'From:'}{' '}
                 {savedDraft.saved_at
-                  ? new Date(savedDraft.saved_at).toLocaleString('ar-SA-u-ca-gregory', { dateStyle: 'medium', timeStyle: 'short' })
+                  ? new Date(savedDraft.saved_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short' })
                   : savedDraft.sale_date}
                 {savedDraft.sale_date && savedDraft.sale_date !== todayStr() && (
                   <span className="mr-1 text-amber-700 font-semibold">
@@ -673,7 +673,7 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
           {error && <p className="text-red-600 text-xs bg-red-50 rounded p-2 border border-red-100">⚠ {error}</p>}
 
           <p className="text-xs text-gray-400 border-t pt-2">
-            ✍{profile?.full_name_ar} · {new Date().toLocaleDateString('ar-SA-u-ca-gregory')}
+            ✍{profile?.full_name_ar} · {new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}
           </p>
 
           <div className="flex gap-3">
@@ -949,7 +949,7 @@ export default function SalesPage() {
               const dayTotal = dayRecs.reduce((s, r) => s + Number(r.total_actual ?? 0), 0)
               const dayConfirmed = dayRecs.filter(r => r.is_confirmed).length
               const dayHasDeficit = dayRecs.some(r => Number(r.total_actual ?? 0) - Number(r.total_expected ?? 0) < 0)
-              const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString('ar-SA-u-ca-gregory', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+              const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString('ar-SA-u-ca-gregory-nu-latn', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
               return (
                 <div key={day} className="bg-white rounded-2xl shadow overflow-hidden">

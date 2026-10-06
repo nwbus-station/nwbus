@@ -12,8 +12,8 @@ import { toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
 import { USER_ROLES } from '../utils/constants'
 
-const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory', { minimumFractionDigits: 2 })
-const fmtN = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory')
+const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { minimumFractionDigits: 2 })
+const fmtN = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn')
 
 // ── سجل النشاط: قائمة الحقول ذات المعنى فقط (كل شي غيرها يُتجاهل — بلا تقنيّات/ضوضاء) ──
 const AUDIT_FIELD_LABELS = {
@@ -1634,7 +1634,7 @@ export default function ReportsPage() {
               <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-1)' }}>{isAr ? 'سجل النشاط' : 'Activity Log'}</span>
               {auditTotal > 0 && (
                 <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 99, background: 'var(--surface)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
-                  {isAr ? `${auditTotal.toLocaleString('ar-SA-u-ca-gregory')} سجل` : `${auditTotal.toLocaleString()} records`}
+                  {isAr ? `${auditTotal.toLocaleString('ar-SA-u-ca-gregory-nu-latn')} سجل` : `${auditTotal.toLocaleString('en-US')} records`}
                 </span>
               )}
             </div>
@@ -1648,11 +1648,9 @@ export default function ReportsPage() {
                   <path d="M21 2v6h-6"/><path d="M3 22v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L21 8"/><path d="M21 16l-2.64 2.36A9 9 0 013.51 15"/>
                 </svg>
               </button>
-              <input type="date" value={auditFrom} onChange={e => { setAuditFrom(e.target.value); if (e.target.value) setAuditTo(e.target.value) }}
-                style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }} />
+              <DatePicker value={auditFrom} onChange={v => { setAuditFrom(v); if (v) setAuditTo(v) }} isAr={isAr} className="px-2 py-1 rounded-lg border border-gray-200 text-xs bg-white text-right" />
               <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>—</span>
-              <input type="date" value={auditTo} onChange={e => setAuditTo(e.target.value)}
-                style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }} />
+              <DatePicker value={auditTo} onChange={setAuditTo} isAr={isAr} className="px-2 py-1 rounded-lg border border-gray-200 text-xs bg-white text-right" />
 
               <select value={auditTable} onChange={e => setAuditTable(e.target.value)}
                 style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
@@ -1725,10 +1723,10 @@ export default function ReportsPage() {
                           onClick={() => setAuditExpanded(isOpen ? null : row.id)}>
                           <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
                             <div style={{ fontWeight: 500, color: 'var(--text-2)', fontSize: '0.78rem' }}>
-                              {dt.toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric' })}
+                              {dt.toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { year: 'numeric', month: 'short', day: 'numeric' })}
                             </div>
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>
-                              {dt.toLocaleTimeString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              {dt.toLocaleTimeString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             </div>
                           </td>
                           <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
@@ -1820,7 +1818,7 @@ export default function ReportsPage() {
                   {isAr ? '→ السابق' : '← Prev'}
                 </button>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>
-                  {isAr ? `صفحة ${(auditPage + 1).toLocaleString('ar-SA-u-ca-gregory')} من ${totalPages.toLocaleString('ar-SA-u-ca-gregory')}` : `Page ${auditPage + 1} of ${totalPages}`}
+                  {isAr ? `صفحة ${(auditPage + 1).toLocaleString('ar-SA-u-ca-gregory-nu-latn')} من ${totalPages.toLocaleString('ar-SA-u-ca-gregory-nu-latn')}` : `Page ${auditPage + 1} of ${totalPages}`}
                 </span>
                 <button
                   onClick={() => fetchAudit(auditPage + 1)} disabled={auditPage >= totalPages - 1 || auditLoading}

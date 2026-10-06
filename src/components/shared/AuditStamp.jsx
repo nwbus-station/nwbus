@@ -11,7 +11,7 @@ export default function AuditStamp({ record }) {
   if (!record) return null
 
   const fmtDate = (iso) => iso
-    ? new Date(iso).toLocaleString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB', {
+    ? new Date(iso).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit', hour12: false
       })

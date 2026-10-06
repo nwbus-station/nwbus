@@ -654,7 +654,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
           )}
 
           <p style={{ margin:0, fontSize:'0.7rem', color:'var(--text-3)', borderTop:'1px solid var(--border)', paddingTop:10 }}>
-            ✍ {profile?.full_name_ar} · {new Date().toLocaleDateString('ar-SA-u-ca-gregory')} {new Date().toLocaleTimeString('ar-SA-u-ca-gregory', { hour: '2-digit', minute: '2-digit', hour12: false })}
+            ✍ {profile?.full_name_ar} · {new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')} {new Date().toLocaleTimeString('ar-SA-u-ca-gregory-nu-latn', { hour: '2-digit', minute: '2-digit', hour12: false })}
           </p>
 
           <div style={{ display:'flex', gap:8 }}>

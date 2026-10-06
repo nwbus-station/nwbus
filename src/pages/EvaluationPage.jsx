@@ -2332,8 +2332,8 @@ function printBarHtml() {
 
 function footerHtml(printedBy) {
   const now = new Date()
-  const dateStr = now.toLocaleDateString('ar-SA-u-ca-gregory')
-  const timeStr = now.toLocaleTimeString('ar-SA-u-ca-gregory', { hour: '2-digit', minute: '2-digit' })
+  const dateStr = now.toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')
+  const timeStr = now.toLocaleTimeString('ar-SA-u-ca-gregory-nu-latn', { hour: '2-digit', minute: '2-digit' })
   return `<div class="footer">
     <div class="footer-brand">طُبع بواسطة: ${escapeHtml(printedBy) || '—'}</div>
     <div class="footer-meta">تاريخ الطباعة: ${dateStr} — ${timeStr}</div>
@@ -2384,7 +2384,7 @@ ${printBarHtml()}
     <div class="cover-left">
       <div class="nw-logo">NORTHWESTBUS</div>
       <div class="nw-logo-line"></div>
-      <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory')}</div>
+      <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}</div>
     </div>
   </div>
 
@@ -2460,7 +2460,7 @@ ${printBarHtml()}
     <div class="cover-left">
       <div class="nw-logo">NORTHWESTBUS</div>
       <div class="nw-logo-line"></div>
-      <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory')}</div>
+      <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}</div>
     </div>
   </div>
   <div class="stats">
@@ -2504,7 +2504,7 @@ ${printBarHtml()}
     <div class="cover-left">
       <div class="nw-logo">NORTHWESTBUS</div>
       <div class="nw-logo-line"></div>
-      <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory')}</div>
+      <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}</div>
     </div>
   </div>
   <div class="stats">
@@ -2551,7 +2551,7 @@ ${printBarHtml()}
     <div class="cover-left">
       <div class="nw-logo">NORTHWESTBUS</div>
       <div class="nw-logo-line"></div>
-      <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory')}</div>
+      <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}</div>
     </div>
   </div>
   <div class="stats">

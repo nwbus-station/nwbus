@@ -13,7 +13,7 @@ const toLatinNums = v => v.replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => d.charCodeAt(
 /* ── helpers ── */
 const nowLocal = () => {
   const d = new Date()
-  return d.toLocaleTimeString('ar-SA-u-ca-gregory', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return d.toLocaleTimeString('ar-SA-u-ca-gregory-nu-latn', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 const daysSince = (dateStr) => {
@@ -344,7 +344,7 @@ function LostReportTab({ stations, profile, isAr }) {
           </Field>
 
           <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>
-            {isAr ? 'تاريخ البلاغ:' : 'Report Date:'} {new Date().toLocaleDateString('ar-SA-u-ca-gregory')} — {nowLocal()}
+            {isAr ? 'تاريخ البلاغ:' : 'Report Date:'} {new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')} — {nowLocal()}
           </div>
 
           <button type="submit" disabled={saving}
@@ -978,7 +978,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                               <p style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '0 0 4px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                                 <DetailIcon name="calendar" color="var(--text-3)" /> {isAr ? 'تسليم الجمعية' : 'Donated on'}
                               </p>
-                              <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{new Date(item.donated_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB')}</p>
+                              <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{new Date(item.donated_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB')}</p>
                             </div>
                           )}
                         </div>
