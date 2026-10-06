@@ -78,7 +78,7 @@ export default function CustomerRatingsAdminPage() {
       <p className="text-sm text-gray-500 mb-5">تقييم العملاء لموظفي خدمة العملاء والمرحّلين عبر رمز QR</p>
 
       <div className="flex gap-2 mb-5">
-        {[{ id: 'ratings', label: 'التقييمات' }, { id: 'messages', label: 'رسائل المحطات' }, { id: 'survey', label: 'رضا العملاء' }].map(t => (
+        {[{ id: 'ratings', label: 'التقييمات' }, { id: 'messages', label: 'رسائل المحطات' }, { id: 'survey', label: 'استبيان العملاء' }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${tab === t.id ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
             {t.label}
