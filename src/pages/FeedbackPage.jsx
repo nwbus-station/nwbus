@@ -175,6 +175,7 @@ export default function FeedbackPage() {
   const [demo, setDemo] = useState({ age: '', traveler: '', purpose: '', freq: '' })
   const [sending, setSending] = useState(false)
   const [trap, setTrap] = useState('') // حقل مخفي: البوتات تعبّيه والبشر لا
+  const [openedAt, setOpenedAt] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -194,7 +195,7 @@ export default function FeedbackPage() {
     setFromId(''); setToId(''); setStationId(''); setTripNumber(''); setRatings({}); setNps(null)
     setImprove([]); setReasons([]); setComment(''); setPhone(''); setError('')
   }
-  function start(kind) { resetForm(); setView(kind); window.scrollTo?.({ top: 0 }) }
+  function start(kind) { resetForm(); setOpenedAt(new Date().toISOString()); setView(kind); window.scrollTo?.({ top: 0 }) }
 
   const kind = view === 'trip' || view === 'station' ? view : null
   const aspects = view === 'trip' ? TRIP_ASPECTS : STATION_ASPECTS
@@ -220,7 +221,7 @@ export default function FeedbackPage() {
     if (trap) { setDoneKinds(d => (d.includes(view) ? d : [...d, view])); setView('done'); return }
     setSending(true)
     const payload = {
-      kind: view, lang, device: deviceId(),
+      kind: view, lang, device: deviceId(), opened_at: openedAt,
       station_id: view === 'station' ? stationId : null,
       from_station_id: view === 'trip' ? fromId : null,
       to_station_id: view === 'trip' ? toId : null,

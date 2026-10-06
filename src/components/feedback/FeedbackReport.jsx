@@ -174,6 +174,7 @@ const TABS = [
   { id: 'overview', label: 'لوحة المؤشرات' },
   { id: 'stations', label: 'أداء المحطات' },
   { id: 'audience', label: 'شرائح العملاء' },
+  { id: 'log', label: 'سجل الاستجابات' },
   { id: 'voice', label: 'صوت العميل' },
   { id: 'qr', label: 'رمز الاستبيان' },
 ]
@@ -190,6 +191,7 @@ export default function FeedbackReport() {
   const [prev, setPrev] = useState(null)
   const [stations, setStations] = useState([])
   const [voice, setVoice] = useState([])
+  const [logRows, setLogRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [qrUrl, setQrUrl] = useState('')
@@ -241,6 +243,23 @@ export default function FeedbackReport() {
       if (args.p_station) q = q.or(`station_id.eq.${args.p_station},from_station_id.eq.${args.p_station},to_station_id.eq.${args.p_station}`)
       const { data: rows } = await q
       if (!dead) setVoice(rows ?? [])
+    })()
+    return () => { dead = true }
+  }, [tab, from, to, args])
+
+  // سجل الاستجابات بالوقت: يُجلب عند فتح التبويب فقط
+  useEffect(() => {
+    if (tab !== 'log') return
+    let dead = false
+    ;(async () => {
+      let q = supabase.from('customer_surveys')
+        .select('id, created_at, opened_at, kind, station_id, from_station_id, to_station_id, ratings, nps, lang, device_hash')
+        .gte('created_at', `${from}T00:00:00+03:00`).lte('created_at', `${to}T23:59:59.999+03:00`)
+        .order('created_at', { ascending: false }).limit(200)
+      if (args.p_kind) q = q.eq('kind', args.p_kind)
+      if (args.p_station) q = q.or(`station_id.eq.${args.p_station},from_station_id.eq.${args.p_station},to_station_id.eq.${args.p_station}`)
+      const { data: rows } = await q
+      if (!dead) setLogRows(rows ?? [])
     })()
     return () => { dead = true }
   }, [tab, from, to, args])
@@ -483,6 +502,44 @@ export default function FeedbackReport() {
           <CutTable title="حسب غرض الرحلة" items={D.purpose ?? []} />
           <CutTable title="حسب تكرار السفر" items={D.freq ?? []} />
         </div>
+      )}
+
+      {!loading && tab === 'log' && (
+        <Card title="سجل الاستجابات" hint="وقت فتح الاستبيان ووقت إرساله ومدة التعبئة (بتوقيت الرياض) — آخر 200 استجابة">
+          {!logRows.length ? <p className="text-sm text-gray-400 py-6 text-center">لا توجد استجابات ضمن الفترة</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
+                  <th className="pb-2.5 text-right font-medium">التاريخ</th><th className="pb-2.5 text-center font-medium">وقت الفتح</th>
+                  <th className="pb-2.5 text-center font-medium">وقت الإرسال</th><th className="pb-2.5 text-center font-medium">المدة</th>
+                  <th className="pb-2.5 text-right font-medium">النوع / المحطة</th><th className="pb-2.5 text-center font-medium">NPS</th>
+                  <th className="pb-2.5 text-center font-medium">التقييم</th><th className="pb-2.5 text-center font-medium">الجهاز</th>
+                </tr></thead>
+                <tbody className="divide-y divide-gray-50">
+                  {logRows.map(r => {
+                    const hm = d => d ? new Date(d).toLocaleTimeString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'
+                    const secs = r.opened_at ? Math.max(0, Math.round((new Date(r.created_at) - new Date(r.opened_at)) / 1000)) : null
+                    return (
+                      <tr key={r.id}>
+                        <td className="py-2.5 text-gray-600 whitespace-nowrap">{new Date(r.created_at).toLocaleDateString('en-GB', { timeZone: 'Asia/Riyadh' })}</td>
+                        <td className="py-2.5 text-center font-mono text-xs text-gray-500" dir="ltr">{hm(r.opened_at)}</td>
+                        <td className="py-2.5 text-center font-mono text-xs text-gray-800" dir="ltr">{hm(r.created_at)}</td>
+                        <td className="py-2.5 text-center text-xs text-gray-500">{secs == null ? '—' : secs >= 60 ? `${Math.floor(secs / 60)}د ${secs % 60}ث` : `${secs}ث`}</td>
+                        <td className="py-2.5 text-gray-800" dir="auto">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold me-1.5 ${r.kind === 'trip' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{r.kind === 'trip' ? 'رحلة' : 'محطة'}</span>
+                          {stName(focusId(r))}{r.kind === 'trip' && r.to_station_id ? ` ← ${stName(r.to_station_id)}` : ''}
+                        </td>
+                        <td dir="ltr" className={`py-2.5 text-center font-bold ${npsTone(r.nps == null ? null : (r.nps >= 9 ? 100 : r.nps >= 7 ? 0 : -100))}`}>{r.nps ?? '—'}</td>
+                        <td className="py-2.5 text-center"><ScorePill v={avgOfRow(r)} /></td>
+                        <td className="py-2.5 text-center font-mono text-[10px] text-gray-400" dir="ltr">{r.device_hash ? r.device_hash.slice(0, 6) : '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       )}
 
       {!loading && tab === 'voice' && (
