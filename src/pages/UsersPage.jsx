@@ -522,6 +522,12 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
     setForm(f => ({ ...f, permissions: isRole ? { ...JSON.parse(JSON.stringify(src)) } : { ...JSON.parse(JSON.stringify(src)), restricted_mode: f.permissions.restricted_mode ?? false } }))
   }
   const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary/40 focus:border-nwbus-primary focus:outline-none"
+  // أقسام المسمى: null = كل الأقسام المسموحة لنوع الحساب الأساسي
+  const titleModAllowed = m => roleModuleAllowed(m, form.base_role, null, true)
+  const titleMods = MODULES.filter(m => titleModAllowed(m.value))
+  const titleSel = form.allowed_modules ?? titleMods.map(m => m.value)
+  const setTitleMods = list => { setSaved(false); setForm(f => ({ ...f, allowed_modules: list.length === titleMods.length ? null : list })) }
+  const toggleTitleMod = m => setTitleMods(titleSel.includes(m) ? titleSel.filter(x => x !== m) : [...titleSel, m])
   const isAdminBase = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(form.base_role)
 
   // قدرات "التقييد" مفتوحة افتراضياً، وقدرات "المنح" مقفلة افتراضياً
@@ -568,6 +574,13 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
     setSaved(true)
     onChanged()
     // المسمى الوظيفي/تقييم العميل: نعرض تطبيقها على الموظفين الحاليين اللي عليهم هذي الصلاحية
+    if (data && form.id && Array.isArray(row.allowed_modules)) {
+      const { data: hs } = await supabase.from('users').select('id').eq('custom_title_id', data.id)
+      if (hs?.length && window.confirm(isAr ? `تطبيق الأقسام المحدّدة على ${hs.length} موظف عليهم هذي الصلاحية الآن؟` : `Apply these sections to ${hs.length} current holders?`)) {
+        const { error: e3 } = await supabase.from('users').update({ allowed_modules: row.allowed_modules }).in('id', hs.map(h => h.id))
+        if (e3) setErr(e3.message)
+      }
+    }
     if (data && (row.job_title || row.can_rate_customers)) {
       const { data: holders } = await supabase.from('users').select('id').eq('custom_title_id', data.id)
       if (holders?.length && window.confirm(isAr ? `تطبيق المسمى الوظيفي${row.can_rate_customers ? ' وتقييم العميل' : ''} على ${holders.length} موظف عليهم هذي الصلاحية الآن؟` : `Apply to ${holders.length} current holders?`)) {
@@ -695,6 +708,30 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                     ))}
                   </select>
                   <p className="text-[11px] text-gray-500 mt-1">{isAr ? 'تقييم صاحب هذي الصلاحية يُحسب من الدرجة النهائية بهذي النسبة، ويُعاد توزيع نسبة المصدر الغايب تلقائياً.' : 'This permission\'s evaluations count with this weight in the final score.'}</p>
+                </div>
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-gray-600">
+                      {isAr ? 'الأقسام المتاحة لهذه الصلاحية' : 'Sections available to this permission'}
+                      <span className="text-gray-400 font-normal"> — {isAr ? `${titleSel.filter(titleModAllowed).length} من ${titleMods.length}` : `${titleSel.filter(titleModAllowed).length} of ${titleMods.length}`}</span>
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <button type="button" onClick={() => setTitleMods(titleMods.map(m => m.value))} className="text-xs text-nwbus-primary font-semibold hover:underline">{isAr ? 'تحديد الكل' : 'Select all'}</button>
+                      <button type="button" onClick={() => setTitleMods([])} className="text-xs text-red-600 font-semibold hover:underline">{isAr ? 'إلغاء تحديد الكل' : 'Deselect all'}</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {titleMods.map(m => {
+                      const on = titleSel.includes(m.value)
+                      return (
+                        <label key={m.value} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border cursor-pointer ${on ? 'border-nwbus-primary bg-blue-50 text-nwbus-primary font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                          <input type="checkbox" className="rounded accent-nwbus-primary" checked={on} onChange={() => toggleTitleMod(m.value)} />
+                          {isAr ? m.ar : m.en}
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1.5">{isAr ? 'الموظف اللي تعطيه هذي الصلاحية ما يشوف إلا هذي الأقسام (تقدر تعدّلها له لاحقاً من بطاقته).' : 'Employees with this permission only see these sections.'}</p>
                 </div>
                 <p className="text-[11px] text-gray-500 mt-2">{isAr ? 'المسمى الوظيفي وتقييم العميل يُطبَّقان تلقائياً على أي موظف تعطيه هذي الصلاحية، فيظهر بالتقييم الوظيفي وبتقييم العملاء.' : 'Job title and customer rating apply automatically to anyone given this permission.'}</p>
                 <p className="text-[11px] text-gray-500 mt-2">{isAr ? 'النوع الأساسي هو سقف الصلاحيات — والصلاحيات تحت تضيّق منه أو تضيف عليه.' : 'The base type is the ceiling; the permissions below narrow or extend it.'}</p>
@@ -1503,7 +1540,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             </div>
 
             {selectedTitle && (() => {
-              const mods = selectedTitle.allowed_modules ?? MODULES.map(m => m.value)
+              const mods = selectedTitle.allowed_modules ?? MODULES.filter(m => roleModuleAllowed(m.value, selectedTitle.base_role, null, true)).map(m => m.value)
               const perms = selectedTitle.permissions ?? {}
               const short = c => (isAr ? c.ar : c.en).split('(')[0].trim()
               const chip = (txt, cls) => <span key={txt} className={`rounded-full px-2 py-0.5 ${cls}`}>{txt}</span>
@@ -1710,10 +1747,16 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                   ? (isAr ? '✓ صلاحية وصول كاملة لجميع الأقسام' : '✓ Full access to all sections')
                   : (isAr ? `${selectedMods.length} من ${MODULES.length} مُحدّد` : `${selectedMods.length} of ${MODULES.length} selected`)}
               </span>
-              <button type="button" onClick={() => set('allowed_modules', null)}
-                className="text-xs text-nwbus-primary font-semibold hover:underline">
-                {isAr ? 'تحديد الكل' : 'Select all'}
-              </button>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => { setModWarn(''); set('allowed_modules', null) }}
+                  className="text-xs text-nwbus-primary font-semibold hover:underline">
+                  {isAr ? 'تحديد الكل' : 'Select all'}
+                </button>
+                <button type="button" onClick={() => { setModWarn(''); set('allowed_modules', []) }}
+                  className="text-xs text-red-600 font-semibold hover:underline">
+                  {isAr ? 'إلغاء تحديد الكل' : 'Deselect all'}
+                </button>
+              </div>
             </div>
             {modWarn && (
               <div className="text-xs rounded-lg px-3 py-2 bg-amber-50 text-amber-800 border border-amber-200 flex items-start justify-between gap-2">
