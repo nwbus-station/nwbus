@@ -171,3 +171,6 @@ export const T = {
 export const AR_LABELS = { ...T.ar.o, ...T.ar.a }
 export const AR_O = T.ar.o
 export const AR_A = T.ar.a
+export const EN_LABELS = { ...T.en.o, ...T.en.a }
+export const EN_O = T.en.o
+export const EN_A = T.en.a

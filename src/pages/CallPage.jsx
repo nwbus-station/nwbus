@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { matchesSearch } from '../utils/digits'
 
@@ -73,9 +74,9 @@ function clipUrl(path) {
 }
 
 // توليد مقطع صوت وحفظه مباشرة بمكتبة النداء (بدل تنزيله ورفعه يدوياً) — نفس الـEdge Function بوضع الحفظ
-async function generateClip(text, savePath) {
+async function generateClip(text, savePath, isAr) {
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('لا توجد جلسة دخول')
+  if (!session) throw new Error(isAr ? 'لا توجد جلسة دخول' : 'No active session')
   const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/swift-responder`, {
     method: 'POST',
     headers: {
@@ -86,14 +87,14 @@ async function generateClip(text, savePath) {
     body: JSON.stringify({ text, savePath }),
   })
   const body = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(body.error || 'تعذّر توليد المقطع')
+  if (!res.ok) throw new Error(body.error || (isAr ? 'تعذّر توليد المقطع' : 'Failed to generate the clip'))
   return body.url
 }
 
 // صوت بشري واقعي عبر Edge Function (ElevenLabs) — المفتاح بالخادم فقط، ما يوصل للمتصفح
-async function speakElevenLabs(text, controller) {
+async function speakElevenLabs(text, controller, isAr) {
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) throw new Error('لا توجد جلسة دخول')
+  if (!session) throw new Error(isAr ? 'لا توجد جلسة دخول' : 'No active session')
   if (controller?.stopped) return
   const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/swift-responder`, {
     method: 'POST',
@@ -106,36 +107,36 @@ async function speakElevenLabs(text, controller) {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || 'تعذّر توليد الصوت')
+    throw new Error(body.error || (isAr ? 'تعذّر توليد الصوت' : 'Failed to generate the audio'))
   }
   if (controller?.stopped) return
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
   try {
-    await playAudioUrl(url, controller)
+    await playAudioUrl(url, controller, isAr)
   } finally {
     URL.revokeObjectURL(url)
   }
 }
 
 // تشغيل رابط صوت وحيد مع دعم الإيقاف الفوري عبر controller.audio + controller.stopped
-function playAudioUrl(url, controller) {
+function playAudioUrl(url, controller, isAr) {
   return new Promise((resolve, reject) => {
     if (controller?.stopped) return resolve()
     const audio = new Audio(url)
     if (controller) controller.audio = audio
     audio.onended = resolve
     audio.onpause = resolve // زر "إيقاف" يستدعي audio.pause() فيتحرر الانتظار فوراً
-    audio.onerror = () => reject(new Error('تعذّر تشغيل الصوت'))
+    audio.onerror = () => reject(new Error(isAr ? 'تعذّر تشغيل الصوت' : 'Failed to play the audio'))
     audio.play().catch(reject)
   })
 }
 
 // تشغيل سلسلة مقاطع صوتية جاهزة (مسجّلة/مولّدة مسبقاً) وحدة ورا وحدة — نفس أسلوب المطارات
-async function playClipSequence(urls, controller) {
+async function playClipSequence(urls, controller, isAr) {
   for (const url of urls) {
     if (controller?.stopped) return
-    await playAudioUrl(url, controller)
+    await playAudioUrl(url, controller, isAr)
   }
 }
 
@@ -143,10 +144,10 @@ const CHIME_SUPPORTED = typeof window !== 'undefined' && !!(window.AudioContext 
 const BROWSER_TTS_SUPPORTED = typeof window !== 'undefined' && !!window.speechSynthesis
 
 const REPEAT_OPTIONS = [
-  { value: 0, ar: 'بدون تكرار' },
-  { value: 120, ar: 'كل دقيقتين' },
-  { value: 180, ar: 'كل 3 دقائق' },
-  { value: 300, ar: 'كل 5 دقائق' },
+  { value: 0, ar: 'بدون تكرار', en: 'No repeat' },
+  { value: 120, ar: 'كل دقيقتين', en: 'Every 2 minutes' },
+  { value: 180, ar: 'كل 3 دقائق', en: 'Every 3 minutes' },
+  { value: 300, ar: 'كل 5 دقائق', en: 'Every 5 minutes' },
 ]
 
 function buildAnnouncement(destName, viaNames) {
@@ -155,6 +156,8 @@ function buildAnnouncement(destName, viaNames) {
 }
 
 export default function CallPage() {
+  const { i18n } = useTranslation()
+  const isAr = i18n.language === 'ar'
   const [mode, setMode] = useState('trip') // 'trip' | 'free'
   const [trips, setTrips] = useState([])
   const [loadingTrips, setLoadingTrips] = useState(true)
@@ -216,7 +219,7 @@ export default function CallPage() {
       const { error } = await supabase.storage.from(AUDIO_BUCKET).upload(`phrases/${kind}.mp3`, file, { upsert: true, contentType: file.type || 'audio/mpeg' })
       if (error) throw error
       await refreshClipsIndex()
-    } catch (err) { setCallError(err.message || 'تعذّر رفع المقطع') }
+    } catch (err) { setCallError(err.message || (isAr ? 'تعذّر رفع المقطع' : 'Failed to upload the clip')) }
     setUploadingId('')
   }
 
@@ -226,25 +229,25 @@ export default function CallPage() {
       const { error } = await supabase.storage.from(AUDIO_BUCKET).upload(`stations/${stationId}.mp3`, file, { upsert: true, contentType: file.type || 'audio/mpeg' })
       if (error) throw error
       await refreshClipsIndex()
-    } catch (err) { setCallError(err.message || 'تعذّر رفع المقطع') }
+    } catch (err) { setCallError(err.message || (isAr ? 'تعذّر رفع المقطع' : 'Failed to upload the clip')) }
     setUploadingId('')
   }
 
   async function generatePhraseClip(kind, text) {
     setUploadingId(kind); setCallError('')
     try {
-      await generateClip(text, `phrases/${kind}.mp3`)
+      await generateClip(text, `phrases/${kind}.mp3`, isAr)
       await refreshClipsIndex()
-    } catch (err) { setCallError(err.message || 'تعذّر توليد المقطع') }
+    } catch (err) { setCallError(err.message || (isAr ? 'تعذّر توليد المقطع' : 'Failed to generate the clip')) }
     setUploadingId('')
   }
 
   async function generateStationClip(station) {
     setUploadingId(station.id); setCallError('')
     try {
-      await generateClip(station.name_ar, `stations/${station.id}.mp3`)
+      await generateClip(station.name_ar, `stations/${station.id}.mp3`, isAr)
       await refreshClipsIndex()
-    } catch (err) { setCallError(err.message || 'تعذّر توليد المقطع') }
+    } catch (err) { setCallError(err.message || (isAr ? 'تعذّر توليد المقطع' : 'Failed to generate the clip')) }
     setUploadingId('')
   }
 
@@ -255,10 +258,10 @@ export default function CallPage() {
     setBulkProgress({ done: 0, total: missing.length })
     for (let i = 0; i < missing.length; i++) {
       try {
-        await generateClip(missing[i].name_ar, `stations/${missing[i].id}.mp3`)
+        await generateClip(missing[i].name_ar, `stations/${missing[i].id}.mp3`, isAr)
         setClipsIndex(prev => new Set(prev).add(missing[i].id))
       } catch (err) {
-        setCallError(`توقف التوليد عند "${missing[i].name_ar}": ${err.message}`)
+        setCallError(isAr ? `توقف التوليد عند "${missing[i].name_ar}": ${err.message}` : `Generation stopped at "${missing[i].name_ar}": ${err.message}`)
         break
       }
       setBulkProgress({ done: i + 1, total: missing.length })
@@ -347,31 +350,31 @@ export default function CallPage() {
       if (chimeOn) await playChime(controller)
       if (controller.stopped) { setPlaying(false); return }
       if (voiceURI === CLIPS_VOICE_ID) {
-        if (mode !== 'trip' || !destStop) throw new Error('وضع المقاطع الجاهزة يحتاج اختيار رحلة ووجهة أول')
+        if (mode !== 'trip' || !destStop) throw new Error(isAr ? 'وضع المقاطع الجاهزة يحتاج اختيار رحلة ووجهة أول' : 'Ready-made clips mode requires selecting a trip and destination first')
         const missing = []
-        if (!phraseClips.intro) missing.push('عبارة المقدمة')
+        if (!phraseClips.intro) missing.push(isAr ? 'عبارة المقدمة' : 'the intro phrase')
         if (!clipsIndex.has(destStop.id)) missing.push(destStop.name)
-        if (viaChosen.length && !phraseClips.via) missing.push('عبارة "مروراً بـ"')
+        if (viaChosen.length && !phraseClips.via) missing.push(isAr ? 'عبارة "مروراً بـ"' : 'the "via" phrase')
         viaChosen.forEach(s => { if (!clipsIndex.has(s.id)) missing.push(s.name) })
-        if (missing.length) throw new Error(`ناقص مقاطع صوت: ${missing.join('، ')} — ارفعها من مكتبة المقاطع بالأسفل`)
+        if (missing.length) throw new Error(isAr ? `ناقص مقاطع صوت: ${missing.join('، ')} — ارفعها من مكتبة المقاطع بالأسفل` : `Missing audio clips: ${missing.join(', ')} — upload them from the clips library below`)
         const urls = [clipUrl('phrases/intro.mp3'), clipUrl(`stations/${destStop.id}.mp3`)]
         if (viaChosen.length) {
           urls.push(clipUrl('phrases/via.mp3'))
           viaChosen.forEach(s => urls.push(clipUrl(`stations/${s.id}.mp3`)))
         }
-        await playClipSequence(urls, controller)
+        await playClipSequence(urls, controller, isAr)
       } else if (voiceURI === ELEVENLABS_VOICE_ID) {
-        await speakElevenLabs(t, controller)
+        await speakElevenLabs(t, controller, isAr)
       } else {
         await speak(t, selectedVoice, controller)
       }
     } catch (err) {
-      setCallError(err.message || 'تعذّر تشغيل النداء')
+      setCallError(err.message || (isAr ? 'تعذّر تشغيل النداء' : 'Failed to play the announcement'))
       stopRepeat()
     }
     setPlaying(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chimeOn, selectedVoice, voiceURI, mode, destStop, viaChosen, clipsIndex, phraseClips])
+  }, [chimeOn, selectedVoice, voiceURI, mode, destStop, viaChosen, clipsIndex, phraseClips, isAr])
 
   async function onCallClick() {
     if (playing) return
@@ -392,13 +395,15 @@ export default function CallPage() {
   const needsBrowserTts = voiceURI !== ELEVENLABS_VOICE_ID && voiceURI !== CLIPS_VOICE_ID
 
   return (
-    <div className="max-w-3xl mx-auto p-6" dir="rtl">
-      <h1 className="text-xl font-bold text-gray-800 mb-1">نداء الركاب</h1>
-      <p className="text-sm text-gray-500 mb-5">نداء صوتي لركاب رحلة معينة أو نص حر — يظهر حالياً للأدمن فقط</p>
+    <div className="max-w-3xl mx-auto p-6" dir={isAr ? 'rtl' : 'ltr'}>
+      <h1 className="text-xl font-bold text-gray-800 mb-1">{isAr ? 'نداء الركاب' : 'Passenger Announcements'}</h1>
+      <p className="text-sm text-gray-500 mb-5">{isAr ? 'نداء صوتي لركاب رحلة معينة أو نص حر — يظهر حالياً للأدمن فقط' : 'Voice announcement for the passengers of a specific trip, or free text — currently visible to admins only'}</p>
 
       {needsBrowserTts && !BROWSER_TTS_SUPPORTED && (
         <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl p-4 mb-5">
-          المتصفح الحالي ما يدعم تحويل النص لصوت. جرّب على كروم أو سفاري بأحدث إصدار، أو استخدم مقاطع جاهزة/ElevenLabs من القائمة.
+          {isAr
+            ? 'المتصفح الحالي ما يدعم تحويل النص لصوت. جرّب على كروم أو سفاري بأحدث إصدار، أو استخدم مقاطع جاهزة/ElevenLabs من القائمة.'
+            : 'The current browser does not support text-to-speech. Try the latest Chrome or Safari, or use ready-made clips / ElevenLabs from the menu.'}
         </div>
       )}
       {callError && (
@@ -408,7 +413,7 @@ export default function CallPage() {
       )}
 
       <div className="flex gap-2 mb-5">
-        {[{ id: 'trip', label: 'نداء حسب الرحلة' }, { id: 'free', label: 'نص حر' }].map(m => (
+        {[{ id: 'trip', label: isAr ? 'نداء حسب الرحلة' : 'Announce by trip' }, { id: 'free', label: isAr ? 'نص حر' : 'Free text' }].map(m => (
           <button key={m.id} onClick={() => {
             setMode(m.id); stopRepeat()
             if (m.id === 'free' && voiceURI === CLIPS_VOICE_ID) setVoiceURI(ELEVENLABS_VOICE_ID)
@@ -421,36 +426,36 @@ export default function CallPage() {
 
       {mode === 'trip' && (
         <div className="bg-white border rounded-xl p-4 mb-4">
-          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">الرحلة</label>
+          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">{isAr ? 'الرحلة' : 'Trip'}</label>
           <input value={tripQuery} onChange={e => setTripQuery(e.target.value)}
-            placeholder="ابحث برقم الرحلة أو الخط أو المحطة..."
+            placeholder={isAr ? 'ابحث برقم الرحلة أو الخط أو المحطة...' : 'Search by trip number, route or station...'}
             className="w-full border rounded-lg px-3 py-2 text-sm mb-2" />
           {loadingTrips ? (
-            <p className="text-sm text-gray-400 py-4 text-center">جاري التحميل...</p>
+            <p className="text-sm text-gray-400 py-4 text-center">{isAr ? 'جاري التحميل...' : 'Loading...'}</p>
           ) : (
             <div className="max-h-48 overflow-y-auto border rounded-lg divide-y divide-gray-100">
               {filteredTrips.map(t => (
                 <button key={t.id} type="button" onClick={() => setSelectedTripId(t.id)}
-                  className={`block w-full text-right px-3 py-2 text-sm hover:bg-gray-50 ${selectedTripId === t.id ? 'bg-nwbus-primary/5 font-semibold text-nwbus-primary' : 'text-gray-700'}`}>
-                  رحلة {t.trip_number}{t.route ? ` – خط ${t.route}` : ''}
-                  <span className="text-gray-400 font-normal"> · {t.from_station?.name_ar || '—'} ← {t.to_station?.name_ar || '—'}</span>
+                  className={`block w-full text-start px-3 py-2 text-sm hover:bg-gray-50 ${selectedTripId === t.id ? 'bg-nwbus-primary/5 font-semibold text-nwbus-primary' : 'text-gray-700'}`}>
+                  {isAr ? 'رحلة' : 'Trip'} {t.trip_number}{t.route ? (isAr ? ` – خط ${t.route}` : ` – Route ${t.route}`) : ''}
+                  <span className="text-gray-400 font-normal"> · {t.from_station?.name_ar || '—'} {isAr ? '←' : '→'} {t.to_station?.name_ar || '—'}</span>
                 </button>
               ))}
-              {filteredTrips.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">لا يوجد نتائج</p>}
+              {filteredTrips.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">{isAr ? 'لا يوجد نتائج' : 'No results'}</p>}
             </div>
           )}
 
           {selectedTrip && (
             <div className="mt-4">
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-gray-500">المحطات والتوقفات (آخر محطة مفعّلة هي الوجهة المُعلن عنها)</label>
+                <label className="text-xs font-semibold text-gray-500">{isAr ? 'المحطات والتوقفات (آخر محطة مفعّلة هي الوجهة المُعلن عنها)' : 'Stations and stops (the last enabled station is the announced destination)'}</label>
                 <div className="flex gap-2 text-[11px]">
-                  <button type="button" onClick={() => setStopOff({})} className="text-nwbus-primary hover:underline">الكل</button>
-                  <button type="button" onClick={() => setStopOff(Object.fromEntries(stops.map(s => [s.id, true])))} className="text-gray-400 hover:underline">لا شيء</button>
+                  <button type="button" onClick={() => setStopOff({})} className="text-nwbus-primary hover:underline">{isAr ? 'الكل' : 'All'}</button>
+                  <button type="button" onClick={() => setStopOff(Object.fromEntries(stops.map(s => [s.id, true])))} className="text-gray-400 hover:underline">{isAr ? 'لا شيء' : 'None'}</button>
                 </div>
               </div>
               {loadingStops ? (
-                <p className="text-sm text-gray-400 py-3 text-center">جاري التحميل...</p>
+                <p className="text-sm text-gray-400 py-3 text-center">{isAr ? 'جاري التحميل...' : 'Loading...'}</p>
               ) : (
                 <div className="border rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
                   {stops.map((s, i) => (
@@ -459,19 +464,19 @@ export default function CallPage() {
                       <input type="checkbox" className="accent-nwbus-primary" checked={!stopOff[s.id]}
                         onChange={() => setStopOff(p => ({ ...p, [s.id]: !p[s.id] }))} />
                       <span className="flex-1 text-sm text-gray-700">
-                        {s.name}{s.rest ? ' (استراحة)' : ''}
-                        {i === 0 && <span className="text-[10px] text-green-600 ms-2">المنشأ</span>}
-                        {s.id === destStop?.id && <span className="text-[10px] text-blue-600 ms-2">الوجهة</span>}
+                        {s.name}{s.rest ? (isAr ? ' (استراحة)' : ' (Rest stop)') : ''}
+                        {i === 0 && <span className="text-[10px] text-green-600 ms-2">{isAr ? 'المنشأ' : 'Origin'}</span>}
+                        {s.id === destStop?.id && <span className="text-[10px] text-blue-600 ms-2">{isAr ? 'الوجهة' : 'Destination'}</span>}
                         {voiceURI === CLIPS_VOICE_ID && (
                           <span className={`text-[10px] ms-2 ${clipsIndex.has(s.id) ? 'text-green-600' : 'text-amber-600'}`}>
-                            {clipsIndex.has(s.id) ? '✓ صوت جاهز' : '— بدون صوت'}
+                            {clipsIndex.has(s.id) ? (isAr ? '✓ صوت جاهز' : '✓ Audio ready') : (isAr ? '— بدون صوت' : '— No audio')}
                           </span>
                         )}
                       </span>
                       <span className="text-xs text-gray-400 font-mono">{s.time ? s.time.slice(0, 5) : ''}</span>
                     </label>
                   ))}
-                  {stops.length === 0 && <p className="text-sm text-gray-400 py-3 text-center">لا توجد نقاط توقف مسجّلة لهذه الرحلة</p>}
+                  {stops.length === 0 && <p className="text-sm text-gray-400 py-3 text-center">{isAr ? 'لا توجد نقاط توقف مسجّلة لهذه الرحلة' : 'No stops are recorded for this trip'}</p>}
                 </div>
               )}
             </div>
@@ -480,37 +485,39 @@ export default function CallPage() {
       )}
 
       <div className="bg-white border rounded-xl p-4 mb-4">
-        <label className="text-xs font-semibold text-gray-500 mb-1.5 block">نص النداء</label>
+        <label className="text-xs font-semibold text-gray-500 mb-1.5 block">{isAr ? 'نص النداء' : 'Announcement text'}</label>
         <textarea value={text} onChange={e => setText(e.target.value)} rows={3}
-          placeholder={mode === 'free' ? 'اكتب نص النداء هنا...' : 'اختر رحلة ووجهة ليتم تعبئة النص تلقائياً، وتقدر تعدّله'}
+          placeholder={mode === 'free'
+            ? (isAr ? 'اكتب نص النداء هنا...' : 'Type the announcement text here...')
+            : (isAr ? 'اختر رحلة ووجهة ليتم تعبئة النص تلقائياً، وتقدر تعدّله' : 'Select a trip and destination to auto-fill the text; you can edit it')}
           disabled={voiceURI === CLIPS_VOICE_ID}
           className="w-full border rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400" />
         {voiceURI === CLIPS_VOICE_ID && (
-          <p className="text-[11px] text-gray-400 mt-1">وضع المقاطع الجاهزة ما يستخدم هذا النص — يشغّل مقاطع المحطات المختارة فوق مباشرة.</p>
+          <p className="text-[11px] text-gray-400 mt-1">{isAr ? 'وضع المقاطع الجاهزة ما يستخدم هذا النص — يشغّل مقاطع المحطات المختارة فوق مباشرة.' : 'Ready-made clips mode does not use this text — it plays the clips of the stations selected above.'}</p>
         )}
 
         <div className="flex flex-wrap items-center gap-4 mt-3">
           <label className="flex items-center gap-1.5 text-xs text-gray-600">
             <input type="checkbox" className="accent-nwbus-primary" checked={chimeOn} onChange={e => setChimeOn(e.target.checked)} />
-            نغمة قبل النداء
+            {isAr ? 'نغمة قبل النداء' : 'Chime before announcement'}
           </label>
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-500">تكرار النداء:</label>
+            <label className="text-xs text-gray-500">{isAr ? 'تكرار النداء:' : 'Repeat announcement:'}</label>
             <select value={repeatEvery} onChange={e => setRepeatEvery(Number(e.target.value))}
               disabled={repeating} className="border rounded-lg px-2 py-1.5 text-sm">
-              {REPEAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.ar}</option>)}
+              {REPEAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{isAr ? o.ar : o.en}</option>)}
             </select>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 mt-3">
-          <label className="text-xs text-gray-500 shrink-0">صوت النداء:</label>
+          <label className="text-xs text-gray-500 shrink-0">{isAr ? 'صوت النداء:' : 'Announcement voice:'}</label>
           <select value={voiceURI} onChange={e => { setVoiceURI(e.target.value); setCallError('') }}
             className="border rounded-lg px-2 py-1.5 text-sm flex-1 min-w-0">
-            {mode === 'trip' && <option value={CLIPS_VOICE_ID}>مقاطع مسجّلة جاهزة (الأفضل والأثبت)</option>}
-            <option value={ELEVENLABS_VOICE_ID}>صوت بشري واقعي حي (ElevenLabs)</option>
+            {mode === 'trip' && <option value={CLIPS_VOICE_ID}>{isAr ? 'مقاطع مسجّلة جاهزة (الأفضل والأثبت)' : 'Ready-made recorded clips (best and most reliable)'}</option>}
+            <option value={ELEVENLABS_VOICE_ID}>{isAr ? 'صوت بشري واقعي حي (ElevenLabs)' : 'Live realistic human voice (ElevenLabs)'}</option>
             {[...voices].sort((a, b) => rankVoice(b) - rankVoice(a)).map(v => (
-              <option key={v.voiceURI} value={v.voiceURI}>{v.name} (صوت الجهاز)</option>
+              <option key={v.voiceURI} value={v.voiceURI}>{v.name} {isAr ? '(صوت الجهاز)' : '(device voice)'}</option>
             ))}
           </select>
           {voiceURI !== CLIPS_VOICE_ID && (
@@ -518,19 +525,21 @@ export default function CallPage() {
               onClick={async () => {
                 setCallError('')
                 try {
-                  if (voiceURI === ELEVENLABS_VOICE_ID) await speakElevenLabs('هذا تجربة لصوت النداء')
+                  if (voiceURI === ELEVENLABS_VOICE_ID) await speakElevenLabs('هذا تجربة لصوت النداء', undefined, isAr)
                   else await speak('هذا تجربة لصوت النداء', selectedVoice)
-                } catch (err) { setCallError(err.message || 'تعذّر تشغيل الصوت') }
+                } catch (err) { setCallError(err.message || (isAr ? 'تعذّر تشغيل الصوت' : 'Failed to play the audio')) }
               }}
               disabled={needsBrowserTts && !BROWSER_TTS_SUPPORTED}
               className="px-3 py-1.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-xs hover:bg-gray-100 shrink-0 disabled:opacity-40">
-              تجربة
+              {isAr ? 'تجربة' : 'Test'}
             </button>
           )}
         </div>
         {voices.length === 0 && BROWSER_TTS_SUPPORTED && (
           <p className="text-[11px] text-gray-400 mt-2">
-            ما وجدنا صوت عربي إضافي مثبّت بهذا الجهاز — استخدم مقاطع جاهزة أو ElevenLabs، أو ثبّت صوت عربي من إعدادات الجهاز.
+            {isAr
+              ? 'ما وجدنا صوت عربي إضافي مثبّت بهذا الجهاز — استخدم مقاطع جاهزة أو ElevenLabs، أو ثبّت صوت عربي من إعدادات الجهاز.'
+              : 'No additional Arabic voice is installed on this device — use ready-made clips or ElevenLabs, or install an Arabic voice from the device settings.'}
           </p>
         )}
 
@@ -538,51 +547,52 @@ export default function CallPage() {
           <button type="button" onClick={onCallClick}
             disabled={(voiceURI !== CLIPS_VOICE_ID && !text.trim()) || playing || repeating || (chimeOn && !CHIME_SUPPORTED) || (needsBrowserTts && !BROWSER_TTS_SUPPORTED)}
             className="flex-1 bg-nwbus-primary text-white rounded-lg py-2.5 text-sm font-bold disabled:opacity-40 hover:opacity-90 transition-opacity">
-            {repeating ? 'جارٍ النداء المتكرر...' : playing ? 'جارٍ النداء...' : 'نداء'}
+            {repeating ? (isAr ? 'جارٍ النداء المتكرر...' : 'Repeating announcement...') : playing ? (isAr ? 'جارٍ النداء...' : 'Announcing...') : (isAr ? 'نداء' : 'Announce')}
           </button>
           {(playing || repeating) && (
             <button type="button" onClick={stopRepeat}
               className="px-5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-100">
-              إيقاف
+              {isAr ? 'إيقاف' : 'Stop'}
             </button>
           )}
           {chimeOn && (
             <button type="button" onClick={() => playChime()} disabled={!CHIME_SUPPORTED}
               className="px-4 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm hover:bg-gray-100 disabled:opacity-40">
-              تجربة النغمة
+              {isAr ? 'تجربة النغمة' : 'Test chime'}
             </button>
           )}
         </div>
       </div>
 
       <div className="bg-white border rounded-xl p-4 mb-4">
-        <button type="button" onClick={() => setShowClipsLibrary(o => !o)} className="flex items-center justify-between w-full text-right">
-          <span className="text-sm font-semibold text-gray-700">مكتبة المقاطع الصوتية الجاهزة</span>
-          <span className="text-xs text-gray-400">{showClipsLibrary ? 'إخفاء' : 'إظهار'}</span>
+        <button type="button" onClick={() => setShowClipsLibrary(o => !o)} className="flex items-center justify-between w-full text-start">
+          <span className="text-sm font-semibold text-gray-700">{isAr ? 'مكتبة المقاطع الصوتية الجاهزة' : 'Ready-made audio clips library'}</span>
+          <span className="text-xs text-gray-400">{showClipsLibrary ? (isAr ? 'إخفاء' : 'Hide') : (isAr ? 'إظهار' : 'Show')}</span>
         </button>
         {showClipsLibrary && (
           <div className="mt-4 space-y-4">
             <p className="text-xs text-gray-500">
-              اضغط "توليد" يسوّي الصوت تلقائياً عبر ElevenLabs ويحفظه مباشرة (نفس صوت صفحة النداء) — أو ارفع ملف mp3 جاهز
-              بنفسك لو تبي تستبدله بتسجيل يدوي. عبارتين ثابتتين + اسم كل محطة، مرة وحدة بس، وتُستخدم دايماً بنفس الجودة.
+              {isAr
+                ? 'اضغط "توليد" يسوّي الصوت تلقائياً عبر ElevenLabs ويحفظه مباشرة (نفس صوت صفحة النداء) — أو ارفع ملف mp3 جاهز بنفسك لو تبي تستبدله بتسجيل يدوي. عبارتين ثابتتين + اسم كل محطة، مرة وحدة بس، وتُستخدم دايماً بنفس الجودة.'
+                : 'Click "Generate" to create the audio automatically via ElevenLabs and save it directly (same voice as the announcement page) — or upload a ready-made mp3 file yourself to replace it with a manual recording. Two fixed phrases + each station name, once only, always used at the same quality.'}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { key: 'intro', label: 'عبارة المقدمة', text: 'نداء على الركاب المسافرين إلى' },
-                { key: 'via', label: 'عبارة "مروراً بـ"', text: 'مروراً بـ' },
+                { key: 'intro', label: isAr ? 'عبارة المقدمة' : 'Intro phrase', text: 'نداء على الركاب المسافرين إلى' },
+                { key: 'via', label: isAr ? 'عبارة "مروراً بـ"' : '"Via" phrase', text: 'مروراً بـ' },
               ].map(p => (
                 <div key={p.key} className="border rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1.5 gap-2">
                     <span className="text-xs text-gray-600">{p.label} ("{p.text}")</span>
                     <span className={`text-[10px] shrink-0 ${phraseClips[p.key] ? 'text-green-600' : 'text-amber-600'}`}>
-                      {phraseClips[p.key] ? '✓ مرفوع' : 'غير مرفوع'}
+                      {phraseClips[p.key] ? (isAr ? '✓ مرفوع' : '✓ Uploaded') : (isAr ? 'غير مرفوع' : 'Not uploaded')}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <button type="button" onClick={() => generatePhraseClip(p.key, p.text)} disabled={uploadingId === p.key}
                       className="text-xs px-2.5 py-1 bg-nwbus-primary text-white rounded-lg disabled:opacity-40">
-                      {uploadingId === p.key ? 'جارٍ...' : 'توليد'}
+                      {uploadingId === p.key ? (isAr ? 'جارٍ...' : 'Working...') : (isAr ? 'توليد' : 'Generate')}
                     </button>
                     <input type="file" accept="audio/*" disabled={uploadingId === p.key}
                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhraseClip(p.key, f); e.target.value = '' }}
@@ -598,11 +608,11 @@ export default function CallPage() {
 
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <input value={stationSearch} onChange={e => setStationSearch(e.target.value)} placeholder="ابحث عن محطة..."
+                <input value={stationSearch} onChange={e => setStationSearch(e.target.value)} placeholder={isAr ? 'ابحث عن محطة...' : 'Search for a station...'}
                   className="flex-1 border rounded-lg px-3 py-2 text-sm" />
                 <button type="button" onClick={generateAllMissing} disabled={!!bulkProgress || allStations.length === 0}
                   className="text-xs px-3 py-2 bg-nwbus-primary text-white rounded-lg disabled:opacity-40 shrink-0 whitespace-nowrap">
-                  {bulkProgress ? `جارٍ التوليد ${bulkProgress.done}/${bulkProgress.total}...` : 'توليد كل الناقص'}
+                  {bulkProgress ? (isAr ? `جارٍ التوليد ${bulkProgress.done}/${bulkProgress.total}...` : `Generating ${bulkProgress.done}/${bulkProgress.total}...`) : (isAr ? 'توليد كل الناقص' : 'Generate all missing')}
                 </button>
               </div>
               <div className="border rounded-lg divide-y divide-gray-100 max-h-72 overflow-y-auto">
@@ -618,14 +628,14 @@ export default function CallPage() {
                     )}
                     <button type="button" onClick={() => generateStationClip(s)} disabled={uploadingId === s.id || !!bulkProgress}
                       className="text-xs px-2 py-1 bg-nwbus-primary text-white rounded-lg disabled:opacity-40 shrink-0">
-                      {uploadingId === s.id ? '...' : 'توليد'}
+                      {uploadingId === s.id ? '...' : (isAr ? 'توليد' : 'Generate')}
                     </button>
                     <input type="file" accept="audio/*" disabled={uploadingId === s.id}
                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadStationClip(s.id, f); e.target.value = '' }}
                       className="text-xs w-20 sm:w-28 shrink-0" />
                   </div>
                 ))}
-                {allStations.length === 0 && <p className="text-sm text-gray-400 py-3 text-center">جاري التحميل...</p>}
+                {allStations.length === 0 && <p className="text-sm text-gray-400 py-3 text-center">{isAr ? 'جاري التحميل...' : 'Loading...'}</p>}
               </div>
             </div>
           </div>

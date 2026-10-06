@@ -1,14 +1,16 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import * as XLSX from 'xlsx'
 import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
 import { todayStr } from '../../utils/dates'
-import { AR_LABELS, AR_O, AR_A, TRIP_ASPECTS, STATION_ASPECTS } from '../../utils/feedbackConfig'
+import { AR_LABELS, AR_O, AR_A, EN_LABELS, EN_O, EN_A, TRIP_ASPECTS, STATION_ASPECTS } from '../../utils/feedbackConfig'
 import { POSTER_SIZES, buildPosterSvg, downloadPosterPng, printPoster } from '../../utils/qrPoster'
 
-const lbl = k => AR_LABELS[k] || k
-const lblO = k => AR_O[k] || k
-const lblA = k => AR_A[k] || k
+const useIsAr = () => useTranslation().i18n.language === 'ar'
+const mkLbl = isAr => { const d = isAr ? AR_LABELS : EN_LABELS; return k => d[k] || k }
+const mkLblO = isAr => { const d = isAr ? AR_O : EN_O; return k => d[k] || k }
+const mkLblA = isAr => { const d = isAr ? AR_A : EN_A; return k => d[k] || k }
 const num = v => (v == null ? null : Number(v))
 const f1 = n => (n == null || Number.isNaN(n) ? '—' : Number(n).toFixed(1))
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
@@ -16,8 +18,8 @@ const TRIP_KEYS = new Set(TRIP_ASPECTS.map(a => a.key))
 const STATION_KEYS = new Set(STATION_ASPECTS.map(a => a.key))
 
 const npsScore = n => (n && n.n ? Math.round(((n.pro - n.det) / n.n) * 100) : null)
-const npsLevel = s => (s == null ? '—' : s >= 50 ? 'ممتاز' : s >= 30 ? 'جيد جداً' : s >= 0 ? 'جيد' : 'يحتاج تحسيناً')
-const scoreLevel = v => (v == null ? '—' : v >= 4.5 ? 'ممتاز' : v >= 4 ? 'جيد جداً' : v >= 3 ? 'مقبول' : 'ضعيف')
+const npsLevel = (s, isAr) => (s == null ? '—' : s >= 50 ? (isAr ? 'ممتاز' : 'Excellent') : s >= 30 ? (isAr ? 'جيد جداً' : 'Very good') : s >= 0 ? (isAr ? 'جيد' : 'Good') : (isAr ? 'يحتاج تحسيناً' : 'Needs improvement'))
+const scoreLevel = (v, isAr) => (v == null ? '—' : v >= 4.5 ? (isAr ? 'ممتاز' : 'Excellent') : v >= 4 ? (isAr ? 'جيد جداً' : 'Very good') : v >= 3 ? (isAr ? 'مقبول' : 'Acceptable') : (isAr ? 'ضعيف' : 'Poor'))
 
 const tone = (v, good = 4, mid = 3) => (v == null ? 'text-gray-400' : v >= good ? 'text-green-700' : v >= mid ? 'text-amber-600' : 'text-red-600')
 const npsTone = n => (n == null ? 'text-gray-400' : n >= 50 ? 'text-green-700' : n >= 0 ? 'text-amber-600' : 'text-red-600')
@@ -49,13 +51,14 @@ function Card({ title, hint, children, className = '', action }) {
 }
 
 function Delta({ cur, prev, digits = 1, unit = '', invert = false }) {
-  if (cur == null || prev == null) return <span className="text-gray-300">لا توجد مقارنة</span>
+  const isAr = useIsAr()
+  if (cur == null || prev == null) return <span className="text-gray-300">{isAr ? 'لا توجد مقارنة' : 'No comparison'}</span>
   const d = Number(cur) - Number(prev)
-  if (Math.abs(d) < 0.05) return <span className="text-gray-400">بدون تغيير عن الفترة السابقة</span>
+  if (Math.abs(d) < 0.05) return <span className="text-gray-400">{isAr ? 'بدون تغيير عن الفترة السابقة' : 'No change vs. previous period'}</span>
   const good = invert ? d < 0 : d > 0
   return (
     <span className={good ? 'text-green-700' : 'text-red-600'}>
-      {d > 0 ? '▲' : '▼'} {Math.abs(d).toFixed(digits)}{unit} <span className="text-gray-400">عن الفترة السابقة</span>
+      {d > 0 ? '▲' : '▼'} {Math.abs(d).toFixed(digits)}{unit} <span className="text-gray-400">{isAr ? 'عن الفترة السابقة' : 'vs. previous period'}</span>
     </span>
   )
 }
@@ -74,7 +77,9 @@ function Kpi({ label, value, valueClass = 'text-gray-900', foot, level }) {
 }
 
 function ScoreRows({ items }) {
-  if (!items.length) return <p className="text-sm text-gray-400">لا توجد بيانات</p>
+  const isAr = useIsAr()
+  const lblA = mkLblA(isAr)
+  if (!items.length) return <p className="text-sm text-gray-400">{isAr ? 'لا توجد بيانات' : 'No data'}</p>
   return (
     <div className="space-y-3.5">
       {items.map(a => (
@@ -89,7 +94,9 @@ function ScoreRows({ items }) {
 }
 
 function CountRows({ items, total }) {
-  if (!items.length) return <p className="text-sm text-gray-400">لا توجد بيانات</p>
+  const isAr = useIsAr()
+  const lblO = mkLblO(isAr)
+  if (!items.length) return <p className="text-sm text-gray-400">{isAr ? 'لا توجد بيانات' : 'No data'}</p>
   return (
     <div className="space-y-3.5">
       {items.map(({ k, n }) => (
@@ -104,7 +111,8 @@ function CountRows({ items, total }) {
 }
 
 function TrendChart({ data, bucket }) {
-  if (!data.length) return <p className="text-sm text-gray-400 py-6 text-center">لا توجد بيانات</p>
+  const isAr = useIsAr()
+  if (!data.length) return <p className="text-sm text-gray-400 py-6 text-center">{isAr ? 'لا توجد بيانات' : 'No data'}</p>
   const W = 640, H = 190, padL = 28, padR = 12, padT = 12, padB = 26
   const maxN = Math.max(...data.map(p => p.n), 1)
   const step = (W - padL - padR) / data.length
@@ -115,7 +123,7 @@ function TrendChart({ data, bucket }) {
   const line = pts.map(p => `${x(data.indexOf(p))},${yAvg(p.avg)}`).join(' ')
   return (
     <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[420px]" role="img" aria-label="اتجاه الرضا">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[420px]" role="img" aria-label={isAr ? 'اتجاه الرضا' : 'Satisfaction trend'}>
         {[1, 3, 5].map(v => (
           <g key={v}>
             <line x1={padL} x2={W - padR} y1={yAvg(v)} y2={yAvg(v)} stroke="#f1f5f9" />
@@ -124,35 +132,37 @@ function TrendChart({ data, bucket }) {
         ))}
         {data.map((p, i) => (
           <rect key={p.d} x={x(i) - Math.min(14, step / 2.6)} y={yBar(p.n)} width={Math.min(28, step / 1.3)} height={H - padB - yBar(p.n)} rx="3" fill="#e2e8f0">
-            <title>{`${dayLabel(p.d)} — ${p.n} استجابة`}</title>
+            <title>{`${dayLabel(p.d)} — ${p.n} ${isAr ? 'استجابة' : 'responses'}`}</title>
           </rect>
         ))}
         {pts.length > 1 && <polyline points={line} fill="none" stroke="#0f172a" strokeWidth="2" strokeLinejoin="round" />}
         {pts.map(p => (
           <circle key={p.d} cx={x(data.indexOf(p))} cy={yAvg(p.avg)} r="3.5" fill="#0f172a">
-            <title>{`${dayLabel(p.d)} — المتوسط ${f1(p.avg)}`}</title>
+            <title>{`${dayLabel(p.d)} — ${isAr ? 'المتوسط' : 'Average'} ${f1(p.avg)}`}</title>
           </circle>
         ))}
         <text x={x(0)} y={H - 8} fontSize="9" fill="#94a3b8" textAnchor="middle">{dayLabel(data[0].d)}</text>
         {data.length > 1 && <text x={x(data.length - 1)} y={H - 8} fontSize="9" fill="#94a3b8" textAnchor="middle">{dayLabel(data[data.length - 1].d)}</text>}
       </svg>
       <div className="flex items-center gap-4 text-[11px] text-gray-500 mt-1">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-900 inline-block" /> متوسط الرضا (من 5)</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-200 inline-block" /> عدد الاستجابات</span>
-        <span className="ms-auto">كل نقطة = {bucket === 'week' ? 'أسبوع' : 'يوم'}</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-900 inline-block" /> {isAr ? 'متوسط الرضا (من 5)' : 'Average satisfaction (out of 5)'}</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-200 inline-block" /> {isAr ? 'عدد الاستجابات' : 'Number of responses'}</span>
+        <span className="ms-auto">{isAr ? 'كل نقطة =' : 'Each point ='} {bucket === 'week' ? (isAr ? 'أسبوع' : 'week') : (isAr ? 'يوم' : 'day')}</span>
       </div>
     </div>
   )
 }
 
 function CutTable({ title, items }) {
+  const isAr = useIsAr()
+  const lbl = mkLbl(isAr)
   return (
     <Card title={title}>
-      {!items.length ? <p className="text-sm text-gray-400">لا توجد بيانات بعد</p> : (
+      {!items.length ? <p className="text-sm text-gray-400">{isAr ? 'لا توجد بيانات بعد' : 'No data yet'}</p> : (
         <table className="w-full text-sm">
           <thead><tr className="text-xs text-gray-400">
-            <th className="pb-2 text-right font-medium">الفئة</th><th className="pb-2 text-center font-medium">الاستجابات</th>
-            <th className="pb-2 text-center font-medium">متوسط الرضا</th><th className="pb-2 text-center font-medium">NPS</th>
+            <th className="pb-2 text-start font-medium">{isAr ? 'الفئة' : 'Category'}</th><th className="pb-2 text-center font-medium">{isAr ? 'الاستجابات' : 'Responses'}</th>
+            <th className="pb-2 text-center font-medium">{isAr ? 'متوسط الرضا' : 'Avg. satisfaction'}</th><th className="pb-2 text-center font-medium">NPS</th>
           </tr></thead>
           <tbody className="divide-y divide-gray-50">
             {items.map(g => (
@@ -171,16 +181,22 @@ function CutTable({ title, items }) {
 }
 
 const TABS = [
-  { id: 'overview', label: 'لوحة المؤشرات' },
-  { id: 'stations', label: 'أداء المحطات' },
-  { id: 'audience', label: 'شرائح العملاء' },
-  { id: 'log', label: 'سجل الاستجابات' },
-  { id: 'voice', label: 'صوت العميل' },
-  { id: 'qr', label: 'رمز الاستبيان' },
+  { id: 'overview', ar: 'لوحة المؤشرات', en: 'Dashboard' },
+  { id: 'stations', ar: 'أداء المحطات', en: 'Station performance' },
+  { id: 'audience', ar: 'شرائح العملاء', en: 'Customer segments' },
+  { id: 'log', ar: 'سجل الاستجابات', en: 'Response log' },
+  { id: 'voice', ar: 'صوت العميل', en: 'Voice of customer' },
+  { id: 'qr', ar: 'رمز الاستبيان', en: 'Survey QR code' },
 ]
-const PRESETS = [{ d: 7, l: '7 أيام' }, { d: 30, l: '30 يوماً' }, { d: 90, l: '90 يوماً' }]
+const PRESETS = [{ d: 7, ar: '7 أيام', en: '7 days' }, { d: 30, ar: '30 يوماً', en: '30 days' }, { d: 90, ar: '90 يوماً', en: '90 days' }]
+const POSTER_LABELS_EN = {
+  '4x6': '4 × 6 in (10.2 × 15.2 cm)', a6: 'A6 (10.5 × 14.8 cm)', a5: 'A5 (14.8 × 21 cm)', a4: 'A4 (21 × 29.7 cm)',
+  '4x4': 'Square 4 × 4 in (10.2 cm)', '3x3': 'Square 3 × 3 in (7.6 cm)',
+}
 
 export default function FeedbackReport() {
+  const isAr = useIsAr()
+  const lbl = mkLbl(isAr), lblO = mkLblO(isAr), lblA = mkLblA(isAr)
   const [from, setFrom] = useState(() => daysAgo(29))
   const [to, setTo] = useState(todayStr())
   const [kind, setKind] = useState('all')
@@ -221,13 +237,13 @@ export default function FeedbackReport() {
       ])
       if (dead) return
       if (cur.error) {
-        setErr(/Could not find|PGRST202|survey_report/i.test(cur.error.message || '') ? 'دالة التقرير غير مثبتة بالقاعدة — شغّل ملف survey_report.sql' : cur.error.message)
+        setErr(/Could not find|PGRST202|survey_report/i.test(cur.error.message || '') ? (isAr ? 'دالة التقرير غير مثبتة بالقاعدة — شغّل ملف survey_report.sql' : 'The report function is not installed in the database — run survey_report.sql') : cur.error.message)
         setData(null); setPrev(null)
       } else { setData(cur.data); setPrev(old.error ? null : old.data) }
       setLoading(false)
     })()
     return () => { dead = true }
-  }, [from, to, args])
+  }, [from, to, args, isAr])
 
   // صوت العميل: الملاحظات وطلبات التواصل (تُجلب عند فتح التبويب فقط)
   useEffect(() => {
@@ -264,7 +280,9 @@ export default function FeedbackReport() {
     return () => { dead = true }
   }, [tab, from, to, args])
 
-  const stName = id => { const s = stations.find(x => x.id === id); return s ? (s.survey_name_ar || s.name_ar || s.name_en) : '—' }
+  const stLabel = s => (isAr ? (s.survey_name_ar || s.name_ar || s.name_en) : (s.name_en || s.name_ar))
+  const stName = id => { const s = stations.find(x => x.id === id); return s ? stLabel(s) : '—' }
+  const repName = s => { if (isAr) return s.name; const x = stations.find(y => y.id === s.id); return x ? (x.name_en || x.name_ar || s.name) : s.name }
   const focusId = r => (r.kind === 'station' ? r.station_id : r.from_station_id)
   const avgOfRow = r => { const v = Object.values(r.ratings ?? {}).map(Number); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null }
 
@@ -308,52 +326,67 @@ export default function FeedbackReport() {
       if (chunk.length < 1000 || page >= 9) break
       page++
     }
+    const H = isAr
+      ? { date: 'التاريخ', kind: 'النوع', station: 'المحطة', from: 'من', to: 'إلى', tripNo: 'رقم الرحلة', avg: 'المتوسط', improve: 'أولويات التحسين', low: 'أسباب عدم الرضا', comment: 'ملاحظات', age: 'الفئة العمرية', traveler: 'نوع المسافر', purpose: 'غرض الرحلة', freq: 'تكرار السفر', phone: 'جوال', lang: 'اللغة', trip: 'رحلة', st: 'محطة', sep: '، ' }
+      : { date: 'Date', kind: 'Type', station: 'Station', from: 'From', to: 'To', tripNo: 'Trip number', avg: 'Average', improve: 'Improvement priorities', low: 'Reasons for dissatisfaction', comment: 'Comments', age: 'Age group', traveler: 'Traveler type', purpose: 'Trip purpose', freq: 'Travel frequency', phone: 'Mobile', lang: 'Language', trip: 'Trip', st: 'Station', sep: ', ' }
     const out = rows.map(r => ({
-      'التاريخ': new Date(r.created_at).toLocaleString('ar-SA-u-ca-gregory'),
-      'النوع': r.kind === 'trip' ? 'رحلة' : 'محطة',
-      'المحطة': stName(focusId(r)),
-      'من': r.kind === 'trip' ? stName(r.from_station_id) : '', 'إلى': r.kind === 'trip' ? stName(r.to_station_id) : '',
-      'رقم الرحلة': r.trip_number ?? '', 'NPS': r.nps ?? '', 'المتوسط': avgOfRow(r)?.toFixed(2) ?? '',
+      [H.date]: new Date(r.created_at).toLocaleString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB'),
+      [H.kind]: r.kind === 'trip' ? H.trip : H.st,
+      [H.station]: stName(focusId(r)),
+      [H.from]: r.kind === 'trip' ? stName(r.from_station_id) : '', [H.to]: r.kind === 'trip' ? stName(r.to_station_id) : '',
+      [H.tripNo]: r.trip_number ?? '', 'NPS': r.nps ?? '', [H.avg]: avgOfRow(r)?.toFixed(2) ?? '',
       ...Object.fromEntries(Object.entries(r.ratings ?? {}).map(([k, v]) => [lblA(k), v])),
-      'أولويات التحسين': (r.improve ?? []).map(lblO).join('، '), 'أسباب عدم الرضا': (r.low_reason ?? []).map(lblO).join('، '),
-      'ملاحظات': r.comment ?? '', 'الفئة العمرية': lbl(r.age_group ?? ''), 'نوع المسافر': lbl(r.traveler_type ?? ''),
-      'غرض الرحلة': lbl(r.trip_purpose ?? ''), 'تكرار السفر': lbl(r.frequency ?? ''), 'جوال': r.contact_phone ?? '', 'اللغة': r.lang ?? '',
+      [H.improve]: (r.improve ?? []).map(lblO).join(H.sep), [H.low]: (r.low_reason ?? []).map(lblO).join(H.sep),
+      [H.comment]: r.comment ?? '', [H.age]: lbl(r.age_group ?? ''), [H.traveler]: lbl(r.traveler_type ?? ''),
+      [H.purpose]: lbl(r.trip_purpose ?? ''), [H.freq]: lbl(r.frequency ?? ''), [H.phone]: r.contact_phone ?? '', [H.lang]: r.lang ?? '',
     }))
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), 'رضا العملاء')
-    XLSX.writeFile(wb, `رضا-العملاء-${from}_${to}.xlsx`)
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), isAr ? 'رضا العملاء' : 'Customer Satisfaction')
+    XLSX.writeFile(wb, isAr ? `رضا-العملاء-${from}_${to}.xlsx` : `customer-satisfaction-${from}_${to}.xlsx`)
   }
 
   const prevScore = prev ? npsScore(prev.nps) : null
-  const scopeText = [kind === 'trip' ? 'الرحلات' : kind === 'station' ? 'المحطات' : 'الرحلات والمحطات', stationFilter ? stName(stationFilter) : 'كل المحطات'].join(' · ')
+  const scopeText = [kind === 'trip' ? (isAr ? 'الرحلات' : 'Trips') : kind === 'station' ? (isAr ? 'المحطات' : 'Stations') : (isAr ? 'الرحلات والمحطات' : 'Trips and stations'), stationFilter ? stName(stationFilter) : (isAr ? 'كل المحطات' : 'All stations')].join(' · ')
 
   const summary = useMemo(() => {
     if (!D || !D.total) return []
     const out = []
-    out.push(`تم استلام ${D.total} استجابة (${D.trips} عن الرحلات و${D.total - D.trips} عن المحطات).`)
-    if (D.score != null) out.push(`مؤشر التوصية NPS يبلغ ${D.score} ويُصنَّف «${npsLevel(D.score)}»، ${pct(D.nps.pro, D.nps.n)}% من العملاء داعمون و${pct(D.nps.det, D.nps.n)}% منتقدون.`)
-    if (D.sat != null) out.push(`${D.sat}% من التقييمات راضية (4 أو 5) بمتوسط عام ${f1(D.avg)} من 5.`)
-    if (D.strongest) out.push(`أقوى عنصر: ${lblA(D.strongest.k)} (${f1(D.strongest.avg)}).`)
-    if (D.weakest && D.weakest.k !== D.strongest?.k) out.push(`أضعف عنصر ويحتاج أولوية: ${lblA(D.weakest.k)} (${f1(D.weakest.avg)}).`)
-    if (D.best) out.push(`أفضل محطة أداءً: ${D.best.name} (${f1(D.best.avg)}).`)
-    if (D.worst) out.push(`أقل محطة أداءً: ${D.worst.name} (${f1(D.worst.avg)}) وتستحق المتابعة.`)
-    if (D.low) out.push(`${D.low} استجابة (${pct(D.low, D.total)}%) تضمنت تقييماً منخفضاً (1 أو 2)${D.contacts ? `، منها ${D.contacts} عميل ترك رقمه للتواصل` : ''}.`)
+    const nl = npsLevel(D.score, isAr)
+    if (isAr) {
+      out.push(`تم استلام ${D.total} استجابة (${D.trips} عن الرحلات و${D.total - D.trips} عن المحطات).`)
+      if (D.score != null) out.push(`مؤشر التوصية NPS يبلغ ${D.score} ويُصنَّف «${nl}»، ${pct(D.nps.pro, D.nps.n)}% من العملاء داعمون و${pct(D.nps.det, D.nps.n)}% منتقدون.`)
+      if (D.sat != null) out.push(`${D.sat}% من التقييمات راضية (4 أو 5) بمتوسط عام ${f1(D.avg)} من 5.`)
+      if (D.strongest) out.push(`أقوى عنصر: ${lblA(D.strongest.k)} (${f1(D.strongest.avg)}).`)
+      if (D.weakest && D.weakest.k !== D.strongest?.k) out.push(`أضعف عنصر ويحتاج أولوية: ${lblA(D.weakest.k)} (${f1(D.weakest.avg)}).`)
+      if (D.best) out.push(`أفضل محطة أداءً: ${repName(D.best)} (${f1(D.best.avg)}).`)
+      if (D.worst) out.push(`أقل محطة أداءً: ${repName(D.worst)} (${f1(D.worst.avg)}) وتستحق المتابعة.`)
+      if (D.low) out.push(`${D.low} استجابة (${pct(D.low, D.total)}%) تضمنت تقييماً منخفضاً (1 أو 2)${D.contacts ? `، منها ${D.contacts} عميل ترك رقمه للتواصل` : ''}.`)
+    } else {
+      out.push(`${D.total} responses received (${D.trips} about trips and ${D.total - D.trips} about stations).`)
+      if (D.score != null) out.push(`The NPS is ${D.score}, rated "${nl}": ${pct(D.nps.pro, D.nps.n)}% of customers are promoters and ${pct(D.nps.det, D.nps.n)}% are detractors.`)
+      if (D.sat != null) out.push(`${D.sat}% of ratings are satisfied (4 or 5), with an overall average of ${f1(D.avg)} out of 5.`)
+      if (D.strongest) out.push(`Strongest aspect: ${lblA(D.strongest.k)} (${f1(D.strongest.avg)}).`)
+      if (D.weakest && D.weakest.k !== D.strongest?.k) out.push(`Weakest aspect, needs priority: ${lblA(D.weakest.k)} (${f1(D.weakest.avg)}).`)
+      if (D.best) out.push(`Best performing station: ${repName(D.best)} (${f1(D.best.avg)}).`)
+      if (D.worst) out.push(`Lowest performing station: ${repName(D.worst)} (${f1(D.worst.avg)}), worth following up.`)
+      if (D.low) out.push(`${D.low} responses (${pct(D.low, D.total)}%) included a low rating (1 or 2)${D.contacts ? `, of which ${D.contacts} customers left their number to be contacted` : ''}.`)
+    }
     return out
-  }, [D])
+  }, [D, isAr, stations])
 
   return (
-    <div className="space-y-5">
+    <div dir={isAr ? 'rtl' : 'ltr'} className="space-y-5">
       {/* الفلاتر */}
       <Card>
         <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
           <div>
-            <p className="text-[11px] font-semibold text-gray-500 mb-1.5">الفترة</p>
+            <p className="text-[11px] font-semibold text-gray-500 mb-1.5">{isAr ? 'الفترة' : 'Period'}</p>
             <div className="flex items-center gap-1.5 flex-wrap">
               {PRESETS.map(p => {
                 const on = from === daysAgo(p.d - 1) && to === todayStr()
                 return (
                   <button key={p.d} type="button" onClick={() => { setFrom(daysAgo(p.d - 1)); setTo(todayStr()) }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${on ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{p.l}</button>
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${on ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{isAr ? p.ar : p.en}</button>
                 )
               })}
               <input type="date" value={from} max={to} onChange={e => setFrom(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs" />
@@ -362,23 +395,23 @@ export default function FeedbackReport() {
             </div>
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-gray-500 mb-1.5">النوع</p>
+            <p className="text-[11px] font-semibold text-gray-500 mb-1.5">{isAr ? 'النوع' : 'Type'}</p>
             <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-              {[['all', 'الكل'], ['trip', 'الرحلات'], ['station', 'المحطات']].map(([v, l]) => (
+              {[['all', isAr ? 'الكل' : 'All'], ['trip', isAr ? 'الرحلات' : 'Trips'], ['station', isAr ? 'المحطات' : 'Stations']].map(([v, l]) => (
                 <button key={v} type="button" onClick={() => setKind(v)}
                   className={`px-3 py-1.5 text-xs font-semibold ${kind === v ? 'bg-slate-900 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{l}</button>
               ))}
             </div>
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-gray-500 mb-1.5">المحطة</p>
+            <p className="text-[11px] font-semibold text-gray-500 mb-1.5">{isAr ? 'المحطة' : 'Station'}</p>
             <select value={stationFilter} onChange={e => setStationFilter(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs w-48">
-              <option value="">كل المحطات</option>
-              {stations.map(s => <option key={s.id} value={s.id}>{s.survey_name_ar || s.name_ar || s.name_en}</option>)}
+              <option value="">{isAr ? 'كل المحطات' : 'All stations'}</option>
+              {stations.map(s => <option key={s.id} value={s.id}>{stLabel(s)}</option>)}
             </select>
           </div>
           <button type="button" onClick={exportExcel} disabled={!D?.total}
-            className="ms-auto px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white disabled:opacity-40">تصدير Excel</button>
+            className="ms-auto px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white disabled:opacity-40">{isAr ? 'تصدير Excel' : 'Export Excel'}</button>
         </div>
       </Card>
 
@@ -387,38 +420,38 @@ export default function FeedbackReport() {
         {TABS.map(t => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)}
             className={`px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${tab === t.id ? 'border-slate-900 text-slate-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-            {t.label}
+            {isAr ? t.ar : t.en}
           </button>
         ))}
       </div>
 
       {err && <div className="bg-red-50 border border-red-100 text-red-700 text-sm rounded-xl p-4">{err}</div>}
-      {loading && <p className="text-center text-gray-400 py-12 text-sm">جاري تحميل المؤشرات…</p>}
+      {loading && <p className="text-center text-gray-400 py-12 text-sm">{isAr ? 'جاري تحميل المؤشرات…' : 'Loading indicators…'}</p>}
 
       {!loading && !err && tab !== 'qr' && tab !== 'voice' && D && D.total === 0 && (
-        <p className="text-center text-gray-400 py-12 text-sm">لا توجد استجابات ضمن الفترة والفلاتر المحددة</p>
+        <p className="text-center text-gray-400 py-12 text-sm">{isAr ? 'لا توجد استجابات ضمن الفترة والفلاتر المحددة' : 'No responses within the selected period and filters'}</p>
       )}
 
       {!loading && D && D.total > 0 && tab === 'overview' && (
         <>
           <div>
-            <h2 className="text-lg font-extrabold text-gray-900">لوحة مؤشرات رضا العملاء</h2>
+            <h2 className="text-lg font-extrabold text-gray-900">{isAr ? 'لوحة مؤشرات رضا العملاء' : 'Customer Satisfaction Dashboard'}</h2>
             <p className="text-xs text-gray-500 mt-1">{dayLabel(from)} → {dayLabel(to)} · {scopeText}</p>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Kpi label="عدد الاستجابات" value={D.total}
+            <Kpi label={isAr ? 'عدد الاستجابات' : 'Responses'} value={D.total}
               foot={<Delta cur={D.total} prev={prev?.total} digits={0} />} />
-            <Kpi label="صافي نقاط التوصية (NPS)" value={D.score ?? '—'} valueClass={npsTone(D.score)} level={npsLevel(D.score)}
+            <Kpi label={isAr ? 'صافي نقاط التوصية (NPS)' : 'Net Promoter Score (NPS)'} value={D.score ?? '—'} valueClass={npsTone(D.score)} level={npsLevel(D.score, isAr)}
               foot={<Delta cur={D.score} prev={prevScore} digits={0} />} />
-            <Kpi label="مؤشر الرضا العام (من 5)" value={f1(D.avg)} valueClass={tone(D.avg)} level={scoreLevel(D.avg)}
+            <Kpi label={isAr ? 'مؤشر الرضا العام (من 5)' : 'Overall satisfaction (out of 5)'} value={f1(D.avg)} valueClass={tone(D.avg)} level={scoreLevel(D.avg, isAr)}
               foot={<Delta cur={D.avg} prev={prev ? num(prev.avg) : null} />} />
-            <Kpi label="نسبة العملاء الراضين" value={D.sat == null ? '—' : `${D.sat}%`} valueClass={tone(D.sat, 80, 60)}
+            <Kpi label={isAr ? 'نسبة العملاء الراضين' : 'Satisfied customers'} value={D.sat == null ? '—' : `${D.sat}%`} valueClass={tone(D.sat, 80, 60)}
               foot={<Delta cur={D.sat} prev={prev ? num(prev.sat) : null} digits={0} unit="%" />} />
           </div>
 
           <div className="grid lg:grid-cols-5 gap-4">
-            <Card title="الخلاصة التنفيذية" className="lg:col-span-3">
+            <Card title={isAr ? 'الخلاصة التنفيذية' : 'Executive summary'} className="lg:col-span-3">
               <ul className="space-y-2.5">
                 {summary.map((s, i) => (
                   <li key={i} className="flex gap-2.5 text-sm text-gray-700 leading-relaxed">
@@ -428,14 +461,14 @@ export default function FeedbackReport() {
               </ul>
             </Card>
             {D.nps?.n > 0 && (
-              <Card title="توزيع ولاء العملاء" hint="منتقدون 0–6 · محايدون 7–8 · داعمون 9–10" className="lg:col-span-2">
+              <Card title={isAr ? 'توزيع ولاء العملاء' : 'Customer loyalty distribution'} hint={isAr ? 'منتقدون 0–6 · محايدون 7–8 · داعمون 9–10' : 'Detractors 0–6 · Passives 7–8 · Promoters 9–10'} className="lg:col-span-2">
                 <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
                   <div className="bg-red-500" style={{ width: `${pct(D.nps.det, D.nps.n)}%` }} />
                   <div className="bg-amber-400" style={{ width: `${pct(D.nps.pas, D.nps.n)}%` }} />
                   <div className="bg-green-500" style={{ width: `${pct(D.nps.pro, D.nps.n)}%` }} />
                 </div>
                 <div className="grid grid-cols-3 mt-5 text-center gap-2">
-                  {[['منتقدون', D.nps.det, 'text-red-600'], ['محايدون', D.nps.pas, 'text-amber-600'], ['داعمون', D.nps.pro, 'text-green-700']].map(([l, n, c]) => (
+                  {[[isAr ? 'منتقدون' : 'Detractors', D.nps.det, 'text-red-600'], [isAr ? 'محايدون' : 'Passives', D.nps.pas, 'text-amber-600'], [isAr ? 'داعمون' : 'Promoters', D.nps.pro, 'text-green-700']].map(([l, n, c]) => (
                     <div key={l} className="bg-gray-50 rounded-xl py-3">
                       <p className={`text-2xl font-extrabold ${c}`}>{pct(n, D.nps.n)}%</p>
                       <p className="text-[11px] text-gray-500 mt-0.5">{l} ({n})</p>
@@ -446,27 +479,27 @@ export default function FeedbackReport() {
             )}
           </div>
 
-          <Card title="اتجاه الرضا عبر الزمن" hint="متوسط الرضا (الخط) مع عدد الاستجابات (الأعمدة)">
+          <Card title={isAr ? 'اتجاه الرضا عبر الزمن' : 'Satisfaction trend over time'} hint={isAr ? 'متوسط الرضا (الخط) مع عدد الاستجابات (الأعمدة)' : 'Average satisfaction (line) with number of responses (bars)'}>
             <TrendChart data={D.trend} bucket={D.bucket} />
           </Card>
 
           <div className="grid lg:grid-cols-2 gap-4">
-            {D.tripAspects.length > 0 && <Card title="أداء عناصر الرحلة" hint="متوسط التقييم من 5 · الأضعف أولاً"><ScoreRows items={D.tripAspects} /></Card>}
-            {D.stationAspects.length > 0 && <Card title="أداء عناصر المحطة" hint="متوسط التقييم من 5 · الأضعف أولاً"><ScoreRows items={D.stationAspects} /></Card>}
+            {D.tripAspects.length > 0 && <Card title={isAr ? 'أداء عناصر الرحلة' : 'Trip aspects performance'} hint={isAr ? 'متوسط التقييم من 5 · الأضعف أولاً' : 'Average rating out of 5 · weakest first'}><ScoreRows items={D.tripAspects} /></Card>}
+            {D.stationAspects.length > 0 && <Card title={isAr ? 'أداء عناصر المحطة' : 'Station aspects performance'} hint={isAr ? 'متوسط التقييم من 5 · الأضعف أولاً' : 'Average rating out of 5 · weakest first'}><ScoreRows items={D.stationAspects} /></Card>}
           </div>
 
           <div className="grid lg:grid-cols-2 gap-4">
-            <Card title="أولويات التحسين" hint="نسبة العملاء الذين اختاروا كل بند"><CountRows items={(D.improve ?? []).slice(0, 8)} total={D.total} /></Card>
-            {(D.reasons ?? []).length > 0 && <Card title="أسباب عدم الرضا" hint="من العملاء ذوي التقييم المنخفض"><CountRows items={D.reasons.slice(0, 8)} total={D.total} /></Card>}
+            <Card title={isAr ? 'أولويات التحسين' : 'Improvement priorities'} hint={isAr ? 'نسبة العملاء الذين اختاروا كل بند' : 'Share of customers who selected each item'}><CountRows items={(D.improve ?? []).slice(0, 8)} total={D.total} /></Card>
+            {(D.reasons ?? []).length > 0 && <Card title={isAr ? 'أسباب عدم الرضا' : 'Reasons for dissatisfaction'} hint={isAr ? 'من العملاء ذوي التقييم المنخفض' : 'From customers with a low rating'}><CountRows items={D.reasons.slice(0, 8)} total={D.total} /></Card>}
           </div>
         </>
       )}
 
       {!loading && D && D.total > 0 && tab === 'stations' && (
-        <Card title="أداء المحطات" hint="الرحلات تُنسب إلى محطة الركوب">
+        <Card title={isAr ? 'أداء المحطات' : 'Station performance'} hint={isAr ? 'الرحلات تُنسب إلى محطة الركوب' : 'Trips are attributed to the boarding station'}>
           <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span className="text-xs text-gray-500">الترتيب:</span>
-            {[['n', 'الأكثر استجابات'], ['low', 'الأقل رضا'], ['high', 'الأعلى رضا']].map(([v, l]) => (
+            <span className="text-xs text-gray-500">{isAr ? 'الترتيب:' : 'Sort by:'}</span>
+            {[['n', isAr ? 'الأكثر استجابات' : 'Most responses'], ['low', isAr ? 'الأقل رضا' : 'Lowest satisfaction'], ['high', isAr ? 'الأعلى رضا' : 'Highest satisfaction']].map(([v, l]) => (
               <button key={v} type="button" onClick={() => setSortBy(v)}
                 className={`px-3 py-1 rounded-full text-xs font-semibold border ${sortBy === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-gray-600 border-gray-200'}`}>{l}</button>
             ))}
@@ -474,17 +507,17 @@ export default function FeedbackReport() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
-                <th className="pb-2.5 text-right font-medium">المحطة</th><th className="pb-2.5 text-center font-medium">الاستجابات</th>
-                <th className="pb-2.5 text-center font-medium">متوسط الرضا</th><th className="pb-2.5 text-center font-medium">المستوى</th>
-                <th className="pb-2.5 text-center font-medium">NPS</th><th className="pb-2.5 text-center font-medium">تقييمات منخفضة</th>
+                <th className="pb-2.5 text-start font-medium">{isAr ? 'المحطة' : 'Station'}</th><th className="pb-2.5 text-center font-medium">{isAr ? 'الاستجابات' : 'Responses'}</th>
+                <th className="pb-2.5 text-center font-medium">{isAr ? 'متوسط الرضا' : 'Avg. satisfaction'}</th><th className="pb-2.5 text-center font-medium">{isAr ? 'المستوى' : 'Level'}</th>
+                <th className="pb-2.5 text-center font-medium">NPS</th><th className="pb-2.5 text-center font-medium">{isAr ? 'تقييمات منخفضة' : 'Low ratings'}</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {sortedStations.map(s => (
                   <tr key={s.id}>
-                    <td className="py-3 text-gray-900 font-medium" dir="auto">{s.name}</td>
+                    <td className="py-3 text-gray-900 font-medium" dir="auto">{repName(s)}</td>
                     <td className="py-3 text-center text-gray-500">{s.n}</td>
                     <td className="py-3 text-center"><ScorePill v={s.avg} /></td>
-                    <td className={`py-3 text-center text-xs font-semibold ${tone(s.avg)}`}>{scoreLevel(s.avg)}</td>
+                    <td className={`py-3 text-center text-xs font-semibold ${tone(s.avg)}`}>{scoreLevel(s.avg, isAr)}</td>
                     <td dir="ltr" className={`py-3 text-center font-bold ${npsTone(s.nps)}`}>{s.nps ?? '—'}</td>
                     <td className={`py-3 text-center text-xs font-semibold ${s.low >= 30 ? 'text-red-600' : 'text-gray-500'}`}>{s.low}%</td>
                   </tr>
@@ -497,23 +530,23 @@ export default function FeedbackReport() {
 
       {!loading && D && D.total > 0 && tab === 'audience' && (
         <div className="grid md:grid-cols-2 gap-4">
-          <CutTable title="حسب الفئة العمرية" items={D.age ?? []} />
-          <CutTable title="حسب نوع المسافر" items={D.traveler ?? []} />
-          <CutTable title="حسب غرض الرحلة" items={D.purpose ?? []} />
-          <CutTable title="حسب تكرار السفر" items={D.freq ?? []} />
+          <CutTable title={isAr ? 'حسب الفئة العمرية' : 'By age group'} items={D.age ?? []} />
+          <CutTable title={isAr ? 'حسب نوع المسافر' : 'By traveler type'} items={D.traveler ?? []} />
+          <CutTable title={isAr ? 'حسب غرض الرحلة' : 'By trip purpose'} items={D.purpose ?? []} />
+          <CutTable title={isAr ? 'حسب تكرار السفر' : 'By travel frequency'} items={D.freq ?? []} />
         </div>
       )}
 
       {!loading && tab === 'log' && (
-        <Card title="سجل الاستجابات" hint="وقت فتح الاستبيان ووقت إرساله ومدة التعبئة (بتوقيت الرياض) — آخر 200 استجابة">
-          {!logRows.length ? <p className="text-sm text-gray-400 py-6 text-center">لا توجد استجابات ضمن الفترة</p> : (
+        <Card title={isAr ? 'سجل الاستجابات' : 'Response log'} hint={isAr ? 'وقت فتح الاستبيان ووقت إرساله ومدة التعبئة (بتوقيت الرياض) — آخر 200 استجابة' : 'Survey open time, submit time and completion duration (Riyadh time) — last 200 responses'}>
+          {!logRows.length ? <p className="text-sm text-gray-400 py-6 text-center">{isAr ? 'لا توجد استجابات ضمن الفترة' : 'No responses within the period'}</p> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-xs text-gray-400 border-b border-gray-100">
-                  <th className="pb-2.5 text-right font-medium">التاريخ</th><th className="pb-2.5 text-center font-medium">وقت الفتح</th>
-                  <th className="pb-2.5 text-center font-medium">وقت الإرسال</th><th className="pb-2.5 text-center font-medium">المدة</th>
-                  <th className="pb-2.5 text-right font-medium">النوع / المحطة</th><th className="pb-2.5 text-center font-medium">NPS</th>
-                  <th className="pb-2.5 text-center font-medium">التقييم</th><th className="pb-2.5 text-center font-medium">الجهاز</th>
+                  <th className="pb-2.5 text-start font-medium">{isAr ? 'التاريخ' : 'Date'}</th><th className="pb-2.5 text-center font-medium">{isAr ? 'وقت الفتح' : 'Opened'}</th>
+                  <th className="pb-2.5 text-center font-medium">{isAr ? 'وقت الإرسال' : 'Submitted'}</th><th className="pb-2.5 text-center font-medium">{isAr ? 'المدة' : 'Duration'}</th>
+                  <th className="pb-2.5 text-start font-medium">{isAr ? 'النوع / المحطة' : 'Type / Station'}</th><th className="pb-2.5 text-center font-medium">NPS</th>
+                  <th className="pb-2.5 text-center font-medium">{isAr ? 'التقييم' : 'Rating'}</th><th className="pb-2.5 text-center font-medium">{isAr ? 'الجهاز' : 'Device'}</th>
                 </tr></thead>
                 <tbody className="divide-y divide-gray-50">
                   {logRows.map(r => {
@@ -524,10 +557,10 @@ export default function FeedbackReport() {
                         <td className="py-2.5 text-gray-600 whitespace-nowrap">{new Date(r.created_at).toLocaleDateString('en-GB', { timeZone: 'Asia/Riyadh' })}</td>
                         <td className="py-2.5 text-center font-mono text-xs text-gray-500" dir="ltr">{hm(r.opened_at)}</td>
                         <td className="py-2.5 text-center font-mono text-xs text-gray-800" dir="ltr">{hm(r.created_at)}</td>
-                        <td className="py-2.5 text-center text-xs text-gray-500">{secs == null ? '—' : secs >= 60 ? `${Math.floor(secs / 60)}د ${secs % 60}ث` : `${secs}ث`}</td>
+                        <td className="py-2.5 text-center text-xs text-gray-500">{secs == null ? '—' : secs >= 60 ? (isAr ? `${Math.floor(secs / 60)}د ${secs % 60}ث` : `${Math.floor(secs / 60)}m ${secs % 60}s`) : (isAr ? `${secs}ث` : `${secs}s`)}</td>
                         <td className="py-2.5 text-gray-800" dir="auto">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold me-1.5 ${r.kind === 'trip' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{r.kind === 'trip' ? 'رحلة' : 'محطة'}</span>
-                          {stName(focusId(r))}{r.kind === 'trip' && r.to_station_id ? ` ← ${stName(r.to_station_id)}` : ''}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold me-1.5 ${r.kind === 'trip' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{r.kind === 'trip' ? (isAr ? 'رحلة' : 'Trip') : (isAr ? 'محطة' : 'Station')}</span>
+                          {stName(focusId(r))}{r.kind === 'trip' && r.to_station_id ? ` ${isAr ? '←' : '→'} ${stName(r.to_station_id)}` : ''}
                         </td>
                         <td dir="ltr" className={`py-2.5 text-center font-bold ${npsTone(r.nps == null ? null : (r.nps >= 9 ? 100 : r.nps >= 7 ? 0 : -100))}`}>{r.nps ?? '—'}</td>
                         <td className="py-2.5 text-center"><ScorePill v={avgOfRow(r)} /></td>
@@ -543,19 +576,19 @@ export default function FeedbackReport() {
       )}
 
       {!loading && tab === 'voice' && (
-        <Card title="صوت العميل" hint="ملاحظات العملاء وطلبات التواصل — الأحدث أولاً">
-          {!voice.length ? <p className="text-sm text-gray-400 py-6 text-center">لا توجد ملاحظات أو طلبات تواصل ضمن الفترة</p> : (
+        <Card title={isAr ? 'صوت العميل' : 'Voice of customer'} hint={isAr ? 'ملاحظات العملاء وطلبات التواصل — الأحدث أولاً' : 'Customer comments and contact requests — newest first'}>
+          {!voice.length ? <p className="text-sm text-gray-400 py-6 text-center">{isAr ? 'لا توجد ملاحظات أو طلبات تواصل ضمن الفترة' : 'No comments or contact requests within the period'}</p> : (
             <div className="divide-y divide-gray-50">
               {voice.map(r => (
                 <div key={r.id} className="py-3.5">
                   <div className="flex items-center gap-2 text-xs text-gray-400 mb-1.5 flex-wrap">
-                    <span className={`px-2 py-0.5 rounded-full font-semibold ${r.kind === 'trip' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{r.kind === 'trip' ? 'رحلة' : 'محطة'}</span>
+                    <span className={`px-2 py-0.5 rounded-full font-semibold ${r.kind === 'trip' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'}`}>{r.kind === 'trip' ? (isAr ? 'رحلة' : 'Trip') : (isAr ? 'محطة' : 'Station')}</span>
                     <span className="text-gray-600" dir="auto">{stName(focusId(r))}</span>
                     <ScorePill v={avgOfRow(r)} />
-                    <span>{new Date(r.created_at).toLocaleDateString('ar-SA-u-ca-gregory')}</span>
-                    {r.contact_phone && <span dir="ltr" className="font-mono text-gray-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded">طلب تواصل: {r.contact_phone}</span>}
+                    <span>{new Date(r.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory' : 'en-GB')}</span>
+                    {r.contact_phone && <span dir="ltr" className="font-mono text-gray-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded">{isAr ? 'طلب تواصل:' : 'Contact request:'} {r.contact_phone}</span>}
                   </div>
-                  {r.comment ? <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{r.comment}</p> : <p className="text-xs text-gray-400">بدون ملاحظة نصية</p>}
+                  {r.comment ? <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{r.comment}</p> : <p className="text-xs text-gray-400">{isAr ? 'بدون ملاحظة نصية' : 'No written comment'}</p>}
                 </div>
               ))}
             </div>
@@ -565,36 +598,38 @@ export default function FeedbackReport() {
 
       {tab === 'qr' && (
         <div className="grid lg:grid-cols-5 gap-4">
-          <Card title="ملصق الاستبيان للطباعة" hint="اختر المقاس ثم حمّل أو اطبع — الملصق ثلاثي اللغة (عربي · English · اردو)" className="lg:col-span-3">
+          <Card title={isAr ? 'ملصق الاستبيان للطباعة' : 'Printable survey poster'} hint={isAr ? 'اختر المقاس ثم حمّل أو اطبع — الملصق ثلاثي اللغة (عربي · English · اردو)' : 'Choose a size, then download or print — the poster is trilingual (Arabic · English · Urdu)'} className="lg:col-span-3">
             <div className="flex flex-wrap items-end gap-3 mb-4">
               <div>
-                <p className="text-[11px] font-semibold text-gray-500 mb-1.5">المقاس</p>
+                <p className="text-[11px] font-semibold text-gray-500 mb-1.5">{isAr ? 'المقاس' : 'Size'}</p>
                 <select value={sizeId} onChange={e => setSizeId(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-64">
-                  {POSTER_SIZES.map(z => <option key={z.id} value={z.id}>{z.label}</option>)}
+                  {POSTER_SIZES.map(z => <option key={z.id} value={z.id}>{isAr ? z.label : (POSTER_LABELS_EN[z.id] || z.label)}</option>)}
                 </select>
               </div>
               <button type="button" disabled={!posterSvg} onClick={() => downloadPosterPng(posterSvg, size.w, size.h, `nwbus-qr-${size.id}.png`)}
-                className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white disabled:opacity-40">تحميل PNG (300 DPI)</button>
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white disabled:opacity-40">{isAr ? 'تحميل PNG (300 DPI)' : 'Download PNG (300 DPI)'}</button>
               <button type="button" disabled={!posterSvg} onClick={() => printPoster(posterSvg, size.w, size.h)}
-                className="px-4 py-2 rounded-lg text-xs font-bold border border-gray-200 text-gray-800 bg-white disabled:opacity-40">طباعة / حفظ PDF</button>
+                className="px-4 py-2 rounded-lg text-xs font-bold border border-gray-200 text-gray-800 bg-white disabled:opacity-40">{isAr ? 'طباعة / حفظ PDF' : 'Print / Save PDF'}</button>
             </div>
             <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
-              عند الطباعة اختر الحجم الفعلي (100%) وبدون هوامش. لو بتطبع بمطبعة أرسل لهم ملف PNG بالمقاس نفسه. الرمز بمستوى تصحيح أخطاء عالٍ (H) فيبقى مقروءاً حتى لو اتّسخ الملصق أو انخدش جزء منه.
+              {isAr
+                ? 'عند الطباعة اختر الحجم الفعلي (100%) وبدون هوامش. لو بتطبع بمطبعة أرسل لهم ملف PNG بالمقاس نفسه. الرمز بمستوى تصحيح أخطاء عالٍ (H) فيبقى مقروءاً حتى لو اتّسخ الملصق أو انخدش جزء منه.'
+                : 'When printing, choose actual size (100%) with no margins. If using a print shop, send them the PNG file at the same size. The code uses a high error-correction level (H), so it stays scannable even if the poster gets dirty or partly scratched.'}
             </p>
             <div className="bg-gray-50 rounded-2xl p-5 flex justify-center">
               {posterSvg
-                ? <img alt="معاينة الملصق" className="shadow-lg bg-white" style={{ maxHeight: 460, maxWidth: '100%', aspectRatio: `${size.w} / ${size.h}` }}
+                ? <img alt={isAr ? 'معاينة الملصق' : 'Poster preview'} className="shadow-lg bg-white" style={{ maxHeight: 460, maxWidth: '100%', aspectRatio: `${size.w} / ${size.h}` }}
                     src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(posterSvg)}`} />
-                : <p className="text-sm text-gray-400 py-10">جاري التجهيز…</p>}
+                : <p className="text-sm text-gray-400 py-10">{isAr ? 'جاري التجهيز…' : 'Preparing…'}</p>}
             </div>
           </Card>
-          <Card title="الرمز والرابط" hint="يفتح الاستبيان بلغة جوال العميل" className="lg:col-span-2 self-start">
+          <Card title={isAr ? 'الرمز والرابط' : 'Code and link'} hint={isAr ? 'يفتح الاستبيان بلغة جوال العميل' : "Opens the survey in the customer's phone language"} className="lg:col-span-2 self-start">
             {qrUrl && <img src={qrUrl} alt="QR" className="w-44 h-44 border border-gray-100 rounded-xl mx-auto" />}
             <p className="text-xs font-mono text-gray-600 break-all bg-gray-50 rounded-lg p-3 mt-4" dir="ltr">{link}</p>
             <div className="flex gap-2 mt-4 flex-wrap">
-              <a href={qrUrl} download="nwbus-feedback-qr.png" className="text-xs bg-slate-900 text-white rounded-lg px-4 py-2 font-bold">الرمز فقط PNG</a>
-              <button type="button" onClick={() => navigator.clipboard?.writeText(link)} className="text-xs border border-gray-200 rounded-lg px-4 py-2 text-gray-700 font-semibold">نسخ الرابط</button>
-              <a href={link} target="_blank" rel="noreferrer" className="text-xs border border-gray-200 rounded-lg px-4 py-2 text-gray-700 font-semibold">معاينة</a>
+              <a href={qrUrl} download="nwbus-feedback-qr.png" className="text-xs bg-slate-900 text-white rounded-lg px-4 py-2 font-bold">{isAr ? 'الرمز فقط PNG' : 'Code only PNG'}</a>
+              <button type="button" onClick={() => navigator.clipboard?.writeText(link)} className="text-xs border border-gray-200 rounded-lg px-4 py-2 text-gray-700 font-semibold">{isAr ? 'نسخ الرابط' : 'Copy link'}</button>
+              <a href={link} target="_blank" rel="noreferrer" className="text-xs border border-gray-200 rounded-lg px-4 py-2 text-gray-700 font-semibold">{isAr ? 'معاينة' : 'Preview'}</a>
             </div>
           </Card>
         </div>
