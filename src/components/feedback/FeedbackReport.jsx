@@ -355,7 +355,7 @@ export default function FeedbackReport() {
     await exportSurveyExcel({
       isAr, rows, D, prev, summary, from, to, scopeText,
       fns: { stName, focusId, lbl, lblO, lblA },
-      filename: isAr ? `رضا-العملاء-${from}_${to}` : `customer-satisfaction-${from}_${to}`,
+      filename: isAr ? `استبيان-العملاء-${from}_${to}` : `customer-survey-${from}_${to}`,
     })
   }
 
@@ -453,7 +453,7 @@ export default function FeedbackReport() {
       {!loading && D && D.total > 0 && tab === 'overview' && (
         <>
           <div>
-            <h2 className="text-lg font-extrabold text-gray-900">{isAr ? 'لوحة مؤشرات رضا العملاء' : 'Customer Satisfaction Dashboard'}</h2>
+            <h2 className="text-lg font-extrabold text-gray-900">{isAr ? 'لوحة مؤشرات استبيان العملاء' : 'Customer Survey Dashboard'}</h2>
             <p className="text-xs text-gray-500 mt-1">{dayLabel(from)} → {dayLabel(to)} · {scopeText}</p>
           </div>
 

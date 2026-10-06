@@ -1,4 +1,4 @@
-// ملف Excel احترافي لتقرير رضا العملاء: ملخص تنفيذي بصيغ حيّة + الاستجابات التفصيلية + صوت العميل
+// ملف Excel احترافي لتقرير استبيان العملاء: ملخص تنفيذي بصيغ حيّة + الاستجابات التفصيلية + صوت العميل
 import { createBook, riyadh, colLetter, XL } from './excelExport'
 import { TRIP_ASPECTS, STATION_ASPECTS } from './feedbackConfig'
 
@@ -60,7 +60,7 @@ export async function exportSurveyExcel({ isAr, rows, D, prev, summary, from, to
   const sheetV = book.sheet(VOICE, [14, 9, 24, 11, 70, 16], { tab: 'FF8B5CF6' })
 
   // ---- الاستجابات ----
-  sheetR.header({ title: T('الاستجابات التفصيلية — رضا العملاء', 'Detailed responses — Customer satisfaction'), subtitle })
+  sheetR.header({ title: T('الاستجابات التفصيلية — استبيان العملاء', 'Detailed responses — Customer survey'), subtitle })
   const avgFml = (m, ri) => ({ formula: `IF(COUNT(${L(C0)}${ri}:${L(C0 + A - 1)}${ri})=0,"",AVERAGE(${L(C0)}${ri}:${L(C0 + A - 1)}${ri}))`, result: m.avg ?? '' })
   const minFml = (m, ri) => ({ formula: `IF(COUNT(${L(C0)}${ri}:${L(C0 + A - 1)}${ri})=0,"",MIN(${L(C0)}${ri}:${L(C0 + A - 1)}${ri}))`, result: m.min ?? '' })
   const rowsR = M.map((m, i) => {
@@ -100,7 +100,7 @@ export async function exportSurveyExcel({ isAr, rows, D, prev, summary, from, to
   sheetV.finish({ landscape: true })
 
   // ---- الملخص ----
-  S.header({ title: T('تقرير رضا العملاء', 'Customer Satisfaction Report'), subtitle })
+  S.header({ title: T('تقرير استبيان العملاء', 'Customer Survey Report'), subtitle })
   const total = M.length
   const npsV = D?.score ?? null
   const pro = M.filter(m => m.nps != null && m.nps >= 9).length, det = M.filter(m => m.nps != null && m.nps <= 6).length

@@ -1,4 +1,4 @@
-// تقرير رضا العملاء للطباعة / الحفظ PDF — A4 عمودي بهوية الشركة
+// تقرير استبيان العملاء للطباعة / الحفظ PDF — A4 عمودي بهوية الشركة
 import { NWB_LOGO_SVG } from './logo'
 
 const NAVY = '#264673', ORANGE = '#EE712D'
@@ -61,8 +61,8 @@ export function buildSurveyReportHtml(o) {
   const period = `${fmtD(from)} – ${fmtD(to)}`
   const prevScore = prev?.nps?.n ? Math.round(((prev.nps.pro - prev.nps.det) / prev.nps.n) * 100) : null
   const prevAvg = prev?.avg == null ? null : Number(prev.avg), prevSat = prev?.sat == null ? null : Number(prev.sat)
-  const title = T('تقرير رضا العملاء', 'Customer Satisfaction Report')
-  const docTitle = `${isAr ? 'رضا-العملاء' : 'customer-satisfaction'}-${from}_${to}`
+  const title = T('تقرير استبيان العملاء', 'Customer Survey Report')
+  const docTitle = `${isAr ? 'استبيان-العملاء' : 'customer-survey'}-${from}_${to}`
 
   const kpi = (label, value, c, foot, sub) => `<div class="kpi" style="border-top-color:${c}"><p class="kl">${label}</p><p class="kv" style="color:${c}">${value}</p><p class="ks">${sub || '&nbsp;'}</p><p class="kf">${foot || '&nbsp;'}</p></div>`
   const sorted = stations.slice().sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1))
