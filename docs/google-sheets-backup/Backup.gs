@@ -132,17 +132,21 @@ function runBackup(recipients) {
   try { stations = sbGet('stations', 'id,name_ar,name_en,is_agent'); }
   catch (e) { stations = sbGet('stations', 'id,name_ar,name_en'); }   // العمود is_agent غير مثبّت بعد
   const records        = sbGet('trip_records', '*', 'order=record_date.desc');
-  const transitRecords = sbGet('trip_transit_records', '*', 'order=created_at.desc');
 
   const stationName = {};
   stations.forEach(function (s) { stationName[s.id] = (s.name_ar || s.name_en || ('محطة ' + s.id)).toString() + (s.is_agent ? ' (وكيل)' : ''); });
 
-  const A = analyze(records, stations, stationName);
+  // المغادرة فقط: محطة المنشأ = مغادرة، محطة الوجهة = وصول (نستبعده)، محطة العبور حسب is_arrival
+  const schedule = {};
+  sbGet('trip_schedule', 'id,from_station_id,to_station_id').forEach(function (t) { schedule[t.id] = t; });
+  const departures = records.filter(function (r) { return isDeparture(r, schedule); });
+
+  const A = analyze(departures, stations, stationName);
   const logo = fetchLogo();
 
-  // تجميع السجلات حسب المحطة
+  // تجميع سجلات المغادرة حسب المحطة
   const byStation = {};
-  records.forEach(function (r) { (byStation[r.station_id] = byStation[r.station_id] || []).push(r); });
+  departures.forEach(function (r) { (byStation[r.station_id] = byStation[r.station_id] || []).push(r); });
 
   const order = [];
   const sheetsWritten = [];
@@ -153,7 +157,7 @@ function runBackup(recipients) {
   order.push('📊 لوحة القيادة');
   buildTrendSheet(ss, A, logo);
   order.push('📈 الاتجاهات');
-  const stationReport = buildStationDailyReport(stations, records, transitRecords, stationName);
+  const stationReport = buildStationDailyReport(stations, departures, stationName);
   writeStationReportSheet(ss, stationReport, logo);
   order.push('📋 التقرير اليومي');
 
@@ -185,9 +189,18 @@ function runBackup(recipients) {
   ss.setActiveSheet(ss.getSheetByName('📊 لوحة القيادة'));
 
   SpreadsheetApp.flush();
-  sendBackupEmail(ss, recipients, A, stationReport, stations.length, records.length);
+  sendBackupEmail(ss, recipients, A, stationReport, stations.length, departures.length);
 
   return { stations: stations.length, records: records.length, rows: totalRaw, sheets: sheetsWritten.length };
+}
+
+/** سجل مغادرة؟ (نفس منطق صفحة التقارير بالتطبيق) */
+function isDeparture(r, schedule) {
+  const t = schedule[r.trip_schedule_id];
+  if (t && t.from_station_id && t.from_station_id === r.station_id) return true;    // محطة المنشأ
+  if (t && t.to_station_id && t.to_station_id === r.station_id) return false;       // محطة الوجهة = وصول
+  if (r.is_arrival !== null && r.is_arrival !== undefined) return r.is_arrival === false;
+  return !(r.actual_arrival && !r.actual_departure);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -726,49 +739,44 @@ function updateStatusSheet(ss, stationCount, recordCount, totalRaw, recipients) 
 /* ════════════════════════════════════════════════════════════
  *  التقرير اليومي لكل محطة (أمس)
  * ════════════════════════════════════════════════════════════ */
-function buildStationDailyReport(stations, records, transitRecords, stationName) {
+function buildStationDailyReport(stations, departures, stationName) {
   const yday = ymd(1);
-  const dep = {}, arr = {};
-  records.forEach(function (r) {
+  const dep = {};
+  departures.forEach(function (r) {
     if (String(r.record_date).slice(0, 10) !== yday) return;
     const s = dep[r.station_id] = dep[r.station_id] || newStat();
     addStat(s, r);
   });
-  transitRecords.forEach(function (r) {
-    if (String(r.created_at || '').slice(0, 10) !== yday) return;
-    const a = arr[r.station_id] = arr[r.station_id] || { trips: 0, pax: 0 };
-    a.trips++; a.pax += Number(r.passenger_count) || 0;
-  });
   const rows = stations.map(function (st) {
-    const d = dep[st.id] || newStat(), a = arr[st.id] || { trips: 0, pax: 0 };
-    return { name: stationName[st.id], depTrips: d.trips, depPax: d.pax, arrTrips: a.trips, arrPax: a.pax, missed: d.missed, punct: punct(d), late: d.late };
-  }).filter(function (r) { return r.depTrips > 0 || r.arrTrips > 0; })
-    .sort(function (a, b) { return (b.depPax + b.arrPax) - (a.depPax + a.arrPax); });
+    const d = dep[st.id] || newStat();
+    return { name: stationName[st.id], depTrips: d.trips, depPax: d.pax, missed: d.missed, punct: punct(d), late: d.late, extra: d.extra };
+  }).filter(function (r) { return r.depTrips > 0; })
+    .sort(function (a, b) { return b.depPax - a.depPax; });
   return { yday: yday, rows: rows };
 }
 
 function writeStationReportSheet(ss, report, logo) {
   const sh = prepSheet(ss, '📋 التقرير اليومي');
-  const W = 8;
-  [170, 100, 100, 100, 100, 100, 110, 110].forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
-  headerBand(sh, W, 'التقرير اليومي لكل محطة', 'يوم ' + report.yday + ' · المغادرة والوصول والتخلف والانضباط', logo);
-  tableHeader(sh, 5, [[1, 1, 'المحطة'], [2, 2, 'رحلات المغادرة'], [3, 3, 'ركاب المغادرة'], [4, 4, 'رحلات الوصول'], [5, 5, 'ركاب الوصول'], [6, 6, 'المتخلفون'], [7, 7, 'الانضباط'], [8, 8, 'رحلات متأخرة']]);
-  const spec = [[1, 1, '@', 'right', true, C.navy], [2, 2, N0], [3, 3, N0, 'center', true], [4, 4, N0], [5, 5, N0, 'center', true], [6, 6, N0], [7, 7, '0%'], [8, 8, N0]];
+  const W = 7;
+  [180, 110, 110, 110, 110, 110, 110].forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
+  headerBand(sh, W, 'التقرير اليومي لكل محطة — المغادرة', 'يوم ' + report.yday + ' · رحلات المغادرة والركاب والتخلف والانضباط (الوصول مستبعد)', logo);
+  tableHeader(sh, 5, [[1, 1, 'المحطة'], [2, 2, 'رحلات المغادرة'], [3, 3, 'ركاب المغادرة'], [4, 4, 'المتخلفون'], [5, 5, 'الانضباط'], [6, 6, 'رحلات متأخرة'], [7, 7, 'إضافية']]);
+  const spec = [[1, 1, '@', 'right', true, C.navy], [2, 2, N0], [3, 3, N0, 'center', true], [4, 4, N0], [5, 5, '0%'], [6, 6, N0], [7, 7, N0]];
   let row = 6;
   if (!report.rows.length) {
     merged(sh, row, 1, W, 'لا توجد بيانات لهذا اليوم', { align: 'center', color: C.grey });
   } else {
     const first = row;
     report.rows.forEach(function (r, i) {
-      tableRowCells(sh, row++, spec, [r.name, r.depTrips, r.depPax, r.arrTrips, r.arrPax, r.missed, r.punct == null ? '—' : r.punct, r.late], i % 2 === 1);
+      tableRowCells(sh, row++, spec, [r.name, r.depTrips, r.depPax, r.missed, r.punct == null ? '—' : r.punct, r.late, r.extra], i % 2 === 1);
     });
     const last = row - 1;
     tableRowCells(sh, row, spec.map(function (s) { return [s[0], s[1], s[2], s[3], true, C.navy]; }), ['الإجمالي',
-      '=SUM(B' + first + ':B' + last + ')', '=SUM(C' + first + ':C' + last + ')', '=SUM(D' + first + ':D' + last + ')', '=SUM(E' + first + ':E' + last + ')',
-      '=SUM(F' + first + ':F' + last + ')', '', '=SUM(H' + first + ':H' + last + ')'], false);
+      '=SUM(B' + first + ':B' + last + ')', '=SUM(C' + first + ':C' + last + ')', '=SUM(D' + first + ':D' + last + ')', '',
+      '=SUM(F' + first + ':F' + last + ')', '=SUM(G' + first + ':G' + last + ')'], false);
     sh.getRange(row, 1, 1, W).setBackground(C.soft).setBorder(true, null, null, null, null, null, C.navy, SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
-    gradient(sh, sh.getRange(first, 7, report.rows.length, 1), '#f4c7c3', '#fff2cc', '#b7e1cd', 0.5, 0.8, 1);
-    addRule(sh, SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(0).setFontColor(C.bad).setBold(true).setRanges([sh.getRange(first, 6, report.rows.length, 1)]).build());
+    gradient(sh, sh.getRange(first, 5, report.rows.length, 1), '#f4c7c3', '#fff2cc', '#b7e1cd', 0.5, 0.8, 1);
+    addRule(sh, SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(0).setFontColor(C.bad).setBold(true).setRanges([sh.getRange(first, 4, report.rows.length, 1)]).build());
   }
   sh.setFrozenRows(5);
 }
@@ -818,25 +826,25 @@ function buildEmailHtml(A, report, now, stationCount, recordCount) {
   report.rows.forEach(function (r, i) {
     const pc = r.punct == null ? '#999' : r.punct >= 0.8 ? C.ok : r.punct >= 0.6 ? C.warn : C.bad;
     rowsHtml += '<tr style="background:' + (i % 2 ? '#f8fafc' : '#fff') + '"><td style="padding:7px 10px;font-weight:bold;color:' + C.navy + ';border:1px solid #dde3ee">' + r.name + '</td>' +
-      td(r.depTrips, true) + td(r.depPax) + td(r.arrTrips, true) + td(r.arrPax) + td(r.missed, false, r.missed > 0 ? C.bad : C.ok) +
+      td(r.depTrips, true) + td(r.depPax) + td(r.missed, false, r.missed > 0 ? C.bad : C.ok) +
       td(r.punct == null ? '—' : Math.round(r.punct * 100) + '%', true, pc) + td(r.late > 0 ? r.late : '✓', false, r.late > 0 ? C.bad : C.ok) + '</tr>';
   });
-  if (!rowsHtml) rowsHtml = '<tr><td colspan="8" style="text-align:center;padding:18px;color:#888">لا توجد بيانات لأمس</td></tr>';
+  if (!rowsHtml) rowsHtml = '<tr><td colspan="6" style="text-align:center;padding:18px;color:#888">لا توجد بيانات لأمس</td></tr>';
   const insights = A.insights.map(function (x) { return '<li style="margin:6px 0;line-height:1.7">' + x + '</li>'; }).join('');
 
   return '<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:820px;margin:0 auto;color:#1d1d1c">' +
     '<div style="background:' + C.navy + ';padding:18px 20px;border-radius:8px 8px 0 0"><div style="color:#fff;font-size:20px;font-weight:bold">NORTH WEST BUS</div>' +
-    '<div style="color:#f5b48d;font-size:13px;margin-top:4px">التقرير التحليلي التشغيلي — حتى ' + report.yday + '</div></div>' +
+    '<div style="color:#f5b48d;font-size:13px;margin-top:4px">التقرير التحليلي التشغيلي (المغادرة) — حتى ' + report.yday + '</div></div>' +
     '<div style="height:4px;background:' + C.orange + '"></div>' +
     '<table style="width:100%;border-collapse:collapse;margin-top:12px"><tr>' +
-    card('إجمالي الركاب (30 يوماً)', fmtN(t.pax), dp.t, C.navy) +
-    card('عدد الرحلات', fmtN(t.trips), dt.t, C.navy) +
+    card('ركاب المغادرة (30 يوماً)', fmtN(t.pax), dp.t, C.navy) +
+    card('رحلات المغادرة', fmtN(t.trips), dt.t, C.navy) +
     card('الانضباط', pu == null ? '—' : Math.round(pu * 100) + '%', 'في المغادرة', pu == null ? C.grey : pu >= 0.85 ? C.ok : pu >= 0.7 ? C.warn : C.bad) +
     card('المتخلفون', fmtN(t.missed), (missedRate(t) * 100).toFixed(1) + '% من الركاب', t.missed > 0 ? C.bad : C.ok) +
     '</tr></table>' +
     '<h3 style="color:' + C.navy + ';margin:18px 0 6px;font-size:15px">أبرز الملاحظات</h3><ul style="padding-right:20px;margin:0;font-size:13px">' + insights + '</ul>' +
-    '<h3 style="color:' + C.navy + ';margin:18px 0 6px;font-size:15px">أداء المحطات أمس — ' + report.yday + '</h3>' +
-    '<table cellspacing="0" style="border-collapse:collapse;width:100%;direction:rtl"><thead><tr>' + th('المحطة') + th('رحلات المغادرة') + th('ركاب المغادرة') + th('رحلات الوصول') + th('ركاب الوصول') + th('المتخلفون') + th('الانضباط') + th('متأخرة') + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    '<h3 style="color:' + C.navy + ';margin:18px 0 6px;font-size:15px">أداء مغادرة المحطات أمس — ' + report.yday + '</h3>' +
+    '<table cellspacing="0" style="border-collapse:collapse;width:100%;direction:rtl"><thead><tr>' + th('المحطة') + th('رحلات المغادرة') + th('ركاب المغادرة') + th('المتخلفون') + th('الانضباط') + th('متأخرة') + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
     '<div style="margin-top:14px;padding:12px 14px;background:#f8f9fb;border-right:4px solid ' + C.orange + ';font-size:12px;color:#555;line-height:1.8">' +
     '📎 مرفق ملف Excel: لوحة القيادة التحليلية · الاتجاهات · التقرير اليومي · ورقة لكل محطة · نسخة كاملة من الجداول (' + stationCount + ' محطة · ' + fmtN(recordCount) + ' سجل ترحيل).<br>' +
     'أُنشئ تلقائياً ' + now + ' · يمكنك تغيير الإيميلات ووقت الإرسال من التطبيق ← الإعدادات.</div></div>';

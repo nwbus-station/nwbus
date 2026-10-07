@@ -84,8 +84,8 @@ export function analyze(records, stations, nameOf, from, to, isAr) {
   const t = A.total, p = A.prevTotal, out = []
   if (t.trips === 0) out.push(T('لا توجد سجلات ترحيل ضمن الفترة المحددة.', 'No trip records within the selected period.'))
   else {
-    let l = T(`خلال ${span} يوماً نُفّذت ${n0(t.trips)} رحلة نقلت ${n0(t.pax)} راكباً بمتوسط ${avgPax(t).toFixed(1)} راكب للرحلة.`,
-      `Over ${span} days, ${n0(t.trips)} trips carried ${n0(t.pax)} passengers (${avgPax(t).toFixed(1)} per trip).`)
+    let l = T(`خلال ${span} يوماً نُفّذت ${n0(t.trips)} رحلة مغادرة نقلت ${n0(t.pax)} راكباً بمتوسط ${avgPax(t).toFixed(1)} راكب للرحلة.`,
+      `Over ${span} days, ${n0(t.trips)} departures carried ${n0(t.pax)} passengers (${avgPax(t).toFixed(1)} per trip).`)
     const ch = pctChange(t.pax, p.pax)
     if (ch != null) l += T(` عدد الركاب ${ch >= 0 ? 'أعلى' : 'أقل'} بنسبة ${Math.abs(Math.round(ch * 100))}% من الفترة السابقة المماثلة.`,
       ` Passengers are ${Math.abs(Math.round(ch * 100))}% ${ch >= 0 ? 'higher' : 'lower'} than the previous equal period.`)
@@ -179,12 +179,21 @@ export async function buildOperationsReport({ supabase, isAr, from, to, kind = '
 
   onProgress?.(T('جلب سجلات الترحيل…', 'Loading trip records…'))
   const records = await fetchAll(supabase, () => supabase.from('trip_records')
-    .select('id, record_date, station_id, bus_number, passenger_count, missed_count, actual_departure, departure_accuracy, operational_status, is_extra_trip, notes, created_by_name')
+    .select('id, record_date, station_id, bus_number, passenger_count, missed_count, actual_departure, actual_arrival, is_arrival, departure_accuracy, operational_status, is_extra_trip, notes, created_by_name, trip:trip_schedule_id(from_station_id, to_station_id)')
     .gte('record_date', pFrom).lte('record_date', to).order('record_date', { ascending: false }).order('id'),
   n => onProgress?.(T(`جلب سجلات الترحيل… ${n0(n)}`, `Loading trip records… ${n0(n)}`)))
 
+  // المغادرة فقط: محطة المنشأ = مغادرة، محطة الوجهة = وصول (نستبعده)، محطة العبور حسب is_arrival — نفس منطق صفحة التقارير
+  const isDeparture = r => {
+    const tr = r.trip
+    if (tr?.from_station_id && tr.from_station_id === r.station_id) return true
+    if (tr?.to_station_id && tr.to_station_id === r.station_id) return false
+    if (r.is_arrival != null) return r.is_arrival === false
+    return !(r.actual_arrival != null && r.actual_departure == null)
+  }
+  const departures = records.filter(isDeparture)
   const allowed = new Set(stations.map(s => s.id))
-  const scoped = kind === 'all' ? records : records.filter(r => allowed.has(r.station_id))
+  const scoped = kind === 'all' ? departures : departures.filter(r => allowed.has(r.station_id))
   onProgress?.(T('تحليل البيانات…', 'Analyzing…'))
   const A = analyze(scoped, stations, nameOf, from, to, isAr)
   const stName = {}, stAgent = {}; stations.forEach(s => { stName[s.id] = nameOf(s); stAgent[s.id] = !!s.is_agent })
@@ -207,7 +216,7 @@ export async function buildOperationsReport({ supabase, isAr, from, to, kind = '
 
   // ═════════ لوحة القيادة ═════════
   const S = book.sheet(T('لوحة القيادة', 'Dashboard'), Array(12).fill(13), { tab: XL.orange })
-  S.header({ title: T('التقرير التشغيلي التحليلي', 'Operations Analytics Report'), subtitle })
+  S.header({ title: T('التقرير التشغيلي التحليلي — المغادرة', 'Operations Analytics Report — Departures'), subtitle: subtitle + T('   ·   المغادرة فقط (الوصول مستبعد)', '   ·   Departures only (arrivals excluded)') })
 
   // مؤشر الأداء العام
   const H = A.health
@@ -225,8 +234,8 @@ export async function buildOperationsReport({ supabase, isAr, from, to, kind = '
   const activeStations = A.rows.filter(r => r.s.trips > 0).length
   const busiest = A.days.reduce((b, d) => (A.byDay[d].pax > (A.byDay[b]?.pax ?? -1) ? d : b), A.days[0])
   S.kpis([
-    { label: T('إجمالي الركاب', 'Total passengers'), value: t.pax, fmt: '#,##0', foot: dTxt(t.pax, p.pax) },
-    { label: T('عدد الرحلات', 'Trips'), value: t.trips, fmt: '#,##0', foot: dTxt(t.trips, p.trips) },
+    { label: T('ركاب المغادرة', 'Departing passengers'), value: t.pax, fmt: '#,##0', foot: dTxt(t.pax, p.pax) },
+    { label: T('رحلات المغادرة', 'Departures'), value: t.trips, fmt: '#,##0', foot: dTxt(t.trips, p.trips) },
     { label: T('الانضباط في المغادرة', 'Departure punctuality'), value: pu ?? '—', fmt: '0%', color: pu == null ? XL.grey : pu >= 0.85 ? XL.green : pu >= 0.7 ? XL.amber : XL.red, foot: pu != null && pp != null ? (Math.round((pu - pp) * 100) === 0 ? T('بلا تغيّر', 'No change') : `${pu >= pp ? '▲' : '▼'} ${Math.abs(Math.round((pu - pp) * 100))} ${T('نقطة', 'pts')}`) : '' },
     { label: T('المتخلفون', 'Missed passengers'), value: t.missed, fmt: '#,##0', color: t.missed > 0 ? XL.red : XL.green, foot: `${(missedRate(t) * 100).toFixed(1)}% ${T('من الركاب', 'of passengers')}` },
     { label: T('متوسط الركاب للرحلة', 'Avg passengers / trip'), value: avgPax(t), fmt: '0.0', foot: dTxt(avgPax(t), avgPax(p)) },
@@ -318,7 +327,7 @@ export async function buildOperationsReport({ supabase, isAr, from, to, kind = '
     // خريطة حرارية: متوسط الركاب اليومي لكل محطة حسب يوم الأسبوع
     const stDow = {}
     A.rows.filter(r => r.s.trips > 0).forEach(r => { stDow[r.id] = Array.from({ length: 7 }, () => ({ pax: 0, days: new Set() })) })
-    records.forEach(rc => {
+    scoped.forEach(rc => {
       const d = String(rc.record_date).slice(0, 10)
       if (d < from || d > to || !stDow[rc.station_id]) return
       const x = stDow[rc.station_id][dowOf(d)]; x.pax += Number(rc.passenger_count) || 0; x.days.add(d)
@@ -358,13 +367,13 @@ export async function buildOperationsReport({ supabase, isAr, from, to, kind = '
   }
   S.section(T('جودة البيانات والمنهجية', 'Data quality & methodology'))
   S.bullets(isAr ? [
-    `التغطية: ${n0(scoped.filter(r => r.record_date >= from && r.record_date <= to).length)} سجل ترحيل في ${A.daysWithData.size} من ${span} يوماً · ${activeStations} محطة نشطة.`,
+    `الأرقام تخص المغادرة فقط — سجلات الوصول مستبعدة. التغطية: ${n0(scoped.filter(r => r.record_date >= from && r.record_date <= to).length)} سجل ترحيل في ${A.daysWithData.size} من ${span} يوماً · ${activeStations} محطة نشطة.`,
     'الانضباط % = الرحلات المبكرة أو في الموعد ÷ الرحلات التي سُجّلت لها دقة المغادرة. نسبة التخلف = المتخلفون ÷ (الركاب + المتخلفون).',
     'المقارنة تتم بفترة سابقة مماثلة في الطول تنتهي قبل بداية الفترة المحددة مباشرة.',
     'التقييم: ممتاز ≥ 85% انضباط · جيد ≥ 70% · متوسط ≥ 55% · يحتاج تدخلاً أقل من ذلك. ساعات الذروة تُستخرج من وقت المغادرة الفعلي.',
     'ورقة «السجلات» تحوي كل البيانات الخام للتصفية والتحليل الإضافي، وورقة لكل محطة بسجلاتها.',
   ] : [
-    `Coverage: ${n0(scoped.filter(r => r.record_date >= from && r.record_date <= to).length)} trip records over ${A.daysWithData.size} of ${span} days · ${activeStations} active stations.`,
+    `Figures cover departures only — arrival records are excluded. Coverage: ${n0(scoped.filter(r => r.record_date >= from && r.record_date <= to).length)} trip records over ${A.daysWithData.size} of ${span} days · ${activeStations} active stations.`,
     'Punctuality % = early or on-time trips ÷ trips with a recorded departure accuracy. Missed rate = missed ÷ (passengers + missed).',
     'Comparison uses an equal-length period ending right before the selected one.',
     'Rating: Excellent ≥ 85% punctuality · Good ≥ 70% · Fair ≥ 55% · otherwise Needs action. Peak hours come from the actual departure time.',
