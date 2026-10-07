@@ -210,8 +210,8 @@ export class Sheet {
   nextPri() { this._pri = (this._pri || 0) + 1; return this._pri }
 
   // تظليل شرطي: تدرّج ألوان (أحمر→أصفر→أخضر) أو أشرطة بيانات
-  scale(ref, { min = 1, mid = 3, max = 5, reverse = false } = {}) {
-    const cols = reverse ? ['FF63BE7B', 'FFFFEB84', 'FFF8696B'] : ['FFF8696B', 'FFFFEB84', 'FF63BE7B']
+  scale(ref, { min = 1, mid = 3, max = 5, reverse = false, colors = null } = {}) {
+    const cols = colors ? colors : reverse ? ['FF63BE7B', 'FFFFEB84', 'FFF8696B'] : ['FFF8696B', 'FFFFEB84', 'FF63BE7B']
     this.ws.addConditionalFormatting({ ref, rules: [{ type: 'colorScale', priority: this.nextPri(), cfvo: [{ type: 'num', value: min }, { type: 'num', value: mid }, { type: 'num', value: max }], color: cols.map(argb => ({ argb })) }] })
     return this
   }

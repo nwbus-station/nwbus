@@ -54,7 +54,7 @@ export function analyze(records, stations, nameOf, from, to, isAr) {
   const pFrom = addDays(from, -span), pTo = addDays(from, -1)
   const days = eachDay(from, to)
   const A = {
-    from, to, pFrom, pTo, span, days, total: newStat(), prevTotal: newStat(), byDay: {}, byStation: {}, byStationPrev: {},
+    from, to, pFrom, pTo, span, days, total: newStat(), prevTotal: newStat(), byDay: {}, byStation: {}, byStationPrev: {}, stDay: {}, hours: Array(24).fill(0), hoursParsed: 0, daysWithData: new Set(),
     status: {}, acc: { 'Early': 0, 'On Time': 0, 'Not On Time': 0, 'Delayed': 0 },
     dow: Array.from({ length: 7 }, () => ({ pax: 0, trips: 0, days: new Set() })), lastDay: {},
   }
@@ -67,6 +67,10 @@ export function analyze(records, stations, nameOf, from, to, isAr) {
       if (r.departure_accuracy && A.acc[r.departure_accuracy] !== undefined) A.acc[r.departure_accuracy]++
       const w = dowOf(d); A.dow[w].pax += Number(r.passenger_count) || 0; A.dow[w].trips++; A.dow[w].days.add(d)
       if (!A.lastDay[sid] || d > A.lastDay[sid]) A.lastDay[sid] = d
+      A.daysWithData.add(d)
+      const sd = (A.stDay[sid] ??= {}); sd[d] = (sd[d] || 0) + (Number(r.passenger_count) || 0)
+      const hm = /(\d{1,2}):\d{2}/.exec(String(r.actual_departure ?? ''))
+      if (hm && Number(hm[1]) < 24) { A.hours[Number(hm[1])]++; A.hoursParsed++ }
     } else if (d >= pFrom && d <= pTo) {
       addStat(A.prevTotal, r); addStat(A.byStationPrev[sid] ??= newStat(), r)
     }
@@ -122,6 +126,36 @@ export function analyze(records, stations, nameOf, from, to, isAr) {
     if (silent.length) out.push(T(`محطات توقف تسجيلها قبل نهاية الفترة بيومين أو أكثر: ${silent.slice(0, 8).join('، ')}.`, `Stations whose records stopped 2+ days before the end: ${silent.slice(0, 8).join(', ')}.`))
   }
   A.insights = out
+
+  // توصيات مقترحة (قواعد بسيطة من الأرقام)
+  const rec = []
+  if (t.trips > 0) {
+    const low = A.rows.filter(r => r.s.acc >= 5 && punct(r.s) < 0.7).map(r => r.name)
+    if (low.length) rec.push(T(`راجع جدولة وانضباط المغادرة في: ${low.slice(0, 6).join('، ')} (الانضباط أقل من 70%).`, `Review departure scheduling and discipline at: ${low.slice(0, 6).join(', ')} (punctuality below 70%).`))
+    const mr2 = A.rows.filter(r => r.s.pax + r.s.missed >= 50 && missedRate(r.s) > 0.02).map(r => r.name)
+    if (mr2.length) rec.push(T(`تتبّع أسباب تخلف الركاب في: ${mr2.slice(0, 6).join('، ')} (النسبة أعلى من 2%).`, `Investigate passenger no-shows at: ${mr2.slice(0, 6).join(', ')} (rate above 2%).`))
+    const dec = A.rows.filter(r => r.p.pax >= 100 && r.change != null && r.change < -0.1).map(r => `${r.name} (${Math.round(r.change * 100)}%)`)
+    if (dec.length) rec.push(T(`افحص أسباب تراجع الركاب في: ${dec.slice(0, 6).join('، ')}.`, `Look into the passenger decline at: ${dec.slice(0, 6).join(', ')}.`))
+    const sil = A.rows.filter(r => r.s.trips > 0 && A.lastDay[r.id] && daysBetween(A.lastDay[r.id], to) >= 2).map(r => r.name)
+    if (sil.length) rec.push(T(`تأكد من إدخال سجلات الترحيل في: ${sil.slice(0, 6).join('، ')} — توقف التسجيل قبل نهاية الفترة.`, `Make sure trip records are being entered at: ${sil.slice(0, 6).join(', ')} — recording stopped before the period ended.`))
+    const topSt = Object.keys(A.status).sort((a, b) => A.status[b] - A.status[a])[0]
+    if (topSt && A.status[topSt] >= 3) rec.push(T(`ضع خطة تعامل مع «${STATUS_AR[topSt] || topSt}» — الحالة الأكثر تكراراً (${A.status[topSt]} مرة).`, `Prepare a response plan for “${topSt}” — the most frequent abnormal status (${A.status[topSt]}×).`))
+    const missingDays = days.filter(d => !A.daysWithData.has(d)).length
+    if (missingDays > 0) rec.push(T(`${missingDays} يوم من الفترة بلا أي سجل ترحيل — تحقق من اكتمال الإدخال.`, `${missingDays} day(s) in the period have no trip records — verify data entry is complete.`))
+    if (!rec.length) rec.push(T('الأداء مستقر ولا توجد ملاحظات حرجة — حافظ على الممارسات الحالية.', 'Performance is stable with no critical findings — keep current practices.'))
+  }
+  A.recommendations = rec
+
+  // مؤشر الأداء العام (0-100): انضباط 50 + تخلف 20 + نمو 15 + اكتمال بيانات 15
+  const puV = punct(t), chV = pctChange(t.pax, p.pax)
+  const comp = {
+    punct: puV == null ? 0 : Math.round(puV * 50),
+    missed: Math.round((1 - Math.min(missedRate(t) / 0.05, 1)) * 20),
+    growth: chV == null ? 10 : Math.round(Math.max(0, Math.min(1, 1 + Math.min(chV, 0) * 2)) * 15),
+    data: Math.round((A.daysWithData.size / span) * 15),
+  }
+  comp.total = t.trips ? comp.punct + comp.missed + comp.growth + comp.data : null
+  A.health = comp
   return A
 }
 
@@ -154,14 +188,30 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
   const clr = v => (v == null || typeof v !== 'number' ? null : v >= 4 ? XL.green : v >= 3 ? XL.amber : XL.red)
   const puColor = v => (typeof v !== 'number' ? null : v >= 0.85 ? XL.green : v >= 0.7 ? XL.amber : XL.red)
   const t = A.total, p = A.prevTotal, pu = punct(t), pp = punct(p)
+  const rankedAcc = A.rows.filter(r => r.s.acc >= 5).sort((a, b) => punct(b.s) - punct(a.s))
+  const bestSt = rankedAcc[0] ?? null, worstSt = rankedAcc.length > 1 ? rankedAcc[rankedAcc.length - 1] : null
   const dTxt = (cur, prev) => {
     const ch = pctChange(cur, prev)
-    return ch == null ? T('لا توجد فترة سابقة', 'No previous period') : `${ch >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(ch * 100))}% ${T('عن الفترة السابقة', 'vs previous')}`
+    if (ch == null) return T('لا توجد فترة سابقة', 'No previous period')
+    if (Math.round(ch * 100) === 0) return T('بلا تغيّر عن الفترة السابقة', 'No change vs previous')
+    return `${ch >= 0 ? '▲' : '▼'} ${Math.abs(Math.round(ch * 100))}% ${T('عن الفترة السابقة', 'vs previous')}`
   }
 
   // ═════════ لوحة القيادة ═════════
-  const S = book.sheet(T('لوحة القيادة', 'Dashboard'), Array(10).fill(15), { tab: XL.orange })
+  const S = book.sheet(T('لوحة القيادة', 'Dashboard'), Array(12).fill(13), { tab: XL.orange })
   S.header({ title: T('التقرير التشغيلي التحليلي', 'Operations Analytics Report'), subtitle })
+
+  // مؤشر الأداء العام
+  const H = A.health
+  const grade = H.total == null ? ['—', XL.grey] : H.total >= 85 ? [T('ممتاز', 'Excellent'), XL.green] : H.total >= 70 ? [T('جيد', 'Good'), XL.green] : H.total >= 55 ? [T('متوسط', 'Fair'), XL.amber] : [T('يحتاج تدخلاً', 'Needs action'), XL.red]
+  S.section(T('مؤشر الأداء العام', 'Overall performance index'), T('مؤشر مركّب من 100: الانضباط (50) + قلة التخلف (20) + نمو الركاب (15) + اكتمال البيانات (15)', 'Composite out of 100: punctuality (50) + low no-shows (20) + passenger growth (15) + data completeness (15)'))
+  S.kpis([
+    { label: T('المؤشر العام', 'Overall index'), value: H.total ?? '—', fmt: '0', color: grade[1], foot: grade[0] },
+    { label: T('الانضباط', 'Punctuality'), value: `${H.punct} / 50`, foot: pc(pu) },
+    { label: T('قلة التخلف', 'Low no-shows'), value: `${H.missed} / 20`, foot: `${(missedRate(t) * 100).toFixed(1)}%` },
+    { label: T('نمو الركاب', 'Growth'), value: `${H.growth} / 15`, foot: pctChange(t.pax, p.pax) == null ? T('بلا مقارنة', 'no baseline') : `${pctChange(t.pax, p.pax) >= 0 ? '+' : ''}${Math.round(pctChange(t.pax, p.pax) * 100)}%` },
+    { label: T('اكتمال البيانات', 'Data completeness'), value: `${H.data} / 15`, foot: `${A.daysWithData.size} ${T('من', 'of')} ${span} ${T('يوماً', 'days')}` },
+  ], 2)
   S.section(T('المؤشرات الرئيسية', 'Key indicators'))
   S.spacer(0)
   const activeStations = A.rows.filter(r => r.s.trips > 0).length
@@ -169,7 +219,7 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
   S.kpis([
     { label: T('إجمالي الركاب', 'Total passengers'), value: t.pax, fmt: '#,##0', foot: dTxt(t.pax, p.pax) },
     { label: T('عدد الرحلات', 'Trips'), value: t.trips, fmt: '#,##0', foot: dTxt(t.trips, p.trips) },
-    { label: T('الانضباط في المغادرة', 'Departure punctuality'), value: pu ?? '—', fmt: '0%', color: pu == null ? XL.grey : pu >= 0.85 ? XL.green : pu >= 0.7 ? XL.amber : XL.red, foot: pu != null && pp != null ? `${pu >= pp ? '▲' : '▼'} ${Math.abs(Math.round((pu - pp) * 100))} ${T('نقطة', 'pts')}` : '' },
+    { label: T('الانضباط في المغادرة', 'Departure punctuality'), value: pu ?? '—', fmt: '0%', color: pu == null ? XL.grey : pu >= 0.85 ? XL.green : pu >= 0.7 ? XL.amber : XL.red, foot: pu != null && pp != null ? (Math.round((pu - pp) * 100) === 0 ? T('بلا تغيّر', 'No change') : `${pu >= pp ? '▲' : '▼'} ${Math.abs(Math.round((pu - pp) * 100))} ${T('نقطة', 'pts')}`) : '' },
     { label: T('المتخلفون', 'Missed passengers'), value: t.missed, fmt: '#,##0', color: t.missed > 0 ? XL.red : XL.green, foot: `${(missedRate(t) * 100).toFixed(1)}% ${T('من الركاب', 'of passengers')}` },
     { label: T('متوسط الركاب للرحلة', 'Avg passengers / trip'), value: avgPax(t), fmt: '0.0', foot: dTxt(avgPax(t), avgPax(p)) },
     { label: T('رحلات إضافية', 'Extra trips'), value: t.extra, fmt: '#,##0', color: XL.orange, foot: dTxt(t.extra, p.extra) },
@@ -177,52 +227,95 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
     { label: T('المحطات النشطة', 'Active stations'), value: activeStations, fmt: '0', foot: `${T('من', 'of')} ${stations?.length ?? 0}` },
     { label: T('متوسط الركاب يومياً', 'Avg passengers / day'), value: t.pax / span, fmt: '#,##0', foot: dTxt(t.pax / span, p.pax / span) },
     { label: T('أعلى يوم ركاباً', 'Peak day'), value: busiest ? A.byDay[busiest].pax : 0, fmt: '#,##0', foot: busiest ?? '' },
+    { label: T('أفضل محطة انضباطاً', 'Best punctuality'), value: bestSt ? punct(bestSt.s) : '—', fmt: '0%', color: XL.green, foot: bestSt?.name ?? '' },
+    { label: T('أقل محطة انضباطاً', 'Lowest punctuality'), value: worstSt && worstSt !== bestSt ? punct(worstSt.s) : '—', fmt: '0%', color: XL.red, foot: worstSt && worstSt !== bestSt ? worstSt.name : '' },
   ], 2)
 
   if (A.insights.length) { S.section(T('أبرز الملاحظات التحليلية', 'Key insights')); S.spacer(0); S.bullets(A.insights) }
+  if (A.recommendations.length) {
+    S.section(T('توصيات مقترحة', 'Suggested actions'), T('مستخرجة تلقائياً من أرقام الفترة — للاسترشاد وليست بديلاً عن تقدير الإدارة', 'Derived automatically from the period figures — a guide, not a substitute for management judgment'))
+    S.bullets(A.recommendations.map((x, i) => `${i + 1}. ${x}`))
+  }
 
   // الرسوم (صور)
+  const accKeys = ['Early', 'On Time', 'Not On Time', 'Delayed']
   const charts = []
-  charts.push(lineChart({ title: T('الركاب يومياً', 'Passengers per day'), labels: A.days.map(d => d.slice(5)), values: A.days.map(d => A.byDay[d].pax), isAr }))
+  charts.push(lineChart({ title: T('الركاب يومياً', 'Passengers per day'), labels: A.days.map(d => d.slice(5)), values: A.days.map(d => A.byDay[d].pax), isAr, w: 560 }))
   if (A.rows.length) {
     const top = A.rows.slice(0, 10)
-    charts.push(barChart({ title: T('الركاب حسب المحطة (الأعلى 10)', 'Passengers by station (top 10)'), labels: top.map(r => r.name), values: top.map(r => r.s.pax), isAr }))
+    charts.push(barChart({ title: T('الركاب حسب المحطة (الأعلى 10)', 'Passengers by station (top 10)'), labels: top.map(r => r.name), values: top.map(r => r.s.pax), isAr, w: 560 }))
   }
-  const accKeys = ['Early', 'On Time', 'Not On Time', 'Delayed']
-  charts.push(donutChart({ title: T('توزيع دقة المغادرة', 'Departure accuracy'), labels: accKeys.map(k => ACCURACY[k][isAr ? 0 : 1]), values: accKeys.map(k => A.acc[k]), colors: ['#15803d', '#84cc16', '#f59e0b', '#b91c1c'], isAr }))
-  charts.push(barChart({ title: T('متوسط الركاب حسب أيام الأسبوع', 'Avg passengers by weekday'), labels: (isAr ? WD_AR : WD_EN), values: A.dow.map(d => (d.days.size ? Math.round(d.pax / d.days.size) : 0)), color: XL.navy.replace('FF', '#'), isAr }))
+  charts.push(donutChart({ title: T('توزيع دقة المغادرة', 'Departure accuracy'), labels: accKeys.map(k => ACCURACY[k][isAr ? 0 : 1]), values: accKeys.map(k => A.acc[k]), colors: ['#15803d', '#84cc16', '#f59e0b', '#b91c1c'], isAr, w: 560 }))
+  charts.push(barChart({ title: T('متوسط الركاب حسب أيام الأسبوع', 'Avg passengers by weekday'), labels: (isAr ? WD_AR : WD_EN), values: A.dow.map(d => (d.days.size ? Math.round(d.pax / d.days.size) : 0)), color: '#264673', isAr, w: 560 }))
+  if (A.hoursParsed > 0) {
+    const hs = A.hours.map((v, i) => [i, v]).filter(([, v]) => v > 0), lo = Math.max(0, hs[0][0] - 1), hi = Math.min(23, hs[hs.length - 1][0] + 1)
+    const hrs = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
+    charts.push(barChart({ title: T('عدد الرحلات حسب ساعة المغادرة (أوقات الذروة)', 'Trips by departure hour (peak times)'), labels: hrs.map(h => String(h).padStart(2, '0') + ':00'), values: hrs.map(h => A.hours[h]), color: '#EE712D', isAr, w: 560 }))
+  }
+  charts.push(donutChart({ title: T('الرحلات العادية والإضافية', 'Regular vs extra trips'), labels: [T('عادية', 'Regular'), T('إضافية', 'Extra')], values: [t.trips - t.extra, t.extra], colors: ['#264673', '#EE712D'], isAr, w: 560 }))
   S.section(T('الرسوم البيانية', 'Charts'))
-  let rowAnchor = S.r - 1
+  const rowAnchor = S.r - 1
   charts.forEach((png, i) => {
     const id = book.wb.addImage({ base64: png, extension: 'png' })
-    const col = i % 2 === 0 ? 0 : 5, rowOff = Math.floor(i / 2) * 15
-    S.ws.addImage(id, { tl: { col: col + 0.1, row: rowAnchor + rowOff + 0.3 }, ext: { width: 540, height: 270 } })
+    const col = i % 2 === 0 ? 0 : 6, rowOff = Math.floor(i / 2) * 15
+    S.ws.addImage(id, { tl: { col: col + 0.1, row: rowAnchor + rowOff + 0.3 }, ext: { width: 560, height: 270 } })
   })
   S.r += Math.ceil(charts.length / 2) * 15 + 1
 
   // ترتيب المحطات
+  const label = r => (r == null ? '—' : r >= 0.85 ? T('ممتاز', 'Excellent') : r >= 0.7 ? T('جيد', 'Good') : r >= 0.55 ? T('متوسط', 'Fair') : T('يحتاج تدخلاً', 'Needs action'))
+  const spark = r => {
+    const bins = Math.min(12, A.days.length), size = Math.ceil(A.days.length / bins), vals = []
+    for (let i = 0; i < A.days.length; i += size) vals.push(A.days.slice(i, i + size).reduce((s, d) => s + (A.stDay[r.id]?.[d] || 0), 0))
+    const mx = Math.max(...vals, 1), blocks = '▁▂▃▄▅▆▇█'
+    return vals.map(v => blocks[Math.min(7, Math.round((v / mx) * 7))]).join('')
+  }
   if (A.rows.length) {
-    S.section(T('ترتيب المحطات', 'Station ranking'), T('مرتّبة حسب عدد الركاب — الألوان تدرّج من الأضعف للأقوى', 'Sorted by passengers — colors run from weakest to strongest'))
-    const rows = A.rows.map((r, i) => [i + 1, r.name, r.s.trips, r.s.pax, avgPax(r.s), missedRate(r.s), punct(r.s) ?? '—', r.s.late, r.change == null ? '—' : r.change])
+    S.section(T('ترتيب المحطات', 'Station ranking'), T('مرتّبة حسب عدد الركاب — الألوان تدرّج من الأضعف للأقوى، والاتجاه رسم مصغّر لحركة الركاب عبر الفترة', 'Sorted by passengers — colors run weakest to strongest; the trend glyph shows passenger flow across the period'))
+    const rows = A.rows.map((r, i) => [i + 1, r.name, r.s.trips, r.s.pax, avgPax(r.s), missedRate(r.s), punct(r.s) ?? '—', label(punct(r.s)), r.change == null ? '—' : r.change, spark(r)])
     const tS = S.table({
       columns: [
         { header: '#', fmt: '0' }, { header: T('المحطة', 'Station'), span: 2, bold: true, color: () => XL.navy }, { header: T('الرحلات', 'Trips'), fmt: '#,##0' }, { header: T('الركاب', 'Passengers'), fmt: '#,##0' },
         { header: T('ركاب/رحلة', 'Pax/trip'), fmt: '0.0' }, { header: T('نسبة التخلف', 'Missed %'), fmt: '0.0%' }, { header: T('الانضباط', 'Punctuality'), fmt: '0%', color: puColor },
-        { header: T('متأخرة', 'Late'), fmt: '#,##0' }, { header: T('تغيّر الركاب', 'Pax change'), fmt: '+0%;-0%;0%', color: v => (typeof v !== 'number' ? null : v > 0 ? XL.green : v < 0 ? XL.red : null) },
+        { header: T('التقييم', 'Rating'), span: 2, color: v => (v === T('ممتاز', 'Excellent') || v === T('جيد', 'Good') ? XL.green : v === T('متوسط', 'Fair') ? XL.amber : v === T('يحتاج تدخلاً', 'Needs action') ? XL.red : null) },
+        { header: T('تغيّر الركاب', 'Pax change'), fmt: '+0%;-0%;0%', color: v => (typeof v !== 'number' ? null : v > 0 ? XL.green : v < 0 ? XL.red : null) },
+        { header: T('الاتجاه', 'Trend'), color: () => XL.navy, align: 'center' },
       ],
       rows,
-      totals: ['', T('الإجمالي', 'Total'), t.trips, t.pax, avgPax(t), missedRate(t), pu ?? '—', t.late, pctChange(t.pax, p.pax) ?? '—'],
+      totals: ['', T('الإجمالي', 'Total'), t.trips, t.pax, avgPax(t), missedRate(t), pu ?? '—', label(pu), pctChange(t.pax, p.pax) ?? '—', ''],
     })
+    // الأعمدة: A # · B:C المحطة · D رحلات · E ركاب · F ركاب/رحلة · G تخلف% · H انضباط · I:J تقييم · K تغيّر · L اتجاه
     S.scale(`H${tS.first}:H${tS.last}`, { min: 0.5, mid: 0.8, max: 1 })
     S.bars(`E${tS.first}:E${tS.last}`, 'FFA9C4EB')
     S.scale(`G${tS.first}:G${tS.last}`, { min: 0, mid: 0.02, max: 0.08, reverse: true })
+
+    // خريطة حرارية: متوسط الركاب اليومي لكل محطة حسب يوم الأسبوع
+    const stDow = {}
+    A.rows.forEach(r => { stDow[r.id] = Array.from({ length: 7 }, () => ({ pax: 0, days: new Set() })) })
+    records.forEach(rc => {
+      const d = String(rc.record_date).slice(0, 10)
+      if (d < from || d > to || !stDow[rc.station_id]) return
+      const x = stDow[rc.station_id][dowOf(d)]; x.pax += Number(rc.passenger_count) || 0; x.days.add(d)
+    })
+    S.section(T('خريطة حرارية: ازدحام المحطات حسب أيام الأسبوع', 'Heatmap: station load by weekday'), T('متوسط الركاب في اليوم — اللون الأغمق = ازدحام أعلى', 'Average passengers per day — darker = busier'))
+    const wd = isAr ? WD_AR : WD_EN
+    const hmRows = A.rows.map(r => {
+      const v = stDow[r.id].map(x => (x.days.size ? Math.round(x.pax / x.days.size) : 0))
+      return [r.name, ...v, Math.round(v.reduce((a, b) => a + b, 0) / Math.max(v.filter(x => x > 0).length, 1))]
+    })
+    const mx = Math.max(...hmRows.flatMap(r => r.slice(1, 8)), 1)
+    const tH = S.table({
+      columns: [{ header: T('المحطة', 'Station'), span: 3, bold: true, color: () => XL.navy }, ...wd.map(n => ({ header: n, fmt: '#,##0' })), { header: T('المتوسط', 'Avg'), span: 2, fmt: '#,##0', bold: true }],
+      rows: hmRows, zebra: false,
+    })
+    S.scale(`D${tH.first}:J${tH.last}`, { min: 0, mid: mx / 2, max: mx, colors: ['FFFFFFFF', 'FFCFE0F7', 'FF4F81D6'] })
   }
 
   // دقة المغادرة + الحالات
   S.section(T('دقة المغادرة', 'Departure accuracy'))
   const accTot = accKeys.reduce((s, k) => s + A.acc[k], 0)
   const tA = S.table({
-    columns: [{ header: T('الحالة', 'Status'), span: 4, bold: true }, { header: T('الرحلات', 'Trips'), span: 3, fmt: '#,##0' }, { header: T('النسبة', 'Share'), span: 3, fmt: '0%' }],
+    columns: [{ header: T('الحالة', 'Status'), span: 4, bold: true }, { header: T('الرحلات', 'Trips'), span: 4, fmt: '#,##0' }, { header: T('النسبة', 'Share'), span: 4, fmt: '0%' }],
     rows: accKeys.map(k => [ACCURACY[k][isAr ? 0 : 1], A.acc[k], accTot ? A.acc[k] / accTot : 0]), zebra: false,
   })
   S.bars(`E${tA.first}:E${tA.last}`, 'FF7FB77E')
@@ -232,20 +325,24 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
   else {
     const tot = sk.reduce((s, k) => s + A.status[k], 0)
     const tI = S.table({
-      columns: [{ header: T('الحالة', 'Status'), span: 4, bold: true }, { header: T('عدد المرات', 'Count'), span: 3, fmt: '#,##0', color: () => XL.red }, { header: T('النسبة', 'Share'), span: 3, fmt: '0%' }],
+      columns: [{ header: T('الحالة', 'Status'), span: 4, bold: true }, { header: T('عدد المرات', 'Count'), span: 4, fmt: '#,##0', color: () => XL.red }, { header: T('النسبة', 'Share'), span: 4, fmt: '0%' }],
       rows: sk.map(k => [isAr ? (STATUS_AR[k] || k) : k, A.status[k], A.status[k] / tot]), zebra: false,
     })
     S.bars(`E${tI.first}:E${tI.last}`, 'FFF4A6A1')
   }
-  S.section(T('منهجية الحساب', 'Methodology'))
+  S.section(T('جودة البيانات والمنهجية', 'Data quality & methodology'))
   S.bullets(isAr ? [
+    `التغطية: ${n0(records.filter(r => r.record_date >= from && r.record_date <= to).length)} سجل ترحيل في ${A.daysWithData.size} من ${span} يوماً · ${activeStations} محطة نشطة.`,
     'الانضباط % = الرحلات المبكرة أو في الموعد ÷ الرحلات التي سُجّلت لها دقة المغادرة. نسبة التخلف = المتخلفون ÷ (الركاب + المتخلفون).',
     'المقارنة تتم بفترة سابقة مماثلة في الطول تنتهي قبل بداية الفترة المحددة مباشرة.',
-    'الأرقام في جدول المحطات من حساب النظام للفترة؛ ورقة «السجلات» تحوي كل البيانات للتصفية والتحليل الإضافي.',
+    'التقييم: ممتاز ≥ 85% انضباط · جيد ≥ 70% · متوسط ≥ 55% · يحتاج تدخلاً أقل من ذلك. ساعات الذروة تُستخرج من وقت المغادرة الفعلي.',
+    'ورقة «السجلات» تحوي كل البيانات الخام للتصفية والتحليل الإضافي، وورقة لكل محطة بسجلاتها.',
   ] : [
+    `Coverage: ${n0(records.filter(r => r.record_date >= from && r.record_date <= to).length)} trip records over ${A.daysWithData.size} of ${span} days · ${activeStations} active stations.`,
     'Punctuality % = early or on-time trips ÷ trips with a recorded departure accuracy. Missed rate = missed ÷ (passengers + missed).',
     'Comparison uses an equal-length period ending right before the selected one.',
-    'The station table comes from the system calculation; the “Records” sheet holds all raw data for filtering and further analysis.',
+    'Rating: Excellent ≥ 85% punctuality · Good ≥ 70% · Fair ≥ 55% · otherwise Needs action. Peak hours come from the actual departure time.',
+    'The “Records” sheet holds all raw data for filtering, plus a sheet per station with its records.',
   ])
   S.finish({ landscape: false })
 
