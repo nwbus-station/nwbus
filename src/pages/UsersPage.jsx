@@ -1901,6 +1901,7 @@ function UsersPageFull() {
   })
   const [search,       setSearch]       = useState('')
   const [roleFilter,   setRoleFilter]   = useState('')
+  const [listKind,     setListKind]     = useState('staff') // 'staff' الموظفون | 'agents' الوكلاء (حسابات وكيل في قائمة منفصلة)
   const [stationFilter, setStationFilter] = useState('')
   const [statusFilter,  setStatusFilter]  = useState('')   // '' | 'active' | 'inactive'
   const [jobFilter,     setJobFilter]     = useState('')
@@ -2087,8 +2088,11 @@ function UsersPageFull() {
       leaveFilter === 'low'  ? (u.leaveRemaining ?? 0) > 0 && u.leaveRemaining < 7 :
       leaveFilter === 'ok'   ? (u.leaveRemaining ?? 0) >= 7 : true
     )
-    return matchSearch && matchRole && matchStatus && matchJob && matchModule && matchSupervisor && matchLeave
+    const matchKind = listKind === 'agents' ? !!u.is_agent : !u.is_agent
+    return matchKind && matchSearch && matchRole && matchStatus && matchJob && matchModule && matchSupervisor && matchLeave
   }
+  const agentCount = users.filter(u => u.is_agent).length
+  const staffCount = users.length - agentCount
 
   const filtered = users.filter(u => matchesNonStationFilters(u) && (!stationFilter || u.station_id === stationFilter))
 
@@ -2339,7 +2343,9 @@ function UsersPageFull() {
         <div>
           <h1 className="text-xl font-bold text-nwbus-primary">{isAr ? 'إدارة الموظفين' : 'Staff Management'}</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            {isAr ? `${filtered.length} من ${users.length} موظف` : `${filtered.length} of ${users.length} staff`}
+            {listKind === 'agents'
+              ? (isAr ? `${filtered.length} من ${agentCount} وكيل` : `${filtered.length} of ${agentCount} agents`)
+              : (isAr ? `${filtered.length} من ${staffCount} موظف` : `${filtered.length} of ${staffCount} staff`)}
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
@@ -2370,6 +2376,17 @@ function UsersPageFull() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* قائمتان: الموظفون / الوكلاء */}
+      <div className="flex items-center gap-1 mb-3 border-b border-gray-200">
+        {[['staff', isAr ? 'الموظفون' : 'Staff', staffCount], ['agents', isAr ? 'الوكلاء' : 'Agents', agentCount]].map(([k, label, n]) => (
+          <button key={k} type="button" onClick={() => { setListKind(k); setSelectedIds(new Set()) }}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors flex items-center gap-2 ${listKind === k ? 'border-nwbus-primary text-nwbus-primary' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+            {label}
+            <span className={`text-[11px] rounded-full px-2 py-0.5 tabular-nums ${listKind === k ? 'bg-nwbus-primary/10' : 'bg-gray-100'}`}>{n}</span>
+          </button>
+        ))}
       </div>
 
       {/* Search + Filters */}
@@ -2596,6 +2613,7 @@ function UsersPageFull() {
                         <p className="font-semibold text-gray-800 truncate flex items-center gap-1.5">
                           {u.full_name_ar}
                           {u.is_accountant && <span className="text-[10px] bg-yellow-100 text-yellow-700 rounded px-1.5 py-0.5 shrink-0">+ محاسب</span>}
+                          {u.is_agent && <span className="text-[10px] bg-violet-100 text-violet-700 rounded px-1.5 py-0.5 shrink-0 font-bold">{isAr ? 'وكيل' : 'Agent'}</span>}
                         </p>
                         <p className="text-xs text-gray-400 truncate">
                           {u.job_number ? <span className="font-mono">{u.job_number}</span> : null}
