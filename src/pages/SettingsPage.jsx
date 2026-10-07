@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { useAppSettings } from '../context/AppSettingsContext'
 import BackupSettings from '../components/settings/BackupSettings'
+import OperationsReportDownload from '../components/settings/OperationsReportDownload'
 
 const THEMES = [
   { id:'bw',     labelAr:'أسود وأبيض',    labelEn:'Black & White',   preview:['#0a0a0a','#ffffff','#f0f0f0'] },
@@ -93,6 +94,7 @@ const Section = ({ titleAr, titleEn, children }) => (
       </Section>
 
       {/* ── النسخ الاحتياطي والتقرير اليومي ── */}
+      <OperationsReportDownload isAr={isAr} />
       <BackupSettings isAr={isAr} />
 
       {/* ── System info ── */}
