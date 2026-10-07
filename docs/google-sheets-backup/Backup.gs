@@ -128,12 +128,14 @@ function runBackup(recipients) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   try { ss.setSpreadsheetTimeZone(TZ); } catch (e) { /* غير حرج */ }
 
-  const stations       = sbGet('stations', 'id,name_ar,name_en');
+  let stations;
+  try { stations = sbGet('stations', 'id,name_ar,name_en,is_agent'); }
+  catch (e) { stations = sbGet('stations', 'id,name_ar,name_en'); }   // العمود is_agent غير مثبّت بعد
   const records        = sbGet('trip_records', '*', 'order=record_date.desc');
   const transitRecords = sbGet('trip_transit_records', '*', 'order=created_at.desc');
 
   const stationName = {};
-  stations.forEach(function (s) { stationName[s.id] = (s.name_ar || s.name_en || ('محطة ' + s.id)).toString(); });
+  stations.forEach(function (s) { stationName[s.id] = (s.name_ar || s.name_en || ('محطة ' + s.id)).toString() + (s.is_agent ? ' (وكيل)' : ''); });
 
   const A = analyze(records, stations, stationName);
   const logo = fetchLogo();
@@ -248,9 +250,8 @@ function analyze(records, stations, stationName) {
   // صفوف ترتيب المحطات
   A.rows = stations.map(function (st) {
     const s = A.byStation30[st.id] || newStat(), p = A.byStationPrev[st.id] || newStat();
-    return { id: st.id, name: stationName[st.id], s: s, p: p, change: pctChange(s.pax, p.pax) };
-  }).filter(function (r) { return r.s.trips > 0 || r.p.trips > 0; })
-    .sort(function (a, b) { return b.s.pax - a.s.pax; });
+    return { id: st.id, name: stationName[st.id], agent: !!st.is_agent, s: s, p: p, change: pctChange(s.pax, p.pax) };
+  }).sort(function (a, b) { return b.s.pax - a.s.pax; });   // كل المحطات (حتى بدون سجلات) — الوكلاء تظهر بعلامة (وكيل)
 
   A.insights = buildInsights(A);
   return A;
@@ -305,6 +306,14 @@ function buildInsights(A) {
     const g = grow[0], d = grow[grow.length - 1];
     if (g.change > 0.05) out.push('أكبر نمو في الركاب: ' + g.name + ' (+' + Math.round(g.change * 100) + '%).');
     if (d.change < -0.05) out.push('أكبر تراجع في الركاب: ' + d.name + ' (' + Math.round(d.change * 100) + '%) — يُنصح بمعرفة السبب.');
+  }
+
+  const agentRows = A.rows.filter(function (r) { return r.agent; });
+  if (agentRows.length) {
+    const agPax = agentRows.reduce(function (sum, r) { return sum + r.s.pax; }, 0);
+    const agIdle = agentRows.filter(function (r) { return r.s.trips === 0; }).map(function (r) { return r.name; });
+    out.push('محطات الوكلاء: ' + agentRows.length + ' محطة نقلت ' + fmtN(agPax) + ' راكباً (' + (t.pax ? Math.round(agPax / t.pax * 100) : 0) + '% من الإجمالي)' +
+      (agIdle.length ? '، وبلا أي سجل ضمن الفترة: ' + agIdle.slice(0, 6).join('، ') : '') + '.');
   }
 
   const stKeys = Object.keys(A.status30).sort(function (a, b) { return A.status30[b] - A.status30[a]; });
@@ -430,7 +439,7 @@ function buildChartData(ss, A) {
   const daily = [['التاريخ', 'الركاب', 'الرحلات']].concat(A.days.map(function (d) { return [d.slice(5), A.byDay[d].pax, A.byDay[d].trips]; }));
   sh.getRange(1, 1, daily.length, 3).setValues(daily);
   // E:F — أعلى 10 محطات
-  const top = A.rows.slice(0, 10);
+  const top = A.rows.filter(function (r) { return r.s.pax > 0; }).slice(0, 10);
   const st = [['المحطة', 'الركاب']].concat(top.map(function (r) { return [r.name, r.s.pax]; }));
   sh.getRange(1, 5, st.length, 2).setValues(st);
   // H:I — دقة المغادرة

@@ -77,8 +77,8 @@ export function analyze(records, stations, nameOf, from, to, isAr) {
   })
   A.rows = stations.map(st => {
     const s = A.byStation[st.id] || newStat(), p = A.byStationPrev[st.id] || newStat()
-    return { id: st.id, name: nameOf(st), s, p, change: pctChange(s.pax, p.pax) }
-  }).filter(r => r.s.trips > 0 || r.p.trips > 0).sort((a, b) => b.s.pax - a.s.pax)
+    return { id: st.id, name: nameOf(st), agent: !!st.is_agent, s, p, change: pctChange(s.pax, p.pax) }
+  }).sort((a, b) => b.s.pax - a.s.pax || a.name.localeCompare(b.name))
 
   // ملاحظات تحليلية تلقائية
   const t = A.total, p = A.prevTotal, out = []
@@ -159,7 +159,7 @@ export function analyze(records, stations, nameOf, from, to, isAr) {
   return A
 }
 
-export async function buildOperationsReport({ supabase, isAr, from, to, onProgress }) {
+export async function buildOperationsReport({ supabase, isAr, from, to, kind = 'all', onProgress }) {
   const T = (a, e) => (isAr ? a : e)
   const span = daysBetween(from, to) + 1
   if (span < 1) throw new Error(T('الفترة غير صحيحة', 'Invalid period'))
@@ -167,9 +167,15 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
   const pFrom = addDays(from, -span)
 
   onProgress?.(T('جلب المحطات…', 'Loading stations…'))
-  const { data: stations, error: se } = await supabase.from('stations').select('id, name_ar, name_en')
+  // is_agent عمود جديد (docs/stations_is_agent.sql) — لو ما انضاف بعد نكمل بدونه
+  let { data: stRaw, error: se } = await supabase.from('stations').select('id, name_ar, name_en, is_active, merged_into, is_agent')
+  if (se) ({ data: stRaw, error: se } = await supabase.from('stations').select('id, name_ar, name_en, is_active, merged_into'))
   if (se) throw new Error(se.message)
-  const nameOf = s => (isAr ? (s.name_ar || s.name_en) : (s.name_en || s.name_ar)) || '—'
+  const agentTag = T('وكيل', 'Agent')
+  const nameOf = s => `${(isAr ? (s.name_ar || s.name_en) : (s.name_en || s.name_ar)) || '—'}${s.is_agent ? ` (${agentTag})` : ''}`
+  const stations = (stRaw ?? []).filter(s => s.is_active !== false && !s.merged_into)
+    .filter(s => kind === 'agent' ? !!s.is_agent : kind === 'nwb' ? !s.is_agent : true)
+  const hasAgents = (stRaw ?? []).some(s => s.is_agent)
 
   onProgress?.(T('جلب سجلات الترحيل…', 'Loading trip records…'))
   const records = await fetchAll(supabase, () => supabase.from('trip_records')
@@ -177,9 +183,11 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
     .gte('record_date', pFrom).lte('record_date', to).order('record_date', { ascending: false }).order('id'),
   n => onProgress?.(T(`جلب سجلات الترحيل… ${n0(n)}`, `Loading trip records… ${n0(n)}`)))
 
+  const allowed = new Set(stations.map(s => s.id))
+  const scoped = kind === 'all' ? records : records.filter(r => allowed.has(r.station_id))
   onProgress?.(T('تحليل البيانات…', 'Analyzing…'))
-  const A = analyze(records, stations ?? [], nameOf, from, to, isAr)
-  const stName = {}; (stations ?? []).forEach(s => { stName[s.id] = nameOf(s) })
+  const A = analyze(scoped, stations, nameOf, from, to, isAr)
+  const stName = {}, stAgent = {}; stations.forEach(s => { stName[s.id] = nameOf(s); stAgent[s.id] = !!s.is_agent })
 
   onProgress?.(T('إنشاء الملف…', 'Building the file…'))
   const book = await createBook({ isAr })
@@ -224,12 +232,30 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
     { label: T('متوسط الركاب للرحلة', 'Avg passengers / trip'), value: avgPax(t), fmt: '0.0', foot: dTxt(avgPax(t), avgPax(p)) },
     { label: T('رحلات إضافية', 'Extra trips'), value: t.extra, fmt: '#,##0', color: XL.orange, foot: dTxt(t.extra, p.extra) },
     { label: T('رحلات متأخرة', 'Late trips'), value: t.late, fmt: '#,##0', color: t.late > 0 ? XL.red : XL.green, foot: `${pc(t.acc ? t.late / t.acc : null)} ${T('من المقيَّمة', 'of rated')}` },
-    { label: T('المحطات النشطة', 'Active stations'), value: activeStations, fmt: '0', foot: `${T('من', 'of')} ${stations?.length ?? 0}` },
+    { label: T('المحطات النشطة', 'Active stations'), value: activeStations, fmt: '0', foot: `${T('من', 'of')} ${stations.length}` },
     { label: T('متوسط الركاب يومياً', 'Avg passengers / day'), value: t.pax / span, fmt: '#,##0', foot: dTxt(t.pax / span, p.pax / span) },
     { label: T('أعلى يوم ركاباً', 'Peak day'), value: busiest ? A.byDay[busiest].pax : 0, fmt: '#,##0', foot: busiest ?? '' },
     { label: T('أفضل محطة انضباطاً', 'Best punctuality'), value: bestSt ? punct(bestSt.s) : '—', fmt: '0%', color: XL.green, foot: bestSt?.name ?? '' },
     { label: T('أقل محطة انضباطاً', 'Lowest punctuality'), value: worstSt && worstSt !== bestSt ? punct(worstSt.s) : '—', fmt: '0%', color: XL.red, foot: worstSt && worstSt !== bestSt ? worstSt.name : '' },
   ], 2)
+
+  // نورث وست مقابل الوكلاء
+  if (hasAgents && kind === 'all') {
+    const grp = a => {
+      const rs = A.rows.filter(r => r.agent === a), g = newStat()
+      rs.forEach(r => { for (const k of Object.keys(g)) g[k] += r.s[k] })
+      return { rs, g, reporting: rs.filter(r => r.s.trips > 0).length }
+    }
+    const nw = grp(false), ag = grp(true)
+    S.section(T('نورث وست مقابل الوكلاء', 'North West vs Agents'), T('مقارنة محطات نورث وست بمحطات الوكلاء خلال الفترة', 'North West stations compared with agent stations over the period'))
+    const gRow = (name, o) => [name, o.rs.length, o.reporting, o.g.trips, o.g.pax, avgPax(o.g), missedRate(o.g), punct(o.g) ?? '—', t.pax ? o.g.pax / t.pax : 0]
+    const tG = S.table({
+      columns: [{ header: T('الفئة', 'Group'), span: 3, bold: true }, { header: T('المحطات', 'Stations'), fmt: '0' }, { header: T('سجّلت بيانات', 'Reporting'), fmt: '0' }, { header: T('الرحلات', 'Trips'), fmt: '#,##0' }, { header: T('الركاب', 'Passengers'), fmt: '#,##0', bold: true },
+        { header: T('ركاب/رحلة', 'Pax/trip'), fmt: '0.0' }, { header: T('نسبة التخلف', 'Missed %'), fmt: '0.0%' }, { header: T('الانضباط', 'Punctuality'), fmt: '0%', color: puColor }, { header: T('حصة الركاب', 'Passenger share'), span: 2, fmt: '0%' }],
+      rows: [gRow(T('محطات نورث وست', 'North West stations'), nw), gRow(T('محطات الوكلاء', 'Agent stations'), ag)], zebra: false,
+    })
+    S.bars(`K${tG.first}:K${tG.last}`, 'FFA9C4EB')
+  }
 
   if (A.insights.length) { S.section(T('أبرز الملاحظات التحليلية', 'Key insights')); S.spacer(0); S.bullets(A.insights) }
   if (A.recommendations.length) {
@@ -241,8 +267,8 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
   const accKeys = ['Early', 'On Time', 'Not On Time', 'Delayed']
   const charts = []
   charts.push(lineChart({ title: T('الركاب يومياً', 'Passengers per day'), labels: A.days.map(d => d.slice(5)), values: A.days.map(d => A.byDay[d].pax), isAr, w: 560 }))
-  if (A.rows.length) {
-    const top = A.rows.slice(0, 10)
+  if (A.rows.some(r => r.s.pax > 0)) {
+    const top = A.rows.filter(r => r.s.pax > 0).slice(0, 10)
     charts.push(barChart({ title: T('الركاب حسب المحطة (الأعلى 10)', 'Passengers by station (top 10)'), labels: top.map(r => r.name), values: top.map(r => r.s.pax), isAr, w: 560 }))
   }
   charts.push(donutChart({ title: T('توزيع دقة المغادرة', 'Departure accuracy'), labels: accKeys.map(k => ACCURACY[k][isAr ? 0 : 1]), values: accKeys.map(k => A.acc[k]), colors: ['#15803d', '#84cc16', '#f59e0b', '#b91c1c'], isAr, w: 560 }))
@@ -263,7 +289,7 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
   S.r += Math.ceil(charts.length / 2) * 15 + 1
 
   // ترتيب المحطات
-  const label = r => (r == null ? '—' : r >= 0.85 ? T('ممتاز', 'Excellent') : r >= 0.7 ? T('جيد', 'Good') : r >= 0.55 ? T('متوسط', 'Fair') : T('يحتاج تدخلاً', 'Needs action'))
+  const label = r => (r == null ? T('لا سجلات', 'No records') : r >= 0.85 ? T('ممتاز', 'Excellent') : r >= 0.7 ? T('جيد', 'Good') : r >= 0.55 ? T('متوسط', 'Fair') : T('يحتاج تدخلاً', 'Needs action'))
   const spark = r => {
     const bins = Math.min(12, A.days.length), size = Math.ceil(A.days.length / bins), vals = []
     for (let i = 0; i < A.days.length; i += size) vals.push(A.days.slice(i, i + size).reduce((s, d) => s + (A.stDay[r.id]?.[d] || 0), 0))
@@ -291,7 +317,7 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
 
     // خريطة حرارية: متوسط الركاب اليومي لكل محطة حسب يوم الأسبوع
     const stDow = {}
-    A.rows.forEach(r => { stDow[r.id] = Array.from({ length: 7 }, () => ({ pax: 0, days: new Set() })) })
+    A.rows.filter(r => r.s.trips > 0).forEach(r => { stDow[r.id] = Array.from({ length: 7 }, () => ({ pax: 0, days: new Set() })) })
     records.forEach(rc => {
       const d = String(rc.record_date).slice(0, 10)
       if (d < from || d > to || !stDow[rc.station_id]) return
@@ -299,7 +325,7 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
     })
     S.section(T('خريطة حرارية: ازدحام المحطات حسب أيام الأسبوع', 'Heatmap: station load by weekday'), T('متوسط الركاب في اليوم — اللون الأغمق = ازدحام أعلى', 'Average passengers per day — darker = busier'))
     const wd = isAr ? WD_AR : WD_EN
-    const hmRows = A.rows.map(r => {
+    const hmRows = A.rows.filter(r => r.s.trips > 0).map(r => {
       const v = stDow[r.id].map(x => (x.days.size ? Math.round(x.pax / x.days.size) : 0))
       return [r.name, ...v, Math.round(v.reduce((a, b) => a + b, 0) / Math.max(v.filter(x => x > 0).length, 1))]
     })
@@ -332,13 +358,13 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
   }
   S.section(T('جودة البيانات والمنهجية', 'Data quality & methodology'))
   S.bullets(isAr ? [
-    `التغطية: ${n0(records.filter(r => r.record_date >= from && r.record_date <= to).length)} سجل ترحيل في ${A.daysWithData.size} من ${span} يوماً · ${activeStations} محطة نشطة.`,
+    `التغطية: ${n0(scoped.filter(r => r.record_date >= from && r.record_date <= to).length)} سجل ترحيل في ${A.daysWithData.size} من ${span} يوماً · ${activeStations} محطة نشطة.`,
     'الانضباط % = الرحلات المبكرة أو في الموعد ÷ الرحلات التي سُجّلت لها دقة المغادرة. نسبة التخلف = المتخلفون ÷ (الركاب + المتخلفون).',
     'المقارنة تتم بفترة سابقة مماثلة في الطول تنتهي قبل بداية الفترة المحددة مباشرة.',
     'التقييم: ممتاز ≥ 85% انضباط · جيد ≥ 70% · متوسط ≥ 55% · يحتاج تدخلاً أقل من ذلك. ساعات الذروة تُستخرج من وقت المغادرة الفعلي.',
     'ورقة «السجلات» تحوي كل البيانات الخام للتصفية والتحليل الإضافي، وورقة لكل محطة بسجلاتها.',
   ] : [
-    `Coverage: ${n0(records.filter(r => r.record_date >= from && r.record_date <= to).length)} trip records over ${A.daysWithData.size} of ${span} days · ${activeStations} active stations.`,
+    `Coverage: ${n0(scoped.filter(r => r.record_date >= from && r.record_date <= to).length)} trip records over ${A.daysWithData.size} of ${span} days · ${activeStations} active stations.`,
     'Punctuality % = early or on-time trips ÷ trips with a recorded departure accuracy. Missed rate = missed ÷ (passengers + missed).',
     'Comparison uses an equal-length period ending right before the selected one.',
     'Rating: Excellent ≥ 85% punctuality · Good ≥ 70% · Fair ≥ 55% · otherwise Needs action. Peak hours come from the actual departure time.',
@@ -363,16 +389,16 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
   D.finish({ landscape: false })
 
   // ═════════ كل السجلات ═════════
-  const inPeriod = records.filter(r => r.record_date >= from && r.record_date <= to)
-  const R = book.sheet(T('السجلات', 'Records'), [13, 24, 11, 10, 10, 16, 14, 22, 11, 30, 18])
+  const inPeriod = scoped.filter(r => r.record_date >= from && r.record_date <= to)
+  const R = book.sheet(T('السجلات', 'Records'), [13, 24, 11, 11, 10, 10, 16, 14, 22, 11, 30, 18])
   R.header({ title: T('سجلات الترحيل', 'Trip records'), subtitle })
   R.table({
-    columns: [{ header: T('التاريخ', 'Date') }, { header: T('المحطة', 'Station') }, { header: T('رقم الباص', 'Bus') }, { header: T('الركاب', 'Pax'), fmt: '0', bold: true }, { header: T('المتخلفون', 'Missed'), fmt: '0', color: v => (typeof v === 'number' && v > 0 ? XL.red : null) },
+    columns: [{ header: T('التاريخ', 'Date') }, { header: T('المحطة', 'Station') }, { header: T('النوع', 'Type'), color: v => (v === agentTag ? '#7C3AED'.replace('#', 'FF') : null) }, { header: T('رقم الباص', 'Bus') }, { header: T('الركاب', 'Pax'), fmt: '0', bold: true }, { header: T('المتخلفون', 'Missed'), fmt: '0', color: v => (typeof v === 'number' && v > 0 ? XL.red : null) },
       { header: T('المغادرة الفعلية', 'Actual departure') }, { header: T('الدقة', 'Accuracy') }, { header: T('الحالة التشغيلية', 'Operational status') }, { header: T('إضافية', 'Extra') }, { header: T('ملاحظات', 'Notes'), wrap: true }, { header: T('أدخلها', 'Entered by') }],
-    rows: inPeriod.map(r => [r.record_date, stName[r.station_id] ?? '—', r.bus_number ?? '', Number(r.passenger_count) || 0, Number(r.missed_count) || 0, r.actual_departure ?? '',
+    rows: inPeriod.map(r => [r.record_date, stName[r.station_id] ?? '—', stAgent[r.station_id] ? agentTag : T('نورث وست', 'North West'), r.bus_number ?? '', Number(r.passenger_count) || 0, Number(r.missed_count) || 0, r.actual_departure ?? '',
       r.departure_accuracy ? ACCURACY[r.departure_accuracy]?.[isAr ? 0 : 1] ?? r.departure_accuracy : '', r.operational_status ? (isAr ? (STATUS_AR[r.operational_status] || r.operational_status) : r.operational_status) : '',
       r.is_extra_trip ? T('نعم', 'Yes') : '', r.notes ?? '', r.created_by_name ?? '']),
-    filter: true, freeze: 2, printTitle: true,
+    filter: true, freeze: 3, printTitle: true,
   })
   R.finish({ landscape: true })
 
@@ -408,5 +434,5 @@ export async function buildOperationsReport({ supabase, isAr, from, to, onProgre
 
   onProgress?.(T('تجهيز التنزيل…', 'Preparing download…'))
   await book.save(isAr ? `التقرير-التشغيلي_${from}_${to}` : `operations-report_${from}_${to}`)
-  return { records: inPeriod.length, stations: A.rows.length, trips: t.trips }
+  return { records: inPeriod.length, stations: A.rows.filter(r => r.s.trips > 0).length, trips: t.trips }
 }

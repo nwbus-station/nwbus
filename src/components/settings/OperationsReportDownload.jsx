@@ -9,6 +9,7 @@ const shift = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.g
 export default function OperationsReportDownload({ isAr }) {
   const [from, setFrom] = useState(() => shift(todayStr(), -29))
   const [to, setTo] = useState(() => shift(todayStr(), -1))
+  const [kind, setKind] = useState('all') // all | nwb | agent
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const T = (a, e) => (isAr ? a : e)
@@ -30,7 +31,7 @@ export default function OperationsReportDownload({ isAr }) {
     setBusy(true); setMsg(null)
     try {
       const { buildOperationsReport } = await import('../../utils/operationsReport')
-      const r = await buildOperationsReport({ supabase, isAr, from, to, onProgress: t => setMsg({ ok: true, text: t }) })
+      const r = await buildOperationsReport({ supabase, isAr, from, to, kind, onProgress: t => setMsg({ ok: true, text: t }) })
       setMsg({ ok: true, text: T(`تم التنزيل — ${r.trips.toLocaleString('en-US')} رحلة · ${r.stations} محطة`, `Downloaded — ${r.trips.toLocaleString('en-US')} trips · ${r.stations} stations`) })
     } catch (e) {
       setMsg({ ok: false, text: T('تعذّر إنشاء التقرير: ', 'Could not create the report: ') + (e?.message || e) })
@@ -54,6 +55,13 @@ export default function OperationsReportDownload({ isAr }) {
               style={{ padding: '6px 12px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${on ? '#1C2B4A' : 'var(--border)'}`, background: on ? '#1C2B4A' : '#fff', color: on ? '#fff' : 'var(--text-2)' }}>{l}</button>
           )
         })}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', marginInlineEnd: 4 }}>{T('المحطات:', 'Stations:')}</span>
+        {[['all', T('الكل (نورث وست + الوكلاء)', 'All (North West + agents)')], ['nwb', T('نورث وست فقط', 'North West only')], ['agent', T('الوكلاء فقط', 'Agents only')]].map(([k, l]) => (
+          <button key={k} type="button" onClick={() => setKind(k)}
+            style={{ padding: '6px 12px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${kind === k ? '#7C3AED' : 'var(--border)'}`, background: kind === k ? '#7C3AED' : '#fff', color: kind === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
+        ))}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
         <DatePicker value={from} onChange={v => { setFrom(v); if (v && to && v > to) setTo(v) }} isAr={isAr} className={inp} />

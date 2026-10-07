@@ -148,6 +148,7 @@ function StationModal({ station, onClose, onSaved }) {
     city_group: station?.city_group ?? '',
     is_active:  station?.is_active  ?? true,
     combined_arr_dep: station?.combined_arr_dep ?? false,
+    is_agent:   station?.is_agent   ?? false,
   })
   const [tripNums, setTripNums] = useState(Array.isArray(station?.trip_numbers) ? station.trip_numbers : [])
   const [numInput, setNumInput] = useState('')
@@ -227,6 +228,13 @@ function StationModal({ station, onClose, onSaved }) {
               <input className={inputCls} value={form.region} onChange={e => set('region', e.target.value)} />
             </div>
           </div>
+          <label className="flex items-start gap-2.5 rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2.5 cursor-pointer">
+            <input type="checkbox" className="mt-0.5 rounded accent-violet-600" checked={!!form.is_agent} onChange={e => set('is_agent', e.target.checked)} />
+            <span className="text-sm text-gray-700">
+              <span className="font-semibold">{isAr ? 'محطة وكيل' : 'Agent station'}</span>
+              <span className="block text-[11px] text-gray-500 mt-0.5">{isAr ? 'تُشغَّل عبر وكيل وليست من محطات نورث وست — تظهر بعلامة "وكيل" وتُحسب منفصلة في التقارير.' : 'Operated by an agent, not a North West station — shown with an "Agent" badge and counted separately in reports.'}</span>
+            </span>
+          </label>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               {isAr ? 'مجموعة المدينة (لمنع رحلات داخل المدينة)' : 'City Group (prevent intra-city trips)'}
@@ -404,7 +412,7 @@ export default function StationsPage() {
               {filtered.map(s => (
                 <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-gray-800">{s.name_ar}</p>
+                    <p className="font-semibold text-gray-800 flex items-center gap-1.5">{s.name_ar}{s.is_agent && <span className="text-[10px] bg-violet-100 text-violet-700 rounded px-1.5 py-0.5 font-bold">{isAr ? 'وكيل' : 'Agent'}</span>}</p>
                     <p className="text-xs text-gray-400">{s.name_en}</p>
                   </td>
                   <td className="px-4 py-3">
