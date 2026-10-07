@@ -243,18 +243,28 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
 }
 
 async function createAuthUserViaEdge(username, password) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const token = session?.access_token
-  if (!token) return { error: 'No active session' }
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-auth-user`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
-    body: JSON.stringify({ username, password }),
-  })
-  const body = await res.json().catch(() => ({}))
-  if (res.ok) return { auth_id: body.auth_id }
-  if (res.status === 409) return { exists: true }
-  return { error: body.error || 'Failed to create account' }
+  const call = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) return { status: 401 }
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-auth-user`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+      body: JSON.stringify({ username, password }),
+    })
+    return { status: res.status, ok: res.ok, body: await res.json().catch(() => ({})) }
+  }
+  let r = await call()
+  // التوكن منتهي أو غير صالح (نافذة مفتوحة من فترة): نجدّد الجلسة ونعيد المحاولة مرة واحدة
+  if (r.status === 401) {
+    await supabase.auth.refreshSession().catch(() => {})
+    r = await call()
+  }
+  if (r.ok) return { auth_id: r.body.auth_id }
+  if (r.status === 409) return { exists: true }
+  if (r.status === 401) return { error: 'انتهت جلسة الدخول — سجّل الخروج ثم ادخل من جديد وأعد المحاولة' }
+  if (r.status === 403) return { error: 'ما عندك صلاحية إنشاء حسابات' }
+  return { error: r.body?.error || 'Failed to create account' }
 }
 
 async function resetPasswordViaEdge(authId, newPassword) {
