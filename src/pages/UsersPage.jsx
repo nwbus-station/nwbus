@@ -1105,7 +1105,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
     setError('')
     try {
       if (!user) {
-        if (!form.national_id.trim()) throw new Error(isAr ? 'رقم الهوية/الإقامة مطلوب' : 'National/Iqama ID is required')
+        if (!form.is_agent && !form.national_id.trim()) throw new Error(isAr ? 'رقم الهوية/الإقامة مطلوب' : 'National/Iqama ID is required')
         if (!form.password) throw new Error(isAr ? 'كلمة المرور مطلوبة' : 'Password is required')
         if (form.password.length < 6) throw new Error(isAr ? 'كلمة المرور 6 أحرف على الأقل' : 'Password must be at least 6 characters')
 
@@ -1347,10 +1347,10 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                {isAr ? 'رقم الهوية / الإقامة' : 'National / Iqama ID'}{!user && ' *'}
+                {isAr ? 'رقم الهوية / الإقامة' : 'National / Iqama ID'}{!user && !form.is_agent && ' *'}{form.is_agent && <span className="text-gray-400 font-normal"> {isAr ? '(اختياري لحساب الوكيل)' : '(optional for agent accounts)'}</span>}
               </label>
               <input autoComplete="off" className={inputCls + ' font-mono'} value={form.national_id} inputMode="numeric" dir="ltr"
-                required={!user}
+                required={!user && !form.is_agent}
                 onChange={e => handleNationalIdChange(e.target.value)}
                 placeholder="1xxxxxxxxx" />
             </div>
