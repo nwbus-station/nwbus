@@ -453,26 +453,34 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
   )
 }
 
-// زر عائم "الرجوع للأعلى" — يظهر بعد التمرير لأسفل بأي صفحة، ويرجع بسلاسة لأعلى الصفحة
+// زر عائم "الرجوع للأعلى" — يظهر فقط أثناء التمرير للأعلى (أو بعد وقوف قصير) حتى ما يغطي آخر الجدول/الأعمدة،
+// ويختفي أثناء التمرير للأسفل وبعد ثوانٍ من التوقف. صغير وشبه شفاف عشان ما يحجب الكتابة.
 function ScrollToTopButton() {
   const [show, setShow] = useState(false)
   useEffect(() => {
-    const onScroll = () => setShow(window.scrollY > 400)
-    onScroll()
+    let last = window.scrollY, timer = null
+    const hideLater = () => { clearTimeout(timer); timer = setTimeout(() => setShow(false), 2500) }
+    const onScroll = () => {
+      const y = window.scrollY
+      if (y < 400) { setShow(false); last = y; return }
+      if (y < last - 4) { setShow(true); hideLater() }      // تمرير للأعلى → يظهر
+      else if (y > last + 4) { setShow(false) }             // تمرير للأسفل → يختفي
+      last = y
+    }
     window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    return () => { window.removeEventListener('scroll', onScroll); clearTimeout(timer) }
   }, [])
   if (!show) return null
   return (
-    <button className="no-print" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+    <button className="no-print" onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); setShow(false) }}
       title="أعلى الصفحة" aria-label="أعلى الصفحة"
       style={{
-        position: 'fixed', bottom: 20, insetInlineStart: 20, zIndex: 55,
-        width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--border-2)',
-        background: 'var(--card)', color: 'var(--text-2)', boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+        position: 'fixed', bottom: 16, insetInlineStart: 10, zIndex: 55,
+        width: 34, height: 34, borderRadius: '50%', border: '1px solid var(--border-2)',
+        background: 'var(--card)', color: 'var(--text-2)', boxShadow: '0 3px 10px rgba(0,0,0,0.16)', opacity: 0.88,
         display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
       }}>
-      <Icon d={ICONS.up} size={17} />
+      <Icon d={ICONS.up} size={15} />
     </button>
   )
 }
