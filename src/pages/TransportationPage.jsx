@@ -883,7 +883,7 @@ export default function TransportationPage() {
       const arrOn = r.arr_enabled !== false   // وصول مفعّل؟
       const depOn = r.dep_enabled !== false   // مغادرة مفعّلة؟
 
-      // الوقتان: وقت الجدول (من trip_schedule_stops) يُقدَّم على وقت station_trips إلا إذا كان station_trips مختلفاً (تعديل يدوي)
+      // الوقتان: التعديل اليدوي (station_trips) يتقدّم، وإلا وقت الجدول (trip_schedule_stops)
       const arrT = r.arrival_time || ''
       const depT = r.departure_time || ''
       const crossDep = crossDepMap[tr.id]
@@ -918,8 +918,9 @@ export default function TransportationPage() {
         // مغادرة: لا تظهر إذا كانت الوجهة في نفس مدينة المحطة الحالية
         const sameFrom = currentGroup && fromGroup && currentGroup === fromGroup
         const sameTo   = currentGroup && toGroup   && currentGroup === toGroup
-        if (!sameFrom) addArr(stationObj, stop.arrival  || arrT)
-        if (!sameTo)   addDep(stationObj, stop.departure || depT)
+        // التعديل اليدوي من «تفعيل رحلات المحطة» (station_trips) يتقدّم على وقت التوقف بالجدول — يكون فارغاً لو ما عُدّل
+        if (!sameFrom) addArr(stationObj, arrT || stop.arrival)
+        if (!sameTo)   addDep(stationObj, depT || stop.departure)
       } else {
         // لا يوجد سجل توقف → فقط إذا كان الوقت محدداً يدوياً
         if (!(currentGroup && fromGroup && currentGroup === fromGroup)) addArr(stationObj, arrT)
