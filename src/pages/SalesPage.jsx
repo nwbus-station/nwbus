@@ -56,11 +56,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
 
   const [savedCashier]  = useState(() => localStorage.getItem(CASHIER_KEY)  ?? '')
 
-  // استرجاع المسودة المحفوظة (للسجلات الجديدة فقط)
-  const savedDraft = !sale ? (() => {
-    try { return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null') } catch { return null }
-  })() : null
-  const [showDraftBanner, setShowDraftBanner] = useState(!!savedDraft)
+  // لا توجد مسودات: نمسح أي مسودة قديمة محفوظة بالمتصفح
+  useEffect(() => { try { localStorage.removeItem(DRAFT_KEY) } catch { /* لا شي */ } }, [])
 
   // السجل مقفول إذا كان مؤكداً وليس الأدمن
   const isLocked = sale?.is_confirmed && !isGeneralAdmin
@@ -287,20 +284,20 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   }
 
   const [form, setForm] = useState({
-    sale_date:         sale?.sale_date          ?? savedDraft?.sale_date         ?? todayStr(),
-    shift:             sale?.shift              ?? savedDraft?.shift              ?? 'A',
-    station_id:        sale?.station_id         ?? savedDraft?.station_id        ?? profile.station_id ?? '',
+    sale_date:         sale?.sale_date ?? todayStr(),
+    shift:             sale?.shift ?? 'A',
+    station_id:        sale?.station_id ?? profile.station_id ?? '',
     employee_name:     sale?.employee_name      ?? profile?.full_name_ar          ?? '',
-    cashier_ref:       sale ? (parseInitialRefs(sale.balance_ref)[0] ?? '') : (savedDraft?.cashier_ref ?? savedCashier),
-    balance_refs:      sale ? (parseInitialRefs(sale.balance_ref).slice(1).length > 0 ? parseInitialRefs(sale.balance_ref).slice(1) : ['']) : (savedDraft?.balance_refs ?? ['']),
-    cash_amount:       sale?.cash_amount        ?? savedDraft?.cash_amount       ?? 0,
-    mada_amount:       sale?.mada_amount        ?? savedDraft?.mada_amount       ?? 0,
-    mada_network_ref:  sale?.mada_network_ref   ?? savedDraft?.mada_network_ref  ?? '',
-    visa_amount:       sale?.visa_amount        ?? savedDraft?.visa_amount       ?? 0,
-    mastercard_amount: sale?.mastercard_amount  ?? savedDraft?.mastercard_amount ?? 0,
-    other_amount:      sale?.other_amount       ?? savedDraft?.other_amount      ?? 0,
-    other_type:        sale?.other_type         ?? savedDraft?.other_type        ?? '',
-    total_sales:       sale?.total_expected     ?? savedDraft?.total_sales       ?? 0,
+    cashier_ref:       sale ? (parseInitialRefs(sale.balance_ref)[0] ?? '') : savedCashier,
+    balance_refs:      sale ? (parseInitialRefs(sale.balance_ref).slice(1).length > 0 ? parseInitialRefs(sale.balance_ref).slice(1) : ['']) : [''],
+    cash_amount:       sale?.cash_amount ?? 0,
+    mada_amount:       sale?.mada_amount ?? 0,
+    mada_network_ref:  sale?.mada_network_ref ?? '',
+    visa_amount:       sale?.visa_amount ?? 0,
+    mastercard_amount: sale?.mastercard_amount ?? 0,
+    other_amount:      sale?.other_amount ?? 0,
+    other_type:        sale?.other_type ?? '',
+    total_sales:       sale?.total_expected ?? 0,
     is_confirmed:          sale?.is_confirmed       ?? false,
     accountant_notes:      sale?.accountant_notes   ?? '',
     deficit_acknowledged:  false,
@@ -313,11 +310,6 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     ...f, [k]: v,
     ...(DATA_FIELDS.includes(k) && sale ? { _dataChanged: true } : {}),
   }))
-
-  // حفظ المسودة تلقائياً عند كل تغيير (للسجلات الجديدة فقط)
-  useEffect(() => {
-    if (!sale) localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...form, saved_at: new Date().toISOString() }))
-  }, [form, sale])
 
   const totalActual = Math.round(Number(form.cash_amount)) + Math.round(Number(form.mada_amount)) +
     Math.round(Number(form.visa_amount)) + Math.round(Number(form.mastercard_amount)) + Math.round(Number(form.other_amount))
@@ -459,39 +451,6 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
               <p className="text-xs font-semibold text-slate-600">
                 {isAr ? 'هذا السجل مؤكد ومقفول — لا يمكن التعديل' : 'This record is confirmed and locked — editing is disabled'}
               </p>
-            </div>
-          )}
-
-          {/* مسودة محفوظة */}
-          {showDraftBanner && savedDraft && (
-            <div className="bg-amber-50 border border-amber-300 rounded-2xl px-4 py-3 flex items-start gap-3">
-              <div className="flex-1">
-                <p className="text-sm font-bold text-amber-800">{isAr ? 'مسودة محفوظة' : 'Saved draft'}</p>
-                <p className="text-xs text-amber-700 mt-0.5">
-                  {isAr ? 'من تاريخ:' : 'From:'}{' '}
-                  {savedDraft.saved_at
-                    ? new Date(savedDraft.saved_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short' })
-                    : savedDraft.sale_date}
-                  {savedDraft.sale_date && savedDraft.sale_date !== todayStr() && (
-                    <span className="mx-1 font-semibold">{isAr ? `(يوم ${savedDraft.sale_date})` : `(${savedDraft.sale_date})`}</span>
-                  )}
-                </p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button type="button" onClick={() => setShowDraftBanner(false)}
-                  className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">{isAr ? 'استمر منها' : 'Continue'}</button>
-                <button type="button"
-                  onClick={() => {
-                    localStorage.removeItem(DRAFT_KEY)
-                    setShowDraftBanner(false)
-                    setForm(f => ({
-                      ...f, sale_date: todayStr(), shift: 'A', employee_name: profile?.full_name_ar ?? '', cashier_ref: savedCashier,
-                      balance_refs: [''], cash_amount: 0, mada_amount: 0, mada_network_ref: '', visa_amount: 0, mastercard_amount: 0,
-                      other_amount: 0, other_type: '', total_sales: 0,
-                    }))
-                  }}
-                  className="text-xs bg-white border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-amber-50">{isAr ? 'تجاهل' : 'Discard'}</button>
-              </div>
             </div>
           )}
 
