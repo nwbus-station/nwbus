@@ -237,6 +237,24 @@ export default function NewTripModal({ isAr, onClose, onCreated, editTrip }) {
 
     if (isEdit) {
       try {
+        // لقطة قبل التعديل: أي وقت محطة عدّله الأدمن يدوياً (يخالف جدول الرحلة القديم) يبقى ثابتاً بعد تعديل الجدول
+        const h5 = v => (v ? String(v).slice(0, 5) : '')
+        const [{ data: oldStops }, { data: oldST }] = await Promise.all([
+          supabase.from('trip_schedule_stops').select('station_id, arrival_time, departure_time').eq('trip_schedule_id', editTrip.id),
+          supabase.from('station_trips').select('station_id, arrival_time, departure_time, dep_enabled, arr_enabled').eq('trip_schedule_id', editTrip.id),
+        ])
+        const oldSched = new Map()
+        oldSched.set(editTrip.from_station_id, { dep: h5(editTrip.scheduled_departure), arr: '' })
+        oldSched.set(editTrip.to_station_id, { dep: '', arr: h5(editTrip.scheduled_arrival) })
+        ;(oldStops || []).forEach(s => oldSched.set(s.station_id, { dep: h5(s.departure_time), arr: h5(s.arrival_time) }))
+        const keep = new Map()   // station_id -> { dep?, arr?, depOn, arrOn }
+        ;(oldST || []).forEach(r => {
+          const o = oldSched.get(r.station_id), cd = h5(r.departure_time), ca = h5(r.arrival_time), m = { depOn: r.dep_enabled !== false, arrOn: r.arr_enabled !== false }
+          if (cd && (!o || cd !== o.dep)) m.dep = cd
+          if (ca && (!o || ca !== o.arr)) m.arr = ca
+          keep.set(r.station_id, m)
+        })
+
         const { error: eu } = await supabase.from('trip_schedule').update({
           trip_number: num,
           trip_name: num,
@@ -282,11 +300,15 @@ export default function NewTripModal({ isAr, onClose, onCreated, editTrip }) {
             arrival_time: s.arrival_time ? s.arrival_time.slice(0, 5) : null,
             departure_time: s.departure_time ? s.departure_time.slice(0, 5) : null,
           })),
-        ].map(r => ({
-          ...r, trip_schedule_id: editTrip.id,
-          departure_station_id: null, dep_enabled: true, arr_enabled: true,
-          selected_by: profile.id, selected_by_name: profile.full_name_ar,
-        }))
+        ].map(r => {
+          const k = keep.get(r.station_id)
+          return {
+            ...r, trip_schedule_id: editTrip.id,
+            ...(k?.dep ? { departure_time: k.dep } : {}), ...(k?.arr ? { arrival_time: k.arr } : {}),   // التعديل اليدوي ثابت
+            departure_station_id: null, dep_enabled: k ? k.depOn : true, arr_enabled: k ? k.arrOn : true,
+            selected_by: profile.id, selected_by_name: profile.full_name_ar,
+          }
+        })
         const { error: eup } = await supabase.from('station_trips')
           .upsert(rows, { onConflict: 'station_id,trip_schedule_id' })
         if (eup) throw eup
