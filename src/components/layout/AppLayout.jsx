@@ -453,34 +453,38 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
   )
 }
 
-// زر عائم "الرجوع للأعلى" — يظهر فقط أثناء التمرير للأعلى (أو بعد وقوف قصير) حتى ما يغطي آخر الجدول/الأعمدة،
-// ويختفي أثناء التمرير للأسفل وبعد ثوانٍ من التوقف. صغير وشبه شفاف عشان ما يحجب الكتابة.
+// زر عائم للتنقل السريع: أثناء التمرير للأسفل يظهر سهم "آخر الصفحة"، وأثناء التمرير للأعلى يظهر سهم "أعلى الصفحة".
+// صغير وشبه شفاف ويختفي بعد ثانيتين ونصف من التوقف حتى ما يغطي الجداول والأعمدة.
 function ScrollToTopButton() {
-  const [show, setShow] = useState(false)
+  const [dir, setDir] = useState(null)   // 'up' | 'down' | null
   useEffect(() => {
     let last = window.scrollY, timer = null
-    const hideLater = () => { clearTimeout(timer); timer = setTimeout(() => setShow(false), 2500) }
+    const hideLater = () => { clearTimeout(timer); timer = setTimeout(() => setDir(null), 2500) }
+    const nearBottom = y => y + window.innerHeight >= document.documentElement.scrollHeight - 120
     const onScroll = () => {
       const y = window.scrollY
-      if (y < 400) { setShow(false); last = y; return }
-      if (y < last - 4) { setShow(true); hideLater() }      // تمرير للأعلى → يظهر
-      else if (y > last + 4) { setShow(false) }             // تمرير للأسفل → يختفي
+      if (y < 250) { setDir(null); last = y; return }
+      if (y < last - 4) { setDir('up'); hideLater() }                                  // تمرير للأعلى
+      else if (y > last + 4) { if (nearBottom(y)) setDir(null); else { setDir('down'); hideLater() } }  // تمرير للأسفل
       last = y
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => { window.removeEventListener('scroll', onScroll); clearTimeout(timer) }
   }, [])
-  if (!show) return null
+  if (!dir) return null
+  const goTop = dir === 'up'
+  const label = goTop ? 'أعلى الصفحة' : 'آخر الصفحة'
   return (
-    <button className="no-print" onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); setShow(false) }}
-      title="أعلى الصفحة" aria-label="أعلى الصفحة"
+    <button className="no-print"
+      onClick={() => { window.scrollTo({ top: goTop ? 0 : document.documentElement.scrollHeight, behavior: 'smooth' }); setDir(null) }}
+      title={label} aria-label={label}
       style={{
         position: 'fixed', bottom: 16, insetInlineStart: 10, zIndex: 55,
         width: 34, height: 34, borderRadius: '50%', border: '1px solid var(--border-2)',
         background: 'var(--card)', color: 'var(--text-2)', boxShadow: '0 3px 10px rgba(0,0,0,0.16)', opacity: 0.88,
         display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
       }}>
-      <Icon d={ICONS.up} size={15} />
+      <span style={{ display: 'flex', transform: goTop ? 'none' : 'rotate(180deg)' }}><Icon d={ICONS.up} size={15} /></span>
     </button>
   )
 }
