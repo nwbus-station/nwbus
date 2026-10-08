@@ -914,7 +914,7 @@ export default function SalesPage() {
       </div>
 
       {/* Summary */}
-      <StatStrip className="mb-5" items={[
+      <StatStrip className="mb-5" sticky={isGeneralAdmin} items={[
         { label: isAr ? 'الإجمالي الفعلي' : 'Actual Total', val: fmt(totalActualSum) + ' ر.س', tone: 'text-green-700' },
         { label: isAr ? 'إجمالي المبيعات' : 'Sales Total', val: fmt(totalExpectedSum) + ' ر.س' },
         { label: isAr ? 'الفرق' : 'Difference',
