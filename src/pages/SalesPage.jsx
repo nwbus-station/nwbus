@@ -22,7 +22,6 @@ const fmtD = d => d ? new Date(d).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn
 const fmtT = d => d ? new Date(d).toLocaleTimeString('ar-SA-u-ca-gregory-nu-latn', { hour:'2-digit', minute:'2-digit', hour12: false }) : ''
 
 const CASHIER_KEY  = 'nwbus_cashier_ref'
-const EMPLOYEE_KEY = 'nwbus_employee_name'
 const DRAFT_KEY    = 'nwbus_sales_draft'
 
 const parseRefs = raw => {
@@ -34,15 +33,29 @@ const parseRefsArr = raw => {
   try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : [raw] } catch { return [raw] }
 }
 
+// بطاقة قسم داخل نموذج الإيراد (خارج المكوّن عشان ما تُعاد تهيئة الحقول مع كل ضغطة مفتاح)
+function SectionCard({ n, title, children, tone = 'bg-white border-slate-200' }) {
+  return (
+    <section className={`rounded-2xl border ${tone} p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]`}>
+      {title && (
+        <h3 className="flex items-center gap-2 text-[13px] font-extrabold text-slate-800 mb-3">
+          {n != null && <span className="w-5 h-5 rounded-full bg-emerald-700 text-white text-[10px] font-bold grid place-items-center">{n}</span>}
+          {title}
+        </h3>
+      )}
+      {children}
+    </section>
+  )
+}
+
 /* ─── Sales Modal ───────────────────────────────────────── */
-function SalesModal({ sale, stations, onClose, onSaved }) {
+export function SalesModal({ sale, stations, onClose, onSaved }) {
   useEscapeKey(onClose)
   const { profile, isAccountant, isGeneralAdmin, allowCap } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
   const [savedCashier]  = useState(() => localStorage.getItem(CASHIER_KEY)  ?? '')
-  const [savedEmployee] = useState(() => localStorage.getItem(EMPLOYEE_KEY) ?? '')
 
   // استرجاع المسودة المحفوظة (للسجلات الجديدة فقط)
   const savedDraft = !sale ? (() => {
@@ -60,8 +73,8 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
     const printDate = now.toLocaleDateString('en-GB')
     const printTime = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
     const printerName = profile?.full_name_ar ?? profile?.full_name ?? '—'
-    const employeeName = sale?.employee_name ?? '—'
-    const jobNumber = sale?.created_by_user?.job_number ?? '—'
+    const employeeName = sale?.employee_name || sale?.created_by_name || '—'
+    const jobNumber = ((!sale?.employee_name || sale.employee_name === sale.created_by_name) ? sale?.created_by_user?.job_number : null) ?? '—'
     const stationName = sale?.station?.name_ar ?? sale?.station?.name_en ?? '—'
     const accountantName = sale?.confirmed_by_name ?? '—'
     const totalActualVal = (Number(sale?.cash_amount??0) + Number(sale?.mada_amount??0) + Number(sale?.visa_amount??0) + Number(sale?.mastercard_amount??0) + Number(sale?.other_amount??0))
@@ -278,7 +291,7 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
     sale_date:         sale?.sale_date          ?? savedDraft?.sale_date         ?? todayStr(),
     shift:             sale?.shift              ?? savedDraft?.shift              ?? 'A',
     station_id:        sale?.station_id         ?? savedDraft?.station_id        ?? profile.station_id ?? '',
-    employee_name:     sale?.employee_name      ?? savedDraft?.employee_name     ?? savedEmployee,
+    employee_name:     sale?.employee_name      ?? profile?.full_name_ar          ?? '',
     cashier_ref:       sale ? (parseInitialRefs(sale.balance_ref)[0] ?? '') : (savedDraft?.cashier_ref ?? savedCashier),
     balance_refs:      sale ? (parseInitialRefs(sale.balance_ref).slice(1).length > 0 ? parseInitialRefs(sale.balance_ref).slice(1) : ['']) : (savedDraft?.balance_refs ?? ['']),
     cash_amount:       sale?.cash_amount        ?? savedDraft?.cash_amount       ?? 0,
@@ -315,7 +328,6 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
   function removeBalanceRef(i)  { set('balance_refs', form.balance_refs.filter((_, idx) => idx !== i)) }
   function setBalanceRef(i, v)  { const refs = [...form.balance_refs]; refs[i] = v; set('balance_refs', refs) }
   function persistCashier()   { localStorage.setItem(CASHIER_KEY,  form.cashier_ref)   }
-  function persistEmployee()  { localStorage.setItem(EMPLOYEE_KEY, form.employee_name) }
 
   async function handleSave(e) {
     e.preventDefault()
@@ -392,308 +404,297 @@ function SalesModal({ sale, stations, onClose, onSaved }) {
     setSaving(false)
   }
 
-  const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
+  const inputCls = "w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-600 focus:outline-none transition"
 
+  // الموظف: من حساب المستخدم (للسجل الجديد) أو من السجل المحفوظ؛ الرقم الوظيفي بجانبه ومربوط بالطباعة
+  const empName = sale ? (sale.employee_name || sale.created_by_name || '—') : (profile?.full_name_ar || '—')
+  const empJob  = sale
+    ? ((!sale.employee_name || sale.employee_name === sale.created_by_name) ? (sale.created_by_user?.job_number ?? null) : null)
+    : (profile?.job_number ?? null)
+  const stationLabel = (() => {
+    const id = isGeneralAdmin ? form.station_id : (sale?.station_id ?? profile.station_id)
+    const st = stations.find(s => s.id === id) ?? sale?.station
+    return st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : null
+  })()
+  const shiftObj = SHIFTS.find(s => s.value === form.shift)
+  const diffTone = diff === 0 ? { c: '#15803d', bg: '#f0fdf4', bd: '#bbf7d0', t: isAr ? 'مطابق ✓' : 'Matched ✓' }
+    : diff > 0 ? { c: '#1d4ed8', bg: '#eff6ff', bd: '#bfdbfe', t: isAr ? 'زيادة' : 'Surplus' }
+    : { c: '#b91c1c', bg: '#fef2f2', bd: '#fecaca', t: isAr ? 'عجز' : 'Deficit' }
+  const METHODS = [
+    { key: 'cash_amount',       label: isAr ? 'نقداً' : 'Cash',  dot: '#16a34a' },
+    { key: 'mada_amount',       label: isAr ? 'مدى' : 'Mada',    dot: '#2563eb', ref: 'mada_network_ref', refLabel: isAr ? 'الرقم المرجعي لمدى' : 'Mada reference' },
+    { key: 'visa_amount',       label: 'Visa',                    dot: '#4f46e5' },
+    { key: 'mastercard_amount', label: 'Mastercard',              dot: '#ea580c' },
+    { key: 'other_amount',      label: isAr ? 'أخرى' : 'Other', dot: '#64748b', ref: 'other_type', refLabel: isAr ? 'نوع الدفع' : 'Payment type' },
+  ]
   return (
-    <div className={`fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4${isLocked ? ' print-modal-root' : ''}`} dir={isAr ? 'rtl' : 'ltr'}>
-      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto${isLocked ? ' print-modal-panel' : ''}`}>
+    <div className={`fixed inset-0 bg-slate-900/55 backdrop-blur-[2px] z-50 flex items-center justify-center p-3 sm:p-4${isLocked ? ' print-modal-root' : ''}`} dir={isAr ? 'rtl' : 'ltr'}>
+      <div className={`bg-slate-50 rounded-3xl shadow-2xl w-full max-w-xl max-h-[94vh] flex flex-col overflow-hidden${isLocked ? ' print-modal-panel' : ''}`}>
 
-        <div className="px-6 py-4 border-b flex items-center justify-between"
-          style={{ background: isLocked ? '#3F4A52' : '#1E7A55' }}>
-          <h2 className="font-bold text-white text-base">
-            {isLocked ? '' : ''}{' '}
-            {sale ? (isAr ? 'عرض سجل المبيعات' : 'View Sales Record') : (isAr ? 'إدخال مبيعات' : 'Sales Entry')}
-          </h2>
-          <button onClick={onClose} className="text-white/50 hover:text-white text-2xl leading-none no-print">×</button>
+        {/* ═ الترويسة ═ */}
+        <div className="relative px-6 pt-5 pb-4 text-white shrink-0"
+          style={{ background: isLocked ? 'linear-gradient(135deg,#475560,#2c363d)' : 'linear-gradient(135deg,#0f5132,#1E7A55 60%,#2a9166)' }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold tracking-wide text-white/70">{isAr ? 'نظام الإيرادات' : 'Revenue system'}</p>
+              <h2 className="text-lg font-extrabold mt-0.5">
+                {sale ? (isAr ? 'سجل المبيعات' : 'Sales record') : (isAr ? 'إدخال مبيعات' : 'Sales entry')}
+              </h2>
+              <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                {stationLabel && <span className="text-[11px] font-semibold bg-white/15 rounded-full px-2.5 py-0.5">{stationLabel}</span>}
+                <span className="text-[11px] font-semibold bg-white/15 rounded-full px-2.5 py-0.5" dir="ltr">{form.sale_date}</span>
+                {shiftObj && <span className="text-[11px] font-semibold bg-white/15 rounded-full px-2.5 py-0.5">{isAr ? shiftObj.ar : shiftObj.en}</span>}
+                {isLocked && <span className="text-[11px] font-bold bg-amber-400 text-amber-950 rounded-full px-2.5 py-0.5">{isAr ? 'مؤكد ومقفول' : 'Confirmed · locked'}</span>}
+              </div>
+            </div>
+            <button onClick={onClose} aria-label="close"
+              className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white text-xl leading-none grid place-items-center no-print">×</button>
+          </div>
         </div>
 
-        {/* بانر القفل */}
-        {isLocked && (
-          <div className="mx-6 mt-4 flex items-center gap-2 bg-gray-100 border border-gray-300 rounded-xl px-4 py-3">
-            <span className="text-lg"></span>
-            <p className="text-xs font-semibold text-gray-600">
-              {isAr ? 'هذا السجل مؤكد ومقفول — لا يمكن التعديل' : 'This record is confirmed and locked — editing is disabled'}
-            </p>
-          </div>
-        )}
+        <form onSubmit={handleSave} className="flex flex-col min-h-0 flex-1">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
 
-        <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
-
-        {/* بانر المسودة المحفوظة */}
-        {showDraftBanner && savedDraft && (
-          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-start gap-3">
-            <span className="text-xl mt-0.5"></span>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-amber-800">
-                {isAr ? 'مسودة محفوظة' : 'Saved Draft'}
+          {isLocked && (
+            <div className="flex items-center gap-2 bg-slate-100 border border-slate-300 rounded-xl px-4 py-2.5">
+              <p className="text-xs font-semibold text-slate-600">
+                {isAr ? 'هذا السجل مؤكد ومقفول — لا يمكن التعديل' : 'This record is confirmed and locked — editing is disabled'}
               </p>
-              <p className="text-xs text-amber-600 mt-0.5">
-                {isAr ? 'من تاريخ:' : 'From:'}{' '}
-                {savedDraft.saved_at
-                  ? new Date(savedDraft.saved_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short' })
-                  : savedDraft.sale_date}
-                {savedDraft.sale_date && savedDraft.sale_date !== todayStr() && (
-                  <span className="mr-1 text-amber-700 font-semibold">
-                    {isAr ? `(يوم ${savedDraft.sale_date})` : `(${savedDraft.sale_date})`}
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button type="button"
-                onClick={() => setShowDraftBanner(false)}
-                className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
-                {isAr ? 'استمر منها' : 'Continue'}
-              </button>
-              <button type="button"
-                onClick={() => {
-                  localStorage.removeItem(DRAFT_KEY)
-                  setShowDraftBanner(false)
-                  setForm(f => ({
-                    ...f,
-                    sale_date: todayStr(), shift: 'A',
-                    employee_name: savedEmployee, cashier_ref: savedCashier,
-                    balance_refs: [''], cash_amount: 0, mada_amount: 0,
-                    mada_network_ref: '', visa_amount: 0, mastercard_amount: 0,
-                    other_amount: 0, other_type: '', total_sales: 0,
-                  }))
-                }}
-                className="text-xs bg-white border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-amber-50">
-                {isAr ? 'تجاهل' : 'Discard'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <fieldset disabled={isLocked} className="space-y-4 disabled:opacity-60">
-
-          {/* ① المحطة — للأدمن فقط */}
-          {isGeneralAdmin && (
-            <div className="bg-nwbus-primary/5 rounded-xl p-4 border border-nwbus-primary/20">
-              <label className="block text-xs font-bold text-nwbus-primary mb-1.5">
-                {isAr ? 'المحطة *' : 'Station *'}
-              </label>
-              <select
-                required={isGeneralAdmin}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white"
-                value={form.station_id}
-                onChange={e => set('station_id', e.target.value)}
-              >
-                <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
-                {stations.map(s => (
-                  <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
-                ))}
-              </select>
             </div>
           )}
 
-          {/* ② اسم الموظف */}
-          <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-            <label className="block text-xs font-bold text-blue-800 mb-1.5">
-              {isAr ? 'اسم الموظف' : 'Employee Name'}
-            </label>
-            <div className="flex gap-2">
-              <input
-                className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none bg-white"
-                value={form.employee_name}
-                onChange={e => set('employee_name', e.target.value)}
-                placeholder={isAr ? 'أدخل اسم الموظف' : 'Enter employee name'}
-              />
-              <button type="button" onClick={persistEmployee}
-                className="shrink-0 px-3 py-2 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600 transition-colors">
-                {isAr ? 'تثبيت' : 'Pin'}
-              </button>
-            </div>
-            {savedEmployee && savedEmployee !== form.employee_name && (
-              <button type="button" onClick={() => set('employee_name', savedEmployee)}
-                className="text-xs text-blue-700 mt-1.5 underline">
-                ↩ {isAr ? `استخدام المثبت: ${savedEmployee}` : `Use pinned: ${savedEmployee}`}
-              </button>
-            )}
-          </div>
-
-          {/* ② رقم الصرافة */}
-          <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-            <label className="block text-xs font-bold text-amber-800 mb-1.5">
-              {isAr ? 'رقم الصرافة' : 'Cashier Number'}
-            </label>
-            <div className="flex gap-2">
-              <input className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none bg-white"
-                value={form.cashier_ref} onChange={e => set('cashier_ref', toLatinDigits(e.target.value))}
-                placeholder={isAr ? 'أدخل رقم الصرافة' : 'Enter cashier number'} />
-              <button type="button" onClick={persistCashier}
-                className="shrink-0 px-3 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-colors">
-                {isAr ? 'تثبيت' : 'Pin'}
-              </button>
-            </div>
-            {savedCashier && savedCashier !== form.cashier_ref && (
-              <button type="button" onClick={() => set('cashier_ref', savedCashier)}
-                className="text-xs text-amber-700 mt-1.5 underline">
-                ↩ {isAr ? `استخدام المثبت: ${savedCashier}` : `Use pinned: ${savedCashier}`}
-              </button>
-            )}
-          </div>
-
-          {/* ② أرقام الموازنة (اختياري) */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-medium text-gray-600">
-                {isAr ? 'رقم الموازنة' : 'Budget Reference'}
-                <span className="ms-1.5 text-gray-400 font-normal">({isAr ? 'اختياري' : 'optional'})</span>
-              </label>
-              <button type="button" onClick={addBalanceRef}
-                className="text-xs text-nwbus-primary font-semibold hover:underline">
-                + {isAr ? 'إضافة رقم' : 'Add another'}
-              </button>
-            </div>
-            {form.balance_refs.map((ref, i) => (
-              <div key={i} className="flex gap-2 mb-2">
-                <input className={inputCls} value={ref}
-                  onChange={e => setBalanceRef(i, toLatinDigits(e.target.value))}
-                  placeholder={isAr ? 'أدخل رقم الموازنة أو اتركه فارغاً' : 'Enter budget ref or leave blank'} />
-                {form.balance_refs.length > 1 && (
-                  <button type="button" onClick={() => removeBalanceRef(i)}
-                    className="shrink-0 text-red-400 hover:text-red-600 px-2 text-lg">✕</button>
-                )}
+          {/* مسودة محفوظة */}
+          {showDraftBanner && savedDraft && (
+            <div className="bg-amber-50 border border-amber-300 rounded-2xl px-4 py-3 flex items-start gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-bold text-amber-800">{isAr ? 'مسودة محفوظة' : 'Saved draft'}</p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  {isAr ? 'من تاريخ:' : 'From:'}{' '}
+                  {savedDraft.saved_at
+                    ? new Date(savedDraft.saved_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short' })
+                    : savedDraft.sale_date}
+                  {savedDraft.sale_date && savedDraft.sale_date !== todayStr() && (
+                    <span className="mx-1 font-semibold">{isAr ? `(يوم ${savedDraft.sale_date})` : `(${savedDraft.sale_date})`}</span>
+                  )}
+                </p>
               </div>
-            ))}
-          </div>
-
-          {/* ③ التاريخ والوردية */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'التاريخ' : 'Date'}</label>
-              <DatePicker className={inputCls} isAr={isAr}
-                value={form.sale_date} onChange={v => set('sale_date', v)} />
+              <div className="flex gap-2 shrink-0">
+                <button type="button" onClick={() => setShowDraftBanner(false)}
+                  className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">{isAr ? 'استمر منها' : 'Continue'}</button>
+                <button type="button"
+                  onClick={() => {
+                    localStorage.removeItem(DRAFT_KEY)
+                    setShowDraftBanner(false)
+                    setForm(f => ({
+                      ...f, sale_date: todayStr(), shift: 'A', employee_name: profile?.full_name_ar ?? '', cashier_ref: savedCashier,
+                      balance_refs: [''], cash_amount: 0, mada_amount: 0, mada_network_ref: '', visa_amount: 0, mastercard_amount: 0,
+                      other_amount: 0, other_type: '', total_sales: 0,
+                    }))
+                  }}
+                  className="text-xs bg-white border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-amber-50">{isAr ? 'تجاهل' : 'Discard'}</button>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الوردية' : 'Shift'}</label>
-              <select className={inputCls} value={form.shift} onChange={e => set('shift', e.target.value)}>
-                {SHIFTS.map(s => <option key={s.value} value={s.value}>{isAr ? s.ar : s.en}</option>)}
-              </select>
-            </div>
-          </div>
+          )}
 
-          {/* ④ طرق الدفع */}
-          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-              {isAr ? 'طرق الدفع' : 'Payment Methods'}
-            </p>
-            {[
-              { key: 'cash_amount',       label: isAr ? 'نقداً' : 'Cash' },
-              { key: 'mada_amount',       label: 'مدى / Mada', ref: 'mada_network_ref', refLabel: isAr ? 'رقم مرجعي مدى' : 'Mada Ref' },
-              { key: 'visa_amount',       label: 'Visa' },
-              { key: 'mastercard_amount', label: 'Mastercard' },
-              { key: 'other_amount',      label: isAr ? 'أخرى' : 'Other', ref: 'other_type', refLabel: isAr ? 'نوع الدفع' : 'Payment Type' },
-            ].map(field => (
-              <div key={field.key}>
-                <div className="flex items-center gap-3">
-                  <label className="text-xs font-medium text-gray-600 w-28 shrink-0">{field.label}</label>
-                  <input type="text" inputMode="numeric" lang="en"
-                    className="flex-1 border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white"
-                    value={form[field.key]}
-                    onChange={e => set(field.key, Math.round(Number(cleanNumber(e.target.value))) || 0)}
-                    onFocus={e => e.target.select()} />
-                </div>
-                {field.ref && Number(form[field.key]) > 0 && (
-                  <div className="mt-1 ms-28 ps-3">
-                    <input placeholder={field.refLabel}
-                      className="w-full border rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white"
-                      value={form[field.ref]} onChange={e => set(field.ref, toLatinDigits(e.target.value))} />
+          <fieldset disabled={isLocked} className="space-y-3.5 disabled:opacity-70 min-w-0">
+
+            {/* بطاقة الموظف — من الحساب */}
+            <div className="rounded-2xl p-4 text-white flex items-center gap-3.5 shadow-sm"
+              style={{ background: 'linear-gradient(135deg,#1b3a6b,#264673 55%,#35599a)' }}>
+              <div className="w-12 h-12 rounded-full bg-white/15 border border-white/25 grid place-items-center text-lg font-extrabold shrink-0">
+                {(empName || '؟').trim().charAt(0)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold text-white/65 tracking-wide">{isAr ? 'الموظف (من الحساب)' : 'Employee (from account)'}</p>
+                <p className="text-base font-extrabold leading-tight truncate" dir="auto">{empName}</p>
+              </div>
+              <div className="text-end shrink-0">
+                <p className="text-[10px] font-semibold text-white/65 tracking-wide">{isAr ? 'الرقم الوظيفي' : 'Job no.'}</p>
+                <p className="text-lg font-extrabold font-mono leading-tight" dir="ltr">{empJob ? `#${empJob}` : '—'}</p>
+              </div>
+            </div>
+
+            {/* بيانات السجل */}
+            <SectionCard n={1} title={isAr ? 'بيانات السجل' : 'Record details'}>
+              <div className="space-y-3">
+                {isGeneralAdmin && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'المحطة *' : 'Station *'}</label>
+                    <select required={isGeneralAdmin} className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
+                      <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
+                      {stations.map(s => <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>)}
+                    </select>
                   </div>
                 )}
-              </div>
-            ))}
-          </div>
-
-          {/* ⑤ إجمالي المبيعات + الفرق */}
-          <div className="bg-green-50 rounded-xl p-4 space-y-2 border border-green-200">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-bold text-gray-700">{isAr ? 'إجمالي المبيعات:' : 'Total Sales:'}</span>
-              <input type="text" inputMode="numeric" lang="en"
-                className="w-36 border rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-green-400 focus:outline-none bg-white"
-                value={form.total_sales}
-                onChange={e => set('total_sales', Math.round(Number(cleanNumber(e.target.value))) || 0)}
-                onFocus={e => e.target.select()} />
-            </div>
-            <div className="flex justify-between text-sm border-t border-green-200 pt-2">
-              <span className="text-gray-500">{isAr ? 'الإجمالي الفعلي:' : 'Actual:'}</span>
-              <span className="font-bold text-green-700">{fmt(totalActual)} {isAr ? 'ر.س' : 'SAR'}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">{isAr ? 'الفرق:' : 'Difference:'}</span>
-              <span className={`font-bold ${diff === 0 ? 'text-gray-400' : diff > 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                {diff >= 0 ? '+' : ''}{fmt(diff)} {isAr ? 'ر.س' : 'SAR'}
-              </span>
-            </div>
-          </div>
-
-          {/* ⑥ تأكيد المحاسب */}
-          {isAccountant && sale && (allowCap('sales_confirm') || allowCap('sales_deficit_ack') || allowCap('sales_notes')) && (
-            <div className="bg-yellow-50 rounded-xl p-4 space-y-3 border border-yellow-200">
-              <p className="text-xs font-bold text-yellow-700">{isAr ? 'تأكيد المحاسب' : 'Accountant Confirmation'}</p>
-
-              {/* تنبيه العجز */}
-              {diff < 0 && allowCap('sales_deficit_ack') && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
-                  <p className="text-xs font-bold text-red-700">
-                    ⚠ {isAr ? 'يوجد عجز بمقدار' : 'Deficit of'} {fmt(Math.abs(diff))} {isAr ? 'ر.س' : 'SAR'}
-                  </p>
-                  <p className="text-xs text-red-600">
-                    {isAr
-                      ? `الموظف: ${sale.employee_name || sale.created_by_name || '—'} · الرقم الوظيفي: ${sale.created_by_user?.job_number || '—'}`
-                      : `Employee: ${sale.employee_name || sale.created_by_name || '—'} · Job No: ${sale.created_by_user?.job_number || '—'}`}
-                  </p>
-                  <label className="flex items-center gap-2 text-xs text-red-700 cursor-pointer font-semibold">
-                    <input type="checkbox" className="rounded accent-red-600"
-                      checked={form.deficit_acknowledged ?? false}
-                      onChange={e => set('deficit_acknowledged', e.target.checked)} />
-                    {isAr
-                      ? 'أُقر بتحميل العجز على الموظف وأعتمده بصفتي محاسب المحطة'
-                      : 'I acknowledge the deficit is charged to the employee and approve as station accountant'}
-                  </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'التاريخ' : 'Date'}</label>
+                    <DatePicker className={inputCls} isAr={isAr} value={form.sale_date} onChange={v => set('sale_date', v)} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'الوردية' : 'Shift'}</label>
+                    <select className={inputCls} value={form.shift} onChange={e => set('shift', e.target.value)}>
+                      {SHIFTS.map(s => <option key={s.value} value={s.value}>{isAr ? s.ar : s.en}</option>)}
+                    </select>
+                  </div>
                 </div>
-              )}
+              </div>
+            </SectionCard>
 
-              {allowCap('sales_confirm') && (
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" className="rounded"
-                  checked={form.is_confirmed} onChange={e => set('is_confirmed', e.target.checked)} />
-                {isAr ? 'تأكيد وإغلاق السجل' : 'Confirm and close this record'}
-              </label>
-              )}
-              {allowCap('sales_notes') && <textarea rows={2} placeholder={isAr ? 'ملاحظات...' : 'Notes...'}
-                className="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
-                value={form.accountant_notes} onChange={e => set('accountant_notes', e.target.value)} />}
-            </div>
-          )}
+            {/* المراجع */}
+            <SectionCard n={2} title={isAr ? 'المراجع' : 'References'}>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'رقم الصرافة' : 'Cashier number'}</label>
+                  <div className="flex gap-2">
+                    <input className={inputCls + ' font-mono'} dir="ltr" value={form.cashier_ref}
+                      onChange={e => set('cashier_ref', toLatinDigits(e.target.value))}
+                      placeholder={isAr ? 'أدخل رقم الصرافة' : 'Enter cashier number'} />
+                    <button type="button" onClick={persistCashier}
+                      className="shrink-0 px-3.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-xs font-bold hover:bg-amber-100 transition">
+                      {isAr ? 'تثبيت' : 'Pin'}
+                    </button>
+                  </div>
+                  {savedCashier && savedCashier !== form.cashier_ref && (
+                    <button type="button" onClick={() => set('cashier_ref', savedCashier)} className="text-xs text-amber-700 mt-1.5 underline">
+                      ↩ {isAr ? `استخدام المثبت: ${savedCashier}` : `Use pinned: ${savedCashier}`}
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-500">
+                      {isAr ? 'رقم الموازنة' : 'Budget reference'}
+                      <span className="ms-1.5 text-slate-400 font-normal">({isAr ? 'اختياري' : 'optional'})</span>
+                    </label>
+                    <button type="button" onClick={addBalanceRef} className="text-xs text-emerald-700 font-bold hover:underline">+ {isAr ? 'إضافة رقم' : 'Add another'}</button>
+                  </div>
+                  {form.balance_refs.map((ref, i) => (
+                    <div key={i} className="flex gap-2 mb-2 last:mb-0">
+                      <input className={inputCls + ' font-mono'} dir="ltr" value={ref}
+                        onChange={e => setBalanceRef(i, toLatinDigits(e.target.value))}
+                        placeholder={isAr ? 'أدخل رقم الموازنة أو اتركه فارغاً' : 'Enter budget ref or leave blank'} />
+                      {form.balance_refs.length > 1 && (
+                        <button type="button" onClick={() => removeBalanceRef(i)} className="shrink-0 text-red-400 hover:text-red-600 px-2 text-lg">✕</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </SectionCard>
 
-        </fieldset>
+            {/* طرق الدفع */}
+            <SectionCard n={3} title={isAr ? 'طرق الدفع' : 'Payment methods'}>
+              <div className="space-y-2.5">
+                {METHODS.map(m => (
+                  <div key={m.key}>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-2 w-28 shrink-0 text-[13px] font-semibold text-slate-700">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: m.dot }} />{m.label}
+                      </span>
+                      <div className="relative flex-1">
+                        <input type="text" inputMode="numeric" lang="en" dir="ltr"
+                          className={inputCls + ' text-end font-mono font-bold pe-12'}
+                          value={form[m.key]}
+                          onChange={e => set(m.key, Math.round(Number(cleanNumber(e.target.value))) || 0)}
+                          onFocus={e => e.target.select()} />
+                        <span className="absolute inset-y-0 end-3 flex items-center text-[11px] font-semibold text-slate-400 pointer-events-none">{isAr ? 'ر.س' : 'SAR'}</span>
+                      </div>
+                    </div>
+                    {m.ref && Number(form[m.key]) > 0 && (
+                      <div className="mt-1.5 ms-[7.75rem]">
+                        <input placeholder={m.refLabel} dir="ltr"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none font-mono"
+                          value={form[m.ref]} onChange={e => set(m.ref, toLatinDigits(e.target.value))} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
 
-          {error && <p className="text-red-600 text-xs bg-red-50 rounded p-2 border border-red-100">⚠ {error}</p>}
+            {/* الإجماليات */}
+            <SectionCard n={4} title={isAr ? 'الإجماليات' : 'Totals'} tone="bg-white border-emerald-200">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="text-[13px] font-bold text-slate-700">{isAr ? 'إجمالي المبيعات (المتوقع)' : 'Sales total (expected)'}</span>
+                <div className="relative w-40">
+                  <input type="text" inputMode="numeric" lang="en" dir="ltr"
+                    className={inputCls + ' text-end font-mono font-bold pe-12'}
+                    value={form.total_sales}
+                    onChange={e => set('total_sales', Math.round(Number(cleanNumber(e.target.value))) || 0)}
+                    onFocus={e => e.target.select()} />
+                  <span className="absolute inset-y-0 end-3 flex items-center text-[11px] font-semibold text-slate-400 pointer-events-none">{isAr ? 'ر.س' : 'SAR'}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-center">
+                  <p className="text-[10px] font-semibold text-slate-400">{isAr ? 'الإجمالي الفعلي' : 'Actual total'}</p>
+                  <p className="text-lg font-extrabold font-mono text-emerald-700 leading-tight" dir="ltr">{fmt(totalActual)} <span className="text-[10px] font-semibold text-slate-400">{isAr ? 'ر.س' : 'SAR'}</span></p>
+                </div>
+                <div className="rounded-xl px-3 py-2.5 text-center border" style={{ background: diffTone.bg, borderColor: diffTone.bd }}>
+                  <p className="text-[10px] font-bold" style={{ color: diffTone.c }}>{isAr ? 'الفرق' : 'Difference'} · {diffTone.t}</p>
+                  <p className="text-lg font-extrabold font-mono leading-tight" style={{ color: diffTone.c }} dir="ltr">
+                    {diff > 0 ? '+' : ''}{fmt(diff)} <span className="text-[10px] font-semibold opacity-70">{isAr ? 'ر.س' : 'SAR'}</span>
+                  </p>
+                </div>
+              </div>
+            </SectionCard>
 
-          <p className="text-xs text-gray-400 border-t pt-2">
-            ✍{profile?.full_name_ar} · {new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}
-          </p>
-
-          <div className="flex gap-3">
-            {!isLocked && (
-              <button type="submit" disabled={saving}
-                className="flex-1 bg-green-700 text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-green-800 transition-colors">
-                {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
-              </button>
+            {/* تأكيد المحاسب */}
+            {isAccountant && sale && (allowCap('sales_confirm') || allowCap('sales_deficit_ack') || allowCap('sales_notes')) && (
+              <SectionCard title={isAr ? 'تأكيد المحاسب' : 'Accountant confirmation'} tone="bg-amber-50/70 border-amber-200">
+                <div className="space-y-3">
+                  {diff < 0 && allowCap('sales_deficit_ack') && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
+                      <p className="text-xs font-bold text-red-700">⚠ {isAr ? 'يوجد عجز بمقدار' : 'Deficit of'} {fmt(Math.abs(diff))} {isAr ? 'ر.س' : 'SAR'}</p>
+                      <p className="text-xs text-red-600">
+                        {isAr
+                          ? `الموظف: ${sale.employee_name || sale.created_by_name || '—'} · الرقم الوظيفي: ${sale.created_by_user?.job_number || '—'}`
+                          : `Employee: ${sale.employee_name || sale.created_by_name || '—'} · Job No: ${sale.created_by_user?.job_number || '—'}`}
+                      </p>
+                      <label className="flex items-center gap-2 text-xs text-red-700 cursor-pointer font-semibold">
+                        <input type="checkbox" className="rounded accent-red-600" checked={form.deficit_acknowledged ?? false}
+                          onChange={e => set('deficit_acknowledged', e.target.checked)} />
+                        {isAr ? 'أُقر بتحميل العجز على الموظف وأعتمده بصفتي محاسب المحطة' : 'I acknowledge the deficit is charged to the employee and approve as station accountant'}
+                      </label>
+                    </div>
+                  )}
+                  {allowCap('sales_confirm') && (
+                    <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                      <input type="checkbox" className="rounded accent-emerald-700" checked={form.is_confirmed} onChange={e => set('is_confirmed', e.target.checked)} />
+                      {isAr ? 'تأكيد وإغلاق السجل' : 'Confirm and close this record'}
+                    </label>
+                  )}
+                  {allowCap('sales_notes') && <textarea rows={2} placeholder={isAr ? 'ملاحظات...' : 'Notes...'}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm resize-none bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none"
+                    value={form.accountant_notes} onChange={e => set('accountant_notes', e.target.value)} />}
+                </div>
+              </SectionCard>
             )}
-            {sale && allowCap('sales_print') && (
-              <button type="button" onClick={handlePrint}
-                className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
-                {isAr ? 'طباعة' : 'Print'}
-              </button>
-            )}
-            <button type="button" onClick={onClose}
-              className={`${isLocked ? '' : ''} px-4 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50`}>
-              {isLocked ? (isAr ? '✕ إغلاق' : '✕ Close') : (isAr ? 'إلغاء' : 'Cancel')}
+          </fieldset>
+
+          {error && <p className="text-red-600 text-xs bg-red-50 rounded-xl p-2.5 border border-red-100">⚠ {error}</p>}
+        </div>
+
+        {/* ═ الذيل: أزرار ثابتة ═ */}
+        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-slate-200 flex items-center gap-2.5">
+          {!isLocked && (
+            <button type="submit" disabled={saving}
+              className="flex-1 bg-emerald-700 text-white py-3 rounded-xl text-sm font-extrabold disabled:opacity-50 hover:bg-emerald-800 transition shadow-sm">
+              {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ السجل' : 'Save record')}
             </button>
-          </div>
+          )}
+          {sale && allowCap('sales_print') && (
+            <button type="button" onClick={handlePrint}
+              className="flex-1 bg-slate-800 text-white py-3 rounded-xl text-sm font-extrabold hover:bg-slate-900 transition">
+              {isAr ? 'طباعة' : 'Print'}
+            </button>
+          )}
+          <button type="button" onClick={onClose}
+            className="px-5 py-3 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 bg-white hover:bg-slate-50 transition">
+            {isLocked ? (isAr ? 'إغلاق' : 'Close') : (isAr ? 'إلغاء' : 'Cancel')}
+          </button>
+        </div>
         </form>
       </div>
     </div>
