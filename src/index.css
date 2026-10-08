@@ -809,3 +809,7 @@ nav.bottom-nav {
 /* شريط الإحصاء المثبّت (إيرادات الأدمن): يبقى ظاهراً تحت الهيدر وشريط التبويبات أثناء التمرير */
 .stat-sticky { position: sticky; top: 99px; z-index: 30; box-shadow: 0 6px 14px -8px rgba(15, 23, 42, 0.28); }
 @media (max-width: 767px) { .stat-sticky { top: 55px; } }
+
+/* ملخص الإيرادات للأدمن: يبقى ظاهراً تحت الهيدر وشريط التبويبات أثناء التمرير */
+.stat-sticky-wrap { position: sticky; top: 99px; z-index: 30; padding: 8px 0 10px; margin-top: -8px; background: var(--bg, #f4f6f9); box-shadow: 0 8px 12px -10px rgba(15, 23, 42, 0.3); }
+@media (max-width: 767px) { .stat-sticky-wrap { top: 55px; } }

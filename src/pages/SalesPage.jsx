@@ -5,9 +5,8 @@ import { supabase } from '../lib/supabase'
 import { getCached, setCached } from '../lib/pageCache'
 import { toLatinDigits, cleanNumber } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
-import StatStrip from '../components/shared/StatStrip'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
-import { todayStr } from '../utils/dates'
+import { todayStr, toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 
@@ -210,7 +209,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       <!-- Totals -->
       <div class="totals">
         <div class="totals-row">
-          <span class="t-label">${isAr ? 'المبلغ المتوقع' : 'Expected Amount'}</span>
+          <span class="t-label">${isAr ? 'إجمالي المبيعات' : 'Total Sales'}</span>
           <span class="t-value">${fmt(sale?.total_expected)} ر.س</span>
         </div>
         <div class="totals-row highlight">
@@ -616,7 +615,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
             {/* الإجماليات */}
             <SectionCard n={4} title={isAr ? 'الإجماليات' : 'Totals'} tone="bg-white border-emerald-200">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <span className="text-[13px] font-bold text-slate-700">{isAr ? 'إجمالي المبيعات (المتوقع)' : 'Sales total (expected)'}</span>
+                <span className="text-[13px] font-bold text-slate-700">{isAr ? 'إجمالي المبيعات' : 'Total sales'}</span>
                 <div className="relative w-40">
                   <input type="text" inputMode="numeric" lang="en" dir="ltr"
                     className={inputCls + ' text-end font-mono font-bold pe-12'}
@@ -857,11 +856,16 @@ export default function SalesPage() {
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+      {/* ═ الترويسة ═ */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-xl font-bold text-nwbus-primary">{isAr ? 'الإيرادات' : 'Revenue'}</h1>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl grid place-items-center text-white shadow-sm" style={{ background: 'linear-gradient(135deg,#0f5132,#1E7A55)' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v.01M18 14v.01"/></svg>
+            </span>
+            <h1 className="text-xl font-extrabold text-slate-900">{isAr ? 'الإيرادات' : 'Revenue'}</h1>
+          </div>
+          <p className="text-xs text-slate-400 mt-1.5 ms-0.5">
             {isGeneralAdmin ? (isAr ? 'جميع المحطات' : 'All stations')
               : (isAreaSupervisor || isStationAdmin) && allowedStationIds?.length > 1 ? (isAr ? 'محطاتك المخصصة' : 'Your assigned stations')
               : isStationAdmin || isAccountant ? (isAr ? 'محطتك فقط' : 'Your station only')
@@ -870,25 +874,32 @@ export default function SalesPage() {
         </div>
         {canAdd && (
           <button onClick={() => setModal('new')}
-            className="bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-800 transition-colors">
-            + {isAr ? 'إدخال إيرادات' : 'New Entry'}
+            className="inline-flex items-center justify-center gap-2 text-white px-5 py-2.5 rounded-xl text-sm font-extrabold shadow-sm hover:brightness-110 transition"
+            style={{ background: 'linear-gradient(135deg,#0f5132,#1E7A55)' }}>
+            <span className="text-lg leading-none">+</span>{isAr ? 'إدخال إيرادات' : 'New entry'}
           </button>
         )}
       </div>
 
-      {/* Date + Station filter */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <span className="text-xs text-gray-400">{isAr ? 'التاريخ:' : 'Date:'}</span>
-        <DatePicker value={filterDate} onChange={setFilterDate} isAr={isAr}
-          className="border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
+      {/* ═ الفلاتر ═ */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-3.5 mb-4 flex items-center gap-2.5 flex-wrap shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => setFilterDate(todayStr())}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${filterDate === todayStr() ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>{isAr ? 'اليوم' : 'Today'}</button>
+          <button type="button" onClick={() => { const d = new Date(); d.setDate(d.getDate() - 1); setFilterDate(toLocalDateStr(d)) }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${filterDate === (() => { const d = new Date(); d.setDate(d.getDate() - 1); return toLocalDateStr(d) })() ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>{isAr ? 'أمس' : 'Yesterday'}</button>
+        </div>
+        <div className="w-44 sm:w-52">
+          <DatePicker value={filterDate} onChange={setFilterDate} isAr={isAr}
+            className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500/40 focus:outline-none bg-white" />
+        </div>
         {(isGeneralAdmin || isAreaSupervisor || isStationAdmin) && stations.length > 0 && (
           <>
-            <span className="text-xs text-gray-400">{isAr ? 'المحطة:' : 'Station:'}</span>
+            <span className="hidden sm:block w-px h-6 bg-slate-200 mx-1" />
             <select value={filterStation} onChange={e => setStation(e.target.value)}
-              className="border rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none min-w-[180px]"
               style={{ fontFamily: 'inherit' }}>
               <option value="">{isAr ? 'جميع المحطات' : 'All stations'}</option>
-              {/* المثبّتة أولاً */}
               {pinnedStations.length > 0 && <>
                 <optgroup label={isAr ? 'المثبّتة' : 'Pinned'}>
                   {stations.filter(s => pinnedStations.includes(s.id)).map(s => (
@@ -907,142 +918,171 @@ export default function SalesPage() {
             </select>
             <button onClick={() => setShowPinModal(true)}
               title={isAr ? 'تثبيت محطات' : 'Pin stations'}
-              className={`text-base leading-none rounded-lg px-2 py-1.5 border transition-colors ${pinnedStations.length > 0 ? 'text-amber-600 border-amber-300 bg-amber-50' : 'text-gray-400 border-gray-200 bg-white hover:text-amber-500'}`}>
-              📌
+              className={`w-9 h-9 rounded-lg grid place-items-center border transition ${pinnedStations.length > 0 ? 'text-amber-600 border-amber-300 bg-amber-50' : 'text-slate-400 border-slate-200 bg-white hover:text-amber-600 hover:border-amber-300'}`}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill={pinnedStations.length > 0 ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17v5M9 3h6l-1 7 3 3v2H7v-2l3-3z"/></svg>
             </button>
           </>
         )}
       </div>
 
-      {/* Summary */}
-      {(isGeneralAdmin || isAccountant) && <StatStrip className="mb-5" sticky={isGeneralAdmin} items={[
-        { label: isAr ? 'الإجمالي الفعلي' : 'Actual Total', val: fmt(totalActualSum) + ' ر.س', tone: 'text-green-700' },
-        { label: isAr ? 'إجمالي المبيعات' : 'Sales Total', val: fmt(totalExpectedSum) + ' ر.س' },
-        { label: isAr ? 'الفرق' : 'Difference',
-          val: (totalActualSum - totalExpectedSum >= 0 ? '+' : '') + fmt(totalActualSum - totalExpectedSum) + ' ر.س',
-          tone: totalActualSum >= totalExpectedSum ? 'text-green-700' : 'text-red-600' },
-        { label: isAr ? 'مؤكدة' : 'Confirmed', val: `${confirmed} / ${records.length}` },
-      ]} />}
+      {/* ═ ملخص اليوم (للأدمن والمحاسب) ═ */}
+      {(isGeneralAdmin || isAccountant) && (() => {
+        const dTotal = totalActualSum - totalExpectedSum
+        const pctDone = records.length ? Math.round((confirmed / records.length) * 100) : 0
+        const tone = dTotal === 0 ? { c: '#475569', bg: '#f8fafc', t: isAr ? 'مطابق' : 'Matched' } : dTotal > 0 ? { c: '#1d4ed8', bg: '#eff6ff', t: isAr ? 'زيادة' : 'Surplus' } : { c: '#b91c1c', bg: '#fef2f2', t: isAr ? 'عجز' : 'Deficit' }
+        return (
+          <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5 ${isGeneralAdmin ? 'stat-sticky-wrap' : ''}`}>
+            <div className="rounded-2xl border border-emerald-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+              <p className="text-[11px] font-bold text-slate-400">{isAr ? 'إجمالي المحصَّل' : 'Total collected'}</p>
+              <p className="text-2xl font-extrabold font-mono text-emerald-700 leading-tight mt-0.5" dir="ltr">{fmt(totalActualSum)} <span className="text-xs font-semibold text-slate-400">{isAr ? 'ر.س' : 'SAR'}</span></p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+              <p className="text-[11px] font-bold text-slate-400">{isAr ? 'إجمالي المبيعات' : 'Total sales'}</p>
+              <p className="text-2xl font-extrabold font-mono text-slate-800 leading-tight mt-0.5" dir="ltr">{fmt(totalExpectedSum)} <span className="text-xs font-semibold text-slate-400">{isAr ? 'ر.س' : 'SAR'}</span></p>
+            </div>
+            <div className="rounded-2xl border px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]" style={{ background: tone.bg, borderColor: tone.c + '40' }}>
+              <p className="text-[11px] font-bold" style={{ color: tone.c }}>{isAr ? 'الفرق' : 'Difference'} · {tone.t}</p>
+              <p className="text-2xl font-extrabold font-mono leading-tight mt-0.5" style={{ color: tone.c }} dir="ltr">{dTotal > 0 ? '+' : ''}{fmt(dTotal)} <span className="text-xs font-semibold opacity-60">{isAr ? 'ر.س' : 'SAR'}</span></p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+              <p className="text-[11px] font-bold text-slate-400">{isAr ? 'السجلات المؤكدة' : 'Confirmed records'}</p>
+              <p className="text-2xl font-extrabold font-mono text-slate-800 leading-tight mt-0.5" dir="ltr">{confirmed} <span className="text-sm font-semibold text-slate-400">/ {records.length}</span></p>
+              <div className="h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden"><div className="h-1.5 rounded-full bg-emerald-600" style={{ width: `${pctDone}%` }} /></div>
+            </div>
+          </div>
+        )
+      })()}
 
-      {/* Records */}
+      {/* ═ السجلات ═ */}
       {loading ? (
-        <div className="text-center py-20 text-gray-400">… {isAr ? 'جارٍ التحميل...' : 'Loading...'}</div>
+        <div className="space-y-3">{[0, 1].map(i => <div key={i} className="h-24 rounded-2xl bg-slate-100 animate-pulse" />)}</div>
       ) : records.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">
-          <p className="text-4xl mb-2"></p>
-          <p>{isAr ? 'لا توجد سجلات في هذا اليوم' : 'No records for this date'}</p>
+        <div className="bg-white border border-dashed border-slate-300 rounded-2xl text-center py-16 text-slate-400">
+          <svg className="mx-auto mb-3 text-slate-300" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
+          <p className="font-semibold">{isAr ? 'لا توجد سجلات في هذا اليوم' : 'No records for this date'}</p>
+          {canAdd && <button onClick={() => setModal('new')} className="mt-3 text-sm font-bold text-emerald-700 hover:underline">+ {isAr ? 'إدخال إيرادات' : 'New entry'}</button>}
         </div>
       ) : (() => {
-        // تجميع السجلات بالأيام
         const byDay = {}
-        records.forEach(r => {
-          const d = r.sale_date
-          if (!byDay[d]) byDay[d] = []
-          byDay[d].push(r)
-        })
+        records.forEach(r => { (byDay[r.sale_date] ??= []).push(r) })
         const days = Object.keys(byDay).sort((a, b) => b.localeCompare(a))
+        const others = r => Number(r.visa_amount ?? 0) + Number(r.mastercard_amount ?? 0) + Number(r.other_amount ?? 0)
 
         return (
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {days.map(day => {
               const dayRecs = byDay[day]
               const isOpen = openDays[day] ?? (days.length === 1)
-              const dayTotal = dayRecs.reduce((s, r) => s + Number(r.total_actual ?? 0), 0)
+              const dayActual = dayRecs.reduce((s, r) => s + Number(r.total_actual ?? 0), 0)
+              const daySales = dayRecs.reduce((s, r) => s + Number(r.total_expected ?? 0), 0)
+              const dayDiff = dayActual - daySales
               const dayConfirmed = dayRecs.filter(r => r.is_confirmed).length
               const dayHasDeficit = dayRecs.some(r => Number(r.total_actual ?? 0) - Number(r.total_expected ?? 0) < 0)
-              const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString('ar-SA-u-ca-gregory-nu-latn', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+              const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
               return (
-                <div key={day} className="bg-white rounded-2xl shadow overflow-hidden">
-                  {/* Day Header — accordion */}
-                  <button
-                    onClick={() => toggleDay(day)}
-                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">{isOpen ? '▾' : '▸'}</span>
-                      <div className="text-right">
-                        <div className="font-bold text-nwbus-primary text-sm">{dayLabel}</div>
-                        <div className="text-xs text-gray-400 mt-0.5">
-                          {dayRecs.length} {isAr ? 'سجل' : 'records'} · {dayConfirmed} {isAr ? 'مؤكد' : 'confirmed'}
-                          {dayHasDeficit && <span className="text-red-500 mr-2"> · ⚠ {isAr ? 'يوجد عجز' : 'deficit'}</span>}
+                <div key={day} className="bg-white rounded-2xl border border-slate-200 shadow-[0_1px_3px_rgba(15,23,42,0.05)] overflow-hidden">
+                  <button onClick={() => toggleDay(day)} className="w-full flex items-center justify-between gap-4 px-5 py-4 hover:bg-slate-50/70 transition text-start">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`w-7 h-7 rounded-lg bg-slate-100 text-slate-500 grid place-items-center transition-transform ${isOpen ? '' : (isAr ? 'rotate-90' : '-rotate-90')}`}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-extrabold text-slate-900 text-sm truncate">{dayLabel}</div>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">{dayRecs.length} {isAr ? 'سجل' : 'records'}</span>
+                          <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${dayConfirmed === dayRecs.length ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{dayConfirmed} {isAr ? 'مؤكد' : 'confirmed'}</span>
+                          {dayHasDeficit && <span className="text-[11px] font-bold bg-red-50 text-red-600 rounded-full px-2 py-0.5">{isAr ? 'يوجد عجز' : 'Deficit'}</span>}
                         </div>
                       </div>
                     </div>
-                    <div className="text-left">
-                      <div className="font-bold text-green-700 text-sm font-mono">{fmt(dayTotal)} <span className="text-xs font-normal">ر.س</span></div>
-                      <div className="text-xs text-gray-400">{isAr ? 'إجمالي اليوم' : 'Day total'}</div>
+                    <div className="flex items-center gap-5 shrink-0 text-end">
+                      <div className="hidden sm:block">
+                        <div className="text-[10px] font-semibold text-slate-400">{isAr ? 'إجمالي المبيعات' : 'Total sales'}</div>
+                        <div className="font-bold text-slate-700 text-sm font-mono" dir="ltr">{fmt(daySales)}</div>
+                      </div>
+                      <div className="hidden sm:block">
+                        <div className="text-[10px] font-semibold text-slate-400">{isAr ? 'الفرق' : 'Diff'}</div>
+                        <div className={`font-bold text-sm font-mono ${dayDiff === 0 ? 'text-slate-400' : dayDiff > 0 ? 'text-blue-600' : 'text-red-600'}`} dir="ltr">{dayDiff > 0 ? '+' : ''}{fmt(dayDiff)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-semibold text-slate-400">{isAr ? 'المحصَّل' : 'Collected'}</div>
+                        <div className="font-extrabold text-emerald-700 text-base font-mono" dir="ltr">{fmt(dayActual)} <span className="text-[10px] font-semibold text-slate-400">{isAr ? 'ر.س' : 'SAR'}</span></div>
+                      </div>
                     </div>
                   </button>
 
-                  {/* Day Rows */}
                   {isOpen && (
-                    <div className="overflow-x-auto border-t border-gray-100">
+                    <div className="overflow-x-auto border-t border-slate-100">
                       <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-500 text-xs">
-                          <tr>
+                        <thead>
+                          <tr className="bg-slate-50 text-slate-500 text-[11px] font-bold">
                             {[
-                              isAr ? 'الوردية' : 'Shift',
-                              isAr ? 'الموظف' : 'Employee',
-                              isAr ? 'نقد' : 'Cash',
-                              isAr ? 'مدى' : 'Mada',
-                              isAr ? 'الإجمالي الفعلي' : 'Actual',
-                              isAr ? 'المتوقع' : 'Expected',
-                              isAr ? 'الفرق' : 'Diff',
-                              isAr ? 'الحالة' : 'Status',
-                              '',
-                            ].map((h, i) => (
-                              <th key={i} className="px-3 py-2 text-right font-medium whitespace-nowrap">{h}</th>
+                              [isAr ? 'الوردية' : 'Shift', ''],
+                              [isAr ? 'الموظف' : 'Employee', ''],
+                              [isAr ? 'نقد' : 'Cash', 'hidden md:table-cell'],
+                              [isAr ? 'مدى' : 'Mada', 'hidden md:table-cell'],
+                              [isAr ? 'بطاقات وأخرى' : 'Cards & other', 'hidden lg:table-cell'],
+                              [isAr ? 'المحصَّل' : 'Collected', ''],
+                              [isAr ? 'إجمالي المبيعات' : 'Total sales', ''],
+                              [isAr ? 'الفرق' : 'Diff', ''],
+                              [isAr ? 'الحالة' : 'Status', ''],
+                              ['', ''],
+                            ].map(([h, cls], i) => (
+                              <th key={i} className={`px-3 py-2.5 text-start whitespace-nowrap ${cls}`}>{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-slate-100">
                           {dayRecs.map(r => {
                             const diff = Number(r.total_actual ?? 0) - Number(r.total_expected ?? 0)
+                            const nm = r.employee_name || r.created_by_name || '—'
                             return (
-                              <tr key={r.id} className={`hover:bg-gray-50 transition-colors ${diff < 0 && r.is_confirmed ? 'bg-red-50/30' : ''}`}>
-                                <td className="px-3 py-3 font-bold text-nwbus-primary">{r.shift}</td>
-                                <td className="px-3 py-3 text-xs text-gray-700 max-w-[120px] truncate" title={r.employee_name}>
-                                  <div>{r.employee_name || '—'}</div>
-                                  <div className="text-gray-400 font-mono">{r.created_by_user?.job_number ? `#${r.created_by_user.job_number}` : ''}</div>
+                              <tr key={r.id} className={`hover:bg-slate-50/70 transition-colors ${diff < 0 && r.is_confirmed ? 'bg-red-50/40' : ''}`}>
+                                <td className="px-3 py-3">
+                                  <span className="inline-grid place-items-center w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 font-extrabold text-xs">{r.shift}</span>
                                 </td>
-                                <td className="px-3 py-3 font-mono text-xs">{fmt(r.cash_amount)}</td>
-                                <td className="px-3 py-3 font-mono text-xs">{fmt(r.mada_amount)}</td>
-                                <td className="px-3 py-3 font-mono text-xs font-semibold text-green-700">{fmt(r.total_actual)}</td>
-                                <td className="px-3 py-3 font-mono text-xs text-gray-500">{fmt(r.total_expected)}</td>
-                                <td className={`px-3 py-3 font-mono text-xs font-semibold ${diff === 0 ? 'text-gray-400' : diff > 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                                  {diff >= 0 ? '+' : ''}{fmt(diff)}
-                                  {diff < 0 && r.is_confirmed && <div className="text-red-400 text-[10px]">{isAr ? 'عجز مُقَر' : 'acknowledged'}</div>}
+                                <td className="px-3 py-3 min-w-[150px]">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 text-xs font-extrabold grid place-items-center shrink-0">{String(nm).trim().charAt(0)}</span>
+                                    <div className="min-w-0">
+                                      <div className="text-[13px] font-semibold text-slate-800 truncate max-w-[150px]" title={nm} dir="auto">{nm}</div>
+                                      <div className="text-[11px] text-slate-400 font-mono">{r.created_by_user?.job_number ? `#${r.created_by_user.job_number}` : ''}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3 font-mono text-xs text-slate-600 hidden md:table-cell">{fmt(r.cash_amount)}</td>
+                                <td className="px-3 py-3 font-mono text-xs text-slate-600 hidden md:table-cell">{fmt(r.mada_amount)}</td>
+                                <td className="px-3 py-3 font-mono text-xs text-slate-600 hidden lg:table-cell">{fmt(others(r))}</td>
+                                <td className="px-3 py-3 font-mono text-[13px] font-extrabold text-emerald-700">{fmt(r.total_actual)}</td>
+                                <td className="px-3 py-3 font-mono text-xs font-semibold text-slate-700">{fmt(r.total_expected)}</td>
+                                <td className="px-3 py-3">
+                                  <span className={`inline-block font-mono text-xs font-bold rounded-lg px-2 py-1 ${diff === 0 ? 'bg-slate-100 text-slate-500' : diff > 0 ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`} dir="ltr">
+                                    {diff > 0 ? '+' : ''}{fmt(diff)}
+                                  </span>
+                                  {diff < 0 && r.is_confirmed && <div className="text-red-400 text-[10px] mt-0.5">{isAr ? 'عجز مُقَر' : 'acknowledged'}</div>}
                                 </td>
                                 <td className="px-3 py-3">
-                                  <span className={`text-xs rounded-full px-2 py-0.5 ${r.is_confirmed ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                    {r.is_confirmed ? (isAr ? 'مؤكد ✓' : 'Confirmed ✓') : (isAr ? 'قيد المراجعة' : 'Pending')}
+                                  <span className={`inline-flex items-center gap-1 text-[11px] font-bold rounded-full px-2.5 py-1 ${r.is_confirmed ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${r.is_confirmed ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                    {r.is_confirmed ? (isAr ? 'مؤكد' : 'Confirmed') : (isAr ? 'قيد المراجعة' : 'Pending')}
                                   </span>
                                 </td>
                                 <td className="px-3 py-3">
-                                  <div className="flex gap-1 items-center">
-                                    <button onClick={() => setAudit(r)}
-                                      className="text-xs border border-gray-200 text-gray-400 rounded-lg px-2 py-1 hover:bg-gray-50"
-                                      title={isAr ? 'سجل التعديلات' : 'Audit History'}></button>
-                                    {r.is_confirmed && !isGeneralAdmin
-                                      ? (
-                                        <button onClick={() => setModal(r)}
-                                          className="text-xs border border-gray-300 text-gray-500 rounded-lg px-3 py-1 hover:bg-gray-50 transition-colors">
-                                          {isAr ? 'عرض' : 'View'}
-                                        </button>
-                                      ) : (
-                                        <button onClick={() => setModal(r)}
-                                          className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1 hover:bg-nwbus-primary hover:text-white transition-colors">
-                                          {isAr ? 'تعديل' : 'Edit'}
-                                        </button>
-                                      )
-                                    }
+                                  <div className="flex gap-1.5 items-center justify-end">
+                                    <button onClick={() => setAudit(r)} title={isAr ? 'سجل التعديلات' : 'Audit history'}
+                                      className="w-8 h-8 grid place-items-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition">
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                                    </button>
+                                    {r.is_confirmed && !isGeneralAdmin ? (
+                                      <button onClick={() => setModal(r)} className="text-xs font-bold border border-slate-300 text-slate-600 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition">{isAr ? 'عرض' : 'View'}</button>
+                                    ) : (
+                                      <button onClick={() => setModal(r)} className="text-xs font-bold border border-emerald-700 text-emerald-700 rounded-lg px-3 py-1.5 hover:bg-emerald-700 hover:text-white transition">{isAr ? 'تعديل' : 'Edit'}</button>
+                                    )}
                                     {isGeneralAdmin && (
-                                      <button onClick={() => handleDelete(r.id)}
-                                        disabled={deleting === r.id}
-                                        className="text-xs border border-red-200 text-red-400 rounded-lg px-2 py-1 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-40"
-                                        title={isAr ? 'حذف' : 'Delete'}>
-                                        {deleting === r.id ? '…' : ''}
+                                      <button onClick={() => handleDelete(r.id)} disabled={deleting === r.id} title={isAr ? 'حذف' : 'Delete'}
+                                        className="w-8 h-8 grid place-items-center rounded-lg border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition disabled:opacity-40">
+                                        {deleting === r.id ? '…' : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>}
                                       </button>
                                     )}
                                   </div>
@@ -1051,6 +1091,20 @@ export default function SalesPage() {
                             )
                           })}
                         </tbody>
+                        {dayRecs.length > 1 && (
+                          <tfoot>
+                            <tr className="bg-slate-50 border-t-2 border-slate-200 text-[12px] font-extrabold text-slate-700">
+                              <td className="px-3 py-2.5" colSpan={2}>{isAr ? 'إجمالي اليوم' : 'Day total'}</td>
+                              <td className="px-3 py-2.5 font-mono hidden md:table-cell">{fmt(dayRecs.reduce((s, r) => s + Number(r.cash_amount ?? 0), 0))}</td>
+                              <td className="px-3 py-2.5 font-mono hidden md:table-cell">{fmt(dayRecs.reduce((s, r) => s + Number(r.mada_amount ?? 0), 0))}</td>
+                              <td className="px-3 py-2.5 font-mono hidden lg:table-cell">{fmt(dayRecs.reduce((s, r) => s + others(r), 0))}</td>
+                              <td className="px-3 py-2.5 font-mono text-emerald-700">{fmt(dayActual)}</td>
+                              <td className="px-3 py-2.5 font-mono">{fmt(daySales)}</td>
+                              <td className={`px-3 py-2.5 font-mono ${dayDiff === 0 ? 'text-slate-400' : dayDiff > 0 ? 'text-blue-700' : 'text-red-600'}`} dir="ltr">{dayDiff > 0 ? '+' : ''}{fmt(dayDiff)}</td>
+                              <td colSpan={2} />
+                            </tr>
+                          </tfoot>
+                        )}
                       </table>
                     </div>
                   )}
