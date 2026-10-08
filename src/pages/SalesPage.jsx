@@ -11,10 +11,23 @@ import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 
 const SHIFTS = [
-  { value: 'A', ar: 'الوردية أ', en: 'Shift A' },
-  { value: 'B', ar: 'الوردية ب', en: 'Shift B' },
-  { value: 'C', ar: 'الوردية ج', en: 'Shift C' },
+  { value: 'A', ar: 'الوردية أ', en: 'Shift A', range: '00:00 – 08:00', end: 8 },
+  { value: 'B', ar: 'الوردية ب', en: 'Shift B', range: '08:00 – 16:00', end: 16 },
+  { value: 'C', ar: 'الوردية ج', en: 'Shift C', range: '16:00 – 24:00', end: 24 },
 ]
+
+// الوردية المتوقعة من الوقت الحالي: وقت الإقفال (قبل نهاية الوردية بساعة وحتى ساعة ونصف بعدها) يعني الوردية المنتهية،
+// وإلا فالوردية الجارية. بعد منتصف الليل مباشرة تكون ورديّة ج ليوم أمس.
+function suggestShift(now = new Date()) {
+  const h = now.getHours() + now.getMinutes() / 60
+  const today = todayStr()
+  for (const sh of SHIFTS) {
+    if (h >= sh.end - 1 && h < sh.end + 1.5 && sh.end < 24) return { shift: sh.value, date: today, closing: true }
+  }
+  if (h >= 23) return { shift: 'C', date: today, closing: true }
+  if (h < 1.5) { const d = new Date(now); d.setDate(d.getDate() - 1); return { shift: 'C', date: toLocalDateStr(d), closing: true, yesterday: true } }
+  return { shift: h < 8 ? 'A' : h < 16 ? 'B' : 'C', date: today, closing: false }
+}
 
 const fmt  = n => Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 const fmtD = d => d ? new Date(d).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn', { year:'numeric', month:'short', day:'numeric' }) : '—'
@@ -278,14 +291,18 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     }
   }
 
+  // الوردية المتوقعة تُحسب مرة واحدة عند فتح السجل الجديد
+  const [suggested] = useState(() => suggestShift())
+  const [shiftConfirmed, setShiftConfirmed] = useState(false)
+
   const parseInitialRefs = raw => {
     if (!raw) return ['']
     try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : [raw] } catch { return [raw] }
   }
 
   const [form, setForm] = useState({
-    sale_date:         sale?.sale_date ?? todayStr(),
-    shift:             sale?.shift ?? 'A',
+    sale_date:         sale?.sale_date ?? suggested.date,
+    shift:             sale?.shift ?? suggested.shift,
     station_id:        sale?.station_id ?? profile.station_id ?? '',
     employee_name:     sale?.employee_name      ?? profile?.full_name_ar          ?? '',
     cashier_ref:       sale ? (parseInitialRefs(sale.balance_ref)[0] ?? '') : savedCashier,
@@ -323,6 +340,10 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   async function handleSave(e) {
     e.preventDefault()
     if (isLocked) return
+    if (!sale && (form.shift !== suggested.shift || form.sale_date !== suggested.date) && !shiftConfirmed) {
+      setError(isAr ? 'الوردية أو التاريخ يختلف عن المتوقع حسب الوقت الحالي — أكّد صحتهما بالتأشير على خانة التأكيد' : 'The shift or date differs from the one expected for the current time — tick the confirmation box')
+      return
+    }
     setSaving(true); setError('')
 
     const stationId = isGeneralAdmin ? form.station_id : profile.station_id
@@ -492,10 +513,41 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                   <div>
                     <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'الوردية' : 'Shift'}</label>
                     <select className={inputCls} value={form.shift} onChange={e => set('shift', e.target.value)}>
-                      {SHIFTS.map(s => <option key={s.value} value={s.value}>{isAr ? s.ar : s.en}</option>)}
+                      {SHIFTS.map(s => <option key={s.value} value={s.value}>{isAr ? s.ar : s.en} ({s.range})</option>)}
                     </select>
                   </div>
                 </div>
+                {!sale && (() => {
+                  const sug = SHIFTS.find(x => x.value === suggested.shift)
+                  const mismatch = form.shift !== suggested.shift || form.sale_date !== suggested.date
+                  const cur = SHIFTS.find(x => x.value === form.shift)
+                  const hhmm = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                  return (
+                    <div className={`rounded-xl border px-3.5 py-3 text-[12.5px] leading-relaxed ${mismatch ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                      <p className="font-extrabold mb-0.5">{mismatch ? (isAr ? 'تنبيه: الوردية تختلف عن المتوقع' : 'Warning: shift differs from the expected one') : (isAr ? 'تأكيد الوردية' : 'Confirm the shift')}</p>
+                      <p>
+                        {isAr
+                          ? `الوقت الآن ${hhmm} — الوردية المتوقعة: ${sug.ar} (${sug.range})${suggested.closing ? ' · وقت إقفال الوردية' : ''}${suggested.yesterday ? ` · وتاريخ السجل ${suggested.date} (الوردية تنتهي بعد منتصف الليل)` : ''}.`
+                          : `Time now ${hhmm} — expected shift: ${sug.en} (${sug.range})${suggested.closing ? ' · shift closing time' : ''}${suggested.yesterday ? ` · record date ${suggested.date} (shift ends after midnight)` : ''}.`}
+                      </p>
+                      {mismatch ? (
+                        <>
+                          <p className="mt-1">{isAr ? `اخترت ${cur?.ar} بتاريخ ${form.sale_date}.` : `You picked ${cur?.en} on ${form.sale_date}.`}</p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                            <button type="button" onClick={() => { set('shift', suggested.shift); set('sale_date', suggested.date); setShiftConfirmed(false) }}
+                              className="text-xs font-bold bg-white border border-red-300 text-red-700 rounded-lg px-3 py-1 hover:bg-red-100">{isAr ? 'استخدام المتوقعة' : 'Use expected'}</button>
+                            <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                              <input type="checkbox" className="rounded accent-red-600" checked={shiftConfirmed} onChange={e => setShiftConfirmed(e.target.checked)} />
+                              {isAr ? 'أؤكد أن الوردية والتاريخ صحيحان' : 'I confirm the shift and date are correct'}
+                            </label>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="mt-0.5 font-semibold">{isAr ? 'تأكد أنها وردتك قبل الحفظ.' : 'Make sure this is your shift before saving.'}</p>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </SectionCard>
 
