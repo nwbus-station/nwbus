@@ -445,13 +445,13 @@ export default function ReportsPage() {
   // جلب المحطات: الكل للأدمن، محطاته لمشرف المنطقة، والمعيّنة للمشرف/المحاسب
   useEffect(() => {
     if (seesAll) {
-      supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group').eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     } else if (scopedIds) {
-      supabase.from('stations').select('id, name_ar, name_en').in('id', scopedIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group').in('id', scopedIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     } else if (isAreaSupervisor && allowedStationIds?.length) {
-      supabase.from('stations').select('id, name_ar, name_en').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     } else if ((isStationAdmin || isAccountant) && profile?.id) {
       supabase.from('user_stations').select('station:station_id(id, name_ar, name_en)').eq('user_id', profile.id)
@@ -509,8 +509,9 @@ export default function ReportsPage() {
           dep_enabled, arr_enabled,
           trip:trip_schedule_id(trip_number, from_station_id, to_station_id,
             scheduled_departure, scheduled_arrival, is_active, is_rf, rf_date,
-            from_station:from_station_id(id, name_ar,name_en),
-            to_station:to_station_id(id, name_ar,name_en))
+            days_of_week, start_date, end_date,
+            from_station:from_station_id(id, name_ar,name_en, city_group),
+            to_station:to_station_id(id, name_ar,name_en, city_group))
         `)
         if (station !== 'all') q = q.eq('station_id', station)
         else if (!seesAll && myStationIds.length) q = q.in('station_id', myStationIds)
@@ -667,40 +668,50 @@ export default function ReportsPage() {
       const isDest   = trip.to_station?.id   === st.station_id || trip.to_station_id   === st.station_id
       const isOrigin = trip.from_station?.id === st.station_id || trip.from_station_id === st.station_id
       const stop     = stopMap[`${st.trip_schedule_id}|${st.station_id}`]
-      const isTransitST = !isDest && !isOrigin
       const arrOn = st.arr_enabled !== false
       const depOn = st.dep_enabled !== false
       const stnName = stationNameMap[st.station_id]?.name_ar || stationNameMap[st.station_id]?.name_en || nm(trip.from_station)
 
-      const makeUnentered = (date, isArr) => {
-        const sched = isArr
-          ? (st.arrival_time  || stop?.arrival_time  || trip.scheduled_arrival)
-          : (st.departure_time || stop?.departure_time || trip.scheduled_departure)
+      // نفس منطق صفحة الترحيل: وقت المحطة اليدوي يتقدّم، ثم وقت التوقف بالجدول؛ وبدون وقت لا تظهر الرحلة لهذه المحطة
+      const makeUnentered = (date, isArr, time) => {
         return {
           date, station: stnName, station_id: st.station_id, trip: trip.trip_number || '—',
           bus: '—', type: isArr ? 'arrival' : 'departure',
           from: isArr ? nm(trip.from_station) : stnName,
           to:   isArr ? stnName : nm(trip.to_station),
-          sched: sched ? String(sched).slice(0, 5) : '—',
+          sched: time ? String(time).slice(0, 5) : '—',
           actual: '—',
           acc: { key: 'none', label: isAr ? 'غير مدخلة' : 'Not Entered', color: '#94a3b8' },
           delay: null, missed: 0, pax: 0, unentered: true,
         }
       }
+      const groupOf = x => {
+        if (!x) return null
+        if (x.city_group) return x.city_group
+        const w = (x.name_en || '').split(/[\s-]+/)[0].toLowerCase()
+        return w || null
+      }
+      const curG = groupOf(stationNameMap[st.station_id]), fromG = groupOf(trip.from_station), toG = groupOf(trip.to_station)
+      const sameFrom = !!(curG && fromG && curG === fromG), sameTo = !!(curG && toG && curG === toG)
 
       dates.forEach(date => {
         if (isRF && trip.rf_date !== date) return  // رحلة إضافية: يوم واحد فقط
+        if (trip.start_date && date < trip.start_date) return
+        if (trip.end_date && date > trip.end_date) return
+        if (trip.days_of_week?.length && !trip.days_of_week.includes(new Date(date + 'T00:00:00').getDay())) return
         const key = `${st.trip_schedule_id}|${date}|${st.station_id}`
         if (enteredKeys.has(key)) return
-        if (isDest && arrOn) {
-          unenteredCount++
-          movements.push(makeUnentered(date, true))
-        } else if (isOrigin && depOn) {
-          unenteredCount++
-          movements.push(makeUnentered(date, false))
-        } else if (isTransitST) {
-          if (arrOn) { unenteredCount++; movements.push(makeUnentered(date, true)) }
-          if (depOn) { unenteredCount++; movements.push(makeUnentered(date, false)) }
+        const add = (isArr, time) => { if (!time) return; unenteredCount++; movements.push(makeUnentered(date, isArr, time)) }
+        if (isDest) {
+          if (arrOn) add(true, st.arrival_time || trip.scheduled_arrival)
+        } else if (isOrigin) {
+          if (depOn) add(false, st.departure_time || trip.scheduled_departure)
+        } else if (stop) {
+          if (arrOn && !sameFrom) add(true, st.arrival_time || stop.arrival_time)
+          if (depOn && !sameTo)   add(false, st.departure_time || stop.departure_time)
+        } else {
+          if (arrOn && !sameFrom) add(true, st.arrival_time)
+          if (depOn && !sameTo)   add(false, st.departure_time)
         }
       })
     })
