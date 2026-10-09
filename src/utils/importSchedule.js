@@ -411,10 +411,7 @@ export async function applyDueSchedules(profile) {
   let applied = 0
   for (const row of data) {
     if (!row.payload) continue
-    const t0 = new Date(Date.now() - 2000).toISOString()
     await importSchedule(row.payload, profile, row.file_name || '', { startDate: row.start_date, endDate: row.end_date })
-    // الاستيراد يضيف سجلاً جديداً — نحذفه ونُبقي سجل الجدولة الأصلي (وقت الرفع الحقيقي) لئلا يتكرر الجدول بالقائمة
-    await supabase.from('schedule_uploads').delete().eq('status', 'applied').is('payload', null).eq('file_name', row.file_name || '').gte('uploaded_at', t0).neq('id', row.id)
     await supabase.from('schedule_uploads').update({ status: 'applied' }).eq('id', row.id)
     applied++
   }
