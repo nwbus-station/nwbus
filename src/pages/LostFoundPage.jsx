@@ -7,6 +7,7 @@ import { ITEM_TYPES } from '../utils/constants'
 import DatePicker from '../components/shared/DatePicker'
 import { todayStr } from '../utils/dates'
 import RouteText from '../components/shared/RouteText'
+import SelectField from '../components/shared/SelectField'
 
 const toLatinNums = v => v.replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => d.charCodeAt(0) - 1632)
 
@@ -168,11 +169,11 @@ function StationRouteSelector({ stations, fromId, toId, onFromChange, onToChange
           <span style={{ fontSize: '0.68rem', color: 'var(--text-3)', fontWeight: 600 }}>{isAr ? 'من' : 'From'}</span>
           <input value={fromQ} onChange={e => { setFromQ(e.target.value); onFromChange('') }}
             placeholder={isAr ? 'بحث محطة المغادرة...' : 'Search departure...'} style={{ ...inp, fontSize: '0.78rem' }} />
-          <select value={fromId} onChange={e => onFromChange(e.target.value)} size={4}
+          <SelectField value={fromId} onChange={e => onFromChange(e.target.value)} size={4}
             style={{ ...inp, height: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
             <option value="">{isAr ? '— اختر —' : '— Select —'}</option>
             {filt(fromQ).map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
-          </select>
+          </SelectField>
           {fromId && <span style={{ fontSize: '0.68rem', color: 'var(--text-1)', fontWeight: 700 }}>✓ {stations.find(s => s.id === fromId)?.name_ar}</span>}
         </div>
 
@@ -183,11 +184,11 @@ function StationRouteSelector({ stations, fromId, toId, onFromChange, onToChange
           <span style={{ fontSize: '0.68rem', color: 'var(--text-3)', fontWeight: 600 }}>{isAr ? 'إلى' : 'To'}</span>
           <input value={toQ} onChange={e => { setToQ(e.target.value); onToChange('') }}
             placeholder={isAr ? 'بحث محطة الوصول...' : 'Search arrival...'} style={{ ...inp, fontSize: '0.78rem' }} />
-          <select value={toId} onChange={e => onToChange(e.target.value)} size={4}
+          <SelectField value={toId} onChange={e => onToChange(e.target.value)} size={4}
             style={{ ...inp, height: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
             <option value="">{isAr ? '— اختر —' : '— Select —'}</option>
             {filt(toQ).map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
-          </select>
+          </SelectField>
           {toId && <span style={{ fontSize: '0.68rem', color: 'var(--text-1)', fontWeight: 700 }}>✓ {stations.find(s => s.id === toId)?.name_ar}</span>}
         </div>
 
@@ -290,12 +291,12 @@ function LostReportTab({ stations, profile, isAr }) {
               placeholder={isAr ? 'ابحث عن المحطة...' : 'Search station...'}
               style={{ ...inp, marginBottom: 4 }} />
             {!form.customer_location_id ? (
-              <select value={form.customer_location_id}
+              <SelectField value={form.customer_location_id}
                 onChange={e => { set('customer_location_id', e.target.value); setLocSearch(stations.find(s => s.id === e.target.value)?.name_ar || '') }}
                 size={3} style={{ ...inp, height: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
                 <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
                 {filteredLoc.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}
-              </select>
+              </SelectField>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', borderRadius: 8, background: 'var(--card)', border: '1.5px solid var(--text-1)' }}>
                 <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-1)' }}>{stations.find(s => s.id === form.customer_location_id)?.name_ar}</span>
@@ -569,14 +570,14 @@ function RegisterItemTab({ profile, isAr, stations }) {
                 placeholder={isAr ? 'ابحث عن المحطة...' : 'Search station...'}
                 style={inp} />
               {!selectedStationId ? (
-                <select value={selectedStationId}
+                <SelectField value={selectedStationId}
                   onChange={e => { setSelectedStationId(e.target.value); setStationSearch(stations.find(s => s.id === e.target.value)?.name_ar || '') }}
                   size={4} style={{ ...inp, height: 'auto', padding: '4px 8px', fontSize: '0.82rem' }}>
                   <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
                   {stations.filter(s => !stationSearch || s.name_ar.includes(stationSearch)).map(s => (
                     <option key={s.id} value={s.id}>{s.name_ar}</option>
                   ))}
-                </select>
+                </SelectField>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 8, background: 'var(--surface)', border: '1.5px solid var(--text-1)' }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{effectiveStation}</span>
@@ -600,9 +601,9 @@ function RegisterItemTab({ profile, isAr, stations }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label={isAr ? 'نوع الموجود' : 'Item Type'}>
-              <select value={form.item_type} onChange={e => set('item_type', e.target.value)} style={inp}>
+              <SelectField value={form.item_type} onChange={e => set('item_type', e.target.value)} style={inp}>
                 {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.ar}</option>)}
-              </select>
+              </SelectField>
             </Field>
             <Field label={isAr ? 'تاريخ الإيجاد' : 'Date Found'}>
               <DatePicker isAr={true} value={form.found_date} onChange={v => set('found_date', v)} style={inp} />
@@ -809,13 +810,13 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
               placeholder={isAr ? 'بحث...' : 'Search...'}
               style={{ ...inp, flex: '1 1 200px', boxSizing: 'border-box', marginBottom: 0 }} />
             {sub === 'items' && !stationFilter && itemStations.length > 1 && (
-              <select value={itemStation} onChange={e => setItemStation(e.target.value)}
+              <SelectField value={itemStation} onChange={e => setItemStation(e.target.value)}
                 style={{ ...inp, flex: '0 1 180px', boxSizing: 'border-box', marginBottom: 0 }}>
                 <option value="">{isAr ? 'كل المحطات' : 'All stations'}</option>
                 {itemStations.map(([sid, name]) => (
                   <option key={sid} value={sid}>{name}</option>
                 ))}
-              </select>
+              </SelectField>
             )}
           </div>
 

@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import TimeInput24 from '../shared/TimeInput24'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
+import SelectField from '../shared/SelectField'
 
 /**
  * شاشة اختيار رحلات المحطة — للمشرف (والأدمن).
@@ -333,12 +334,12 @@ export default function StationTripsModal({ stationId, stationName, stations = [
                     <div className="mt-1 flex items-center gap-2" onClick={e => e.stopPropagation()}>
                       <span className="text-[10px] text-gray-400">{t('Bus type', 'نوع الحافلة')}:</span>
                       {editType && canEdit ? (
-                        <select value={normBusType(tr.bus_type)} disabled={busy === 'type-' + tr.id}
+                        <SelectField value={normBusType(tr.bus_type)} disabled={busy === 'type-' + tr.id}
                           onChange={e => changeBusType(tr.id, e.target.value)}
                           className="border border-gray-300 rounded-md px-2 py-0.5 text-[11px] font-bold bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none">
                           {!BUS_TYPE_OPTS.some(o => o[0] === normBusType(tr.bus_type)) && <option value={normBusType(tr.bus_type)}>{normBusType(tr.bus_type) || '—'}</option>}
                           {BUS_TYPE_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                        </select>
+                        </SelectField>
                       ) : (
                         <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${(BUS_TYPE_OPTS.find(o => o[0] === normBusType(tr.bus_type)) ?? [0, 0, 'bg-gray-100 text-gray-500'])[2]}`}>
                           {normBusType(tr.bus_type) || '—'}
@@ -367,12 +368,12 @@ export default function StationTripsModal({ stationId, stationName, stations = [
                     </div>
                     <div>
                       <label className="block text-[10px] text-gray-500 mb-0.5">{t('Departure station', 'محطة المغادرة')}</label>
-                      <select value={ov.departure_station_id || ''} disabled={!canEdit}
+                      <SelectField value={ov.departure_station_id || ''} disabled={!canEdit}
                         onChange={e => updateOverride(tr.id, { departure_station_id: e.target.value || null })}
                         className="w-full border rounded-lg px-2 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none disabled:bg-gray-50 disabled:text-gray-500">
                         <option value="">{t('Schedule origin', 'الأصلية')}: {tr.from_station ? stName(tr.from_station) : '—'}</option>
                         {stations.map(s => <option key={s.id} value={s.id}>{stName(s)}</option>)}
-                      </select>
+                      </SelectField>
                     </div>
                     <div>
                       <label className="block text-[10px] text-gray-500 mb-0.5">{t('Departure time', 'موعد المغادرة')}</label>

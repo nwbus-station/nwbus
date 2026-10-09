@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import SelectField from '../components/shared/SelectField'
 
 const MONO = "'IBM Plex Mono', monospace"
 const STAR_THRESHOLD = 98
@@ -686,18 +687,18 @@ function BulkEditForm({ posts, isAr, onCancel, onSaved }) {
       <div style={row}>
         <label style={checkboxLabel}><input type="checkbox" checked={changeFont} onChange={e => setChangeFont(e.target.checked)} /> {isAr ? 'الخط' : 'Font'}</label>
         {changeFont && (
-          <select style={inp} value={font} onChange={e => setFontVal(e.target.value)}>
+          <SelectField style={inp} value={font} onChange={e => setFontVal(e.target.value)}>
             {Object.entries(FONTS).map(([k, f]) => <option key={k} value={k}>{isAr ? f.ar : f.en}</option>)}
-          </select>
+          </SelectField>
         )}
       </div>
 
       <div style={row}>
         <label style={checkboxLabel}><input type="checkbox" checked={changeBg} onChange={e => setChangeBg(e.target.checked)} /> {isAr ? 'الخلفية الجاهزة' : 'Preset background'}</label>
         {changeBg && (
-          <select style={inp} value={backgroundPreset} onChange={e => setBackgroundPreset(e.target.value)}>
+          <SelectField style={inp} value={backgroundPreset} onChange={e => setBackgroundPreset(e.target.value)}>
             {PRESET_BACKGROUNDS.map(b => <option key={b.key} value={b.key}>{isAr ? b.ar : b.en}</option>)}
-          </select>
+          </SelectField>
         )}
       </div>
 
@@ -1164,9 +1165,9 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
               )}
             </Field>
             <Field label={isAr ? 'الخط' : 'Font'}>
-              <select style={inp} value={form.font} onChange={e => set('font', e.target.value)}>
+              <SelectField style={inp} value={form.font} onChange={e => set('font', e.target.value)}>
                 {Object.entries(FONTS).map(([k, f]) => <option key={k} value={k}>{isAr ? f.ar : f.en}</option>)}
-              </select>
+              </SelectField>
             </Field>
           </div>
         </SectionCard>

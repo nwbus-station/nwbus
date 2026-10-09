@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import SelectField from '../shared/SelectField'
 
 const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/
 const fmtDT = (v, isAr) => v ? new Date(v).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' }) : '—'
@@ -113,10 +114,10 @@ export default function BackupSettings({ isAr }) {
       </div>
 
       <label style={lbl}>{isAr ? 'وقت الإرسال اليومي (بتوقيت الرياض)' : 'Daily send time (Riyadh)'}</label>
-      <select value={hour} onChange={e => setHour(Number(e.target.value))} dir="ltr"
+      <SelectField value={hour} onChange={e => setHour(Number(e.target.value))} dir="ltr"
         style={{ padding: '9px 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: '0.82rem', background: '#fff', marginBottom: 14 }}>
         {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
-      </select>
+      </SelectField>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" onClick={save} disabled={!dirty && !draft.trim() || busy === 'save'}

@@ -22,6 +22,7 @@ import { applyDueSchedules } from '../utils/importSchedule'
 import { todayStr } from '../utils/dates'
 import RouteText from '../components/shared/RouteText'
 import { isRestStation } from '../utils/stations'
+import SelectField from '../components/shared/SelectField'
 
 const accuracyColor = v => ({
   'On Time':    'text-green-600 font-semibold',
@@ -610,12 +611,12 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
           {/* Trip Status */}
           <div>
             <label style={S.label}>⚡ {isAr ? 'حالة الرحلة' : 'Trip Status'}</label>
-            <select style={S.input}
+            <SelectField style={S.input}
               value={form.operational_status} onChange={e => set('operational_status', e.target.value)}>
               {TRIP_STATUSES.map(s => (
                 <option key={s.value} value={s.value}>{isAr ? s.ar : s.en}</option>
               ))}
-            </select>
+            </SelectField>
           </div>
 
           {/* Facilities status */}

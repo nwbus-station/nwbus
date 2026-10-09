@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { matchesSearch } from '../utils/digits'
+import SelectField from '../components/shared/SelectField'
 
 // نغمة نداء المطار (دينغ-دونغ تنازلي) — مُولّدة بالكامل بالمتصفح (Web Audio)، بدون ملف صوتي خارجي
 // controller اختياري: يخزّن AudioContext الحالي عشان زر "إيقاف" يقدر يسكّته فوراً
@@ -503,23 +504,23 @@ export default function CallPage() {
           </label>
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-gray-500">{isAr ? 'تكرار النداء:' : 'Repeat announcement:'}</label>
-            <select value={repeatEvery} onChange={e => setRepeatEvery(Number(e.target.value))}
+            <SelectField value={repeatEvery} onChange={e => setRepeatEvery(Number(e.target.value))}
               disabled={repeating} className="border rounded-lg px-2 py-1.5 text-sm">
               {REPEAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{isAr ? o.ar : o.en}</option>)}
-            </select>
+            </SelectField>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 mt-3">
           <label className="text-xs text-gray-500 shrink-0">{isAr ? 'صوت النداء:' : 'Announcement voice:'}</label>
-          <select value={voiceURI} onChange={e => { setVoiceURI(e.target.value); setCallError('') }}
+          <SelectField value={voiceURI} onChange={e => { setVoiceURI(e.target.value); setCallError('') }}
             className="border rounded-lg px-2 py-1.5 text-sm flex-1 min-w-0">
             {mode === 'trip' && <option value={CLIPS_VOICE_ID}>{isAr ? 'مقاطع مسجّلة جاهزة (الأفضل والأثبت)' : 'Ready-made recorded clips (best and most reliable)'}</option>}
             <option value={ELEVENLABS_VOICE_ID}>{isAr ? 'صوت بشري واقعي حي (ElevenLabs)' : 'Live realistic human voice (ElevenLabs)'}</option>
             {[...voices].sort((a, b) => rankVoice(b) - rankVoice(a)).map(v => (
               <option key={v.voiceURI} value={v.voiceURI}>{v.name} {isAr ? '(صوت الجهاز)' : '(device voice)'}</option>
             ))}
-          </select>
+          </SelectField>
           {voiceURI !== CLIPS_VOICE_ID && (
             <button type="button"
               onClick={async () => {

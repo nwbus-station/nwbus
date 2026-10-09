@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { escapeHtml, matchesSearch } from '../utils/digits'
 import { ADMIN_ROLE_VALUES, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS, DISPATCHER_SOURCE } from '../utils/constants'
 import { createNotification } from '../utils/notifications'
+import SelectField from '../components/shared/SelectField'
 
 // ── تقييم الموظفين متعدد المصادر: مشرف الوردية + مشرف المحطة + المدير التنفيذي للمحطات ──
 // كل مصدر له وزنه، والنتيجة النهائية تُحسب فقط بعد اكتمال الثلاثة
@@ -1147,12 +1148,12 @@ export default function EvaluationPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
               {/* اختيار الشهر والسنة */}
               <div className="ev-month-row" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <select value={selMonth} onChange={e => setSelMonth(+e.target.value)} className="ev-select" style={{ minWidth: 96 }}>
+                <SelectField value={selMonth} onChange={e => setSelMonth(+e.target.value)} className="ev-select" style={{ minWidth: 96 }}>
                   {MONTHS_AR.map((m, i) => <option key={i} value={i+1}>{isAr ? m : MONTHS_EN[i]}</option>)}
-                </select>
-                <select value={selYear} onChange={e => setSelYear(+e.target.value)} className="ev-select">
+                </SelectField>
+                <SelectField value={selYear} onChange={e => setSelYear(+e.target.value)} className="ev-select">
                   {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
+                </SelectField>
               </div>
               {/* زر الطباعة */}
               {isAdmin && (
@@ -2026,12 +2027,12 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                 <p style={{ margin:0, fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>الفترة الزمنية</p>
                 <div style={{ display:'flex', gap:10 }}>
-                  <select value={selMonth} onChange={e => setSelMonth(+e.target.value)} style={{ ...INP, flex:1 }}>
+                  <SelectField value={selMonth} onChange={e => setSelMonth(+e.target.value)} style={{ ...INP, flex:1 }}>
                     {MONTHS_AR.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
-                  </select>
-                  <select value={selYear} onChange={e => setSelYear(+e.target.value)} style={{ ...INP, flex:1 }}>
+                  </SelectField>
+                  <SelectField value={selYear} onChange={e => setSelYear(+e.target.value)} style={{ ...INP, flex:1 }}>
                     {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
+                  </SelectField>
                 </div>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -2210,12 +2211,12 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
                   <div key={r.label}>
                     <p style={{ margin:'0 0 8px', fontSize:'0.72rem', fontWeight:700, color:'var(--text-2)' }}>{r.label}</p>
                     <div style={{ display:'flex', gap:8 }}>
-                      <select className="nw-sel" value={r.month} onChange={e => r.setM(+e.target.value)} style={{ ...INP, flex:1, padding:'9px 10px' }}>
+                      <SelectField className="nw-sel" value={r.month} onChange={e => r.setM(+e.target.value)} style={{ ...INP, flex:1, padding:'9px 10px' }}>
                         {MONTHS_AR.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
-                      </select>
-                      <select className="nw-sel" value={r.year} onChange={e => r.setY(+e.target.value)} style={{ ...INP, width:80, padding:'9px 10px' }}>
+                      </SelectField>
+                      <SelectField className="nw-sel" value={r.year} onChange={e => r.setY(+e.target.value)} style={{ ...INP, width:80, padding:'9px 10px' }}>
                         {[2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
-                      </select>
+                      </SelectField>
                     </div>
                   </div>
                 ))}

@@ -7,6 +7,7 @@ import { NWB_LOGO_SVG } from '../utils/logo'
 import { isRestStation } from '../utils/stations'
 
 import { todayStr } from '../utils/dates'
+import SelectField from '../components/shared/SelectField'
 
 const hhmmFromTs = v => v ? new Date(v).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
 const s5 = v => v ? String(v).slice(0, 5) : ''
@@ -305,11 +306,11 @@ export default function LiveBoard() {
             {isGeneralAdmin && (
               <>
                 <div style={{ fontSize: 13, color: th.muted, marginBottom: 6 }}>{isAr ? 'المحطة المعروضة' : 'Displayed station'}</div>
-                <select value={boardStation} onChange={e => setStationPref(e.target.value)}
+                <SelectField value={boardStation} onChange={e => setStationPref(e.target.value)}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: th.text, fontSize: 13, marginBottom: 18 }}>
                   <option value="all" style={{ color: '#000' }}>{isAr ? 'كل المحطات (شامل)' : 'All stations'}</option>
                   {stations.map(s => <option key={s.id} value={s.id} style={{ color: '#000' }}>{nm(s)}</option>)}
-                </select>
+                </SelectField>
               </>
             )}
 

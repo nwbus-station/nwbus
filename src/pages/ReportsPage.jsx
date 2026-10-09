@@ -12,6 +12,7 @@ import StatStrip from '../components/shared/StatStrip'
 import { toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
 import { USER_ROLES } from '../utils/constants'
+import SelectField from '../components/shared/SelectField'
 
 const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { minimumFractionDigits: 2 })
 const fmtN = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn')
@@ -1660,32 +1661,32 @@ export default function ReportsPage() {
               <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>—</span>
               <DatePicker value={auditTo} onChange={setAuditTo} isAr={isAr} className="px-2 py-1 rounded-lg border border-gray-200 text-xs bg-white text-right" />
 
-              <select value={auditTable} onChange={e => setAuditTable(e.target.value)}
+              <SelectField value={auditTable} onChange={e => setAuditTable(e.target.value)}
                 style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
                 <option value="all">{isAr ? 'كل الأقسام' : 'All sections'}</option>
                 {AUDIT_FILTER_TABLES.map(t => (
                   <option key={t} value={t}>{auditTableMeta(t).label}</option>
                 ))}
-              </select>
+              </SelectField>
 
               {/* فلتر المحطة — الأدمن يشوف كل الشبكة، وغيره يقتصر على محطاته المخصصة فقط */}
               {isGeneralAdmin ? (
-                <select value={auditStation} onChange={e => setAuditStation(e.target.value)}
+                <SelectField value={auditStation} onChange={e => setAuditStation(e.target.value)}
                   style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
                   <option value="all">{isAr ? 'كل المحطات' : 'All stations'}</option>
                   <option value="mine">{isAr ? 'محطتي' : 'My station'}</option>
                   {stations.map(s => (
                     <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
                   ))}
-                </select>
+                </SelectField>
               ) : myStationIds.length > 1 && (
-                <select value={auditStation} onChange={e => setAuditStation(e.target.value)}
+                <SelectField value={auditStation} onChange={e => setAuditStation(e.target.value)}
                   style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
                   <option value="mine">{isAr ? 'كل محطاتي' : 'All my stations'}</option>
                   {stations.map(s => (
                     <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
                   ))}
-                </select>
+                </SelectField>
               )}
 
               <button onClick={() => fetchAudit(0)} disabled={auditLoading}

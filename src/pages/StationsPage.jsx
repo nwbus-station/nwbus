@@ -9,6 +9,7 @@ import { mergeStations, checkMergeReady } from '../utils/mergeStations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import SearchSelect from '../components/shared/SearchSelect'
 import StatStrip from '../components/shared/StatStrip'
+import SelectField from '../components/shared/SelectField'
 
 /* ─── دمج محطة مكررة في الأساسية — أدمن فقط ─────────────── */
 function MergeModal({ stations, onClose, onSaved }) {
@@ -218,10 +219,10 @@ function StationModal({ station, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'النوع' : 'Type'}</label>
-              <select className={inputCls} value={form.type} onChange={e => set('type', e.target.value)}>
+              <SelectField className={inputCls} value={form.type} onChange={e => set('type', e.target.value)}>
                 <option value="main">{isAr ? 'رئيسية' : 'Main'}</option>
                 <option value="transit">{isAr ? 'مرور' : 'Transit'}</option>
-              </select>
+              </SelectField>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المنطقة' : 'Region'}</label>

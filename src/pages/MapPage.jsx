@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { clearCached } from '../lib/pageCache'
 import { isRestStation } from '../utils/stations'
+import SelectField from '../components/shared/SelectField'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -493,9 +494,9 @@ export default function MapPage() {
             ))}
           </div>
           {regions.length > 2 && (
-            <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} style={{ ...input, padding: '6px 8px', fontSize: '0.76rem' }}>
+            <SelectField value={regionFilter} onChange={e => setRegionFilter(e.target.value)} style={{ ...input, padding: '6px 8px', fontSize: '0.76rem' }}>
               {regions.map(r => <option key={r} value={r}>{r === 'all' ? (isAr ? 'كل المناطق' : 'All regions') : r}</option>)}
-            </select>
+            </SelectField>
           )}
         </div>
 
@@ -627,9 +628,9 @@ export default function MapPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div>
                       <label style={lbl}>{isAr ? 'النوع' : 'Type'}</label>
-                      <select style={input} value={form.kind} onChange={e => setForm(f => ({ ...f, kind: e.target.value }))}>
+                      <SelectField style={input} value={form.kind} onChange={e => setForm(f => ({ ...f, kind: e.target.value }))}>
                         {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{isAr ? v.ar : v.en}</option>)}
-                      </select>
+                      </SelectField>
                     </div>
                     <div>
                       <label style={lbl}>{isAr ? 'المنطقة' : 'Region'}</label>

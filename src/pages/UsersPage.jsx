@@ -14,6 +14,7 @@ import DatePicker from '../components/shared/DatePicker'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { SHIFTS, computeActiveUntil } from '../utils/ratingShifts'
 import { leaveRemaining } from '../utils/leaveBalance'
+import SelectField from '../components/shared/SelectField'
 const XL_GREEN = 'FF15803D', XL_RED = 'FFB91C1C'
 
 function RatingActivationAdmin({ userId, isAr }) {
@@ -69,9 +70,9 @@ function RatingActivationAdmin({ userId, isAr }) {
       <div className="grid grid-cols-2 gap-2">
         <input value={windowNumber} onChange={e => setWindowNumber(e.target.value)} dir="ltr" placeholder={isAr ? 'رقم الشباك' : 'Window #'}
           className="border rounded-lg px-2 py-1.5 text-xs" />
-        <select value={shift} onChange={e => setShift(e.target.value)} className="border rounded-lg px-2 py-1.5 text-xs">
+        <SelectField value={shift} onChange={e => setShift(e.target.value)} className="border rounded-lg px-2 py-1.5 text-xs">
           {SHIFTS.map(s => <option key={s.value} value={s.value}>{s.ar} ({s.range})</option>)}
-        </select>
+        </SelectField>
       </div>
       <div className="flex gap-2">
         <button type="button" disabled={busy} onClick={() => toggle(true)}
@@ -710,18 +711,18 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'نوع الحساب الأساسي *' : 'Base account type *'}</label>
-                    <select className={inputCls} value={form.base_role} onChange={e => { setSaved(false); setForm(f => ({ ...f, base_role: e.target.value })) }}>
+                    <SelectField className={inputCls} value={form.base_role} onChange={e => { setSaved(false); setForm(f => ({ ...f, base_role: e.target.value })) }}>
                       {USER_ROLES.map(r => <option key={r.value} value={r.value}>{isAr ? r.ar : r.en}</option>)}
-                    </select>
+                    </SelectField>
                   </div>
                 </div>
                 <div className="grid sm:grid-cols-3 gap-3 mt-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي *' : 'Job title *'}</label>
-                    <select className={`${inputCls} ${!form.job_title ? 'border-red-300' : ''}`} value={form.job_title ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, job_title: e.target.value })) }}>
+                    <SelectField className={`${inputCls} ${!form.job_title ? 'border-red-300' : ''}`} value={form.job_title ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, job_title: e.target.value })) }}>
                       <option value="">{isAr ? '— اختر المسمى الوظيفي —' : '— Select job title —'}</option>
                       {JOB_TITLES.map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
-                    </select>
+                    </SelectField>
                   </div>
                   <label className="sm:col-span-2 flex items-center gap-2 text-sm text-gray-700 mt-5 cursor-pointer">
                     <input type="checkbox" className="rounded accent-nwbus-primary" checked={!!form.can_rate_customers}
@@ -731,13 +732,13 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                 </div>
                 <div className="mt-3 max-w-md">
                   <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'صفة التقييم ونسبته (لو هذي الصلاحية تقيّم موظفين)' : 'Evaluation capacity & weight (if this permission evaluates staff)'}</label>
-                  <select className={inputCls} value={form.eval_source ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, eval_source: e.target.value })) }}>
+                  <SelectField className={inputCls} value={form.eval_source ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, eval_source: e.target.value })) }}>
                     <option value="">{isAr ? 'تلقائي — مشرف المحطة (35%)' : 'Default — Station supervisor (35%)'}</option>
                     {EVAL_SOURCE_ORDER.map(k => (
                       <option key={k} value={k}>{EVAL_SOURCE_LABELS[k]} ({EVAL_SOURCE_WEIGHTS[k]}%)</option>
                     ))}
                     <option value="dispatcher_supervisor">{isAr ? 'مشرف المرحّلين — يحل تلقائياً محل مشرف المحطة (35%) أو مشرف الوردية (25%)' : 'Dispatchers supervisor — fills the station (35%) or shift (25%) slot automatically'}</option>
-                  </select>
+                  </SelectField>
                   <p className="text-[11px] text-gray-500 mt-1">{isAr ? 'تقييم صاحب هذي الصلاحية يُحسب من الدرجة النهائية بهذي النسبة، ويُعاد توزيع نسبة المصدر الغايب تلقائياً.' : 'This permission\'s evaluations count with this weight in the final score.'}</p>
                 </div>
                 <div className="mt-4">
@@ -781,12 +782,12 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                   <div className="flex items-center gap-2">
                     <input value={q} onChange={e => setQ(e.target.value)} placeholder={isAr ? 'بحث في الصلاحيات…' : 'Search permissions…'}
                       className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs w-48 focus:ring-2 focus:ring-nwbus-primary/40 focus:outline-none" />
-                    <select value="" onChange={e => { copyFrom(e.target.value); e.target.value = '' }}
+                    <SelectField value="" onChange={e => { copyFrom(e.target.value); e.target.value = '' }}
                       className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-gray-700 max-w-[150px]" title={isAr ? 'نسخ الصلاحيات من دور أو مسمى آخر' : 'Copy from'}>
                       <option value="">{isAr ? 'نسخ من…' : 'Copy from…'}</option>
                       {EDITABLE_ROLES.filter(r => !(isRole && form.role === r)).map(r => <option key={r} value={`role:${r}`}>{isAr ? USER_ROLES.find(x => x.value === r)?.ar : r}</option>)}
                       {titles.filter(t => t.id !== form.id).map(t => <option key={t.id} value={`title:${t.id}`}>{t.name_ar}</option>)}
-                    </select>
+                    </SelectField>
                     {isRole && <button type="button" onClick={() => { if (window.confirm(isAr ? 'استعادة الإعدادات الافتراضية لهذا الدور؟' : 'Restore defaults for this role?')) { setSaved(false); setForm(f => ({ ...f, permissions: {} })) } }}
                       className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">{isAr ? 'الافتراضي' : 'Defaults'}</button>}
                     <button type="button" onClick={() => setMany(capList, true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-green-700 hover:bg-green-50">{isAr ? 'تفعيل الكل' : 'Enable all'}</button>
@@ -1348,10 +1349,10 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي' : 'Job Title'}</label>
-                <select className={inputCls} value={form.job_title} onChange={e => set('job_title', e.target.value)}>
+                <SelectField className={inputCls} value={form.job_title} onChange={e => set('job_title', e.target.value)}>
                   <option value="">{isAr ? '— اختر —' : '— Select —'}</option>
                   {JOB_TITLES.map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
-                </select>
+                </SelectField>
               </div>
             </div>
 
@@ -1537,7 +1538,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الصلاحية *' : 'Role *'}</label>
-                <select required className={inputCls} value={form.custom_title_id ? `title:${form.custom_title_id}` : form.role}
+                <SelectField required className={inputCls} value={form.custom_title_id ? `title:${form.custom_title_id}` : form.role}
                   onChange={e => {
                     const v = e.target.value
                     if (v.startsWith('title:')) {
@@ -1559,14 +1560,14 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                       {customTitles.map(t => <option key={t.id} value={`title:${t.id}`}>{isAr ? t.name_ar : (t.name_en || t.name_ar)}</option>)}
                     </optgroup>
                   )}
-                </select>
+                </SelectField>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اللغة' : 'Language'}</label>
-                <select className={inputCls} value={form.language} onChange={e => set('language', e.target.value)}>
+                <SelectField className={inputCls} value={form.language} onChange={e => set('language', e.target.value)}>
                   <option value="ar">عربي</option>
                   <option value="en">English</option>
-                </select>
+                </SelectField>
               </div>
             </div>
 
@@ -1618,9 +1619,9 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                 <div className="grid grid-cols-2 gap-2">
                   <input value={form.rating_window_number ?? ''} onChange={e => set('rating_window_number', e.target.value)} dir="ltr"
                     placeholder={isAr ? 'رقم الشباك' : 'Window #'} className="border rounded-lg px-2 py-1.5 text-xs" />
-                  <select value={form.rating_shift ?? 'A'} onChange={e => set('rating_shift', e.target.value)} className="border rounded-lg px-2 py-1.5 text-xs">
+                  <SelectField value={form.rating_shift ?? 'A'} onChange={e => set('rating_shift', e.target.value)} className="border rounded-lg px-2 py-1.5 text-xs">
                     {SHIFTS.map(s => <option key={s.value} value={s.value}>{s.ar} ({s.range})</option>)}
-                  </select>
+                  </SelectField>
                 </div>
                 <p className="text-[10px] text-gray-400">{isAr ? 'التفعيل الفوري يظهر بعد الحفظ عند تعديل الموظف — الموظف نفسه يفعّل تقييمه من صفحة "تقييم العميل"' : 'Instant activation is available after saving, when editing the employee'}</p>
               </div>
@@ -1632,13 +1633,13 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             {!(isGeneralAdmin && isMultiStationRole) && (
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المحطة' : 'Station'}</label>
-                <select className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}
+                <SelectField className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}
                   disabled={isStationAdmin}>
                   <option value="">{isAr ? '— بدون محطة —' : '— No Station —'}</option>
                   {stations.map(s => (
                     <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
                   ))}
-                </select>
+                </SelectField>
               </div>
             )}
 
@@ -1732,14 +1733,14 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   {isAr ? 'المسؤول المباشر' : 'Direct Supervisor'}
                 </label>
-                <select className={inputCls} value={form.supervisor_id} onChange={e => set('supervisor_id', e.target.value)}>
+                <SelectField className={inputCls} value={form.supervisor_id} onChange={e => set('supervisor_id', e.target.value)}>
                   <option value="">{isAr ? '— بدون مشرف —' : '— No Supervisor —'}</option>
                   {supervisors.filter(s => s.id !== user?.id).map(s => {
                     const t = customTitles.find(x => x.id === s.custom_title_id)
                     const r = t ? (isAr ? t.name_ar : (t.name_en || t.name_ar)) : USER_ROLES.find(x => x.value === s.role)?.[isAr ? 'ar' : 'en']
                     return <option key={s.id} value={s.id}>{s.full_name_ar}{r ? ` — ${r}` : ''}</option>
                   })}
-                </select>
+                </SelectField>
               </div>
             )}
 
@@ -2415,7 +2416,7 @@ function UsersPageFull() {
         <div className="flex gap-2 flex-wrap">
           {/* Roles */}
           {isGeneralAdmin && (
-            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
+            <SelectField value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
               className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
               style={{ fontFamily: 'inherit' }}>
               <option value="">{isAr ? 'كل الصلاحيات' : 'All Roles'}</option>
@@ -2433,42 +2434,42 @@ function UsersPageFull() {
                   ))}
                 </optgroup>
               )}
-            </select>
+            </SelectField>
           )}
 
           {/* Station — للأدمن ومشرف المنطقة/المحطة (لو معه أكثر من محطة مخصصة) */}
           {(isGeneralAdmin || isAreaSupervisor || isStationAdmin) && stations.length > 1 && (
-            <select value={stationFilter} onChange={e => setStationFilter(e.target.value)}
+            <SelectField value={stationFilter} onChange={e => setStationFilter(e.target.value)}
               className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
               style={{ fontFamily: 'inherit' }}>
               <option value="">{isAr ? 'كل المحطات' : 'All Stations'}</option>
               {stations.map(s => (
                 <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
               ))}
-            </select>
+            </SelectField>
           )}
 
           {isGeneralAdmin && (
             <>
           {/* Job Title */}
-          <select value={jobFilter} onChange={e => setJobFilter(e.target.value)}
+          <SelectField value={jobFilter} onChange={e => setJobFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
             style={{ fontFamily: 'inherit' }}>
             <option value="">{isAr ? 'كل المسميات' : 'All Titles'}</option>
             {JOB_TITLES.map(j => (
               <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>
             ))}
-          </select>
+          </SelectField>
 
           {/* Module access */}
-          <select value={moduleFilter} onChange={e => setModuleFilter(e.target.value)}
+          <SelectField value={moduleFilter} onChange={e => setModuleFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
             style={{ fontFamily: 'inherit' }}>
             <option value="">{isAr ? 'كل الأقسام (تصفية)' : 'Filter by section'}</option>
             {MODULES.map(m => (
               <option key={m.value} value={m.value}>{isAr ? m.ar : m.en}</option>
             ))}
-          </select>
+          </SelectField>
 
           {moduleFilter && (
             <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-white border cursor-pointer text-gray-700">
@@ -2479,33 +2480,33 @@ function UsersPageFull() {
           )}
 
           {/* Status */}
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          <SelectField value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
             style={{ fontFamily: 'inherit' }}>
             <option value="">{isAr ? 'كل الحالات' : 'All Status'}</option>
             <option value="active">{isAr ? 'نشط فقط' : 'Active only'}</option>
             <option value="inactive">{isAr ? 'معطّل فقط' : 'Inactive only'}</option>
-          </select>
+          </SelectField>
 
           {/* Supervisor — لعرض/تحديد موظفي مشرف معيّن دفعة وحدة */}
-          <select value={supervisorFilter} onChange={e => setSupervisorFilter(e.target.value)}
+          <SelectField value={supervisorFilter} onChange={e => setSupervisorFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
             style={{ fontFamily: 'inherit' }}>
             <option value="">{isAr ? 'تصفية حسب المشرف' : 'Filter by supervisor'}</option>
             {supervisors.map(s => (
               <option key={s.id} value={s.id}>{s.full_name_ar}</option>
             ))}
-          </select>
+          </SelectField>
 
           {/* Leave balance */}
-          <select value={leaveFilter} onChange={e => setLeaveFilter(e.target.value)}
+          <SelectField value={leaveFilter} onChange={e => setLeaveFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
             style={{ fontFamily: 'inherit' }}>
             <option value="">{isAr ? 'رصيد الإجازة (تصفية)' : 'Filter by leave balance'}</option>
             <option value="zero">{isAr ? 'رصيد منتهي' : 'Zero balance'}</option>
             <option value="low">{isAr ? 'رصيد منخفض (أقل من 7 أيام)' : 'Low (under 7 days)'}</option>
             <option value="ok">{isAr ? 'رصيد متوفر (7 أيام فأكثر)' : 'Available (7+ days)'}</option>
-          </select>
+          </SelectField>
             </>
           )}
 
@@ -2524,14 +2525,14 @@ function UsersPageFull() {
           <span className="text-xs font-semibold text-nwbus-primary shrink-0">
             {isAr ? `محدد: ${selectedIds.size}` : `Selected: ${selectedIds.size}`}
           </span>
-          <select value={bulkModule} onChange={e => setBulkModule(e.target.value)}
+          <SelectField value={bulkModule} onChange={e => setBulkModule(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
             style={{ fontFamily: 'inherit' }}>
             <option value="">{isAr ? '— اختر قسم —' : '— Select section —'}</option>
             {MODULES.map(m => (
               <option key={m.value} value={m.value}>{isAr ? m.ar : m.en}</option>
             ))}
-          </select>
+          </SelectField>
           <button onClick={handleBulkAddModule} disabled={!bulkModule || bulkSaving}
             className="bg-nwbus-primary text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-nwbus-dark transition-colors">
             {bulkSaving ? (isAr ? 'جارٍ الإضافة...' : 'Adding...') : (isAr ? 'إضافة القسم للمحدد' : 'Add section to selected')}
@@ -2541,14 +2542,14 @@ function UsersPageFull() {
             {bulkSaving ? (isAr ? 'جارٍ الإزالة...' : 'Removing...') : (isAr ? 'إزالة القسم من المحدد' : 'Remove section from selected')}
           </button>
           <span className="text-gray-300">|</span>
-          <select value={bulkSupervisor} onChange={e => setBulkSupervisor(e.target.value)}
+          <SelectField value={bulkSupervisor} onChange={e => setBulkSupervisor(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
             style={{ fontFamily: 'inherit' }}>
             <option value="">{isAr ? '— نقل إلى مشرف —' : '— Reassign to supervisor —'}</option>
             {supervisors.map(s => (
               <option key={s.id} value={s.id}>{s.full_name_ar}</option>
             ))}
-          </select>
+          </SelectField>
           <button onClick={handleBulkReassignSupervisor} disabled={!bulkSupervisor || bulkSaving}
             className="bg-nwbus-primary text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 hover:bg-nwbus-dark transition-colors">
             {bulkSaving ? (isAr ? 'جارٍ النقل...' : 'Reassigning...') : (isAr ? 'نقل المحدد لمشرف جديد' : 'Reassign selected')}

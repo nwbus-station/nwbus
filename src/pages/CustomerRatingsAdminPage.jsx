@@ -6,6 +6,7 @@ import { escapeHtml, toLatinDigits, matchesSearch } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
 import { useAuth } from '../context/AuthContext'
 import FeedbackReport from '../components/feedback/FeedbackReport'
+import SelectField from '../components/shared/SelectField'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ', en: 'Shift A' },
@@ -21,7 +22,7 @@ function stationLabel(st, isAr) {
   return isAr ? st.name_ar : (st.name_en || st.name_ar)
 }
 
-// قائمة موظفين قابلة للبحث بالاسم أو الرقم الوظيفي — بديل عن <select> عادي لما تكون
+// قائمة موظفين قابلة للبحث بالاسم أو الرقم الوظيفي — بديل عن <SelectField> عادي لما تكون
 // القائمة طويلة (كل من عنده صلاحية "يُقيّم من العميل" بكل المحطات)
 function EmployeePicker({ employees, value, onChange, defaultLabel }) {
   const { i18n } = useTranslation()
@@ -243,24 +244,24 @@ function RatingsTab() {
   return (
     <div>
       <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap gap-3 items-center mb-4">
-        <select value={stationFilter} onChange={e => setStationFilter(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
+        <SelectField value={stationFilter} onChange={e => setStationFilter(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
           <option value="">{isAr ? 'كل المحطات' : 'All stations'}</option>
           {stations.map(s => <option key={s.id} value={s.id}>{stationLabel(s, isAr)}</option>)}
-        </select>
-        <select value={shiftFilter} onChange={e => setShiftFilter(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
+        </SelectField>
+        <SelectField value={shiftFilter} onChange={e => setShiftFilter(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
           <option value="">{isAr ? 'كل الورديات' : 'All shifts'}</option>
           {SHIFTS.map(s => <option key={s.value} value={s.value}>{isAr ? s.ar : s.en}</option>)}
-        </select>
+        </SelectField>
         <EmployeePicker employees={employees} value={employeeFilter} onChange={setEmployeeFilter}
           defaultLabel={stationFilter ? (isAr ? 'كل موظفي المحطة' : 'All station employees') : (isAr ? 'كل الموظفين' : 'All employees')} />
         <DatePicker value={dateFrom} onChange={setDateFrom} className="border rounded-lg px-3 py-2 text-sm" placeholder={isAr ? 'من تاريخ' : 'From date'} />
         <span className="text-gray-400 text-sm">{isAr ? 'إلى' : 'to'}</span>
         <DatePicker value={dateTo} onChange={setDateTo} className="border rounded-lg px-3 py-2 text-sm" placeholder={isAr ? 'إلى تاريخ' : 'To date'} />
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
+        <SelectField value={sortBy} onChange={e => setSortBy(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
           <option value="date">{isAr ? 'الأحدث' : 'Newest'}</option>
           <option value="best">{isAr ? 'الأعلى تقييماً' : 'Highest rated'}</option>
           <option value="worst">{isAr ? 'الأقل تقييماً' : 'Lowest rated'}</option>
-        </select>
+        </SelectField>
         <button onClick={printReport} className="ms-auto bg-nwbus-primary text-white rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90">
           🖨 {employeeFilter ? (isAr ? 'طباعة تقرير الموظف' : 'Print employee report') : stationFilter ? (isAr ? 'طباعة تقرير المحطة' : 'Print station report') : (isAr ? 'طباعة التقرير' : 'Print report')}
         </button>

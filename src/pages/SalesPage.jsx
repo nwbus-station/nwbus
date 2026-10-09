@@ -9,6 +9,7 @@ import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { todayStr, toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
+import SelectField from '../components/shared/SelectField'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ', en: 'Shift A', range: '00:00 – 08:00', end: 8 },
@@ -499,10 +500,10 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                 {isGeneralAdmin && (
                   <div>
                     <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'المحطة *' : 'Station *'}</label>
-                    <select required={isGeneralAdmin} className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
+                    <SelectField required={isGeneralAdmin} className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
                       <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
                       {stations.map(s => <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>)}
-                    </select>
+                    </SelectField>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3">
@@ -512,9 +513,9 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'الوردية' : 'Shift'}</label>
-                    <select className={inputCls} value={form.shift} onChange={e => set('shift', e.target.value)}>
+                    <SelectField className={inputCls} value={form.shift} onChange={e => set('shift', e.target.value)}>
                       {SHIFTS.map(s => <option key={s.value} value={s.value}>{isAr ? s.ar : s.en} ({s.range})</option>)}
-                    </select>
+                    </SelectField>
                   </div>
                 </div>
                 {!sale && (() => {
@@ -907,7 +908,7 @@ export default function SalesPage() {
         {(isGeneralAdmin || isAreaSupervisor || isStationAdmin) && stations.length > 0 && (
           <>
             <span className="hidden sm:block w-px h-6 bg-slate-200 mx-1" />
-            <select value={filterStation} onChange={e => setStation(e.target.value)}
+            <SelectField value={filterStation} onChange={e => setStation(e.target.value)}
               className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none min-w-[180px]"
               style={{ fontFamily: 'inherit' }}>
               <option value="">{isAr ? 'جميع المحطات' : 'All stations'}</option>
@@ -926,7 +927,7 @@ export default function SalesPage() {
               {pinnedStations.length === 0 && stations.map(s => (
                 <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
               ))}
-            </select>
+            </SelectField>
             <button onClick={() => setShowPinModal(true)}
               title={isAr ? 'تثبيت محطات' : 'Pin stations'}
               className={`w-9 h-9 rounded-lg grid place-items-center border transition ${pinnedStations.length > 0 ? 'text-amber-600 border-amber-300 bg-amber-50' : 'text-slate-400 border-slate-200 bg-white hover:text-amber-600 hover:border-amber-300'}`}>

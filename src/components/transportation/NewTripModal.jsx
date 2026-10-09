@@ -7,6 +7,7 @@ import TimeInput24 from '../shared/TimeInput24'
 import { isRestStation } from '../../utils/stations'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { todayStr } from '../../utils/dates'
+import SelectField from '../shared/SelectField'
 
 /**
  * إضافة رحلة (خط) جديدة يدوياً — للأدمن فقط.
@@ -584,9 +585,9 @@ export default function NewTripModal({ isAr, onClose, onCreated, editTrip }) {
             </div>
             <div>
               <label className="block text-[11px] text-gray-500 mb-1">{t('Bus type', 'نوع الحافلة')}</label>
-              <select value={form.bus_type} onChange={e => set('bus_type', e.target.value)} className={inputCls}>
+              <SelectField value={form.bus_type} onChange={e => set('bus_type', e.target.value)} className={inputCls}>
                 {BUS_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
+              </SelectField>
             </div>
           </div>
 

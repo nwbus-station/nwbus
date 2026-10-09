@@ -8,6 +8,7 @@ import { AR_LABELS, AR_O, AR_A, EN_LABELS, EN_O, EN_A, TRIP_ASPECTS, STATION_ASP
 import { exportSurveyExcel } from '../../utils/surveyExport'
 import { buildSurveyReportHtml, openPrintWindow, printInto } from '../../utils/surveyPdf'
 import { POSTER_SIZES, buildPosterSvg, downloadPosterPng, printPoster } from '../../utils/qrPoster'
+import SelectField from '../shared/SelectField'
 
 const useIsAr = () => useTranslation().i18n.language === 'ar'
 const mkLbl = isAr => { const d = isAr ? AR_LABELS : EN_LABELS; return k => d[k] || k }
@@ -419,10 +420,10 @@ export default function FeedbackReport() {
           </div>
           <div>
             <p className="text-[11px] font-semibold text-gray-500 mb-1.5">{isAr ? 'المحطة' : 'Station'}</p>
-            <select value={stationFilter} onChange={e => setStationFilter(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs w-48">
+            <SelectField value={stationFilter} onChange={e => setStationFilter(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs w-48">
               <option value="">{isAr ? 'كل المحطات' : 'All stations'}</option>
               {stations.map(s => <option key={s.id} value={s.id}>{stLabel(s)}</option>)}
-            </select>
+            </SelectField>
           </div>
           <div className="ms-auto flex items-center gap-2">
             <button type="button" onClick={() => runExport('pdf', printPdf)} disabled={!D?.total || !!busy}
@@ -620,9 +621,9 @@ export default function FeedbackReport() {
             <div className="flex flex-wrap items-end gap-3 mb-4">
               <div>
                 <p className="text-[11px] font-semibold text-gray-500 mb-1.5">{isAr ? 'المقاس' : 'Size'}</p>
-                <select value={sizeId} onChange={e => setSizeId(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-64">
+                <SelectField value={sizeId} onChange={e => setSizeId(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-64">
                   {POSTER_SIZES.map(z => <option key={z.id} value={z.id}>{isAr ? z.label : (POSTER_LABELS_EN[z.id] || z.label)}</option>)}
-                </select>
+                </SelectField>
               </div>
               <button type="button" disabled={!posterSvg} onClick={() => downloadPosterPng(posterSvg, size.w, size.h, `nwbus-qr-${size.id}.png`)}
                 className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white disabled:opacity-40">{isAr ? 'تحميل PNG (300 DPI)' : 'Download PNG (300 DPI)'}</button>
