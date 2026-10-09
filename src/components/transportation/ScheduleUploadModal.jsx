@@ -49,10 +49,25 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
     .then(({ data }) => setPending(data ?? []))
   useEffect(() => { loadPending() }, [])
   useEffect(() => {
-    supabase.from('schedule_uploads').select('id, file_name, period, start_date, end_date, status, trip_count, uploaded_by_name')
-      .eq('status', 'applied').order('start_date', { ascending: false }).limit(8)
-      .then(({ data }) => setHistory(data ?? []))
+    let cancelled = false
+    const base = cols => supabase.from('schedule_uploads').select(cols).eq('status', 'applied')
+    const cols = 'id, file_name, period, start_date, end_date, status, trip_count, uploaded_by_name'
+    ;(async () => {
+      // نحاول بوقت الرفع أولاً، وإن لم يوجد العمود نرجع للاستعلام السابق
+      let { data, error } = await base(cols + ', uploaded_at').order('uploaded_at', { ascending: false }).limit(10)
+      if (error) ({ data } = await base(cols).order('start_date', { ascending: false }).limit(10))
+      const rows = data ?? []
+      // الجداول المجدولة مسبقاً تحتفظ بنسختها (payload) — نميّزها بأنها طُبّقت تلقائياً
+      if (rows.length) {
+        const { data: sch } = await supabase.from('schedule_uploads').select('id').in('id', rows.map(r => r.id)).not('payload', 'is', null)
+        const set = new Set((sch ?? []).map(r => r.id))
+        rows.forEach(r => { r.auto = set.has(r.id) })
+      }
+      if (!cancelled) setHistory(rows)
+    })()
+    return () => { cancelled = true }
   }, [result, view])
+  const fmtDT = d => (d ? new Date(d).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' }) : null)
 
   async function updatePending(id, patch) {
     await supabase.from('schedule_uploads').update(patch).eq('id', id)
@@ -247,7 +262,10 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
             <>
               <div className="flex items-center justify-between gap-3">
                 <button type="button" onClick={() => setView(null)} className="text-xs font-bold border border-slate-300 text-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-50">← {isAr ? 'رجوع' : 'Back'}</button>
-                <p className="text-sm font-extrabold text-slate-800 truncate" dir="ltr">{view.kind === 'upload' ? (view.row.file_name || view.row.period) : (isAr ? 'كل الرحلات الفعّالة حالياً' : 'All currently active trips')}</p>
+                <div className="min-w-0 text-end">
+                  <p className="text-sm font-extrabold text-slate-800 truncate" dir="ltr">{view.kind === 'upload' ? (view.row.file_name || view.row.period) : (isAr ? 'كل الرحلات الفعّالة حالياً' : 'All currently active trips')}</p>
+                  {view.kind === 'upload' && view.row.uploaded_at && <p className="text-[11px] text-slate-500">{isAr ? 'رُفع: ' : 'Uploaded: '}{fmtDT(view.row.uploaded_at)}{view.row.uploaded_by_name ? ` · ${view.row.uploaded_by_name}` : ''}</p>}
+                </div>
               </div>
 
               {view.kind === 'upload' && (
@@ -426,6 +444,12 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
                           <div key={h.id} className="py-2 flex items-center justify-between gap-3 text-xs">
                             <div className="min-w-0">
                               <p className="font-semibold text-slate-700 truncate" dir="ltr">{h.file_name || h.period || '—'}</p>
+                              {h.uploaded_at && (
+                                <p className="text-slate-500 font-semibold">
+                                  {isAr ? 'رُفع: ' : 'Uploaded: '}{fmtDT(h.uploaded_at)}
+                                  {h.auto && <span className="ms-2 text-[10px] font-bold bg-sky-50 text-sky-700 rounded px-1.5 py-0.5">{isAr ? 'جدولة مسبقة · طُبّق تلقائياً' : 'Scheduled · auto-applied'}</span>}
+                                </p>
+                              )}
                               <p className="text-slate-400">
                                 {isAr ? 'من' : 'From'} {h.start_date || '—'} · {isAr ? 'إلى' : 'to'} <b className={h.end_date ? 'text-slate-600' : 'text-slate-400'}>{h.end_date || (isAr ? 'مفتوح' : 'open')}</b>
                                 {h.uploaded_by_name ? ` · ${h.uploaded_by_name}` : ''}
