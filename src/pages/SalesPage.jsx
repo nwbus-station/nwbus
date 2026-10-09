@@ -308,26 +308,28 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     employee_name:     sale?.employee_name      ?? profile?.full_name_ar          ?? '',
     cashier_ref:       sale ? (parseInitialRefs(sale.balance_ref)[0] ?? '') : savedCashier,
     balance_refs:      sale ? (parseInitialRefs(sale.balance_ref).slice(1).length > 0 ? parseInitialRefs(sale.balance_ref).slice(1) : ['']) : [''],
-    cash_amount:       sale?.cash_amount ?? 0,
-    mada_amount:       sale?.mada_amount ?? 0,
+    cash_amount:       sale?.cash_amount ?? '',
+    mada_amount:       sale?.mada_amount ?? '',
     mada_network_ref:  sale?.mada_network_ref ?? '',
-    visa_amount:       sale?.visa_amount ?? 0,
-    mastercard_amount: sale?.mastercard_amount ?? 0,
-    other_amount:      sale?.other_amount ?? 0,
+    visa_amount:       sale?.visa_amount ?? '',
+    mastercard_amount: sale?.mastercard_amount ?? '',
+    other_amount:      sale?.other_amount ?? '',
     other_type:        sale?.other_type ?? '',
-    total_sales:       sale?.total_expected ?? 0,
+    total_sales:       sale?.total_expected ?? '',
     is_confirmed:          sale?.is_confirmed       ?? false,
     accountant_notes:      sale?.accountant_notes   ?? '',
     deficit_acknowledged:  false,
   })
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
+  const [fieldErrs, setFieldErrs] = useState({})   // حقول ناقصة تُظلَّل بالأحمر
+  const [warn, setWarn] = useState(null)           // تأكيد قبل حفظ فرق/إجمالي صفر
   // الحقول التي تعتبر تغييراً حقيقياً للبيانات (لا تشمل is_confirmed والملاحظات فقط)
   const DATA_FIELDS = ['sale_date','shift','station_id','employee_name','cashier_ref','balance_refs','cash_amount','mada_amount','mada_network_ref','visa_amount','mastercard_amount','other_amount','other_type','total_sales']
-  const set = (k, v) => setForm(f => ({
+  const set = (k, v) => { setFieldErrs(fe => (fe[k] ? { ...fe, [k]: false } : fe)); setForm(f => ({
     ...f, [k]: v,
     ...(DATA_FIELDS.includes(k) && sale ? { _dataChanged: true } : {}),
-  }))
+  })) }
 
   const totalActual = Math.round(Number(form.cash_amount)) + Math.round(Number(form.mada_amount)) +
     Math.round(Number(form.visa_amount)) + Math.round(Number(form.mastercard_amount)) + Math.round(Number(form.other_amount))
@@ -338,9 +340,40 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   function setBalanceRef(i, v)  { const refs = [...form.balance_refs]; refs[i] = v; set('balance_refs', refs) }
   function persistCashier()   { localStorage.setItem(CASHIER_KEY,  form.cashier_ref)   }
 
-  async function handleSave(e) {
-    e.preventDefault()
+  const isBlank = v => v === '' || v === null || v === undefined
+  async function handleSave(e, force = false) {
+    e?.preventDefault?.()
     if (isLocked) return
+    if (!force) {
+      // إدخال إلزامي لكل المبالغ (اكتب 0 إن لم تكن هناك مبيعات بهذه الطريقة)
+      const names = { cash_amount: isAr ? 'نقداً' : 'Cash', mada_amount: isAr ? 'مدى' : 'Mada', visa_amount: 'Visa', mastercard_amount: 'Mastercard', other_amount: isAr ? 'أخرى' : 'Other', total_sales: isAr ? 'إجمالي المبيعات' : 'Total sales' }
+      const missing = Object.keys(names).filter(k => isBlank(form[k]))
+      const errs = Object.fromEntries(missing.map(k => [k, true]))
+      if (Number(form.other_amount) > 0 && !String(form.other_type || '').trim()) errs.other_type = true
+      if (Number(form.mada_amount) > 0 && !String(form.mada_network_ref || '').trim()) errs.mada_network_ref = true
+      if (Object.keys(errs).length) {
+        setFieldErrs(errs)
+        const parts = []
+        if (missing.length) parts.push((isAr ? 'أدخل كل المبالغ (اكتب 0 إن لم يوجد): ' : 'Fill in every amount (type 0 if none): ') + missing.map(k => names[k]).join(isAr ? '، ' : ', '))
+        if (errs.other_type) parts.push(isAr ? 'اكتب نوع الدفع في خانة "أخرى"' : 'Enter the payment type for "Other"')
+        if (errs.mada_network_ref) parts.push(isAr ? 'اكتب الرقم المرجعي لمدى' : 'Enter the Mada reference')
+        setError(parts.join(' — '))
+        return
+      }
+      setFieldErrs({})
+      // مراجعة قبل الحفظ: إجمالي صفر أو فرق بين الإجمالي والمدفوع
+      const untouched = !!sale && !form._dataChanged   // تأكيد المحاسب فقط بدون تعديل أرقام
+      if (!untouched && Math.round(Number(form.total_sales)) === 0 && totalActual === 0) {
+        setWarn(isAr ? 'كل المبالغ صفر. هل تأكدت أنه لا توجد مبيعات في هذه الوردية؟' : 'All amounts are zero. Are you sure there were no sales in this shift?')
+        return
+      }
+      if (!untouched && diff !== 0) {
+        setWarn(isAr
+          ? `الإجمالي الفعلي (${fmt(totalActual)}) لا يساوي إجمالي المبيعات (${fmt(Math.round(Number(form.total_sales)))}) — ${diff < 0 ? 'عجز' : 'زيادة'} ${fmt(Math.abs(diff))} ر.س. راجع الأرقام قبل الحفظ، هل تريد الحفظ كما هي؟`
+          : `Actual total (${fmt(totalActual)}) differs from total sales (${fmt(Math.round(Number(form.total_sales)))}) by ${fmt(Math.abs(diff))} SAR. Review the numbers — save anyway?`)
+        return
+      }
+    }
     if (!sale && (form.shift !== suggested.shift || form.sale_date !== suggested.date) && !shiftConfirmed) {
       setError(isAr ? 'الوردية أو التاريخ يختلف عن المتوقع حسب الوقت الحالي — أكّد صحتهما بالتأشير على خانة التأكيد' : 'The shift or date differs from the one expected for the current time — tick the confirmation box')
       return
@@ -593,7 +626,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
             </SectionCard>
 
             {/* طرق الدفع */}
-            <SectionCard n={3} title={isAr ? 'طرق الدفع' : 'Payment methods'}>
+            <SectionCard n={3} title={isAr ? 'طرق الدفع (إدخال كل الخانات إلزامي)' : 'Payment methods (all fields required)'}>
               <div className="space-y-2.5">
                 {METHODS.map(m => (
                   <div key={m.key}>
@@ -603,9 +636,9 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                       </span>
                       <div className="relative flex-1">
                         <input type="text" inputMode="numeric" lang="en" dir="ltr"
-                          className={inputCls + ' text-end font-mono font-bold pe-12'}
-                          value={form[m.key]}
-                          onChange={e => set(m.key, Math.round(Number(cleanNumber(e.target.value))) || 0)}
+                          className={inputCls + ' text-end font-mono font-bold pe-12' + (fieldErrs[m.key] ? ' !border-red-400 !bg-red-50' : '')}
+                          value={form[m.key]} placeholder="0"
+                          onChange={e => { const c = cleanNumber(e.target.value); set(m.key, String(c).trim() === '' ? '' : (Math.round(Number(c)) || 0)) }}
                           onFocus={e => e.target.select()} />
                         <span className="absolute inset-y-0 end-3 flex items-center text-[11px] font-semibold text-gray-400 pointer-events-none">{isAr ? 'ر.س' : 'SAR'}</span>
                       </div>
@@ -613,7 +646,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                     {m.ref && Number(form[m.key]) > 0 && (
                       <div className="mt-1.5 ms-[7.75rem]">
                         <input placeholder={m.refLabel} dir="ltr"
-                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none font-mono"
+                          className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500/40 focus:outline-none font-mono ${fieldErrs[m.ref] ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white'}`}
                           value={form[m.ref]} onChange={e => set(m.ref, toLatinDigits(e.target.value))} />
                       </div>
                     )}
@@ -628,9 +661,9 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                 <span className="text-[13px] font-bold text-gray-700">{isAr ? 'إجمالي المبيعات' : 'Total sales'}</span>
                 <div className="relative w-40">
                   <input type="text" inputMode="numeric" lang="en" dir="ltr"
-                    className={inputCls + ' text-end font-mono font-bold pe-12'}
-                    value={form.total_sales}
-                    onChange={e => set('total_sales', Math.round(Number(cleanNumber(e.target.value))) || 0)}
+                    className={inputCls + ' text-end font-mono font-bold pe-12' + (fieldErrs.total_sales ? ' !border-red-400 !bg-red-50' : '')}
+                    value={form.total_sales} placeholder="0"
+                    onChange={e => { const c = cleanNumber(e.target.value); set('total_sales', String(c).trim() === '' ? '' : (Math.round(Number(c)) || 0)) }}
                     onFocus={e => e.target.select()} />
                   <span className="absolute inset-y-0 end-3 flex items-center text-[11px] font-semibold text-gray-400 pointer-events-none">{isAr ? 'ر.س' : 'SAR'}</span>
                 </div>
@@ -706,6 +739,11 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         </div>
         </form>
       </div>
+      {warn && (
+        <ConfirmDialog message={warn} danger={false}
+          confirmLabel={isAr ? 'حفظ كما هي' : 'Save anyway'} cancelLabel={isAr ? 'رجوع للتعديل' : 'Go back'}
+          onConfirm={() => { setWarn(null); handleSave(null, true) }} onCancel={() => setWarn(null)} />
+      )}
     </div>
   )
 }
