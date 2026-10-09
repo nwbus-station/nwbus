@@ -76,13 +76,24 @@ export default function SearchSelect({
     return () => mq.removeEventListener?.('change', on)
   }, [])
 
+  // القوائم الطويلة (محطات…) تُرتَّب أبجدياً تلقائياً — الخيار الفارغ ("الكل") يبقى أولاً، والقوائم ذات المجموعات تبقى كما هي
+  const ordered = useMemo(() => {
+    if (options.length <= 20 || options.some(o => o.group)) return options
+    const head = options.filter(o => String(o.value ?? '') === '')
+    const rest = options.filter(o => String(o.value ?? '') !== '')
+    const lang = isAr ? 'ar' : 'en'
+    return [...head, ...rest.sort((a, b) => String(a.label).localeCompare(String(b.label), lang, { numeric: true, sensitivity: 'base' }))]
+  }, [options, isAr])
+  const letterOf = o => { const ch = norm(o.label).replace(/[^a-z0-9\u0600-\u06FF]/g, '').charAt(0); return ch ? ch.toUpperCase() : '#' }
+  const useLetters = ordered.length > 20 && !ordered.some(o => o.group)
+
   const matches = useMemo(() => {
     const nq = norm(q)
-    if (!nq) return options
+    if (!nq) return ordered
     const words = nq.split(/\s+/).filter(Boolean)
-    return options.filter(o => { const l = norm(o.label); return words.every(w => l.includes(w)) })
+    return ordered.filter(o => { const l = norm(o.label); return words.every(w => l.includes(w)) })
       .sort((a, b) => (norm(a.label).startsWith(nq) ? 0 : 1) - (norm(b.label).startsWith(nq) ? 0 : 1))
-  }, [options, q])
+  }, [ordered, q])
 
   function close() { setOpen(false); setQ('') }
   function pick(o) { if (o.disabled) return; onChange?.(o.value); close() }
@@ -127,7 +138,7 @@ export default function SearchSelect({
   // عند الفتح: حدّد المختار وانزل له، وركّز البحث
   useEffect(() => {
     if (!open) return
-    setActive(Math.max(0, options.findIndex(o => String(o.value ?? '') === cur)))
+    setActive(Math.max(0, ordered.findIndex(o => String(o.value ?? '') === cur)))
     const t = setTimeout(() => {
       if (!mobile && showSearch) inputRef.current?.focus()
       listRef.current?.querySelector('[data-sel="1"]')?.scrollIntoView({ block: 'center' })
@@ -155,7 +166,7 @@ export default function SearchSelect({
     </div>
   )
 
-  let lastGroup
+  let lastGroup, lastLetter
   const list = (
     <div ref={listRef} onKeyDown={onKeyDown} tabIndex={-1} role="listbox" style={!mobile && pos ? { maxHeight: Math.min(pos.maxH - (showSearch ? 78 : 22), 300) } : undefined}
       className={mobile ? 'flex-1 overflow-y-auto overscroll-contain px-2 pb-4 outline-none' : `overflow-y-auto overscroll-contain outline-none ${showSearch ? 'mt-2' : ''}`}>
@@ -166,11 +177,15 @@ export default function SearchSelect({
         </div>
       ) : matches.map((o, i) => {
         const isSel = String(o.value ?? '') === cur
-        const head = o.group && o.group !== lastGroup ? o.group : null
+        let head = o.group && o.group !== lastGroup ? o.group : null
         lastGroup = o.group
+        const L = useLetters && !q ? letterOf(o) : null
+        const newLetter = L && L !== lastLetter
+        if (L) lastLetter = L
+        if (newLetter && String(o.value ?? '') !== '') head = head || L
         return (
           <div key={(o.value ?? '') + '|' + i}>
-            {head && <p className="text-[10.5px] font-extrabold text-gray-400 tracking-wide px-3 pt-2.5 pb-1">{head}</p>}
+            {head && <p data-letter={newLetter ? L : undefined} className={`text-[11px] font-extrabold tracking-wide px-3 pt-2.5 pb-1 ${newLetter ? 'sticky top-0 z-[1] bg-white/95 text-nwbus-primary border-b border-gray-100' : 'text-gray-400'}`}>{head}</p>}
             <button type="button" role="option" aria-selected={isSel} disabled={o.disabled}
               data-sel={isSel ? '1' : undefined} data-active={i === active ? '1' : undefined}
               onClick={() => pick(o)} onMouseEnter={() => !mobile && setActive(i)}
@@ -218,6 +233,14 @@ export default function SearchSelect({
               <button type="button" onClick={close} aria-label="close" className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 text-xl leading-none grid place-items-center">×</button>
             </div>
             {showSearch && <div className="px-4 pb-2">{searchBox}</div>}
+            {useLetters && !q && (
+              <div className="flex gap-1.5 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
+                {[...new Set(ordered.filter(o => String(o.value ?? '') !== '').map(letterOf))].map(L => (
+                  <button key={L} type="button" onClick={() => listRef.current?.querySelector(`[data-letter="${L}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+                    className="shrink-0 min-w-8 h-8 px-2 rounded-lg bg-gray-100 text-gray-700 text-xs font-bold">{L}</button>
+                ))}
+              </div>
+            )}
             {showSearch && <p className="text-[11px] font-semibold text-gray-400 px-5 pb-1.5">{matches.length} {isAr ? 'نتيجة' : 'results'}</p>}
             {list}
             <div style={{ height: 'env(safe-area-inset-bottom)' }} />
