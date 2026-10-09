@@ -145,8 +145,8 @@ function RatingsTab() {
     if (stationFilter) q = q.eq('station_id', stationFilter)
     if (shiftFilter) q = q.eq('shift', shiftFilter)
     if (employeeFilter) q = q.eq('employee_id', employeeFilter)
-    if (dateFrom) q = q.gte('created_at', dateFrom)
-    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59')
+    if (dateFrom) q = q.gte('created_at', dateFrom + 'T00:00:00+03:00')
+    if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59.999+03:00')
     q.order('created_at', { ascending: false }).limit(2000).then(({ data, error }) => {
       setRows(data || [])
       setLoading(false)

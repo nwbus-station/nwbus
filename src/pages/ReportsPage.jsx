@@ -403,8 +403,8 @@ export default function ReportsPage() {
     let q = supabase
       .from('audit_log')
       .select(cols, { count: 'exact' })
-      .gte('created_at', auditFrom + 'T00:00:00')
-      .lte('created_at', auditTo   + 'T23:59:59')
+      .gte('created_at', auditFrom + 'T00:00:00+03:00')   // بتوقيت الرياض (بدونها تُحسب UTC فتغيب سجلات أول 3 ساعات من اليوم)
+      .lte('created_at', auditTo   + 'T23:59:59.999+03:00')
       .order('created_at', { ascending: false })
       .range(from, to)
 
