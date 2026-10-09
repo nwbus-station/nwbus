@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
-import { parseSchedule } from '../../utils/parseSchedule'
+import { parseSchedule, readBusTypesByColor } from '../../utils/parseSchedule'
 import { importSchedule, savePendingSchedule } from '../../utils/importSchedule'
 import DatePicker from '../shared/DatePicker'
 import { todayStr } from '../../utils/dates'
@@ -53,6 +53,15 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
       const buf = await file.arrayBuffer()
       const data = parseSchedule(buf)
       if (data.trips.length === 0) throw new Error('الملف لا يحتوي على رحلات صالحة')
+      // نوع الحافلة من ألوان الجدول (VIP / WHEELCHAIR / STANDARD / QAID) — لو تعذّرت القراءة نكمل بالقيم الافتراضية
+      try {
+        const bt = await readBusTypesByColor(buf)
+        if (bt) {
+          data.trips.forEach(t => { const ty = bt.byCode.get(t.code); if (ty) t.busType = ty })
+          data.busTypeCounts = bt.counts
+          data.warnings = [...(data.warnings || []), `أنواع الحافلات من ألوان الجدول: ${Object.entries(bt.counts).map(([k, v]) => `${k} ${v}`).join(' · ')}`]
+        }
+      } catch (e) { console.warn('bus type colors skipped:', e) }
       // كشف المحطات الجديدة (غير موجودة في DB)
       const { data: existSt } = await supabase.from('stations').select('name_en')
       const existNames = new Set((existSt || []).map(s => s.name_en))

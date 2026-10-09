@@ -117,3 +117,56 @@ export function parseSchedule(arrayBuffer) {
 
   return { period, trips, stops, stations, warnings }
 }
+
+/**
+ * أنواع الحافلات من ألوان ورقة SCHEDULE: الجدول يحمل دليل ألوان بأعلى الورقة
+ * ("--> VIP BUS" / "WHEELCHAIR BUS" / "STANDARD BUS" / "QAID BUS" وبجانب كل واحد خلية بلونه)
+ * وكل رحلة مظلّلة بلون نوعها. بدون تظليل = النوع الذي دليله بلا لون (STANDARD).
+ * exceljs وحدها تقرأ الألوان (xlsx لا تقرأ التنسيق) — تُحمَّل عند الحاجة فقط.
+ * يُرجع: { byCode: Map(code → نوع), counts: {نوع: عدد}, legend: {لون: نوع} } أو null لو ما لقينا دليلاً.
+ */
+export async function readBusTypesByColor(arrayBuffer) {
+  const mod = await import('exceljs')
+  const ExcelJS = mod.default ?? mod
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(arrayBuffer)
+  const ws = wb.getWorksheet('SCHEDULE')
+  if (!ws) return null
+
+  const keyOf = cell => {
+    const f = cell?.fill
+    if (!f || f.type !== 'pattern' || f.pattern === 'none') return 'none'
+    const fg = f.fgColor || {}
+    if (fg.argb) { const a = String(fg.argb).toUpperCase(); return a === 'FFFFFFFF' || a === '00FFFFFF' ? 'none' : a }
+    if (fg.theme != null) return `t${fg.theme}/${(fg.tint || 0).toFixed(2)}`
+    if (fg.indexed != null) return `i${fg.indexed}`
+    return 'none'
+  }
+
+  // 1) دليل الألوان من الصفوف الأولى
+  const legend = {}
+  for (let r = 1; r <= 7; r++) {
+    for (let c = 1; c <= ws.columnCount; c++) {
+      const txt = String(ws.getCell(r, c).value?.result ?? ws.getCell(r, c).value ?? '').toUpperCase()
+      const m = txt.match(/(VIP|WHEELCHAIR|STANDARD|QAID)\s*BUS/)
+      if (!m) continue
+      // لون الخلية على يسار/قبل النص بنفس الصف (أقرب خلية ملوّنة، وإلا بلا لون)
+      let key = 'none'
+      for (let k = c - 1; k >= 1; k--) { const kk = keyOf(ws.getCell(r, k)); if (kk !== 'none') { key = kk; break } }
+      if (!(key in legend)) legend[key] = m[1]
+    }
+  }
+  if (!Object.keys(legend).length) return null
+
+  // 2) لون كل رحلة (خلية رمز الرحلة، وإلا خلية محطة الانطلاق)
+  const byCode = new Map(), counts = {}
+  for (let r = 8; r <= ws.rowCount; r++) {
+    const code = String(ws.getCell(r, 3).value?.result ?? ws.getCell(r, 3).value ?? '').trim()
+    if (!code) continue
+    let type = legend[keyOf(ws.getCell(r, 3))] ?? legend[keyOf(ws.getCell(r, 8))]
+    if (!type) continue
+    byCode.set(code, type)
+    counts[type] = (counts[type] || 0) + 1
+  }
+  return { byCode, counts, legend }
+}
