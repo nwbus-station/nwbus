@@ -34,6 +34,14 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
   const [history, setHistory]       = useState([])
   const [dragOver, setDragOver]     = useState(false)
   const [showDiff, setShowDiff]     = useState('')       // 'new' | 'changed' | 'removed' | ''
+  const [view, setView]             = useState(null)   // عرض بيانات جدول مرفوع: { kind: 'upload', row } | { kind: 'active' }
+  const [viewTrips, setViewTrips]   = useState([])
+  const [viewLoading, setViewLoading] = useState(false)
+  const [viewSearch, setViewSearch] = useState('')
+  const [viewType, setViewType]     = useState('')
+  const [endDraft, setEndDraft]     = useState('')
+  const [confirmEnd, setConfirmEnd] = useState(false)
+  const [endMsg, setEndMsg]         = useState(null)
 
   const loadPending = () => supabase.from('schedule_uploads')
     .select('id, file_name, period, start_date, end_date')
@@ -41,10 +49,10 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
     .then(({ data }) => setPending(data ?? []))
   useEffect(() => { loadPending() }, [])
   useEffect(() => {
-    supabase.from('schedule_uploads').select('id, file_name, period, start_date, end_date, status, trip_count, uploaded_by_name, created_at')
-      .eq('status', 'applied').order('created_at', { ascending: false }).limit(4)
+    supabase.from('schedule_uploads').select('id, file_name, period, start_date, end_date, status, trip_count, uploaded_by_name')
+      .eq('status', 'applied').order('start_date', { ascending: false }).limit(8)
       .then(({ data }) => setHistory(data ?? []))
-  }, [result])
+  }, [result, view])
 
   async function updatePending(id, patch) {
     await supabase.from('schedule_uploads').update(patch).eq('id', id)
@@ -116,6 +124,33 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
     } finally {
       setReading(false)
     }
+  }
+
+  async function openView(v) {
+    setView(v); setViewTrips([]); setViewSearch(''); setViewType(''); setEndMsg(null); setViewLoading(true)
+    setEndDraft(v.kind === 'upload' ? (v.row.end_date || '') : '')
+    let q = supabase.from('trip_schedule')
+      .select('id, trip_number, route, scheduled_departure, scheduled_arrival, bus_type, is_active, start_date, end_date, schedule_period, from_station:from_station_id(name_en), to_station:to_station_id(name_en)')
+      .order('scheduled_departure').range(0, 2999)
+    q = v.kind === 'upload' && v.row.period ? q.eq('schedule_period', v.row.period) : q.eq('is_active', true)
+    const { data, error } = await q
+    if (error) setEndMsg({ ok: false, text: error.message })
+    setViewTrips(data ?? []); setViewLoading(false)
+  }
+  async function saveEndDate() {
+    setConfirmEnd(false)
+    if (view?.kind !== 'upload') return
+    setEndMsg(null)
+    const v = endDraft || null
+    if (view.row.period) {
+      const { error } = await supabase.from('trip_schedule').update({ end_date: v }).eq('schedule_period', view.row.period)
+      if (error) { setEndMsg({ ok: false, text: error.message }); return }
+    }
+    const { error: e2 } = await supabase.from('schedule_uploads').update({ end_date: v }).eq('id', view.row.id)
+    if (e2) { setEndMsg({ ok: false, text: e2.message }); return }
+    setView(cur => ({ ...cur, row: { ...cur.row, end_date: v } }))
+    setViewTrips(list => list.map(t => ({ ...t, end_date: v })))
+    setEndMsg({ ok: true, text: isAr ? (v ? `تم حفظ تاريخ النهاية ${v} — الرحلات تتوقف بعده تلقائياً` : 'تم إلغاء تاريخ النهاية (الجدول مفتوح بلا نهاية)') : 'End date saved' })
   }
 
   const isFuture = startDate && startDate > todayStr()
@@ -201,7 +236,86 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
 
           {/* ═ تم الحفظ — جدول مستقبلي ═ */}
-          {result?.pending ? (
+          {view ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <button type="button" onClick={() => setView(null)} className="text-xs font-bold border border-slate-300 text-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-50">← {isAr ? 'رجوع' : 'Back'}</button>
+                <p className="text-sm font-extrabold text-slate-800 truncate" dir="ltr">{view.kind === 'upload' ? (view.row.file_name || view.row.period) : (isAr ? 'كل الرحلات الفعّالة حالياً' : 'All currently active trips')}</p>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {[
+                  [isAr ? 'الرحلات' : 'Trips', viewTrips.length],
+                  [isAr ? 'فعّالة' : 'Active', viewTrips.filter(t => t.is_active).length],
+                  [isAr ? 'بداية الجدول' : 'Start', view.kind === 'upload' ? (view.row.start_date || '—') : '—'],
+                  [isAr ? 'نهاية الجدول' : 'End', view.kind === 'upload' ? (view.row.end_date || (isAr ? 'مفتوح' : 'open')) : '—'],
+                ].map(([l, v]) => (
+                  <div key={l} className="bg-white border border-slate-200 rounded-2xl px-3.5 py-3 text-center">
+                    <p className="text-[11px] font-semibold text-slate-400">{l}</p>
+                    <p className="text-base font-extrabold text-slate-900 mt-1 font-mono">{v}</p>
+                  </div>
+                ))}
+              </div>
+
+              {view.kind === 'upload' && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                  <p className="text-[13px] font-extrabold text-slate-800 mb-1">{isAr ? 'تعديل تاريخ النهاية' : 'Edit end date'}</p>
+                  <p className="text-xs text-slate-500 mb-3 leading-relaxed">{isAr ? 'تتوقف رحلات هذا الجدول عن الظهور بعد هذا التاريخ تلقائياً. اتركه فارغاً ليبقى الجدول مفتوحاً بلا نهاية. بياناتك المسجّلة سابقاً لا تُحذف.' : 'Trips of this schedule stop appearing after this date. Leave empty for no end.'}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="w-48"><DatePicker value={endDraft} onChange={setEndDraft} isAr={isAr} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white" /></div>
+                    {endDraft && <button type="button" onClick={() => setEndDraft('')} className="text-xs font-bold text-slate-500 hover:text-slate-800">{isAr ? 'بدون نهاية' : 'No end'}</button>}
+                    <button type="button" disabled={(endDraft || '') === (view.row.end_date || '')} onClick={() => setConfirmEnd(true)}
+                      className="ms-auto px-5 py-2 text-sm rounded-xl bg-slate-900 text-white font-extrabold hover:bg-black disabled:opacity-40">{isAr ? 'حفظ التاريخ' : 'Save'}</button>
+                  </div>
+                  {endMsg && <p className={`text-xs font-semibold mt-2 ${endMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>{endMsg.text}</p>}
+                </div>
+              )}
+
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 flex-wrap">
+                  <p className="text-[13px] font-extrabold text-slate-800 shrink-0">{isAr ? 'بيانات الرحلات' : 'Trip data'}</p>
+                  {['VIP', 'WHEELCHAIR', 'STANDARD', 'QAID'].map(k => (
+                    <button key={k} type="button" onClick={() => setViewType(t => (t === k ? '' : k))}
+                      className={`text-[10px] font-bold rounded px-2 py-1 ${(TYPE_STYLE[k] ?? TYPE_STYLE.STANDARD).chip} ${viewType === k ? 'ring-2 ring-slate-800' : ''}`}>{k}</button>
+                  ))}
+                  <input value={viewSearch} onChange={e => setViewSearch(e.target.value)} placeholder={isAr ? 'بحث برقم الرحلة أو المحطة…' : 'Search…'}
+                    className="ms-auto w-44 sm:w-56 border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-slate-400 focus:outline-none" />
+                </div>
+                <div className="max-h-80 overflow-auto">
+                  {viewLoading ? <p className="text-center text-slate-400 text-xs py-8">{isAr ? 'جارٍ التحميل…' : 'Loading…'}</p> : (
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-slate-50 text-slate-500 text-[10.5px] font-bold">
+                        <tr>{[isAr ? 'الرحلة' : 'Trip', isAr ? 'المسار' : 'Route', isAr ? 'المغادرة' : 'Dep', isAr ? 'الوصول' : 'Arr', isAr ? 'النوع' : 'Type', isAr ? 'ينتهي' : 'Ends', isAr ? 'الحالة' : 'Status'].map(h => <th key={h} className="px-3 py-2 text-start whitespace-nowrap">{h}</th>)}</tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {viewTrips.filter(t => {
+                          const k = String(t.bus_type || '').toUpperCase().replace('WCH', 'WHEELCHAIR')
+                          if (viewType && k !== viewType) return false
+                          if (!viewSearch) return true
+                          const q = viewSearch.toLowerCase()
+                          return (t.trip_number || '').toLowerCase().includes(q) || (t.route || '').toLowerCase().includes(q) || (t.from_station?.name_en || '').toLowerCase().includes(q) || (t.to_station?.name_en || '').toLowerCase().includes(q)
+                        }).slice(0, 400).map(t => {
+                          const k = String(t.bus_type || '').toUpperCase().replace('WCH', 'WHEELCHAIR'), st = TYPE_STYLE[k] ?? TYPE_STYLE.STANDARD
+                          return (
+                            <tr key={t.id} className={t.is_active ? 'hover:bg-slate-50/70' : 'opacity-50'}>
+                              <td className="px-3 py-1.5 font-mono font-bold text-slate-800 whitespace-nowrap" dir="ltr">{t.trip_number}</td>
+                              <td className="px-3 py-1.5 text-slate-600 max-w-[220px] truncate" dir="ltr" title={`${t.from_station?.name_en ?? ''} → ${t.to_station?.name_en ?? ''}`}>{t.from_station?.name_en ?? '—'} → {t.to_station?.name_en ?? '—'}</td>
+                              <td className="px-3 py-1.5 font-mono text-slate-700">{String(t.scheduled_departure || '').slice(0, 5) || '—'}</td>
+                              <td className="px-3 py-1.5 font-mono text-slate-700">{String(t.scheduled_arrival || '').slice(0, 5) || '—'}</td>
+                              <td className="px-3 py-1.5"><span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${st.chip}`}>{k || '—'}</span></td>
+                              <td className="px-3 py-1.5 font-mono text-slate-500">{t.end_date || (isAr ? 'مفتوح' : 'open')}</td>
+                              <td className="px-3 py-1.5"><span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${t.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{t.is_active ? (isAr ? 'فعّالة' : 'Active') : (isAr ? 'معطّلة' : 'Inactive')}</span></td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                  {!viewLoading && viewTrips.length === 0 && <p className="text-center text-slate-400 text-xs py-8">{isAr ? 'لا توجد رحلات مرتبطة بهذا الجدول' : 'No trips linked to this schedule'}</p>}
+                </div>
+              </div>
+            </>
+          ) : result?.pending ? (
             <div className="text-center py-6">
               <div className="w-14 h-14 rounded-full bg-amber-100 text-amber-600 grid place-items-center mx-auto text-2xl">⏱</div>
               <p className="font-extrabold text-slate-900 mt-3">{isAr ? 'تمت جدولة الجدول للمستقبل' : 'Schedule queued'}</p>
@@ -278,23 +392,36 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
                     </div>
                   )}
 
-                  {/* آخر الجداول المرفوعة */}
-                  {history.length > 0 && (
-                    <div className="bg-white border border-slate-200 rounded-2xl p-3.5">
-                      <div className="text-xs font-extrabold text-slate-700 mb-2">{isAr ? 'آخر الجداول المرفوعة' : 'Recent uploads'}</div>
+                  {/* الجداول المرفوعة — عرض البيانات وتعديل تاريخ النهاية */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3.5">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-extrabold text-slate-700">{isAr ? 'الجداول المرفوعة' : 'Uploaded schedules'}</div>
+                      <button type="button" onClick={() => openView({ kind: 'active' })}
+                        className="text-[11px] font-bold border border-slate-300 text-slate-700 rounded-lg px-2.5 py-1 hover:bg-slate-50">{isAr ? 'عرض كل الرحلات الفعّالة الآن' : 'View all active trips'}</button>
+                    </div>
+                    {history.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-2">{isAr ? 'لا يوجد سجل رفع بعد' : 'No uploads yet'}</p>
+                    ) : (
                       <div className="divide-y divide-slate-100">
                         {history.map(h => (
                           <div key={h.id} className="py-2 flex items-center justify-between gap-3 text-xs">
                             <div className="min-w-0">
                               <p className="font-semibold text-slate-700 truncate" dir="ltr">{h.file_name || h.period || '—'}</p>
-                              <p className="text-slate-400">{fmtD(h.created_at)}{h.uploaded_by_name ? ` · ${h.uploaded_by_name}` : ''}</p>
+                              <p className="text-slate-400">
+                                {isAr ? 'من' : 'From'} {h.start_date || '—'} · {isAr ? 'إلى' : 'to'} <b className={h.end_date ? 'text-slate-600' : 'text-slate-400'}>{h.end_date || (isAr ? 'مفتوح' : 'open')}</b>
+                                {h.uploaded_by_name ? ` · ${h.uploaded_by_name}` : ''}
+                              </p>
                             </div>
-                            <span className="shrink-0 bg-slate-100 text-slate-600 rounded-full px-2.5 py-0.5 font-bold">{h.trip_count ?? '—'} {isAr ? 'رحلة' : 'trips'}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="bg-slate-100 text-slate-600 rounded-full px-2.5 py-0.5 font-bold">{h.trip_count ?? '—'} {isAr ? 'رحلة' : 'trips'}</span>
+                              <button type="button" onClick={() => openView({ kind: 'upload', row: h })}
+                                className="text-[11px] font-bold bg-slate-900 text-white rounded-lg px-3 py-1.5 hover:bg-black">{isAr ? 'عرض / تعديل النهاية' : 'View / end date'}</button>
+                            </div>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </>
               )}
 
@@ -505,6 +632,12 @@ export default function ScheduleUploadModal({ isAr, onClose, onDone }) {
         )}
       </div>
 
+      {confirmEnd && (
+        <ConfirmDialog
+          message={isAr ? (endDraft ? `تعيين نهاية الجدول بتاريخ ${endDraft}؟ ستتوقف رحلاته عن الظهور بعد هذا اليوم.` : 'إلغاء تاريخ النهاية؟ سيبقى الجدول مفتوحاً بلا نهاية.') : 'Save the new end date?'}
+          danger={false} confirmLabel={isAr ? 'تأكيد' : 'Confirm'} cancelLabel={isAr ? 'إلغاء' : 'Cancel'}
+          onConfirm={saveEndDate} onCancel={() => setConfirmEnd(false)} />
+      )}
       {confirmCancel && (
         <ConfirmDialog
           message={isAr ? 'إلغاء هذا الجدول المجدول؟' : 'Cancel this scheduled upload?'}
