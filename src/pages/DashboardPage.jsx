@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { getCached, setCached } from '../lib/pageCache'
+import { onPwaUpdateAvailable, isPwaUpdatePending, applyPwaUpdate } from '../lib/pwaUpdate'
 import { SurveyOverlay, detectSurveyCity, SURVEY_STATIONS } from './SurveyPage'
 import { TEMPLATES as MAGAZINE_TEMPLATES, TEMPLATE_ORDER as MAGAZINE_TEMPLATE_ORDER, bgFor as magazineBgFor, isPostLive, templateLabel as magazineTemplateLabel } from './MagazinePage'
 
@@ -430,6 +431,10 @@ export default function DashboardPage() {
   ]
 
   /* ── المعلومات ── */
+  const [updatePending, setUpdatePending] = useState(isPwaUpdatePending())
+  useEffect(() => onPwaUpdateAvailable(() => setUpdatePending(true)), [])
+  const buildStamp = new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' })
+
   const infoRows = [
     { label: isAr ? 'المستخدم' : 'User',    value: userName || '—' },
     { label: isAr ? 'الدور'    : 'Role',    value: roleLabel || '—' },
@@ -597,6 +602,17 @@ export default function DashboardPage() {
                       <p style={{ margin: '3px 0 0', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-1)' }}>{r.value}</p>
                     </div>
                   ))}
+                </div>
+                <div style={{ padding: '11px 16px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{isAr ? 'آخر تحديث للبرنامج' : 'Last update'}</p>
+                    <p style={{ margin: '3px 0 0', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-1)' }}>{buildStamp} <span style={{ fontFamily: MONO, color: 'var(--text-3)', fontSize: '0.68rem' }} dir="ltr">· v{__APP_VERSION__}</span></p>
+                  </div>
+                  {updatePending && (
+                    <button onClick={applyPwaUpdate} style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {isAr ? 'تحديث جديد متوفر — حدّث الآن' : 'New update — update now'}
+                    </button>
+                  )}
                 </div>
                 <div style={{ padding: '11px 16px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />

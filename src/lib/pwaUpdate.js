@@ -40,6 +40,8 @@ export function initPwaUpdate() {
   })
 }
 
+export function isPwaUpdatePending() { return pending }
+
 export function onPwaUpdateAvailable(cb) {
   listeners.push(cb)
   return () => { listeners = listeners.filter(l => l !== cb) }

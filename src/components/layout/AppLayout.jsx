@@ -733,7 +733,7 @@ export default function AppLayout() {
         </div>
       )}
 
-      {showUpdateNudge && (
+      {showUpdateNudge && location.pathname !== '/' && (
         <div className="no-print" dir={isAr ? 'rtl' : 'ltr'} style={{
           position: 'fixed', bottom: 20, insetInlineEnd: showPwdNudge && !showChangePwd ? 356 : 20, zIndex: 60,
           background: '#1C2B36', color: '#fff', borderRadius: 12,
@@ -788,11 +788,11 @@ export default function AppLayout() {
       <ScrollToTopButton />
 
       {/* شارة ثابتة دايماً — تصير مرئية بدون تمرير، على أي صفحة */}
-      <div className="no-print app-version-badge">
+      {location.pathname !== '/' && <div className="no-print app-version-badge">
         {isAr ? 'آخر تحديث: ' : 'Updated: '}
         {new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' })}
         {' · '}v{__APP_VERSION__}
-      </div>
+      </div>}
 
       {/* ── Bottom nav (mobile only) ── */}
       <nav className="bottom-nav">
