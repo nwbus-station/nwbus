@@ -54,7 +54,14 @@ const BUS_TYPE = {
   STANDARD:   { ar: 'STANDARD',  en: 'STANDARD',   style: { background: 'var(--surface-2)',  color: 'var(--text-2)',  fontWeight: 600, borderRadius: 4 } },
   QAID:       { ar: 'QAID',      en: 'QAID',       style: { background: 'var(--success-bg)', color: 'var(--success)', fontWeight: 600, borderRadius: 4 } },
 }
-const busTypeLookup = t => BUS_TYPE[String(t || '').toUpperCase()] ?? null
+const BUS_TYPE_ALIAS = { WCH: 'WHEELCHAIR', 'WHEEL CHAIR': 'WHEELCHAIR', STD: 'STANDARD', NORMAL: 'STANDARD', 'عادي': 'STANDARD', 'قائد': 'QAID' }
+const busTypeLookup = t => {
+  const k = String(t || '').trim().toUpperCase()
+  if (!k) return null
+  const hit = BUS_TYPE[BUS_TYPE_ALIAS[k] ?? k]
+  // نوع غير معروف: نعرضه كما هو بدل ما نخفيه
+  return hit ?? { ar: String(t).trim(), en: String(t).trim(), style: { background: 'var(--surface-2)', color: 'var(--text-2)', fontWeight: 600, borderRadius: 4 } }
+}
 
 // رقم الحافلة ومدة تأخرها من آخر محطة غادرتها (يُدخلها موظف المحطة السابقة)
 function UpstreamChip({ up, isAr }) {
@@ -1401,7 +1408,7 @@ export default function TransportationPage() {
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`font-mono font-bold text-gray-800 ${isCancelled ? 'line-through' : ''}`}>{trip.trip_number}</span>
-                        {bt && bt.ar !== 'STANDARD' && (
+                        {bt && (
                           <span className="text-[9px] font-mono font-bold text-gray-500 bg-gray-100 rounded px-1.5 py-px">
                             {isAr ? bt.ar : bt.en}
                           </span>
