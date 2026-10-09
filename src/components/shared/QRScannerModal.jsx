@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
+import { safeImport } from '../../lib/chunkReload'
 
 /* ─── صوت ─── */
 export function playBeep(type = 'found') {
@@ -241,7 +242,7 @@ export default function QRScannerModal({
     }
     try {
       setIsProcessing(true)
-      const { createWorker } = await import('tesseract.js')
+      const { createWorker } = await safeImport(() => import('tesseract.js'))
       const w = await createWorker('eng', 1, { logger: () => {} })
       await w.setParameters({ tessedit_char_whitelist: '0123456789:', tessedit_pageseg_mode: '6' })
       if (!activeRef.current) { await w.terminate(); return }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import DatePicker from '../shared/DatePicker'
 import { todayStr, toLocalDateStr } from '../../utils/dates'
+import { safeImport } from '../../lib/chunkReload'
 
 const shift = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return toLocalDateStr(d) }
 
@@ -30,7 +31,7 @@ export default function OperationsReportDownload({ isAr }) {
     if (!from || !to || from > to) { setMsg({ ok: false, text: T('حدّد فترة صحيحة', 'Pick a valid period') }); return }
     setBusy(true); setMsg(null)
     try {
-      const { buildOperationsReport } = await import('../../utils/operationsReport')
+      const { buildOperationsReport } = await safeImport(() => import('../../utils/operationsReport'))
       const r = await buildOperationsReport({ supabase, isAr, from, to, kind, onProgress: t => setMsg({ ok: true, text: t }) })
       setMsg({ ok: true, text: T(`تم التنزيل — ${r.trips.toLocaleString('en-US')} رحلة · ${r.stations} محطة`, `Downloaded — ${r.trips.toLocaleString('en-US')} trips · ${r.stations} stations`) })
     } catch (e) {

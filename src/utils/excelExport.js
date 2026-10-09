@@ -2,6 +2,7 @@
 // ترويسة بشعار الشركة وعنوان وفترة وتاريخ الإصدار، جداول منسّقة بفلاتر وتجميد، تظليل شرطي، صيغ حيّة، وإعدادات طباعة A4.
 // (exceljs تُحمَّل عند أول تصدير فقط حتى لا تثقل التطبيق)
 import { NWB_LOGO_SVG } from './logo'
+import { safeImport } from '../lib/chunkReload'
 
 export const XL = {
   navy: 'FF264673', orange: 'FFEE712D', ink: 'FF1D1D1C', grey: 'FF6B7280', light: 'FFF1F5F9', zebra: 'FFF8FAFC',
@@ -267,7 +268,7 @@ export class Book {
 }
 
 export async function createBook(opts) {
-  const mod = await import('exceljs')
+  const mod = await safeImport(() => import('exceljs'))
   const ExcelJS = mod.default ?? mod
   return new Book(ExcelJS, opts).init()
 }

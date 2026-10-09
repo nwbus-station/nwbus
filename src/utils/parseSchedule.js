@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { safeImport } from '../lib/chunkReload'
 
 /**
  * قارئ ملف جدول الرحلات (TRIP SCHEDULES .xlsx).
@@ -126,7 +127,7 @@ export function parseSchedule(arrayBuffer) {
  * يُرجع: { byCode: Map(code → نوع), counts: {نوع: عدد}, legend: {لون: نوع} } أو null لو ما لقينا دليلاً.
  */
 export async function readBusTypesByColor(arrayBuffer) {
-  const mod = await import('exceljs')
+  const mod = await safeImport(() => import('exceljs'))
   const ExcelJS = mod.default ?? mod
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(arrayBuffer)

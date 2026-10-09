@@ -8,7 +8,9 @@ import App from './App'
 import './i18n'
 import './index.css'
 import { initPwaUpdate } from './lib/pwaUpdate'
+import { initChunkReload } from './lib/chunkReload'
 
+initChunkReload()
 initPwaUpdate()
 
 /* مراقبة الأخطاء (Sentry) — تعمل فقط إذا ضُبط المفتاح في .env

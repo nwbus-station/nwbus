@@ -29,7 +29,7 @@ import ReportsPage      from './pages/ReportsPage'
 import UsersPage        from './pages/UsersPage'
 import StationsPage     from './pages/StationsPage'
 import LiveBoard        from './pages/LiveBoard'
-const MapPage = lazy(() => import('./pages/MapPage'))
+const MapPage = lazy(() => safeImport(() => import('./pages/MapPage')))
 import SettingsPage     from './pages/SettingsPage'
 import LeavePage        from './pages/LeavePage'
 import SurveyPage       from './pages/SurveyPage'
@@ -46,6 +46,7 @@ import PrivacyPage      from './pages/PrivacyPage'
 // Layout
 import AppLayout        from './components/layout/AppLayout'
 import LoadingSpinner   from './components/shared/LoadingSpinner'
+import { safeImport } from './lib/chunkReload'
 
 function RequireAuth({ children, allowedRoles, module, adminOnly, restrictedCap }) {
   const { session, profile, loading, signOut, isRestricted, customTitle, canSeeModule, grantCap } = useAuth()
