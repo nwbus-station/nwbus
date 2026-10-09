@@ -100,7 +100,12 @@ function auditSummary(row, stations, tripLookup, userLookup) {
     return verb + (stationName ? ` — ${stationName}` : '')
   }
   if (row.table_name === 'lost_found_items') {
-    const verb = row.action === 'INSERT' ? 'أضاف موجودات' : row.action === 'DELETE' ? 'حذف موجودات' : 'حدّث موجودات'
+    // الصفحة تنظّف الموجودات تلقائياً عند فتحها: أكثر من 40 يوماً، أو مُسلَّمة للعميل من أكثر من 30 يوماً — باسم المستخدم الفاتح للصفحة
+    const day = 86400000, at = new Date(row.created_at).getTime()
+    const age = d.created_at ? at - new Date(d.created_at).getTime() : 0
+    const deliveredAge = d.delivered_to_client_at ? at - new Date(d.delivered_to_client_at).getTime() : 0
+    const auto = row.action === 'DELETE' && (age >= 40 * day - day || (d.status === 'claimed' && deliveredAge >= 30 * day - day))
+    const verb = row.action === 'INSERT' ? 'أضاف موجودات' : row.action === 'DELETE' ? (auto ? 'حذف تلقائي (انتهت مدة الاحتفاظ)' : 'حذف موجودات') : 'حدّث موجودات'
     return verb + (d.description ? `: ${d.description}` : '')
   }
   if (row.table_name === 'users') {
