@@ -131,6 +131,7 @@ function AssignedEmployeesPicker({ userId, isAr }) {
     loadAssigned()
   }
   async function remove(empId) {
+    if (!window.confirm('إزالة هذا الموظف من القائمة؟')) return
     setBusy(true); setErr('')
     const { error } = await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId).eq('employee_id', empId)
     setBusy(false)
@@ -201,6 +202,7 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
 
   async function toggle(empId) {
     const has = assigned.has(empId)
+    if (has && !window.confirm('إزالة هذا الموظف من القائمة؟')) return
     setBusy(true); setErr('')
     const { error } = has
       ? await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId).eq('employee_id', empId)

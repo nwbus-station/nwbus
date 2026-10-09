@@ -8,6 +8,7 @@ import DatePicker from '../components/shared/DatePicker'
 import { todayStr } from '../utils/dates'
 import RouteText from '../components/shared/RouteText'
 import SelectField from '../components/shared/SelectField'
+import ConfirmDialog from '../components/shared/ConfirmDialog'
 
 const toLatinNums = v => v.replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => d.charCodeAt(0) - 1632)
 
@@ -724,9 +725,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
     const cacheKey = `lostfound_logs_${stationFilter ?? 'all'}`
     const cached = getCached(cacheKey)
     if (cached) { setReports(cached.reports); setItems(cached.items); setLoading(false) } else { setLoading(true) }
-    await supabase.from('lost_reports').delete().lt('created_at', autoDeleteCutoff)
-    await supabase.from('lost_found_items').delete().lt('created_at', autoDeleteCutoff)
-    await supabase.from('lost_found_items').delete().eq('status', 'claimed').not('delivered_to_client_at', 'is', null).lt('delivered_to_client_at', deliveredCutoff)
+    // لا حذف تلقائي صامت: المنتهية مدتها تظهر بتنبيه والحذف بعد تأكيد الأدمن فقط
 
     let rq = supabase.from('lost_reports').select('*, from_st:from_station_id(name_ar), to_st:to_station_id(name_ar)').order('created_at', { ascending: false })
     let iq = supabase.from('lost_found_items').select('*, creator:created_by(phone)').order('created_at', { ascending: false })
@@ -746,6 +745,13 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
     return () => { supabase.removeChannel(ch) }
   }, [stationFilter])
 
+  const [confirmDel, setConfirmDel] = useState(null)   // { kind: 'report'|'item'|'expired', id? }
+  const [hideExpiredBanner, setHideExpiredBanner] = useState(false)
+  // منتهية مدة الاحتفاظ: أكثر من 40 يوماً، أو مُسلَّمة للعميل من أكثر من 30 يوماً
+  const expiredReports = reports.filter(r => r.created_at && r.created_at < autoDeleteCutoff)
+  const expiredItems = items.filter(i => (i.created_at && i.created_at < autoDeleteCutoff) ||
+    (i.status === 'claimed' && i.delivered_to_client_at && i.delivered_to_client_at < deliveredCutoff))
+
   async function deleteReport(id) {
     setBusy(id); await supabase.from('lost_reports').delete().eq('id', id)
     setReports(prev => prev.filter(r => r.id !== id)); setBusy(null)
@@ -753,6 +759,21 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
   async function deleteItem(id) {
     setBusy(id); await supabase.from('lost_found_items').delete().eq('id', id)
     setItems(prev => prev.filter(i => i.id !== id)); setBusy(null)
+  }
+  async function deleteExpired() {
+    setBusy('expired')
+    const rid = expiredReports.map(r => r.id), iid = expiredItems.map(i => i.id)
+    if (rid.length) await supabase.from('lost_reports').delete().in('id', rid)
+    if (iid.length) await supabase.from('lost_found_items').delete().in('id', iid)
+    setReports(prev => prev.filter(r => !rid.includes(r.id))); setItems(prev => prev.filter(i => !iid.includes(i.id)))
+    setBusy(null)
+  }
+  function runConfirmed() {
+    const c = confirmDel; setConfirmDel(null)
+    if (!c) return
+    if (c.kind === 'report') deleteReport(c.id)
+    else if (c.kind === 'item') deleteItem(c.id)
+    else if (c.kind === 'expired') deleteExpired()
   }
   async function donateItem(id) {
     setBusy(id)
@@ -790,12 +811,37 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', padding: '20px 16px' }}>
+      {isAdmin && !hideExpiredBanner && (expiredItems.length + expiredReports.length) > 0 && (
+        <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220, fontSize: '0.8rem', color: '#92400E', lineHeight: 1.7 }}>
+            <b>{isAr ? 'انتهت مدة الاحتفاظ' : 'Retention period ended'}</b> — {isAr
+              ? `${expiredItems.length} من الموجودات و${expiredReports.length} من البلاغات (أكثر من 40 يوماً، أو مُسلَّمة من أكثر من 30 يوماً). لن تُحذف إلا بعد تأكيدك.`
+              : `${expiredItems.length} items and ${expiredReports.length} reports. Nothing is deleted until you confirm.`}
+          </div>
+          <button onClick={() => setConfirmDel({ kind: 'expired' })} disabled={busy === 'expired'}
+            style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {isAr ? 'مراجعة وحذف' : 'Review & delete'}
+          </button>
+          <button onClick={() => setHideExpiredBanner(true)} style={{ background: 'none', border: '1px solid #FCD34D', color: '#92400E', borderRadius: 8, padding: '7px 12px', fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+            {isAr ? 'لاحقاً' : 'Later'}
+          </button>
+        </div>
+      )}
+      {confirmDel && (
+        <ConfirmDialog
+          message={confirmDel.kind === 'expired'
+            ? (isAr ? `حذف نهائي لـ ${expiredItems.length} من الموجودات و${expiredReports.length} من البلاغات المنتهية مدتها؟ لا يمكن التراجع.` : `Permanently delete ${expiredItems.length} expired items and ${expiredReports.length} reports? This cannot be undone.`)
+            : confirmDel.kind === 'report' ? (isAr ? 'حذف هذا البلاغ نهائياً؟ لا يمكن التراجع.' : 'Delete this report permanently?')
+            : (isAr ? 'حذف هذه القطعة نهائياً؟ لا يمكن التراجع.' : 'Delete this item permanently?')}
+          confirmLabel={isAr ? 'حذف' : 'Delete'} cancelLabel={isAr ? 'إلغاء' : 'Cancel'}
+          onConfirm={runConfirmed} onCancel={() => setConfirmDel(null)} />
+      )}
       <div style={{ background: 'var(--card)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
 
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? 'سجل الأرشيف' : 'Archive Log'}</span>
           <span style={{ fontSize: '0.68rem', color: 'var(--text-3)' }}>
-            {isAr ? '30 يوم ← جمعية · 40 يوم ← حذف تلقائي' : '30 days → Charity · 40 days → Auto-delete'}
+            {isAr ? '30 يوم ← جمعية · 40 يوم ← حذف بعد تأكيدك' : '30 days → Charity · 40 days → delete after your confirmation'}
           </span>
         </div>
 
@@ -848,7 +894,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                           <span>{r.created_by_name}</span>
                         </div>
                       </div>
-                      {isAdmin && delBtn(() => deleteReport(r.id), busy === r.id)}
+                      {isAdmin && delBtn(() => setConfirmDel({ kind: 'report', id: r.id }), busy === r.id)}
                     </div>
                   </div>
                 )
@@ -918,7 +964,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
                             {busy === item.id ? '...' : (isAr ? 'تسليم للجمعية' : 'Donate')}
                           </button>
                         )}
-                        {isAdmin && delBtn(() => deleteItem(item.id), busy === item.id)}
+                        {isAdmin && delBtn(() => setConfirmDel({ kind: 'item', id: item.id }), busy === item.id)}
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-3)', alignSelf: 'center' }}>{isOpen ? '▲' : '▼'}</span>
                       </div>
                     </div>
