@@ -107,6 +107,9 @@ function RatingsTab() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const loc = isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB'
+  // وقت تقييم العميل بتوقيت الرياض (24 ساعة، أرقام لاتينية)
+  const ratedTime = d => new Date(d).toLocaleTimeString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', hour12: false })
+  const ratedDate = d => new Date(d).toLocaleDateString(loc, { timeZone: 'Asia/Riyadh' })
   const [rows, setRows] = useState([])
   const [stations, setStations] = useState([])
   const [employees, setEmployees] = useState([])
@@ -175,7 +178,7 @@ function RatingsTab() {
         <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(r.ticket_number) || '—'}</td>
         <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#9CA3AF;font-size:11px;border:1px solid #EEF0F3">${escapeHtml(r.reference_number) || '—'}</td>
         <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${r.ticket_date ? new Date(r.ticket_date).toLocaleDateString(loc) : '—'}</td>
-        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${new Date(r.created_at).toLocaleDateString(loc)}</td>
+        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3;white-space:nowrap">${ratedDate(r.created_at)}<br><b style="color:#374151;font-family:monospace">${ratedTime(r.created_at)}</b></td>
         <td style="padding:9px 12px;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${escapeHtml(r.comment) || ''}</td>
       </tr>`).join('')
 
@@ -228,7 +231,7 @@ function RatingsTab() {
             <th style="text-align:center">${isAr ? 'رقم التذكرة' : 'Ticket No.'}</th>
             <th style="text-align:center">${isAr ? 'رقم المرجع' : 'Reference No.'}</th>
             <th style="text-align:center">${isAr ? 'تاريخ التذكرة' : 'Ticket Date'}</th>
-            <th style="text-align:center">${isAr ? 'تاريخ التقييم' : 'Rating Date'}</th>
+            <th style="text-align:center">${isAr ? 'تاريخ ووقت التقييم' : 'Rated at'}</th>
             <th>${isAr ? 'ملاحظة' : 'Comment'}</th>
           </tr></thead>
           <tbody>${rowsHtml}</tbody>
@@ -297,7 +300,7 @@ function RatingsTab() {
                     <th className="px-4 py-2 text-start">{isAr ? 'التذكرة' : 'Ticket'}</th>
                     <th className="px-4 py-2 text-start">{isAr ? 'المرجع' : 'Reference'}</th>
                     <th className="px-4 py-2 text-start">{isAr ? 'تاريخ التذكرة' : 'Ticket Date'}</th>
-                    <th className="px-4 py-2 text-start">{isAr ? 'تاريخ التقييم' : 'Rating Date'}</th>
+                    <th className="px-4 py-2 text-start">{isAr ? 'تاريخ ووقت التقييم' : 'Rated at'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -313,7 +316,7 @@ function RatingsTab() {
                       <td className="px-4 py-2.5 text-gray-500 font-mono">{r.ticket_number || '—'}</td>
                       <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">{r.reference_number || '—'}</td>
                       <td className="px-4 py-2.5 text-gray-400 text-xs">{r.ticket_date ? new Date(r.ticket_date).toLocaleDateString(loc) : '—'}</td>
-                      <td className="px-4 py-2.5 text-gray-400 text-xs">{new Date(r.created_at).toLocaleDateString(loc)}</td>
+                      <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{ratedDate(r.created_at)}<span className="block font-mono font-bold text-gray-600 text-[13px]" dir="ltr">{ratedTime(r.created_at)}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -336,7 +339,7 @@ function RatingsTab() {
                     {r.ticket_number && <span>{isAr ? 'تذكرة:' : 'Ticket:'} <span className="font-mono text-gray-500">{r.ticket_number}</span></span>}
                     {r.reference_number && <span>{isAr ? 'مرجع:' : 'Ref:'} <span className="font-mono text-gray-500">{r.reference_number}</span></span>}
                     {r.ticket_date && <span>{isAr ? 'تاريخ التذكرة:' : 'Ticket date:'} {new Date(r.ticket_date).toLocaleDateString(loc)}</span>}
-                    <span>{isAr ? 'تاريخ التقييم:' : 'Rating date:'} {new Date(r.created_at).toLocaleDateString(loc)}</span>
+                    <span>{isAr ? 'وقت التقييم:' : 'Rated at:'} {ratedDate(r.created_at)} <span className="font-mono font-bold text-gray-600" dir="ltr">{ratedTime(r.created_at)}</span></span>
                   </div>
                 </div>
               ))}

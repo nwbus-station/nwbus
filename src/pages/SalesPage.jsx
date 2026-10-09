@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { getCached, setCached } from '../lib/pageCache'
 import { toLatinDigits, cleanNumber } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
+import StatStrip from '../components/shared/StatStrip'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { todayStr, toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
@@ -47,12 +48,11 @@ const parseRefsArr = raw => {
 }
 
 // بطاقة قسم داخل نموذج الإيراد (خارج المكوّن عشان ما تُعاد تهيئة الحقول مع كل ضغطة مفتاح)
-function SectionCard({ n, title, children, tone = 'bg-white border-slate-200' }) {
+function SectionCard({ n, title, children, tone = 'bg-white border-gray-200' }) {
   return (
-    <section className={`rounded-2xl border ${tone} p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]`}>
+    <section className={`rounded-lg border ${tone} p-4`}>
       {title && (
-        <h3 className="flex items-center gap-2 text-[13px] font-extrabold text-slate-800 mb-3">
-          {n != null && <span className="w-5 h-5 rounded-full bg-emerald-700 text-white text-[10px] font-bold grid place-items-center">{n}</span>}
+        <h3 className="text-[13px] font-bold text-gray-800 mb-3">
           {title}
         </h3>
       )}
@@ -417,7 +417,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     setSaving(false)
   }
 
-  const inputCls = "w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-600 focus:outline-none transition"
+  const inputCls = "w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-600 focus:outline-none transition"
 
   // الموظف: من حساب المستخدم (للسجل الجديد) أو من السجل المحفوظ؛ الرقم الوظيفي بجانبه ومربوط بالطباعة
   const empName = sale ? (sale.employee_name || sale.created_by_name || '—') : (profile?.full_name_ar || '—')
@@ -441,27 +441,26 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     { key: 'other_amount',      label: isAr ? 'أخرى' : 'Other', dot: '#64748b', ref: 'other_type', refLabel: isAr ? 'نوع الدفع' : 'Payment type' },
   ]
   return (
-    <div className={`fixed inset-0 bg-slate-900/55 backdrop-blur-[2px] z-50 flex items-center justify-center p-3 sm:p-4${isLocked ? ' print-modal-root' : ''}`} dir={isAr ? 'rtl' : 'ltr'}>
-      <div className={`bg-slate-50 rounded-3xl shadow-2xl w-full max-w-xl max-h-[94vh] flex flex-col overflow-hidden${isLocked ? ' print-modal-panel' : ''}`}>
+    <div className={`fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-3 sm:p-4${isLocked ? ' print-modal-root' : ''}`} dir={isAr ? 'rtl' : 'ltr'}>
+      <div className={`bg-gray-50 rounded-lg shadow-2xl w-full max-w-xl max-h-[94vh] flex flex-col overflow-hidden${isLocked ? ' print-modal-panel' : ''}`}>
 
         {/* ═ الترويسة ═ */}
         <div className="relative px-6 pt-5 pb-4 text-white shrink-0"
-          style={{ background: isLocked ? 'linear-gradient(135deg,#475560,#2c363d)' : 'linear-gradient(135deg,#0f5132,#1E7A55 60%,#2a9166)' }}>
+          style={{ background: isLocked ? '#3F4A52' : '#1E7A55' }}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold tracking-wide text-white/70">{isAr ? 'نظام الإيرادات' : 'Revenue system'}</p>
-              <h2 className="text-lg font-extrabold mt-0.5">
+                            <h2 className="text-base font-bold">
                 {sale ? (isAr ? 'سجل المبيعات' : 'Sales record') : (isAr ? 'إدخال مبيعات' : 'Sales entry')}
               </h2>
               <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                {stationLabel && <span className="text-[11px] font-semibold bg-white/15 rounded-full px-2.5 py-0.5">{stationLabel}</span>}
-                <span className="text-[11px] font-semibold bg-white/15 rounded-full px-2.5 py-0.5" dir="ltr">{form.sale_date}</span>
-                {shiftObj && <span className="text-[11px] font-semibold bg-white/15 rounded-full px-2.5 py-0.5">{isAr ? shiftObj.ar : shiftObj.en}</span>}
-                {isLocked && <span className="text-[11px] font-bold bg-amber-400 text-amber-950 rounded-full px-2.5 py-0.5">{isAr ? 'مؤكد ومقفول' : 'Confirmed · locked'}</span>}
+                {stationLabel && <span className="text-[11px] font-semibold bg-white/15 rounded px-2 py-0.5">{stationLabel}</span>}
+                <span className="text-[11px] font-semibold bg-white/15 rounded px-2 py-0.5" dir="ltr">{form.sale_date}</span>
+                {shiftObj && <span className="text-[11px] font-semibold bg-white/15 rounded px-2 py-0.5">{isAr ? shiftObj.ar : shiftObj.en}</span>}
+                {isLocked && <span className="text-[11px] font-bold bg-amber-400 text-amber-950 rounded px-2 py-0.5">{isAr ? 'مؤكد ومقفول' : 'Confirmed · locked'}</span>}
               </div>
             </div>
             <button onClick={onClose} aria-label="close"
-              className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white text-xl leading-none grid place-items-center no-print">×</button>
+              className="w-8 h-8 rounded-md bg-white/15 hover:bg-white/25 text-white text-xl leading-none grid place-items-center no-print">×</button>
           </div>
         </div>
 
@@ -469,8 +468,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3.5">
 
           {isLocked && (
-            <div className="flex items-center gap-2 bg-slate-100 border border-slate-300 rounded-xl px-4 py-2.5">
-              <p className="text-xs font-semibold text-slate-600">
+            <div className="flex items-center gap-2 bg-gray-100 border border-gray-300 rounded-lg px-4 py-2.5">
+              <p className="text-xs font-semibold text-gray-600">
                 {isAr ? 'هذا السجل مؤكد ومقفول — لا يمكن التعديل' : 'This record is confirmed and locked — editing is disabled'}
               </p>
             </div>
@@ -479,18 +478,17 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
           <fieldset disabled={isLocked} className="space-y-3.5 disabled:opacity-70 min-w-0">
 
             {/* بطاقة الموظف — من الحساب */}
-            <div className="rounded-2xl p-4 text-white flex items-center gap-3.5 shadow-sm"
-              style={{ background: 'linear-gradient(135deg,#1b3a6b,#264673 55%,#35599a)' }}>
-              <div className="w-12 h-12 rounded-full bg-white/15 border border-white/25 grid place-items-center text-lg font-extrabold shrink-0">
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-md bg-gray-100 text-gray-600 grid place-items-center text-base font-bold shrink-0">
                 {(empName || '؟').trim().charAt(0)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-semibold text-white/65 tracking-wide">{isAr ? 'الموظف (من الحساب)' : 'Employee (from account)'}</p>
-                <p className="text-base font-extrabold leading-tight truncate" dir="auto">{empName}</p>
+                <p className="text-[11px] text-gray-400">{isAr ? 'الموظف (من الحساب)' : 'Employee (from account)'}</p>
+                <p className="text-sm font-bold text-gray-900 truncate" dir="auto">{empName}</p>
               </div>
               <div className="text-end shrink-0">
-                <p className="text-[10px] font-semibold text-white/65 tracking-wide">{isAr ? 'الرقم الوظيفي' : 'Job no.'}</p>
-                <p className="text-lg font-extrabold font-mono leading-tight" dir="ltr">{empJob ? `#${empJob}` : '—'}</p>
+                <p className="text-[11px] text-gray-400">{isAr ? 'الرقم الوظيفي' : 'Job no.'}</p>
+                <p className="text-sm font-bold font-mono text-gray-900" dir="ltr">{empJob ? `#${empJob}` : '—'}</p>
               </div>
             </div>
 
@@ -499,7 +497,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
               <div className="space-y-3">
                 {isGeneralAdmin && (
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'المحطة *' : 'Station *'}</label>
+                    <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'المحطة *' : 'Station *'}</label>
                     <SelectField required={isGeneralAdmin} className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
                       <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
                       {stations.map(s => <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>)}
@@ -508,11 +506,11 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'التاريخ' : 'Date'}</label>
+                    <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'التاريخ' : 'Date'}</label>
                     <DatePicker className={inputCls} isAr={isAr} value={form.sale_date} onChange={v => set('sale_date', v)} />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'الوردية' : 'Shift'}</label>
+                    <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'الوردية' : 'Shift'}</label>
                     <SelectField className={inputCls} value={form.shift} onChange={e => set('shift', e.target.value)}>
                       {SHIFTS.map(s => <option key={s.value} value={s.value}>{isAr ? s.ar : s.en} ({s.range})</option>)}
                     </SelectField>
@@ -524,8 +522,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                   const cur = SHIFTS.find(x => x.value === form.shift)
                   const hhmm = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
                   return (
-                    <div className={`rounded-xl border px-3.5 py-3 text-[12.5px] leading-relaxed ${mismatch ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
-                      <p className="font-extrabold mb-0.5">{mismatch ? (isAr ? 'تنبيه: الوردية تختلف عن المتوقع' : 'Warning: shift differs from the expected one') : (isAr ? 'تأكيد الوردية' : 'Confirm the shift')}</p>
+                    <div className={`rounded-lg border px-3.5 py-3 text-[12.5px] leading-relaxed ${mismatch ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                      <p className="font-bold mb-0.5">{mismatch ? (isAr ? 'تنبيه: الوردية تختلف عن المتوقع' : 'Warning: shift differs from the expected one') : (isAr ? 'تأكيد الوردية' : 'Confirm the shift')}</p>
                       <p>
                         {isAr
                           ? `الوقت الآن ${hhmm} — الوردية المتوقعة: ${sug.ar} (${sug.range})${suggested.closing ? ' · وقت إقفال الوردية' : ''}${suggested.yesterday ? ` · وتاريخ السجل ${suggested.date} (الوردية تنتهي بعد منتصف الليل)` : ''}.`
@@ -556,13 +554,13 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
             <SectionCard n={2} title={isAr ? 'المراجع' : 'References'}>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-500 mb-1">{isAr ? 'رقم الصرافة' : 'Cashier number'}</label>
+                  <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'رقم الصرافة' : 'Cashier number'}</label>
                   <div className="flex gap-2">
                     <input className={inputCls + ' font-mono'} dir="ltr" value={form.cashier_ref}
                       onChange={e => set('cashier_ref', toLatinDigits(e.target.value))}
                       placeholder={isAr ? 'أدخل رقم الصرافة' : 'Enter cashier number'} />
                     <button type="button" onClick={persistCashier}
-                      className="shrink-0 px-3.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-xs font-bold hover:bg-amber-100 transition">
+                      className="shrink-0 px-3.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-xs font-bold hover:bg-amber-100 transition">
                       {isAr ? 'تثبيت' : 'Pin'}
                     </button>
                   </div>
@@ -574,9 +572,9 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-bold text-slate-500">
+                    <label className="text-[11px] font-bold text-gray-500">
                       {isAr ? 'رقم الموازنة' : 'Budget reference'}
-                      <span className="ms-1.5 text-slate-400 font-normal">({isAr ? 'اختياري' : 'optional'})</span>
+                      <span className="ms-1.5 text-gray-400 font-normal">({isAr ? 'اختياري' : 'optional'})</span>
                     </label>
                     <button type="button" onClick={addBalanceRef} className="text-xs text-emerald-700 font-bold hover:underline">+ {isAr ? 'إضافة رقم' : 'Add another'}</button>
                   </div>
@@ -600,7 +598,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                 {METHODS.map(m => (
                   <div key={m.key}>
                     <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-2 w-28 shrink-0 text-[13px] font-semibold text-slate-700">
+                      <span className="flex items-center gap-2 w-28 shrink-0 text-[13px] font-semibold text-gray-700">
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: m.dot }} />{m.label}
                       </span>
                       <div className="relative flex-1">
@@ -609,13 +607,13 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                           value={form[m.key]}
                           onChange={e => set(m.key, Math.round(Number(cleanNumber(e.target.value))) || 0)}
                           onFocus={e => e.target.select()} />
-                        <span className="absolute inset-y-0 end-3 flex items-center text-[11px] font-semibold text-slate-400 pointer-events-none">{isAr ? 'ر.س' : 'SAR'}</span>
+                        <span className="absolute inset-y-0 end-3 flex items-center text-[11px] font-semibold text-gray-400 pointer-events-none">{isAr ? 'ر.س' : 'SAR'}</span>
                       </div>
                     </div>
                     {m.ref && Number(form[m.key]) > 0 && (
                       <div className="mt-1.5 ms-[7.75rem]">
                         <input placeholder={m.refLabel} dir="ltr"
-                          className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none font-mono"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none font-mono"
                           value={form[m.ref]} onChange={e => set(m.ref, toLatinDigits(e.target.value))} />
                       </div>
                     )}
@@ -627,24 +625,24 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
             {/* الإجماليات */}
             <SectionCard n={4} title={isAr ? 'الإجماليات' : 'Totals'} tone="bg-white border-emerald-200">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <span className="text-[13px] font-bold text-slate-700">{isAr ? 'إجمالي المبيعات' : 'Total sales'}</span>
+                <span className="text-[13px] font-bold text-gray-700">{isAr ? 'إجمالي المبيعات' : 'Total sales'}</span>
                 <div className="relative w-40">
                   <input type="text" inputMode="numeric" lang="en" dir="ltr"
                     className={inputCls + ' text-end font-mono font-bold pe-12'}
                     value={form.total_sales}
                     onChange={e => set('total_sales', Math.round(Number(cleanNumber(e.target.value))) || 0)}
                     onFocus={e => e.target.select()} />
-                  <span className="absolute inset-y-0 end-3 flex items-center text-[11px] font-semibold text-slate-400 pointer-events-none">{isAr ? 'ر.س' : 'SAR'}</span>
+                  <span className="absolute inset-y-0 end-3 flex items-center text-[11px] font-semibold text-gray-400 pointer-events-none">{isAr ? 'ر.س' : 'SAR'}</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
-                <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-center">
-                  <p className="text-[10px] font-semibold text-slate-400">{isAr ? 'الإجمالي الفعلي' : 'Actual total'}</p>
-                  <p className="text-lg font-extrabold font-mono text-emerald-700 leading-tight" dir="ltr">{fmt(totalActual)} <span className="text-[10px] font-semibold text-slate-400">{isAr ? 'ر.س' : 'SAR'}</span></p>
+                <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2.5 text-center">
+                  <p className="text-[10px] font-semibold text-gray-400">{isAr ? 'الإجمالي الفعلي' : 'Actual total'}</p>
+                  <p className="text-lg font-bold font-mono text-emerald-700 leading-tight" dir="ltr">{fmt(totalActual)} <span className="text-[10px] font-semibold text-gray-400">{isAr ? 'ر.س' : 'SAR'}</span></p>
                 </div>
-                <div className="rounded-xl px-3 py-2.5 text-center border" style={{ background: diffTone.bg, borderColor: diffTone.bd }}>
+                <div className="rounded-lg px-3 py-2.5 text-center border" style={{ background: diffTone.bg, borderColor: diffTone.bd }}>
                   <p className="text-[10px] font-bold" style={{ color: diffTone.c }}>{isAr ? 'الفرق' : 'Difference'} · {diffTone.t}</p>
-                  <p className="text-lg font-extrabold font-mono leading-tight" style={{ color: diffTone.c }} dir="ltr">
+                  <p className="text-lg font-bold font-mono leading-tight" style={{ color: diffTone.c }} dir="ltr">
                     {diff > 0 ? '+' : ''}{fmt(diff)} <span className="text-[10px] font-semibold opacity-70">{isAr ? 'ر.س' : 'SAR'}</span>
                   </p>
                 </div>
@@ -656,7 +654,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
               <SectionCard title={isAr ? 'تأكيد المحاسب' : 'Accountant confirmation'} tone="bg-amber-50/70 border-amber-200">
                 <div className="space-y-3">
                   {diff < 0 && allowCap('sales_deficit_ack') && (
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
                       <p className="text-xs font-bold text-red-700">⚠ {isAr ? 'يوجد عجز بمقدار' : 'Deficit of'} {fmt(Math.abs(diff))} {isAr ? 'ر.س' : 'SAR'}</p>
                       <p className="text-xs text-red-600">
                         {isAr
@@ -677,32 +675,32 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                     </label>
                   )}
                   {allowCap('sales_notes') && <textarea rows={2} placeholder={isAr ? 'ملاحظات...' : 'Notes...'}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm resize-none bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none"
                     value={form.accountant_notes} onChange={e => set('accountant_notes', e.target.value)} />}
                 </div>
               </SectionCard>
             )}
           </fieldset>
 
-          {error && <p className="text-red-600 text-xs bg-red-50 rounded-xl p-2.5 border border-red-100">⚠ {error}</p>}
+          {error && <p className="text-red-600 text-xs bg-red-50 rounded-lg p-2.5 border border-red-100">⚠ {error}</p>}
         </div>
 
         {/* ═ الذيل: أزرار ثابتة ═ */}
-        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-slate-200 flex items-center gap-2.5">
+        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-gray-200 flex items-center gap-2.5">
           {!isLocked && (
             <button type="submit" disabled={saving}
-              className="flex-1 bg-emerald-700 text-white py-3 rounded-xl text-sm font-extrabold disabled:opacity-50 hover:bg-emerald-800 transition shadow-sm">
+              className="flex-1 bg-green-700 text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-green-800 transition-colors ">
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ السجل' : 'Save record')}
             </button>
           )}
           {sale && allowCap('sales_print') && (
             <button type="button" onClick={handlePrint}
-              className="flex-1 bg-slate-800 text-white py-3 rounded-xl text-sm font-extrabold hover:bg-slate-900 transition">
+              className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
               {isAr ? 'طباعة' : 'Print'}
             </button>
           )}
           <button type="button" onClick={onClose}
-            className="px-5 py-3 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 bg-white hover:bg-slate-50 transition">
+            className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 bg-white hover:bg-gray-50">
             {isLocked ? (isAr ? 'إغلاق' : 'Close') : (isAr ? 'إلغاء' : 'Cancel')}
           </button>
         </div>
@@ -868,16 +866,11 @@ export default function SalesPage() {
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
 
-      {/* ═ الترويسة ═ */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl grid place-items-center text-white shadow-sm" style={{ background: 'linear-gradient(135deg,#0f5132,#1E7A55)' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v.01M18 14v.01"/></svg>
-            </span>
-            <h1 className="text-xl font-extrabold text-slate-900">{isAr ? 'الإيرادات' : 'Revenue'}</h1>
-          </div>
-          <p className="text-xs text-slate-400 mt-1.5 ms-0.5">
+          <h1 className="text-xl font-bold text-gray-900">{isAr ? 'الإيرادات' : 'Revenue'}</h1>
+          <p className="text-xs text-gray-400 mt-0.5">
             {isGeneralAdmin ? (isAr ? 'جميع المحطات' : 'All stations')
               : (isAreaSupervisor || isStationAdmin) && allowedStationIds?.length > 1 ? (isAr ? 'محطاتك المخصصة' : 'Your assigned stations')
               : isStationAdmin || isAccountant ? (isAr ? 'محطتك فقط' : 'Your station only')
@@ -886,31 +879,26 @@ export default function SalesPage() {
         </div>
         {canAdd && (
           <button onClick={() => setModal('new')}
-            className="inline-flex items-center justify-center gap-2 text-white px-5 py-2.5 rounded-xl text-sm font-extrabold shadow-sm hover:brightness-110 transition"
-            style={{ background: 'linear-gradient(135deg,#0f5132,#1E7A55)' }}>
-            <span className="text-lg leading-none">+</span>{isAr ? 'إدخال إيرادات' : 'New entry'}
+            className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-black transition-colors self-start sm:self-auto">
+            + {isAr ? 'إدخال إيرادات' : 'New Entry'}
           </button>
         )}
       </div>
 
-      {/* ═ الفلاتر ═ */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-3.5 mb-4 flex items-center gap-2.5 flex-wrap shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => setFilterDate(todayStr())}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${filterDate === todayStr() ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>{isAr ? 'اليوم' : 'Today'}</button>
-          <button type="button" onClick={() => { const d = new Date(); d.setDate(d.getDate() - 1); setFilterDate(toLocalDateStr(d)) }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${filterDate === (() => { const d = new Date(); d.setDate(d.getDate() - 1); return toLocalDateStr(d) })() ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>{isAr ? 'أمس' : 'Yesterday'}</button>
-        </div>
-        <div className="w-44 sm:w-52">
+      {/* Date + Station filter */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <button type="button" onClick={() => setFilterDate(todayStr())}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${filterDate === todayStr() ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{isAr ? 'اليوم' : 'Today'}</button>
+        <button type="button" onClick={() => { const d = new Date(); d.setDate(d.getDate() - 1); setFilterDate(toLocalDateStr(d)) }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${filterDate === (() => { const d = new Date(); d.setDate(d.getDate() - 1); return toLocalDateStr(d) })() ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{isAr ? 'أمس' : 'Yesterday'}</button>
+        <div className="w-44">
           <DatePicker value={filterDate} onChange={setFilterDate} isAr={isAr}
-            className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500/40 focus:outline-none bg-white" />
+            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
         </div>
         {(isGeneralAdmin || isAreaSupervisor || isStationAdmin) && stations.length > 0 && (
           <>
-            <span className="hidden sm:block w-px h-6 bg-slate-200 mx-1" />
             <SelectField value={filterStation} onChange={e => setStation(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none min-w-[180px]"
-              style={{ fontFamily: 'inherit' }}>
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white min-w-[180px]">
               <option value="">{isAr ? 'جميع المحطات' : 'All stations'}</option>
               {pinnedStations.length > 0 && <>
                 <optgroup label={isAr ? 'المثبّتة' : 'Pinned'}>
@@ -930,49 +918,29 @@ export default function SalesPage() {
             </SelectField>
             <button onClick={() => setShowPinModal(true)}
               title={isAr ? 'تثبيت محطات' : 'Pin stations'}
-              className={`w-9 h-9 rounded-lg grid place-items-center border transition ${pinnedStations.length > 0 ? 'text-amber-600 border-amber-300 bg-amber-50' : 'text-slate-400 border-slate-200 bg-white hover:text-amber-600 hover:border-amber-300'}`}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill={pinnedStations.length > 0 ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17v5M9 3h6l-1 7 3 3v2H7v-2l3-3z"/></svg>
+              className={`text-sm leading-none rounded-lg px-2.5 py-2 border transition-colors ${pinnedStations.length > 0 ? 'text-amber-600 border-amber-300 bg-amber-50' : 'text-gray-400 border-gray-200 bg-white hover:text-amber-600'}`}>
+              {isAr ? 'تثبيت' : 'Pin'}
             </button>
           </>
         )}
       </div>
 
-      {/* ═ ملخص اليوم (للأدمن والمحاسب) ═ */}
-      {(isGeneralAdmin || isAccountant) && (() => {
-        const dTotal = totalActualSum - totalExpectedSum
-        const pctDone = records.length ? Math.round((confirmed / records.length) * 100) : 0
-        const tone = dTotal === 0 ? { c: '#475569', bg: '#f8fafc', t: isAr ? 'مطابق' : 'Matched' } : dTotal > 0 ? { c: '#1d4ed8', bg: '#eff6ff', t: isAr ? 'زيادة' : 'Surplus' } : { c: '#b91c1c', bg: '#fef2f2', t: isAr ? 'عجز' : 'Deficit' }
-        return (
-          <div className={`grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5 ${isGeneralAdmin ? 'stat-sticky-wrap' : ''}`}>
-            <div className="rounded-2xl border border-emerald-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <p className="text-[11px] font-bold text-slate-400">{isAr ? 'إجمالي المحصَّل' : 'Total collected'}</p>
-              <p className="text-2xl font-extrabold font-mono text-emerald-700 leading-tight mt-0.5" dir="ltr">{fmt(totalActualSum)} <span className="text-xs font-semibold text-slate-400">{isAr ? 'ر.س' : 'SAR'}</span></p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <p className="text-[11px] font-bold text-slate-400">{isAr ? 'إجمالي المبيعات' : 'Total sales'}</p>
-              <p className="text-2xl font-extrabold font-mono text-slate-800 leading-tight mt-0.5" dir="ltr">{fmt(totalExpectedSum)} <span className="text-xs font-semibold text-slate-400">{isAr ? 'ر.س' : 'SAR'}</span></p>
-            </div>
-            <div className="rounded-2xl border px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]" style={{ background: tone.bg, borderColor: tone.c + '40' }}>
-              <p className="text-[11px] font-bold" style={{ color: tone.c }}>{isAr ? 'الفرق' : 'Difference'} · {tone.t}</p>
-              <p className="text-2xl font-extrabold font-mono leading-tight mt-0.5" style={{ color: tone.c }} dir="ltr">{dTotal > 0 ? '+' : ''}{fmt(dTotal)} <span className="text-xs font-semibold opacity-60">{isAr ? 'ر.س' : 'SAR'}</span></p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <p className="text-[11px] font-bold text-slate-400">{isAr ? 'السجلات المؤكدة' : 'Confirmed records'}</p>
-              <p className="text-2xl font-extrabold font-mono text-slate-800 leading-tight mt-0.5" dir="ltr">{confirmed} <span className="text-sm font-semibold text-slate-400">/ {records.length}</span></p>
-              <div className="h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden"><div className="h-1.5 rounded-full bg-emerald-600" style={{ width: `${pctDone}%` }} /></div>
-            </div>
-          </div>
-        )
-      })()}
+      {/* Summary — للأدمن والمحاسب */}
+      {(isGeneralAdmin || isAccountant) && <StatStrip className="mb-4" sticky={isGeneralAdmin} items={[
+        { label: isAr ? 'إجمالي المحصَّل' : 'Total collected', val: fmt(totalActualSum) + ' ر.س', tone: 'text-green-700' },
+        { label: isAr ? 'إجمالي المبيعات' : 'Total sales', val: fmt(totalExpectedSum) + ' ر.س' },
+        { label: isAr ? 'الفرق' : 'Difference',
+          val: (totalActualSum - totalExpectedSum > 0 ? '+' : '') + fmt(totalActualSum - totalExpectedSum) + ' ر.س',
+          tone: totalActualSum - totalExpectedSum === 0 ? 'text-gray-500' : totalActualSum > totalExpectedSum ? 'text-blue-600' : 'text-red-600' },
+        { label: isAr ? 'مؤكدة' : 'Confirmed', val: `${confirmed} / ${records.length}` },
+      ]} />}
 
-      {/* ═ السجلات ═ */}
+      {/* Records */}
       {loading ? (
-        <div className="space-y-3">{[0, 1].map(i => <div key={i} className="h-24 rounded-2xl bg-slate-100 animate-pulse" />)}</div>
+        <div className="text-center py-20 text-gray-400">{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>
       ) : records.length === 0 ? (
-        <div className="bg-white border border-dashed border-slate-300 rounded-2xl text-center py-16 text-slate-400">
-          <svg className="mx-auto mb-3 text-slate-300" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
-          <p className="font-semibold">{isAr ? 'لا توجد سجلات في هذا اليوم' : 'No records for this date'}</p>
-          {canAdd && <button onClick={() => setModal('new')} className="mt-3 text-sm font-bold text-emerald-700 hover:underline">+ {isAr ? 'إدخال إيرادات' : 'New entry'}</button>}
+        <div className="text-center py-20 text-gray-400 bg-white border border-gray-200 rounded-lg">
+          <p>{isAr ? 'لا توجد سجلات في هذا اليوم' : 'No records for this date'}</p>
         </div>
       ) : (() => {
         const byDay = {}
@@ -981,7 +949,7 @@ export default function SalesPage() {
         const others = r => Number(r.visa_amount ?? 0) + Number(r.mastercard_amount ?? 0) + Number(r.other_amount ?? 0)
 
         return (
-          <div className="space-y-3.5">
+          <div className="space-y-3">
             {days.map(day => {
               const dayRecs = byDay[day]
               const isOpen = openDays[day] ?? (days.length === 1)
@@ -993,42 +961,29 @@ export default function SalesPage() {
               const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
               return (
-                <div key={day} className="bg-white rounded-2xl border border-slate-200 shadow-[0_1px_3px_rgba(15,23,42,0.05)] overflow-hidden">
-                  <button onClick={() => toggleDay(day)} className="w-full flex items-center justify-between gap-4 px-5 py-4 hover:bg-slate-50/70 transition text-start">
+                <div key={day} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <button onClick={() => toggleDay(day)} className="w-full flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50 transition-colors text-start">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className={`w-7 h-7 rounded-lg bg-slate-100 text-slate-500 grid place-items-center transition-transform ${isOpen ? '' : (isAr ? 'rotate-90' : '-rotate-90')}`}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                      </span>
+                      <span className="text-gray-400 text-sm w-3">{isOpen ? '▾' : (isAr ? '◂' : '▸')}</span>
                       <div className="min-w-0">
-                        <div className="font-extrabold text-slate-900 text-sm truncate">{dayLabel}</div>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">{dayRecs.length} {isAr ? 'سجل' : 'records'}</span>
-                          <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${dayConfirmed === dayRecs.length ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{dayConfirmed} {isAr ? 'مؤكد' : 'confirmed'}</span>
-                          {dayHasDeficit && <span className="text-[11px] font-bold bg-red-50 text-red-600 rounded-full px-2 py-0.5">{isAr ? 'يوجد عجز' : 'Deficit'}</span>}
+                        <div className="font-bold text-gray-900 text-sm truncate">{dayLabel}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {dayRecs.length} {isAr ? 'سجل' : 'records'} · {dayConfirmed} {isAr ? 'مؤكد' : 'confirmed'}
+                          {dayHasDeficit && <span className="text-red-500 font-semibold"> · {isAr ? 'يوجد عجز' : 'deficit'}</span>}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-5 shrink-0 text-end">
-                      <div className="hidden sm:block">
-                        <div className="text-[10px] font-semibold text-slate-400">{isAr ? 'إجمالي المبيعات' : 'Total sales'}</div>
-                        <div className="font-bold text-slate-700 text-sm font-mono" dir="ltr">{fmt(daySales)}</div>
-                      </div>
-                      <div className="hidden sm:block">
-                        <div className="text-[10px] font-semibold text-slate-400">{isAr ? 'الفرق' : 'Diff'}</div>
-                        <div className={`font-bold text-sm font-mono ${dayDiff === 0 ? 'text-slate-400' : dayDiff > 0 ? 'text-blue-600' : 'text-red-600'}`} dir="ltr">{dayDiff > 0 ? '+' : ''}{fmt(dayDiff)}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] font-semibold text-slate-400">{isAr ? 'المحصَّل' : 'Collected'}</div>
-                        <div className="font-extrabold text-emerald-700 text-base font-mono" dir="ltr">{fmt(dayActual)} <span className="text-[10px] font-semibold text-slate-400">{isAr ? 'ر.س' : 'SAR'}</span></div>
-                      </div>
+                    <div className="text-end shrink-0">
+                      <div className="font-bold text-green-700 text-sm font-mono" dir="ltr">{fmt(dayActual)} <span className="text-xs font-normal text-gray-400">{isAr ? 'ر.س' : 'SAR'}</span></div>
+                      <div className="text-xs text-gray-400">{isAr ? 'إجمالي اليوم' : 'Day total'}</div>
                     </div>
                   </button>
 
                   {isOpen && (
-                    <div className="overflow-x-auto border-t border-slate-100">
+                    <div className="overflow-x-auto border-t border-gray-100">
                       <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-slate-50 text-slate-500 text-[11px] font-bold">
+                        <thead className="bg-gray-50 text-gray-500 text-xs">
+                          <tr>
                             {[
                               [isAr ? 'الوردية' : 'Shift', ''],
                               [isAr ? 'الموظف' : 'Employee', ''],
@@ -1041,60 +996,59 @@ export default function SalesPage() {
                               [isAr ? 'الحالة' : 'Status', ''],
                               ['', ''],
                             ].map(([h, cls], i) => (
-                              <th key={i} className={`px-3 py-2.5 text-start whitespace-nowrap ${cls}`}>{h}</th>
+                              <th key={i} className={`px-3 py-2 text-start font-medium whitespace-nowrap ${cls}`}>{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-gray-50">
                           {dayRecs.map(r => {
                             const diff = Number(r.total_actual ?? 0) - Number(r.total_expected ?? 0)
                             const nm = r.employee_name || r.created_by_name || '—'
                             return (
-                              <tr key={r.id} className={`hover:bg-slate-50/70 transition-colors ${diff < 0 && r.is_confirmed ? 'bg-red-50/40' : ''}`}>
-                                <td className="px-3 py-3">
-                                  <span className="inline-grid place-items-center w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 font-extrabold text-xs">{r.shift}</span>
+                              <tr key={r.id} className={`hover:bg-gray-50 transition-colors ${diff < 0 && r.is_confirmed ? 'bg-red-50/30' : ''}`}>
+                                <td className="px-3 py-3 font-bold text-nwbus-primary">{r.shift}</td>
+                                <td className="px-3 py-3 min-w-[140px]">
+                                  <div className="text-[13px] text-gray-800 truncate max-w-[160px]" title={nm} dir="auto">{nm}</div>
+                                  <div className="text-[11px] text-gray-400 font-mono">{r.created_by_user?.job_number ? `#${r.created_by_user.job_number}` : ''}</div>
                                 </td>
-                                <td className="px-3 py-3 min-w-[150px]">
-                                  <div className="flex items-center gap-2.5">
-                                    <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 text-xs font-extrabold grid place-items-center shrink-0">{String(nm).trim().charAt(0)}</span>
-                                    <div className="min-w-0">
-                                      <div className="text-[13px] font-semibold text-slate-800 truncate max-w-[150px]" title={nm} dir="auto">{nm}</div>
-                                      <div className="text-[11px] text-slate-400 font-mono">{r.created_by_user?.job_number ? `#${r.created_by_user.job_number}` : ''}</div>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-3 font-mono text-xs text-slate-600 hidden md:table-cell">{fmt(r.cash_amount)}</td>
-                                <td className="px-3 py-3 font-mono text-xs text-slate-600 hidden md:table-cell">{fmt(r.mada_amount)}</td>
-                                <td className="px-3 py-3 font-mono text-xs text-slate-600 hidden lg:table-cell">{fmt(others(r))}</td>
-                                <td className="px-3 py-3 font-mono text-[13px] font-extrabold text-emerald-700">{fmt(r.total_actual)}</td>
-                                <td className="px-3 py-3 font-mono text-xs font-semibold text-slate-700">{fmt(r.total_expected)}</td>
-                                <td className="px-3 py-3">
-                                  <span className={`inline-block font-mono text-xs font-bold rounded-lg px-2 py-1 ${diff === 0 ? 'bg-slate-100 text-slate-500' : diff > 0 ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`} dir="ltr">
-                                    {diff > 0 ? '+' : ''}{fmt(diff)}
-                                  </span>
-                                  {diff < 0 && r.is_confirmed && <div className="text-red-400 text-[10px] mt-0.5">{isAr ? 'عجز مُقَر' : 'acknowledged'}</div>}
+                                <td className="px-3 py-3 font-mono text-xs text-gray-600 hidden md:table-cell">{fmt(r.cash_amount)}</td>
+                                <td className="px-3 py-3 font-mono text-xs text-gray-600 hidden md:table-cell">{fmt(r.mada_amount)}</td>
+                                <td className="px-3 py-3 font-mono text-xs text-gray-600 hidden lg:table-cell">{fmt(others(r))}</td>
+                                <td className="px-3 py-3 font-mono text-xs font-semibold text-green-700">{fmt(r.total_actual)}</td>
+                                <td className="px-3 py-3 font-mono text-xs text-gray-500">{fmt(r.total_expected)}</td>
+                                <td className={`px-3 py-3 font-mono text-xs font-semibold ${diff === 0 ? 'text-gray-400' : diff > 0 ? 'text-blue-600' : 'text-red-600'}`} dir="ltr">
+                                  {diff > 0 ? '+' : ''}{fmt(diff)}
+                                  {diff < 0 && r.is_confirmed && <div className="text-red-400 text-[10px] font-sans">{isAr ? 'عجز مُقَر' : 'acknowledged'}</div>}
                                 </td>
                                 <td className="px-3 py-3">
-                                  <span className={`inline-flex items-center gap-1 text-[11px] font-bold rounded-full px-2.5 py-1 ${r.is_confirmed ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${r.is_confirmed ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                                    {r.is_confirmed ? (isAr ? 'مؤكد' : 'Confirmed') : (isAr ? 'قيد المراجعة' : 'Pending')}
+                                  <span className={`text-xs rounded-full px-2 py-0.5 ${r.is_confirmed ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                    {r.is_confirmed ? (isAr ? 'مؤكد ✓' : 'Confirmed ✓') : (isAr ? 'قيد المراجعة' : 'Pending')}
                                   </span>
                                 </td>
                                 <td className="px-3 py-3">
-                                  <div className="flex gap-1.5 items-center justify-end">
-                                    <button onClick={() => setAudit(r)} title={isAr ? 'سجل التعديلات' : 'Audit history'}
-                                      className="w-8 h-8 grid place-items-center rounded-lg border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition">
-                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
-                                    </button>
-                                    {r.is_confirmed && !isGeneralAdmin ? (
-                                      <button onClick={() => setModal(r)} className="text-xs font-bold border border-slate-300 text-slate-600 rounded-lg px-3 py-1.5 hover:bg-slate-50 transition">{isAr ? 'عرض' : 'View'}</button>
-                                    ) : (
-                                      <button onClick={() => setModal(r)} className="text-xs font-bold border border-emerald-700 text-emerald-700 rounded-lg px-3 py-1.5 hover:bg-emerald-700 hover:text-white transition">{isAr ? 'تعديل' : 'Edit'}</button>
-                                    )}
+                                  <div className="flex gap-1 items-center">
+                                    <button onClick={() => setAudit(r)}
+                                      className="text-xs border border-gray-200 text-gray-500 rounded-lg px-2 py-1 hover:bg-gray-50"
+                                      title={isAr ? 'سجل التعديلات' : 'Audit History'}>{isAr ? 'السجل' : 'Log'}</button>
+                                    {r.is_confirmed && !isGeneralAdmin
+                                      ? (
+                                        <button onClick={() => setModal(r)}
+                                          className="text-xs border border-gray-300 text-gray-500 rounded-lg px-3 py-1 hover:bg-gray-50 transition-colors">
+                                          {isAr ? 'عرض' : 'View'}
+                                        </button>
+                                      ) : (
+                                        <button onClick={() => setModal(r)}
+                                          className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1 hover:bg-nwbus-primary hover:text-white transition-colors">
+                                          {isAr ? 'تعديل' : 'Edit'}
+                                        </button>
+                                      )
+                                    }
                                     {isGeneralAdmin && (
-                                      <button onClick={() => handleDelete(r.id)} disabled={deleting === r.id} title={isAr ? 'حذف' : 'Delete'}
-                                        className="w-8 h-8 grid place-items-center rounded-lg border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition disabled:opacity-40">
-                                        {deleting === r.id ? '…' : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>}
+                                      <button onClick={() => handleDelete(r.id)}
+                                        disabled={deleting === r.id}
+                                        className="text-xs border border-red-200 text-red-500 rounded-lg px-2 py-1 hover:bg-red-50 transition-colors disabled:opacity-40"
+                                        title={isAr ? 'حذف' : 'Delete'}>
+                                        {deleting === r.id ? '…' : (isAr ? 'حذف' : 'Del')}
                                       </button>
                                     )}
                                   </div>
@@ -1105,14 +1059,14 @@ export default function SalesPage() {
                         </tbody>
                         {dayRecs.length > 1 && (
                           <tfoot>
-                            <tr className="bg-slate-50 border-t-2 border-slate-200 text-[12px] font-extrabold text-slate-700">
-                              <td className="px-3 py-2.5" colSpan={2}>{isAr ? 'إجمالي اليوم' : 'Day total'}</td>
-                              <td className="px-3 py-2.5 font-mono hidden md:table-cell">{fmt(dayRecs.reduce((s, r) => s + Number(r.cash_amount ?? 0), 0))}</td>
-                              <td className="px-3 py-2.5 font-mono hidden md:table-cell">{fmt(dayRecs.reduce((s, r) => s + Number(r.mada_amount ?? 0), 0))}</td>
-                              <td className="px-3 py-2.5 font-mono hidden lg:table-cell">{fmt(dayRecs.reduce((s, r) => s + others(r), 0))}</td>
-                              <td className="px-3 py-2.5 font-mono text-emerald-700">{fmt(dayActual)}</td>
-                              <td className="px-3 py-2.5 font-mono">{fmt(daySales)}</td>
-                              <td className={`px-3 py-2.5 font-mono ${dayDiff === 0 ? 'text-slate-400' : dayDiff > 0 ? 'text-blue-700' : 'text-red-600'}`} dir="ltr">{dayDiff > 0 ? '+' : ''}{fmt(dayDiff)}</td>
+                            <tr className="bg-gray-50 border-t border-gray-200 text-xs font-bold text-gray-700">
+                              <td className="px-3 py-2" colSpan={2}>{isAr ? 'إجمالي اليوم' : 'Day total'}</td>
+                              <td className="px-3 py-2 font-mono hidden md:table-cell">{fmt(dayRecs.reduce((s, r) => s + Number(r.cash_amount ?? 0), 0))}</td>
+                              <td className="px-3 py-2 font-mono hidden md:table-cell">{fmt(dayRecs.reduce((s, r) => s + Number(r.mada_amount ?? 0), 0))}</td>
+                              <td className="px-3 py-2 font-mono hidden lg:table-cell">{fmt(dayRecs.reduce((s, r) => s + others(r), 0))}</td>
+                              <td className="px-3 py-2 font-mono text-green-700">{fmt(dayActual)}</td>
+                              <td className="px-3 py-2 font-mono">{fmt(daySales)}</td>
+                              <td className={`px-3 py-2 font-mono ${dayDiff === 0 ? 'text-gray-400' : dayDiff > 0 ? 'text-blue-700' : 'text-red-600'}`} dir="ltr">{dayDiff > 0 ? '+' : ''}{fmt(dayDiff)}</td>
                               <td colSpan={2} />
                             </tr>
                           </tfoot>
