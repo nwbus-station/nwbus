@@ -12,8 +12,16 @@ import { useEscapeKey } from '../../hooks/useEscapeKey'
  *   - محطة الوصول ثابتة (وجهة الرحلة)
  * تُحفظ في جدول station_trips (departure_time, departure_station_id).
  */
+const BUS_TYPE_OPTS = [
+  ['VIP', 'VIP', 'bg-amber-100 text-amber-800'],
+  ['WHEELCHAIR', 'WHEELCHAIR', 'bg-sky-100 text-sky-800'],
+  ['STANDARD', 'STANDARD', 'bg-gray-100 text-gray-700'],
+  ['QAID', 'QAID', 'bg-green-100 text-green-800'],
+]
+const normBusType = v => { const k = String(v || '').trim().toUpperCase(); return ({ WCH: 'WHEELCHAIR', 'عادي': 'STANDARD', 'قائد': 'QAID' })[k] ?? k }
+
 const tripFields = `
-  id, trip_number, trip_name, route, scheduled_departure, scheduled_arrival,
+  id, trip_number, trip_name, route, scheduled_departure, scheduled_arrival, bus_type,
   from_station:from_station_id(name_en, name_ar),
   to_station:to_station_id(name_en, name_ar)
 `
@@ -63,6 +71,7 @@ export default function StationTripsModal({ stationId, stationName, stations = [
   const [search, setSearch]         = useState('')
   const [error, setError]           = useState('')
   const [suspendedOnly, setSuspendedOnly] = useState(false)
+  const [editType, setEditType] = useState(false)   // تفعيل تعديل نوع الحافلة
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -188,6 +197,19 @@ export default function StationTripsModal({ stationId, stationName, stations = [
     if (error) setError(error.message)
   }
 
+  // تعديل نوع الحافلة للرحلة (على الجدول نفسه — يسري على كل محطات الرحلة)
+  async function changeBusType(tripId, value) {
+    const prev = candidates.find(c => c.id === tripId)?.bus_type
+    setCandidates(list => list.map(c => (c.id === tripId ? { ...c, bus_type: value } : c)))
+    setBusy('type-' + tripId); setError('')
+    const { error } = await supabase.from('trip_schedule').update({ bus_type: value }).eq('id', tripId)
+    setBusy(null)
+    if (error) {
+      setCandidates(list => list.map(c => (c.id === tripId ? { ...c, bus_type: prev } : c)))
+      setError(error.message)
+    }
+  }
+
   // رحلة "معلّقة": مضافة للمحطة لكن كاملة الإيقاف أو أحد اتجاهيها موقوف
   const isSuspended = ov => ov?.exists && (!ov.enabled || !ov.depOn || !ov.arrOn)
   const suspendedCount = [...selected.values()].filter(isSuspended).length
@@ -232,6 +254,15 @@ export default function StationTripsModal({ stationId, stationName, stations = [
               )
             })()}
           </div>
+          {canEdit && (
+            <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 cursor-pointer">
+              <span className="text-xs text-gray-600">
+                <span className="font-semibold text-gray-800">{t('Enable editing bus type', 'تفعيل تعديل نوع الحافلة')}</span>
+                <span className="block text-[11px] text-gray-400 mt-0.5">{t('Changes the trip type for all its stations', 'يغيّر نوع الرحلة في كل محطاتها')}</span>
+              </span>
+              <input type="checkbox" className="accent-nwbus-primary w-4 h-4" checked={editType} onChange={e => setEditType(e.target.checked)} />
+            </label>
+          )}
           {error && <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-2">{error}</div>}
           {suspendedCount > 0 && (
             <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-300 text-amber-800 text-xs rounded-lg px-3 py-2">
@@ -298,6 +329,21 @@ export default function StationTripsModal({ stationId, stationName, stations = [
                     <div className="text-xs text-gray-500 mt-0.5 truncate">
                       {tr.from_station ? stName(tr.from_station) : '—'} {' → '} {tr.to_station ? stName(tr.to_station) : '—'}
                       {tr.scheduled_departure && <span className="text-gray-400"> · {tr.scheduled_departure.slice(0, 5)}</span>}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <span className="text-[10px] text-gray-400">{t('Bus type', 'نوع الحافلة')}:</span>
+                      {editType && canEdit ? (
+                        <select value={normBusType(tr.bus_type)} disabled={busy === 'type-' + tr.id}
+                          onChange={e => changeBusType(tr.id, e.target.value)}
+                          className="border border-gray-300 rounded-md px-2 py-0.5 text-[11px] font-bold bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none">
+                          {!BUS_TYPE_OPTS.some(o => o[0] === normBusType(tr.bus_type)) && <option value={normBusType(tr.bus_type)}>{normBusType(tr.bus_type) || '—'}</option>}
+                          {BUS_TYPE_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                      ) : (
+                        <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${(BUS_TYPE_OPTS.find(o => o[0] === normBusType(tr.bus_type)) ?? [0, 0, 'bg-gray-100 text-gray-500'])[2]}`}>
+                          {normBusType(tr.bus_type) || '—'}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {busy === tr.id && <span className="text-xs text-gray-400">…</span>}
