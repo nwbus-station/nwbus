@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import TimeInput24 from '../shared/TimeInput24'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import SelectField from '../shared/SelectField'
+import ConfirmDialog from '../shared/ConfirmDialog'
 
 /**
  * شاشة اختيار رحلات المحطة — للمشرف (والأدمن).
@@ -211,6 +212,16 @@ export default function StationTripsModal({ stationId, stationName, stations = [
     }
   }
 
+  // إزالة ربط رحلة لا تمر بالمحطة (سجل station_trips فقط — الرحلة نفسها وجدولها لا يتأثران)
+  const [confirmRemove, setConfirmRemove] = useState(null)
+  async function removeLink(tr) {
+    setConfirmRemove(null); setBusy(tr.id); setError('')
+    const { error } = await supabase.from('station_trips').delete().eq('station_id', stationId).eq('trip_schedule_id', tr.id)
+    setBusy(null)
+    if (error) { setError(error.message); return }
+    setSelected(prev => { const n = new Map(prev); n.delete(tr.id); return n })
+  }
+
   // رحلة "معلّقة": مضافة للمحطة لكن كاملة الإيقاف أو أحد اتجاهيها موقوف
   const isSuspended = ov => ov?.exists && (!ov.enabled || !ov.depOn || !ov.arrOn)
   const suspendedCount = [...selected.values()].filter(isSuspended).length
@@ -326,6 +337,13 @@ export default function StationTripsModal({ stationId, stationName, stations = [
                           {t('Arrival suspended', 'الوصول معلّق')}
                         </span>
                       )}
+                      {canEdit && ov?.exists && !tr.passes && !ov.is_extra && (
+                        <button type="button" disabled={busy === tr.id}
+                          onClick={e => { e.stopPropagation(); setConfirmRemove(tr) }}
+                          className="text-[10px] rounded-full px-2.5 py-0.5 border border-red-300 text-red-600 font-bold hover:bg-red-50 disabled:opacity-50">
+                          {t('Remove from station', 'إزالة من المحطة')}
+                        </button>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5 truncate">
                       {tr.from_station ? stName(tr.from_station) : '—'} {' → '} {tr.to_station ? stName(tr.to_station) : '—'}
@@ -412,6 +430,14 @@ export default function StationTripsModal({ stationId, stationName, stations = [
           </button>
         </div>
       </div>
+      {confirmRemove && (
+        <ConfirmDialog
+          message={isAr
+            ? `الرحلة ${confirmRemove.trip_number} لا تمر بمحطتك أصلاً. إزالتها تحذف ربطها بهذه المحطة فقط (الرحلة نفسها وبقية محطاتها لا تتأثر). متابعة؟`
+            : `Trip ${confirmRemove.trip_number} does not pass your station. Removing deletes only its link to this station (the trip itself is unaffected). Continue?`}
+          confirmLabel={isAr ? 'إزالة' : 'Remove'} cancelLabel={isAr ? 'إلغاء' : 'Cancel'}
+          onConfirm={() => removeLink(confirmRemove)} onCancel={() => setConfirmRemove(null)} />
+      )}
     </div>
   )
 }
