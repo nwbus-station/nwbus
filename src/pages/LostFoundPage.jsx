@@ -707,7 +707,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
   const initialLogsCacheKey = `lostfound_logs_${stationFilter ?? 'all'}`
   const initialLogsCache = getCached(initialLogsCacheKey)
 
-  const [sub, setSub]         = useState('reports')
+  const [sub, setSub]         = useState('items')
   const [reports, setReports] = useState(() => initialLogsCache?.reports ?? [])
   const [items, setItems]     = useState(() => initialLogsCache?.items ?? [])
   const [loading, setLoading] = useState(() => !initialLogsCache)
@@ -839,15 +839,15 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
       <div style={{ background: 'var(--card)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
 
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? 'سجل الأرشيف' : 'Archive Log'}</span>
+          <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? 'السجل والأرشيف' : 'Archive & Log'}</span>
           <span style={{ fontSize: '0.68rem', color: 'var(--text-3)' }}>
             {isAr ? '30 يوم ← جمعية · 40 يوم ← حذف بعد تأكيدك' : '30 days → Charity · 40 days → delete after your confirmation'}
           </span>
         </div>
 
         <div style={{ padding: '10px 16px 0', display: 'flex', gap: 4, borderBottom: '1px solid var(--border)' }}>
-          {subBtn('reports', isAr ? 'بلاغات المفقودات' : 'Lost Reports', reports.length)}
           {subBtn('items', isAr ? 'الموجودات' : 'Found Items', items.length)}
+          {subBtn('reports', isAr ? 'بلاغات المفقودات' : 'Lost Reports', reports.length)}
         </div>
 
         <div style={{ padding: '14px 20px' }}>
@@ -1151,11 +1151,12 @@ function Field({ label, children }) {
   )
 }
 
+// الترتيب حسب سير العمل: تسجيل ما نُجد ← تسليمه لصاحبه ← بلاغات من فقد شيئاً ← السجل
 const TABS = [
-  { id: 'report',   ar: 'بلاغ مفقودات',      en: 'Lost Report',     hideForEmployee: true },
-  { id: 'handover', ar: 'تسليم موجودات',     en: 'Item Handover' },
-  { id: 'register', ar: 'تسجيل موجود',       en: 'Register Item' },
-  { id: 'logs',     ar: 'سجل الأرشيف',       en: 'Archive Log' },
+  { id: 'register', ar: 'تسجيل موجود جديد',  en: 'Register Item',   hint: { ar: 'عثرت على غرض؟ سجّله هنا', en: 'Found something? Log it' } },
+  { id: 'handover', ar: 'تسليم لصاحبه',      en: 'Hand Over',       hint: { ar: 'سلّم الغرض لمن جاء يطلبه', en: 'Give an item to its owner' } },
+  { id: 'report',   ar: 'بلاغ مفقود',        en: 'Lost Report',     hideForEmployee: true, hint: { ar: 'عميل فقد غرضاً؟ سجّل بلاغه', en: 'A customer lost something' } },
+  { id: 'logs',     ar: 'السجل والأرشيف',    en: 'Archive & Log',   hint: { ar: 'كل الموجودات والبلاغات السابقة', en: 'All past items and reports' } },
 ]
 
 /* ══════════════════════════════════════════════════════════
@@ -1167,8 +1168,9 @@ export default function LostFoundPage() {
   const isAdmin = isAdminRole && allowCap('lostfound_manage')
   const isEmployee = profile?.role === 'station_employee'
   const isAr = i18n.language === 'ar'
-  const [tab, setTab] = useState(isEmployee ? 'register' : 'report')
+  const [tab, setTab] = useState('register')
   const [stations, setStations] = useState([])
+  const [counts, setCounts] = useState({ unclaimed: null, reports: null, aging: null })
 
   useEffect(() => {
     supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
@@ -1179,23 +1181,55 @@ export default function LostFoundPage() {
   const visibleTabs = TABS.filter(t => !(t.hideForEmployee && isEmployee) && allowCap(TAB_CAP[t.id]))
   const activeTab = visibleTabs.some(t => t.id === tab) ? tab : visibleTabs[0]?.id
 
+  // ملخص سريع أعلى الصفحة — يتحدّث عند تبديل التبويب (بعد تسجيل أو تسليم)
+  useEffect(() => {
+    const cutoff30 = new Date(Date.now() - 30 * 86400000).toISOString()
+    const sid = profile?.station_id || null
+    let uq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed')
+    let aq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed').lt('created_at', cutoff30)
+    let rq = supabase.from('lost_reports').select('id', { count: 'exact', head: true })
+    if (sid) { uq = uq.eq('station_id', sid); aq = aq.eq('station_id', sid) }
+    if (isEmployee && sid) rq = rq.eq('station_id', sid)
+    Promise.all([uq, aq, rq]).then(([u, a, r]) => setCounts({ unclaimed: u.count ?? 0, aging: a.count ?? 0, reports: r.count ?? 0 }))
+  }, [activeTab, profile?.station_id, isEmployee])
+
   return (
     <div style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
 
-      {/* Tabs */}
-      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '0 20px', display: 'flex', gap: 4, overflowX: 'auto' }}>
-        {visibleTabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{
-              padding: '14px 20px', border: 'none', background: 'none', cursor: 'pointer',
-              fontSize: '0.88rem', fontWeight: activeTab === t.id ? 800 : 500, fontFamily: 'inherit',
-              color: activeTab === t.id ? 'var(--text-1)' : 'var(--text-3)',
-              borderBottom: `2.5px solid ${activeTab === t.id ? 'var(--text-1)' : 'transparent'}`,
-              transition: 'all 0.15s', whiteSpace: 'nowrap',
-            }}>
-            {isAr ? t.ar : t.en}
+      {/* ملخص سريع */}
+      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        {[
+          [isAr ? 'بانتظار التسليم' : 'Awaiting hand-over', counts.unclaimed, 'handover', false],
+          [isAr ? 'تجاوزت 30 يوماً (للجمعية)' : 'Over 30 days (charity)', counts.aging, 'logs', (counts.aging ?? 0) > 0],
+          [isAr ? 'بلاغات المفقودات' : 'Lost reports', counts.reports, 'logs', false],
+        ].map(([label, n, go, warn], i) => (
+          <button key={i} onClick={() => visibleTabs.some(t => t.id === go) && setTab(go)}
+            style={{ padding: '12px 10px', border: 'none', borderInlineStart: i ? '1px solid var(--border)' : 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}>
+            <div style={{ fontSize: '1.35rem', fontWeight: 800, lineHeight: 1.1, color: warn ? '#B45309' : 'var(--text-1)' }}>{n ?? '—'}</div>
+            <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', marginTop: 3, fontWeight: 600 }}>{label}</div>
           </button>
         ))}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '0 12px', display: 'flex', gap: 2, overflowX: 'auto' }}>
+        {visibleTabs.map(t => {
+          const on = activeTab === t.id
+          const badge = t.id === 'handover' ? counts.unclaimed : null
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} title={isAr ? t.hint.ar : t.hint.en}
+              style={{
+                padding: '11px 16px 9px', border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start',
+                borderBottom: `2.5px solid ${on ? 'var(--text-1)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap',
+              }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.88rem', fontWeight: on ? 800 : 600, color: on ? 'var(--text-1)' : 'var(--text-3)' }}>
+                {isAr ? t.ar : t.en}
+                {badge > 0 && <span style={{ fontSize: '0.62rem', fontWeight: 800, background: 'var(--text-1)', color: 'var(--card)', borderRadius: 99, padding: '1px 7px' }}>{badge}</span>}
+              </span>
+              <span style={{ display: 'block', fontSize: '0.64rem', color: 'var(--text-3)', marginTop: 2, fontWeight: 500 }}>{isAr ? t.hint.ar : t.hint.en}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Content */}
