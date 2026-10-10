@@ -85,13 +85,13 @@ export class Sheet {
     return this
   }
 
-  section(title, hint) {
+  section(title, hint, color = XL.navy) {
     const ws = this.ws
     ws.getRow(this.r).height = 24
     const c = this.fullMerge(this.r)
     c.value = title; c.font = { bold: true, size: 12, color: { argb: XL.white } }
     c.alignment = { vertical: 'middle', horizontal: this.align, indent: 1 }
-    for (let i = 1; i <= this.n; i++) ws.getCell(this.r, i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.navy } }
+    for (let i = 1; i <= this.n; i++) ws.getCell(this.r, i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } }
     this.r++
     if (hint) { this.note(hint) }
     return this

@@ -45,8 +45,8 @@ export default function OperationsReportDownload({ isAr }) {
     <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
       <h3 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{T('تنزيل التقرير التشغيلي التحليلي', 'Download the operations analytics report')}</h3>
       <p style={{ margin: '4px 0 14px', fontSize: '0.74rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
-        {T('حدّد الفترة وانزّل ملف Excel مباشرة: لوحة قيادة للمغادرة والوصول (أرقام ومقارنة وتحليل ورسوم)، اكتمال الإدخال لكل محطة، اتجاه يومي، قائمة الحركات غير المُدخلة، كل السجلات، وورقة لكل محطة. بدون إرسال إيميل.',
-          'Pick a period and download an Excel file directly: a departures & arrivals dashboard (figures, comparison, analysis, charts), entry completeness per station, daily trend, the list of movements not entered, all records and a sheet per station. No email needed.')}
+        {T('حدّد الفترة وانزّل ملف Excel مباشرة: ملخص بالمغادرة والوصول وعدد الزوار (أرقام وتحليل ورسوم)، جدول المحطات، الاتجاه اليومي، الوكلاء في ورقة مستقلة، رضا العملاء والاستبيانات، الحركات غير المُدخلة، كل السجلات، وورقة لكل محطة. بدون إرسال إيميل.',
+          'Pick a period and download an Excel file directly: a summary with departures, arrivals and visitors (figures, analysis, charts), stations table, daily trend, agents on their own sheet, customer ratings & surveys, movements not entered, all records and a sheet per station. No email needed.')}
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
         {PRESETS.map(([l, a, b]) => {
