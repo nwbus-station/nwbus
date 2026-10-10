@@ -37,6 +37,16 @@ const QUICK_GROUPS = [
   { id: 'material',label: 'الخامة',  items: ['جلد','قماش','بلاستيك','نايلون','معدن','خشب'] },
 ]
 
+// شاشة ضيقة (جوال)
+function useNarrow(max = 640) {
+  const [n, setN] = useState(() => typeof window !== 'undefined' && window.matchMedia(`(max-width: ${max}px)`).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${max}px)`), h = e => setN(e.matches)
+    mq.addEventListener('change', h); return () => mq.removeEventListener('change', h)
+  }, [max])
+  return n
+}
+
 function QuickDescBuilder({ value, onChange }) {
   const [openId, setOpenId] = useState(null)
   const ref = useRef(null)
@@ -159,11 +169,12 @@ function StationRouteSelector({ stations, fromId, toId, onFromChange, onToChange
   const [fromQ, setFromQ] = useState('')
   const [toQ,   setToQ]   = useState('')
   const filt = (q) => stations.filter(s => s.name_ar.includes(q) || s.name_en?.toLowerCase().includes(q.toLowerCase()))
+  const narrow = useNarrow()
 
   return (
     <div style={{ background: 'var(--surface)', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border)' }}>
       <p style={{ margin: '0 0 10px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'وجهة الرحلة' : 'Trip Route'}</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: narrow ? '1fr' : '1fr auto 1fr', gap: 8, alignItems: 'start' }}>
 
         {/* من */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -178,7 +189,7 @@ function StationRouteSelector({ stations, fromId, toId, onFromChange, onToChange
           {fromId && <span style={{ fontSize: '0.68rem', color: 'var(--text-1)', fontWeight: 700 }}>✓ {stations.find(s => s.id === fromId)?.name_ar}</span>}
         </div>
 
-        <span style={{ color: 'var(--text-3)', fontSize: '0.9rem', padding: '36px 2px 0' }}>←</span>
+        {!narrow && <span style={{ color: 'var(--text-3)', fontSize: '0.9rem', padding: '36px 2px 0' }}>←</span>}
 
         {/* إلى */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -273,7 +284,7 @@ function LostReportTab({ stations, profile, isAr }) {
               style={{ ...inp, resize: 'none' }} placeholder={isAr ? 'صف الغرض بدقة...' : 'Describe the item in detail...'} />
           </Field>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
             <Field label={isAr ? 'اسم العميل *' : 'Customer Name *'}>
               <input required value={form.customer_name} onChange={e => set('customer_name', e.target.value)}
                 style={inp} placeholder={isAr ? 'الاسم الكامل' : 'Full Name'} />
@@ -307,7 +318,7 @@ function LostReportTab({ stations, profile, isAr }) {
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
             <Field label={isAr ? 'رقم الاستكر' : 'Sticker No.'}>
               <input inputMode="numeric" value={form.sticker_number} onChange={e => set('sticker_number', toLatinNums(e.target.value))}
                 style={inp} placeholder={isAr ? 'رقم ملصق الحقيبة' : 'Bag sticker number'} dir="ltr" />
@@ -322,7 +333,7 @@ function LostReportTab({ stations, profile, isAr }) {
             stations={stations} fromId={form.from_station_id} toId={form.to_station_id}
             onFromChange={v => set('from_station_id', v)} onToChange={v => set('to_station_id', v)} isAr={isAr} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
             <Field label={isAr ? 'رقم الحافلة' : 'Bus No.'}>
               <input inputMode="numeric" value={form.bus_number} onChange={e => set('bus_number', toLatinNums(e.target.value))}
                 style={inp} placeholder={isAr ? 'رقم الحافلة' : 'Bus number'} dir="ltr" />
@@ -441,7 +452,7 @@ function HandoverTab({ profile, isAr }) {
               <p style={{ margin: 0, fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-1)' }}>
                 {isAr ? 'تسليم:' : 'Handover:'} {selected.item_description}
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
                 <Field label={isAr ? 'اسم المستلم *' : 'Recipient Name *'}>
                   <input required value={form.owner_name} onChange={e => setForm(f => ({ ...f, owner_name: e.target.value }))} style={inp} />
                 </Field>
@@ -600,7 +611,7 @@ function RegisterItemTab({ profile, isAr, stations }) {
               style={{ ...inp, resize: 'none' }} placeholder={isAr ? 'صف الغرض بدقة...' : 'Describe the item in detail...'} />
           </Field>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
             <Field label={isAr ? 'نوع الموجود' : 'Item Type'}>
               <SelectField value={form.item_type} onChange={e => set('item_type', e.target.value)} style={inp}>
                 {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.ar}</option>)}
@@ -615,7 +626,7 @@ function RegisterItemTab({ profile, isAr, stations }) {
             stations={stations} fromId={form.from_station_id} toId={form.to_station_id}
             onFromChange={v => set('from_station_id', v)} onToChange={v => set('to_station_id', v)} isAr={isAr} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
             <Field label={isAr ? 'رقم الرحلة' : 'Trip No.'}>
               <input inputMode="numeric" value={form.trip_number} onChange={e => set('trip_number', toLatinNums(e.target.value))} style={inp} dir="ltr" />
             </Field>
@@ -1171,6 +1182,7 @@ export default function LostFoundPage() {
   const [tab, setTab] = useState('register')
   const [stations, setStations] = useState([])
   const [counts, setCounts] = useState({ unclaimed: null, reports: null, aging: null })
+  const narrow = useNarrow()
 
   useEffect(() => {
     supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
@@ -1212,15 +1224,17 @@ export default function LostFoundPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '0 12px', display: 'flex', gap: 2, overflowX: 'auto' }}>
+      <div style={narrow
+        ? { background: 'var(--card)', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr' }
+        : { background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '0 12px', display: 'flex', gap: 2, overflowX: 'auto' }}>
         {visibleTabs.map(t => {
           const on = activeTab === t.id
           const badge = t.id === 'handover' ? counts.unclaimed : null
           return (
             <button key={t.id} onClick={() => setTab(t.id)} title={isAr ? t.hint.ar : t.hint.en}
               style={{
-                padding: '11px 16px 9px', border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start',
-                borderBottom: `2.5px solid ${on ? 'var(--text-1)' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap',
+                padding: narrow ? '10px 12px 8px' : '11px 16px 9px', border: 'none', background: narrow && on ? 'var(--surface)' : 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start',
+                borderBottom: `2.5px solid ${on ? 'var(--text-1)' : (narrow ? 'var(--border)' : 'transparent')}`, transition: 'all 0.15s', whiteSpace: narrow ? 'normal' : 'nowrap',
               }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.88rem', fontWeight: on ? 800 : 600, color: on ? 'var(--text-1)' : 'var(--text-3)' }}>
                 {isAr ? t.ar : t.en}
