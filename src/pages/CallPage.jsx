@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { matchesSearch } from '../utils/digits'
+import { arabizeStation, hasLatin } from '../utils/arabizeStation'
+import ConfirmDialog from '../components/shared/ConfirmDialog'
 import SelectField from '../components/shared/SelectField'
 
 // نغمة نداء المطار (دينغ-دونغ تنازلي) — مُولّدة بالكامل بالمتصفح (Web Audio)، بدون ملف صوتي خارجي
@@ -186,6 +188,10 @@ export default function CallPage() {
   const [stationSearch, setStationSearch] = useState('')
   const [uploadingId, setUploadingId] = useState('')
   const [bulkProgress, setBulkProgress] = useState(null) // { done, total } | null
+  const [namesVersion, setNamesVersion] = useState(0)     // يتغيّر بعد تعديل أسماء المحطات لإعادة تحميل الرحلات والتوقفات
+  const [nameDrafts, setNameDrafts] = useState({})        // { stationId: اسم عربي مقترح/معدّل }
+  const [confirmRename, setConfirmRename] = useState(null) // { list: [{id,name}] }
+  const [renaming, setRenaming] = useState('')
 
   const selectedTrip = trips.find(t => t.id === selectedTripId)
   const checkedStops = stops.filter(s => !stopOff[s.id])
@@ -252,6 +258,22 @@ export default function CallPage() {
     setUploadingId('')
   }
 
+  // حفظ اسم عربي للمحطة (name_ar) ثم إعادة توليد مقطعها الصوتي إن كان موجوداً
+  async function renameStations(list) {
+    setCallError(''); setRenaming('bulk')
+    const done = []
+    for (const { id, name } of list) {
+      const { error } = await supabase.from('stations').update({ name_ar: name }).eq('id', id)
+      if (error) { setCallError((isAr ? 'تعذّر حفظ الاسم: ' : 'Could not save the name: ') + error.message); break }
+      done.push({ id, name })
+      if (clipsIndex.has(id)) { try { await generateClip(name, `stations/${id}.mp3`, isAr) } catch { /* يُعاد التوليد يدوياً */ } }
+    }
+    setAllStations(prev => prev.map(s => { const d = done.find(x => x.id === s.id); return d ? { ...s, name_ar: d.name } : s }))
+    setNameDrafts(prev => { const n = { ...prev }; done.forEach(d => delete n[d.id]); return n })
+    if (done.length) setNamesVersion(v => v + 1)
+    setRenaming('')
+  }
+
   async function generateAllMissing() {
     const missing = allStations.filter(s => !clipsIndex.has(s.id))
     if (!missing.length) return
@@ -299,6 +321,19 @@ export default function CallPage() {
   }, [])
 
   useEffect(() => {
+    if (!namesVersion) return
+    ;(async () => {
+      const { data } = await supabase
+        .from('trip_schedule')
+        .select('id, trip_number, trip_name, route, scheduled_departure, scheduled_arrival, from_station:from_station_id(id,name_ar), to_station:to_station_id(id,name_ar)')
+        .eq('is_active', true)
+        .or('is_rf.is.null,is_rf.eq.false')
+        .order('scheduled_departure')
+      setTrips(data || [])
+    })()
+  }, [namesVersion])
+
+  useEffect(() => {
     if (!selectedTrip) { setStops([]); setStopOff({}); return }
     (async () => {
       setLoadingStops(true)
@@ -320,7 +355,7 @@ export default function CallPage() {
       setStops(dedup)
       setLoadingStops(false)
     })()
-  }, [selectedTripId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedTripId, namesVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (mode !== 'trip' || !destStop) return
@@ -616,10 +651,40 @@ export default function CallPage() {
                   {bulkProgress ? (isAr ? `جارٍ التوليد ${bulkProgress.done}/${bulkProgress.total}...` : `Generating ${bulkProgress.done}/${bulkProgress.total}...`) : (isAr ? 'توليد كل الناقص' : 'Generate all missing')}
                 </button>
               </div>
+              {(() => {
+                const latin = allStations.filter(s => hasLatin(s.name_ar))
+                if (!latin.length) return null
+                const ready = latin.map(s => ({ id: s.id, name: (nameDrafts[s.id] ?? arabizeStation(s.name_ar)).trim() })).filter(x => x.name && !hasLatin(x.name))
+                return (
+                  <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 flex items-center gap-3 flex-wrap">
+                    <p className="flex-1 min-w-[200px] text-xs text-amber-900 leading-relaxed">
+                      {isAr
+                        ? `${latin.length} محطة اسمها بالإنجليزية فيُنطق بشكل سيء في النداء. اقترحت لها أسماء عربية — راجعها أو عدّلها في الحقول أدناه ثم احفظ.`
+                        : `${latin.length} stations have English names, which sound poor in announcements. Arabic suggestions are filled in below — review, edit, then save.`}
+                    </p>
+                    <button type="button" disabled={!ready.length || !!renaming} onClick={() => setConfirmRename({ list: ready })}
+                      className="text-xs px-3 py-2 bg-amber-600 text-white rounded-lg disabled:opacity-40 shrink-0">
+                      {isAr ? `حفظ المقترحات المكتملة (${ready.length})` : `Save completed suggestions (${ready.length})`}
+                    </button>
+                  </div>
+                )
+              })()}
               <div className="border rounded-lg divide-y divide-gray-100 max-h-72 overflow-y-auto">
                 {allStations.filter(s => matchesSearch(s.name_ar, stationSearch)).map(s => (
-                  <div key={s.id} className="flex items-center gap-2 px-3 py-2">
+                  <div key={s.id} className="flex items-center gap-2 px-3 py-2 flex-wrap">
+                    {hasLatin(s.name_ar) ? (
+                      <div className="w-full flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] text-gray-400 truncate max-w-[45%]" dir="ltr">{s.name_ar}</span>
+                        <input dir="rtl" value={nameDrafts[s.id] ?? arabizeStation(s.name_ar)}
+                          onChange={e => setNameDrafts(p => ({ ...p, [s.id]: e.target.value }))}
+                          className={`flex-1 min-w-[150px] border rounded-lg px-2.5 py-1.5 text-sm ${hasLatin(nameDrafts[s.id] ?? arabizeStation(s.name_ar)) ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`} />
+                        <button type="button" disabled={!!renaming || !(nameDrafts[s.id] ?? arabizeStation(s.name_ar)).trim()}
+                          onClick={() => setConfirmRename({ list: [{ id: s.id, name: (nameDrafts[s.id] ?? arabizeStation(s.name_ar)).trim() }] })}
+                          className="text-xs px-2.5 py-1.5 bg-amber-600 text-white rounded-lg disabled:opacity-40 shrink-0">{isAr ? 'حفظ الاسم' : 'Save name'}</button>
+                      </div>
+                    ) : (
                     <span className="flex-1 text-sm text-gray-700 truncate">{s.name_ar}</span>
+                    )}
                     <span className={`text-[10px] shrink-0 ${clipsIndex.has(s.id) ? 'text-green-600' : 'text-gray-400'}`}>
                       {clipsIndex.has(s.id) ? '✓' : '—'}
                     </span>
@@ -642,6 +707,14 @@ export default function CallPage() {
           </div>
         )}
       </div>
+      {confirmRename && (
+        <ConfirmDialog danger={false}
+          message={isAr
+            ? `تغيير الاسم العربي لـ ${confirmRename.list.length} محطة؟ يظهر الاسم الجديد في النداء وكل الشاشات التي تعرض الاسم العربي، ويُعاد توليد المقطع الصوتي إن كان موجوداً.`
+            : `Change the Arabic name of ${confirmRename.list.length} station(s)? It appears in announcements and wherever the Arabic name is shown; existing audio clips are regenerated.`}
+          confirmLabel={isAr ? 'حفظ' : 'Save'} cancelLabel={isAr ? 'إلغاء' : 'Cancel'}
+          onConfirm={() => { const l = confirmRename.list; setConfirmRename(null); renameStations(l) }} onCancel={() => setConfirmRename(null)} />
+      )}
     </div>
   )
 }
