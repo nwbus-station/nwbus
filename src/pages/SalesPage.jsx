@@ -757,7 +757,7 @@ function AuditModal({ sale, onClose }) {
 
 /* ─── Main Page ────────────────────────────────────────── */
 export default function SalesPage() {
-  const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds, allowCap, workStations } = useAuth()
+  const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds, allowCap, grantCap, workStations } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -873,10 +873,11 @@ export default function SalesPage() {
   const totalExpectedSum = records.reduce((s, r) => s + Number(r.total_expected  ?? 0), 0)
   const confirmed        = records.filter(r => r.is_confirmed).length
 
-  // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام فقط
+  // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام، وللمحاسب فقط إذا فعّل له الأدمن الصلاحية
+  const canExportDaily = isGeneralAdmin || (isAccountant && grantCap('sales_export_daily'))
   const [xlBusy, setXlBusy] = useState(false)
   async function downloadDailyExcel() {
-    if (!isGeneralAdmin || !records.length) return
+    if (!canExportDaily || !records.length) return
     setXlBusy(true)
     try {
       const { exportDailySalesExcel } = await safeImport(() => import('../utils/salesDailyExport'))
@@ -906,7 +907,7 @@ export default function SalesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-        {isGeneralAdmin && (
+        {canExportDaily && (
           <button type="button" onClick={downloadDailyExcel} disabled={xlBusy || records.length === 0}
             title={isAr ? 'جدول يومي بأسلوب محاسبي: قيود + تسوية ورديات + توزيع طرق الدفع + توقيعات الاعتماد' : 'Accounting-style daily workbook'}
             className="bg-white text-gray-800 border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-40">
