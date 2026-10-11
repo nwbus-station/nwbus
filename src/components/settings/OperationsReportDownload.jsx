@@ -20,6 +20,8 @@ export default function OperationsReportDownload({ isAr }) {
   const prevMonthStart = toLocalDateStr(new Date(now.getFullYear(), now.getMonth() - 1, 1))
   const prevMonthEnd = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 0))
   const PRESETS = [
+    [T('أمس', 'Yesterday'), shift(todayStr(), -1), shift(todayStr(), -1)],
+    [T('اليوم', 'Today'), todayStr(), todayStr()],
     [T('آخر 7 أيام', 'Last 7 days'), shift(todayStr(), -7), shift(todayStr(), -1)],
     [T('آخر 30 يوماً', 'Last 30 days'), shift(todayStr(), -30), shift(todayStr(), -1)],
     [T('هذا الشهر', 'This month'), monthStart, todayStr()],
