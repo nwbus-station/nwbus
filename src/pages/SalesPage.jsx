@@ -435,7 +435,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     : (profile?.job_number ?? null)
   const stationLabel = (() => {
     const id = (isGeneralAdmin || multi) ? form.station_id : (sale?.station_id ?? profile.station_id)
-    const st = stations.find(s => s.id === id) ?? sale?.station
+    // الموظف العادي لا تُحمَّل له قائمة المحطات — نرجع لمحطته من بروفايله (أو محطات عمله المتعددة)
+    const st = stations.find(s => s.id === id) ?? workStations?.find(s => s.id === id) ?? sale?.station ?? (id && id === profile?.station_id ? profile.station : null)
     return st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : null
   })()
   const shiftObj = SHIFTS.find(s => s.value === form.shift)
