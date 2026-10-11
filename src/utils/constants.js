@@ -106,6 +106,8 @@ export const TITLE_CAPABILITIES = [
   // الموظفون المحددون بالاسم (تحددهم من تعديل حسابه) — كل إجراء مستقل
   { group: 'الموظفون المحددون بالاسم', key: 'assigned_evaluate', db: true, kind: 'grant', ar: 'تقييمهم وظيفياً', en: 'Evaluate them' },
   { group: 'الموظفون المحددون بالاسم', key: 'assigned_leaves',   db: true, kind: 'grant', ar: 'الموافقة على إجازاتهم', en: 'Approve their leaves' },
+  // الإشراف: ظهور حامل المسمى في قائمة «المسؤول المباشر» عند إضافة/تعديل الموظفين
+  { group: 'الإشراف', key: 'listed_as_direct_supervisor', kind: 'grant', ar: 'يظهر في قائمة «المسؤول المباشر» عند إضافة الموظفين (تلقائي لمن عنده صلاحيات إشراف)', en: 'Listed as a direct supervisor when adding employees (automatic with supervisory permissions)' },
   // مجموعات وظيفية على مستوى المملكة — كل إجراء مستقل
   ...JOB_GROUPS.flatMap(g => g.actions.map(a => ({
     group: `نطاق المملكة — ${g.ar}`, key: `jg_${g.id}_${a}`, db: true, kind: 'grant',

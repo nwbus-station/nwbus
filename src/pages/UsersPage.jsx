@@ -2117,7 +2117,15 @@ function UsersPageFull() {
     fetchAll()
   }
 
-  const supervisors = users.filter(u => ['station_admin', 'area_supervisor', 'general_admin', 'stations_executive_director', 'assistant_stations_executive_director'].includes(u.role) || u.custom_title_id)
+  // قائمة «المسؤول المباشر»: أدوار الإدارة + حاملو مسمى مخصص له صلاحيات إشراف فقط (بدل كل من له مسمى —
+  // كان عمال النظافة وأمثالهم يظهرون لأن لهم مسمى مخصصاً). يمكن إظهار مسمى آخر من نافذة المسميات: «يظهر في قائمة المسؤول المباشر»
+  const SUPERVISOR_ROLES = ['station_admin', 'area_supervisor', 'general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
+  const supervisors = users.filter(u => {
+    if (SUPERVISOR_ROLES.includes(u.role)) return true
+    const p = (u.custom_title_id ? customTitles.find(x => x.id === u.custom_title_id) : null)?.permissions
+    if (!p) return false
+    return p.listed_as_direct_supervisor === true || !!(p.leaves_supervisor_stage || p.evaluation_my_employees || p.scope_assigned_stations || p.stations_manage_assigned || p.assigned_evaluate || p.assigned_leaves)
+  })
   const shiftSupervisors = users.filter(u => u.role === 'shift_supervisor')
 
   // كل الفلاتر إلا فلتر المحطة — نحتاجها لوحدها عشان منتقي محطات الطباعة (متعدد) يشتغل
