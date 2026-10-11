@@ -12,7 +12,6 @@ import StatStrip from '../components/shared/StatStrip'
 import { toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
 import { USER_ROLES } from '../utils/constants'
-import OperationsReportDownload from '../components/settings/OperationsReportDownload'
 import SelectField from '../components/shared/SelectField'
 
 const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { minimumFractionDigits: 2 })
@@ -331,7 +330,6 @@ export default function ReportsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const { isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile, allowCap, grantCap, supervisedStationIds } = useAuth()
-  const [showOps, setShowOps] = useState(false)   // تنزيل التقرير التشغيلي التحليلي (Excel) — للأدمن
   // مسمى مخصص: أي أنواع التقارير تظهر له، ونطاق المحطات المخصصة له فقط
   const REPORT_CAP = { movements: 'reports_movements', compliance: 'reports_compliance', transport: 'reports_transport', missed: 'reports_missed', facilities: 'reports_facilities', sales: 'reports_sales', lost: 'reports_lost' }
   const typeAllowed = id => !REPORT_CAP[id] || allowCap(REPORT_CAP[id])
@@ -1146,16 +1144,6 @@ export default function ReportsPage() {
 
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
-      {isGeneralAdmin && (
-        <div className="mb-4">
-          <button type="button" onClick={() => setShowOps(v => !v)}
-            className="w-full flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-800 hover:bg-gray-50 transition">
-            <span>{isAr ? 'تنزيل التقرير التشغيلي التحليلي (Excel) — المغادرة والوصول وعدد الزوار' : 'Download the operations analytics report (Excel) — departures, arrivals & visitors'}</span>
-            <span className="text-gray-400 text-xs">{showOps ? (isAr ? 'إخفاء ▲' : 'Hide ▲') : (isAr ? 'عرض ▼' : 'Show ▼')}</span>
-          </button>
-          {showOps && <div className="mt-3"><OperationsReportDownload isAr={isAr} /></div>}
-        </div>
-      )}
       <h1 className="text-xl font-bold text-nwbus-primary mb-5">
         {isAr ? 'التقارير' : 'Reports'}
       </h1>
@@ -1210,6 +1198,25 @@ export default function ReportsPage() {
           <label className="block text-xs text-gray-500 mb-1">{isAr ? 'إلى' : 'To'}</label>
           <DatePicker value={dateTo} onChange={setDateTo} isAr={isAr}
             className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
+        </div>
+        {/* اختصارات سريعة: اليوم / أمس */}
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">{isAr ? 'اختصار' : 'Quick'}</label>
+          <div className="flex gap-1">
+            {[
+              [isAr ? 'اليوم' : 'Today', 0],
+              [isAr ? 'أمس' : 'Yesterday', -1],
+            ].map(([label, off]) => {
+              const d = new Date(); d.setDate(d.getDate() + off)
+              const v = toLocalDateStr(d), on = dateFrom === v && dateTo === v
+              return (
+                <button key={off} type="button" onClick={() => { setDateFrom(v); setDateTo(v) }}
+                  className={`px-3.5 py-2 rounded-lg text-sm font-semibold border transition ${on ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-700 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
+                  {label}
+                </button>
+              )
+            })}
+          </div>
         </div>
         {data && allowCap('reports_print') && (
           <button onClick={printReport}
