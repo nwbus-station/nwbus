@@ -1036,6 +1036,9 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
     newUserDraft?.primaryStationId ?? user?.station_id ?? null
   )
 
+  // محطات عمل إضافية (للموظف الذي يعمل بأكثر من محطة) — تُحفظ في user_stations
+  const [extraSet, setExtraSet] = useState(new Set(newUserDraft?.extraSet ?? []))
+
   // حفظ مسودة "موظف جديد" عند كل تغيير — تحمي من فقدان البيانات بانقطاع النت أو تحديث الصفحة
   useEffect(() => {
     if (user) return
@@ -1052,7 +1055,6 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
     }
   }, [user?.id])
   // محطات عمل إضافية لموظف/محاسب/مشرف وردية يعمل بأكثر من محطة (غير محطته الأساسية) — تُحفظ في user_stations
-  const [extraSet, setExtraSet] = useState(new Set(newUserDraft?.extraSet ?? []))
   useEffect(() => {
     if (user?.id && !(user.role === 'station_admin' || user.role === 'area_supervisor' || user.role === 'assistant_stations_executive_director')) {
       supabase.from('user_stations').select('station_id').eq('user_id', user.id)
