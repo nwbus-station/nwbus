@@ -240,7 +240,7 @@ function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0
         <div style="font-size:8px;opacity:.7">نورث وست باص</div>
       </div>
       <div style="width:160px;text-align:left">
-        <div style="font-size:16px;font-weight:800">طلب إجازة</div>
+        <div style="font-size:16px;font-weight:800">${leave.leave_type === 'casual' ? 'طلب استئذان' : 'طلب إجازة'}</div>
         <div style="font-size:9px;opacity:.7;margin-top:2px">المحطة: ${esc(stationName)}</div>
       </div>
     </div>
@@ -486,7 +486,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
     // التحقق من عدم وجود طلب معلق
     const { data: pending } = await supabase.from('leaves')
       .select('id').eq('employee_id', profile.id).eq('status', 'pending').limit(1)
-    if (pending?.length) { setError('لديك طلب إجازة قيد المراجعة — لا يمكن رفع طلب جديد حتى يتم البت في الطلب الحالي'); return }
+    if (pending?.length) { setError(form.leave_type === 'casual' ? 'لديك طلب قيد المراجعة — لا يمكن رفع طلب جديد حتى يتم البت في الطلب الحالي' : 'لديك طلب إجازة قيد المراجعة — لا يمكن رفع طلب جديد حتى يتم البت في الطلب الحالي'); return }
 
     setSaving(true)
 
@@ -539,6 +539,8 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
     {
       const typeLabel = LEAVE_TYPES.find(t => t.id === form.leave_type)?.ar ?? form.leave_type
 
+      const isCasual = form.leave_type === 'casual'
+      const periodTxt = isCasual ? `${form.start_date} · ${formatHoursAr(casualHours)}` : `${days} أيام · ${form.start_date} ← ${form.end_date}`
       const supervisorIds = (await findSupervisorIds(profile.station_id, profile.supervisor_id, profile.id, profile.job_title)).filter(id => id !== profile.id)
 
       const { data: adminsList } = await supabase.from('users')
@@ -552,21 +554,21 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
 
       await notifyMany(supervisorIds, {
         title: supervisorActionNeeded
-          ? `طلب إجازة جديد — ${profile.full_name_ar}`
+          ? `${isCasual ? 'طلب استئذان جديد' : 'طلب إجازة جديد'} — ${profile.full_name_ar}`
           : `${typeLabel}${autoApproved ? ' (معتمدة)' : ''} — ${profile.full_name_ar}`,
         body: supervisorActionNeeded
-          ? `${typeLabel} · ${days} أيام · ${form.start_date} ← ${form.end_date}`
-          : `${days} أيام · ${form.start_date} ← ${form.end_date} — للعلم`,
+          ? `${typeLabel} · ${periodTxt}`
+          : `${periodTxt} — للعلم`,
         type: supervisorActionNeeded ? 'warning' : 'info', refType: 'leave',
       })
 
       await notifyMany(adminIds, {
         title: managerActionNeeded
-          ? `طلب إجازة بانتظار موافقتك — ${profile.full_name_ar}`
+          ? `${isCasual ? 'طلب استئذان بانتظار موافقتك' : 'طلب إجازة بانتظار موافقتك'} — ${profile.full_name_ar}`
           : `${typeLabel}${autoApproved ? ' (معتمدة)' : ''} — ${profile.full_name_ar}`,
         body: managerActionNeeded
-          ? `${typeLabel} · ${days} أيام · ${form.start_date} ← ${form.end_date}`
-          : `${days} أيام · ${form.start_date} ← ${form.end_date} — للعلم`,
+          ? `${typeLabel} · ${periodTxt}`
+          : `${periodTxt} — للعلم`,
         type: managerActionNeeded ? 'warning' : 'info', refType: 'leave',
       })
     }
@@ -583,10 +585,11 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
       })
     }
 
+    const savedType = form.leave_type
     setForm(empty)
     setProofFile(null)
     setShowConfirm(false)
-    onSaved()
+    onSaved(savedType)
   }
 
   // تصنيف الأنواع إلى 4 فئات رئيسية
@@ -864,7 +867,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
 
       <button type="submit"
         style={{ padding: '10px 32px', borderRadius: 8, border: '1.5px solid var(--text-1)', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}>
-        {isAr ? 'رفع طلب الإجازة' : 'Submit Leave Request'}
+        {form.leave_type === 'casual' ? (isAr ? 'رفع طلب' : 'Submit Request') : (isAr ? 'رفع طلب الإجازة' : 'Submit Leave Request')}
       </button>
 
       {/* ── نافذة تأكيد الطلب ── */}
@@ -875,7 +878,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
 
             {/* رأس */}
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{isAr ? 'تأكيد طلب الإجازة' : 'Confirm Leave Request'}</span>
+              <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{form.leave_type === 'casual' ? (isAr ? 'تأكيد الطلب' : 'Confirm Request') : (isAr ? 'تأكيد طلب الإجازة' : 'Confirm Leave Request')}</span>
               <button onClick={() => setShowConfirm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1.1rem', lineHeight: 1, padding: 0, fontFamily: 'inherit' }}>✕</button>
             </div>
 
@@ -885,7 +888,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
                 { label: isAr ? 'الاسم' : 'Name', value: profile?.full_name_ar ?? '—' },
                 { label: isAr ? 'المحطة' : 'Station', value: profile?.station?.name_ar ?? profile?.station_name ?? '—' },
                 { label: isAr ? 'الوظيفة' : 'Job Title', value: profile?.job_title ?? '—' },
-                { label: isAr ? 'نوع الإجازة' : 'Leave Type', value: typeLabel + (relLabel ? ` — ${relLabel}` : '') + (compLabel ? ` — ${compLabel}` : '') },
+                { label: form.leave_type === 'casual' ? (isAr ? 'نوع الطلب' : 'Request Type') : (isAr ? 'نوع الإجازة' : 'Leave Type'), value: typeLabel + (relLabel ? ` — ${relLabel}` : '') + (compLabel ? ` — ${compLabel}` : '') },
                 form.leave_type === 'casual'
                   ? { label: isAr ? 'المدة' : 'Duration', value: formatHoursAr(casualHours) }
                   : { label: isAr ? 'الفترة' : 'Period', value: `${form.start_date} ← ${form.end_date} (${days} ${isAr ? 'يوم' : 'days'})` },
@@ -1358,28 +1361,31 @@ export default function LeavePage() {
     if (leave) {
       const typeLabel = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
       const isApproved = decision === 'approved'
+      const isCasual = leave.leave_type === 'casual'
+      const what = isCasual ? 'استئذانك' : 'إجازتك'
+      const durTxt = isCasual ? formatHoursAr(Number(leave.days_count) * 24) : `${leave.days_count} أيام`
 
       if (level === 'supervisor') {
         // أشعر الموظف
         await notifyMany([leave.employee_id], {
-          title: isApproved ? `✓ وافق المشرف على إجازتك` : `✗ رفض المشرف إجازتك`,
-          body: `${typeLabel} · ${leave.days_count} أيام${notes ? ' · ' + notes : ''}`,
+          title: isApproved ? `✓ وافق المشرف على ${what}` : `✗ رفض المشرف ${what}`,
+          body: `${typeLabel} · ${durTxt}${notes ? ' · ' + notes : ''}`,
           type: isApproved ? 'success' : 'error', refType: 'leave', refId: id,
         })
         // إذا وافق → أشعر الأدمن
         if (isApproved) {
           const { data: admins } = await supabase.from('users').select('id').in('role', ADMIN_ROLE_VALUES).eq('is_active', true)
           await notifyMany((admins ?? []).map(a => a.id).filter(aid => aid !== profile.id), {
-            title: `طلب إجازة بانتظار موافقتك — ${leave.employee_name}`,
-            body: `${typeLabel} · ${leave.days_count} أيام · وافق عليها المشرف`,
+            title: `${isCasual ? 'طلب استئذان' : 'طلب إجازة'} بانتظار موافقتك — ${leave.employee_name}`,
+            body: `${typeLabel} · ${durTxt} · وافق عليه المشرف`,
             type: 'warning', refType: 'leave', refId: id,
           })
         }
       } else {
         // مدير/أدمن يوافق أو يرفض → أشعر الموظف والمشرف
         await notifyMany([leave.employee_id], {
-          title: isApproved ? `✓ تمت الموافقة على إجازتك` : `✗ رفض المدير إجازتك`,
-          body: `${typeLabel} · ${leave.days_count} أيام${notes ? ' · ' + notes : ''}`,
+          title: isApproved ? `✓ تمت الموافقة على ${what}` : `✗ رفض المدير ${what}`,
+          body: `${typeLabel} · ${durTxt}${notes ? ' · ' + notes : ''}`,
           type: isApproved ? 'success' : 'error', refType: 'leave', refId: id,
         })
 
@@ -1388,9 +1394,9 @@ export default function LeavePage() {
         const supervisorIds = await findSupervisorIds(emp?.station_id, emp?.supervisor_id, leave.employee_id, leave.job_title)
         await notifyMany(supervisorIds.filter(sid => sid !== profile.id), {
           title: isApproved
-            ? `✓ تمت الموافقة على إجازة ${leave.employee_name}`
-            : `✗ رُفضت إجازة ${leave.employee_name}`,
-          body: `${typeLabel} · ${leave.days_count} أيام${notes ? ' · ' + notes : ''}`,
+            ? `✓ تمت الموافقة على ${isCasual ? 'استئذان' : 'إجازة'} ${leave.employee_name}`
+            : `✗ رُفض ${isCasual ? 'استئذان' : 'إجازة'} ${leave.employee_name}`,
+          body: `${typeLabel} · ${durTxt}${notes ? ' · ' + notes : ''}`,
           type: isApproved ? 'success' : 'error', refType: 'leave', refId: id,
         })
       }
@@ -1458,10 +1464,10 @@ export default function LeavePage() {
             <div style={{ padding: '24px' }}>
               {saved && (
                 <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: 'var(--surface)', border: '1.5px solid var(--text-1)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.85rem' }}>
-                  {isAr ? '✓ تم رفع طلب الإجازة بنجاح — بانتظار الموافقة' : '✓ Leave request submitted — awaiting approval'}
+                  {saved === 'casual' ? (isAr ? '✓ تم رفع الطلب بنجاح — بانتظار الموافقة' : '✓ Request submitted — awaiting approval') : (isAr ? '✓ تم رفع طلب الإجازة بنجاح — بانتظار الموافقة' : '✓ Leave request submitted — awaiting approval')}
                 </div>
               )}
-              <NewLeaveForm profile={profile} isAr={isAr} onSaved={() => { setSaved(true); setTimeout(() => setSaved(false), 4000) }} />
+              <NewLeaveForm profile={profile} isAr={isAr} onSaved={t => { setSaved(t || true); setTimeout(() => setSaved(false), 4000) }} />
             </div>
           </div>
         )}
