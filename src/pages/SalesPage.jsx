@@ -879,7 +879,9 @@ export default function SalesPage() {
   const [xlOpen, setXlOpen] = useState(false)
   const [xlFrom, setXlFrom] = useState(filterDate)
   const [xlTo, setXlTo] = useState(filterDate)
-  const [xlSel, setXlSel] = useState(new Set())   // محطات مختارة — فارغة = كل المحطات
+  // محطات التنزيل المختارة — فارغة = كل المحطات. تُحفظ بالجهاز فتبقى ثابتة بين مرة وأخرى حتى تغيّرها أنت
+  const [xlSel, setXlSel] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('sales_xl_stations') ?? '[]')) } catch { return new Set() } })
+  useEffect(() => { try { localStorage.setItem('sales_xl_stations', JSON.stringify([...xlSel])) } catch { /* بدون تخزين */ } }, [xlSel])
   const [xlSearch, setXlSearch] = useState('')
   const [xlErr, setXlErr] = useState('')
   const dayShift = n => { const d = new Date(); d.setDate(d.getDate() + n); return toLocalDateStr(d) }
@@ -891,18 +893,19 @@ export default function SalesPage() {
     [isAr ? 'هذا الشهر' : 'This month', toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), dayShift(0)],
     [isAr ? 'الشهر الماضي' : 'Last month', toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)), toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 0))],
   ]
-  function openXl() { setXlFrom(filterDate); setXlTo(filterDate); setXlSel(filterStation ? new Set([filterStation]) : new Set()); setXlSearch(''); setXlErr(''); setXlOpen(true) }
+  function openXl() { setXlFrom(filterDate); setXlTo(filterDate); setXlSearch(''); setXlErr(''); setXlOpen(true) }
   async function downloadDailyExcel() {
     if (!canExportDaily) return
     if (!xlFrom || !xlTo || xlFrom > xlTo) { setXlErr(isAr ? 'حدّد فترة صحيحة' : 'Pick a valid period'); return }
     if ((new Date(xlTo) - new Date(xlFrom)) / 86400000 > 92) { setXlErr(isAr ? 'الحد الأقصى للفترة 93 يوماً' : 'Maximum period is 93 days'); return }
     setXlBusy(true); setXlErr('')
     try {
-      // نفس نطاق الصلاحية الذي يطبّقه جلب السجلات في الصفحة
+      // نفس نطاق الصلاحية الذي يطبّقه جلب السجلات في الصفحة (المحطات المحذوفة من القائمة تُتجاهل)
+      const selIds = stations.filter(x => xlSel.has(x.id)).map(x => x.id)
       const build = () => {
         let q = supabase.from('sales_records').select('*, station:station_id(name_ar, name_en)')
           .gte('sale_date', xlFrom).lte('sale_date', xlTo).order('sale_date').order('shift').order('id')
-        if (isGeneralAdmin) { if (xlSel.size) q = q.in('station_id', [...xlSel]) }
+        if (isGeneralAdmin) { if (selIds.length) q = q.in('station_id', selIds) }
         else if (workStations?.length > 1) q = q.in('station_id', workStations.map(x => x.id))
         else q = q.eq('station_id', profile.station_id)
         return q
@@ -926,7 +929,7 @@ export default function SalesPage() {
       const nm = x => (isAr ? (x.name_ar || x.name_en) : (x.name_en || x.name_ar))
       const picked = stations.filter(x => xlSel.has(x.id))
       const scopeText = !isGeneralAdmin ? (isAr ? 'محطتك' : 'Your station')
-        : !xlSel.size ? (isAr ? 'جميع المحطات' : 'All stations')
+        : !picked.length ? (isAr ? 'جميع المحطات' : 'All stations')
         : picked.length <= 3 ? picked.map(nm).join(isAr ? '، ' : ', ')
         : (isAr ? `${picked.length} محطات مختارة` : `${picked.length} selected stations`)
       await exportDailySalesExcel({
