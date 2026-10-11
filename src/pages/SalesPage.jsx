@@ -879,7 +879,8 @@ export default function SalesPage() {
   const [xlOpen, setXlOpen] = useState(false)
   const [xlFrom, setXlFrom] = useState(filterDate)
   const [xlTo, setXlTo] = useState(filterDate)
-  const [xlStation, setXlStation] = useState('')
+  const [xlSel, setXlSel] = useState(new Set())   // محطات مختارة — فارغة = كل المحطات
+  const [xlSearch, setXlSearch] = useState('')
   const [xlErr, setXlErr] = useState('')
   const dayShift = n => { const d = new Date(); d.setDate(d.getDate() + n); return toLocalDateStr(d) }
   const xlPresets = [
@@ -890,7 +891,7 @@ export default function SalesPage() {
     [isAr ? 'هذا الشهر' : 'This month', toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), dayShift(0)],
     [isAr ? 'الشهر الماضي' : 'Last month', toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)), toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 0))],
   ]
-  function openXl() { setXlFrom(filterDate); setXlTo(filterDate); setXlStation(filterStation || ''); setXlErr(''); setXlOpen(true) }
+  function openXl() { setXlFrom(filterDate); setXlTo(filterDate); setXlSel(filterStation ? new Set([filterStation]) : new Set()); setXlSearch(''); setXlErr(''); setXlOpen(true) }
   async function downloadDailyExcel() {
     if (!canExportDaily) return
     if (!xlFrom || !xlTo || xlFrom > xlTo) { setXlErr(isAr ? 'حدّد فترة صحيحة' : 'Pick a valid period'); return }
@@ -901,7 +902,7 @@ export default function SalesPage() {
       const build = () => {
         let q = supabase.from('sales_records').select('*, station:station_id(name_ar, name_en)')
           .gte('sale_date', xlFrom).lte('sale_date', xlTo).order('sale_date').order('shift').order('id')
-        if (isGeneralAdmin) { if (xlStation) q = q.eq('station_id', xlStation) }
+        if (isGeneralAdmin) { if (xlSel.size) q = q.in('station_id', [...xlSel]) }
         else if (workStations?.length > 1) q = q.in('station_id', workStations.map(x => x.id))
         else q = q.eq('station_id', profile.station_id)
         return q
@@ -922,10 +923,15 @@ export default function SalesPage() {
       }
       const rows = all.map(r => ({ ...r, created_by_user: { job_number: jobMap[r.created_by] ?? null } }))
       const { exportDailySalesExcel } = await safeImport(() => import('../utils/salesDailyExport'))
-      const st = xlStation ? stations.find(x => x.id === xlStation) : null
+      const nm = x => (isAr ? (x.name_ar || x.name_en) : (x.name_en || x.name_ar))
+      const picked = stations.filter(x => xlSel.has(x.id))
+      const scopeText = !isGeneralAdmin ? (isAr ? 'محطتك' : 'Your station')
+        : !xlSel.size ? (isAr ? 'جميع المحطات' : 'All stations')
+        : picked.length <= 3 ? picked.map(nm).join(isAr ? '، ' : ', ')
+        : (isAr ? `${picked.length} محطات مختارة` : `${picked.length} selected stations`)
       await exportDailySalesExcel({
         isAr, records: rows, from: xlFrom, to: xlTo,
-        scopeText: st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : (isGeneralAdmin ? (isAr ? 'جميع المحطات' : 'All stations') : (isAr ? 'محطتك' : 'Your station')),
+        scopeText,
         preparedBy: profile?.full_name_ar || '',
       })
       setXlOpen(false)
@@ -1191,11 +1197,32 @@ export default function SalesPage() {
               </div>
               {isGeneralAdmin && stations.length > 0 && (
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'المحطة' : 'Station'}</label>
-                  <SelectField value={xlStation} onChange={e => setXlStation(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-full">
-                    <option value="">{isAr ? 'جميع المحطات' : 'All stations'}</option>
-                    {stations.map(x => <option key={x.id} value={x.id}>{isAr ? x.name_ar : x.name_en}</option>)}
-                  </SelectField>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-gray-500">{isAr ? 'المحطات' : 'Stations'}
+                      <span className="ms-1.5 font-semibold text-gray-700">{xlSel.size ? (isAr ? `(${xlSel.size} مختارة)` : `(${xlSel.size} selected)`) : (isAr ? '(الكل)' : '(all)')}</span>
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <button type="button" onClick={() => setXlSel(new Set())} className="text-[11px] font-bold text-nwbus-primary hover:underline">{isAr ? 'الكل' : 'All'}</button>
+                      {xlSel.size > 0 && <button type="button" onClick={() => setXlSel(new Set())} className="text-[11px] text-red-500 hover:underline">{isAr ? 'مسح التحديد' : 'Clear'}</button>}
+                    </div>
+                  </div>
+                  <input value={xlSearch} onChange={e => setXlSearch(e.target.value)} placeholder={isAr ? 'ابحث عن محطة…' : 'Search a station…'}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs mb-1.5 focus:ring-2 focus:ring-nwbus-primary/40 focus:outline-none" />
+                  <div className="border border-gray-200 rounded-lg max-h-52 overflow-y-auto overscroll-contain divide-y divide-gray-50">
+                    <label className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 text-sm font-bold text-gray-800">
+                      <input type="checkbox" className="accent-gray-900 w-4 h-4" checked={xlSel.size === 0} onChange={() => setXlSel(new Set())} />
+                      {isAr ? 'جميع المحطات' : 'All stations'}
+                    </label>
+                    {[...stations].sort((a, b) => (isAr ? (a.name_ar || a.name_en) : (a.name_en || a.name_ar)).localeCompare(isAr ? (b.name_ar || b.name_en) : (b.name_en || b.name_ar)))
+                      .filter(x => !xlSearch || (x.name_ar ?? '').includes(xlSearch) || (x.name_en ?? '').toLowerCase().includes(xlSearch.toLowerCase()))
+                      .map(x => (
+                        <label key={x.id} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-50 text-sm text-gray-700">
+                          <input type="checkbox" className="accent-gray-900 w-4 h-4" checked={xlSel.has(x.id)}
+                            onChange={() => setXlSel(prev => { const n = new Set(prev); n.has(x.id) ? n.delete(x.id) : n.add(x.id); return n.size === stations.length ? new Set() : n })} />
+                          <span dir="auto" className="truncate">{isAr ? (x.name_ar || x.name_en) : (x.name_en || x.name_ar)}</span>
+                        </label>
+                      ))}
+                  </div>
                 </div>
               )}
               {xlErr && <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{xlErr}</p>}
