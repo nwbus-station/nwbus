@@ -368,7 +368,7 @@ export default function DashboardPage() {
       const key = `dash_leaves_${profile.id}_${profile.role}`
       const cached = getCached(key)
       if (cached) setPendingLeaves(cached)
-      let q = supabase.from('leaves').select('id, employee_name, station_id').eq('status', 'pending').order('created_at', { ascending: false })
+      let q = supabase.from('leaves').select('id, employee_name, station_id, leave_type').eq('status', 'pending').order('created_at', { ascending: false })
       if ((profile.role === 'area_supervisor' || profile.role === 'station_admin') && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
       else if (profile.role === 'station_admin' && profile.station_id) q = q.eq('station_id', profile.station_id)
       const { data, error } = await q
@@ -519,7 +519,13 @@ export default function DashboardPage() {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)' }}>
-                {isAr ? `${pendingLeaves.length} طلب إجازة بانتظار الموافقة` : `${pendingLeaves.length} leave requests pending`}
+                {(() => {
+                  // الاستئذان (casual) يُسمّى «طلب استئذان» لا «طلب إجازة»
+                  const n = pendingLeaves.length, c = pendingLeaves.filter(l => l.leave_type === 'casual').length
+                  if (c === 0) return isAr ? `${n} طلب إجازة بانتظار الموافقة` : `${n} leave requests pending`
+                  if (c === n) return isAr ? `${n} ${n === 1 ? 'طلب استئذان' : 'طلبات استئذان'} بانتظار الموافقة` : `${n} permission requests pending`
+                  return isAr ? `${n} طلب بانتظار الموافقة (${n - c} إجازة · ${c} استئذان)` : `${n} requests pending (${n - c} leave · ${c} permission)`
+                })()}
               </p>
               <p style={{ margin: '3px 0 0', fontSize: '0.7rem', color: 'var(--text-3)' }}>
                 {pendingLeaves.slice(0, 3).map(l => l.employee_name).filter(Boolean).join(' · ')}
