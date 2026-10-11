@@ -66,9 +66,15 @@ export default function DatePicker({ value, onChange, className = '', isAr = tru
     function place() {
       const r = ref.current?.getBoundingClientRect()
       if (!r) return
-      const top = r.bottom + 4
-      if (isAr) setPos({ top, right: window.innerWidth - r.right })
-      else setPos({ top, left: r.left })
+      // عرض التقويم 256px — نثبّته داخل الشاشة (لا يُقص من اليسار/اليمين) ونقلبه لأعلى الحقل لو ما فيه مكان تحته
+      const W = 256, H = panelRef.current?.offsetHeight || 330, M = 8
+      const vw = window.innerWidth, vh = window.innerHeight
+      let left = isAr ? r.right - W : r.left
+      left = Math.max(M, Math.min(left, vw - W - M))
+      let top = r.bottom + 4
+      if (top + H > vh - M && r.top - H - 4 >= M) top = r.top - H - 4
+      else top = Math.max(M, Math.min(top, vh - H - M))
+      setPos({ top, left })
     }
     place()
     window.addEventListener('resize', place)
