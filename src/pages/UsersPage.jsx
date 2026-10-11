@@ -1041,16 +1041,30 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
     if (user) return
     try {
       sessionStorage.setItem(NEW_USER_DRAFT_KEY, JSON.stringify({
-        form, stationSet: [...stationSet], primaryStationId,
+        form, stationSet: [...stationSet], primaryStationId, extraSet: [...extraSet],
       }))
     } catch {}
-  }, [user, form, stationSet, primaryStationId])
+  }, [user, form, stationSet, primaryStationId, extraSet])
   useEffect(() => {
     if (user?.id && (user.role === 'station_admin' || user.role === 'area_supervisor' || user.role === 'assistant_stations_executive_director')) {
       supabase.from('user_stations').select('station_id').eq('user_id', user.id)
         .then(({ data }) => { if (data?.length) setStationSet(new Set(data.map(r => r.station_id))) })
     }
   }, [user?.id])
+  // محطات عمل إضافية لموظف/محاسب/مشرف وردية يعمل بأكثر من محطة (غير محطته الأساسية) — تُحفظ في user_stations
+  const [extraSet, setExtraSet] = useState(new Set(newUserDraft?.extraSet ?? []))
+  useEffect(() => {
+    if (user?.id && !(user.role === 'station_admin' || user.role === 'area_supervisor' || user.role === 'assistant_stations_executive_director')) {
+      supabase.from('user_stations').select('station_id').eq('user_id', user.id)
+        .then(({ data }) => setExtraSet(new Set((data ?? []).map(r => r.station_id).filter(x => x && x !== user.station_id))))
+    }
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  async function syncExtras(uid) {
+    const primary = form.station_id || null
+    const ids = [...extraSet].filter(x => x && x !== primary)
+    await supabase.from('user_stations').delete().eq('user_id', uid)
+    if (ids.length) await supabase.from('user_stations').insert(ids.map(sid => ({ user_id: uid, station_id: sid })))
+  }
   const toggleStation = sid => setStationSet(prev => {
     const n = new Set(prev)
     if (n.has(sid)) {
@@ -1157,7 +1171,8 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
           created_by:   profile.id,
         }).select('id').single()
         if (insertErr) throw insertErr
-        if (inserted?.id && (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor' || isMultiStationRole)) await syncStations(inserted.id)
+        if (inserted?.id && (form.role === 'station_admin' || form.role === 'area_supervisor' || isMultiStationRole)) await syncStations(inserted.id)
+        else if (inserted?.id && isGeneralAdmin) await syncExtras(inserted.id)
 
         if (inserted?.id) {
           const extras = {}
@@ -1212,7 +1227,8 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
           p_is_agent:        !!form.is_agent,
         })
         if (updErr) throw updErr
-        if (form.role === 'station_admin' || form.role === 'shift_supervisor' || form.role === 'area_supervisor' || isMultiStationRole) await syncStations(user.id)
+        if (form.role === 'station_admin' || form.role === 'area_supervisor' || isMultiStationRole) await syncStations(user.id)
+        else if (isGeneralAdmin) await syncExtras(user.id)
 
         // خانة "تقييم العميل" و"مشرف الوردية الآخر" أضيفتا بعد إنشاء admin_update_user — تحديث مباشر بدل تعديل الدالة
         if (isGeneralAdmin) {
@@ -1640,6 +1656,36 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                   <option value="">{isAr ? '— بدون محطة —' : '— No Station —'}</option>
                   {stations.map(s => (
                     <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
+                  ))}
+                </SelectField>
+              </div>
+            )}
+
+            {/* محطات عمل إضافية — لمن يعمل بأكثر من محطة (غير المشرفين: لهم اختيار متعدد خاص) */}
+            {isGeneralAdmin && !isMultiStationRole && (
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50/60 p-3">
+                <label className="block text-xs font-bold text-gray-700 mb-0.5">{isAr ? 'محطات عمل إضافية (اختياري)' : 'Additional work stations (optional)'}</label>
+                <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">
+                  {isAr ? 'لو الموظف يعمل بأكثر من محطة، أضف محطاته الأخرى هنا. تُربط بحسابه فيظهر له تبديل «محطة العمل» أعلى الشاشة، وكل شاشة (الترحيل، المبيعات، الموجودات…) تتبع المحطة التي يختارها، وصلاحياته تشمل كل محطاته.' : 'If the employee works at more than one station, add the others here. They are linked to the account, a “Working at” switcher appears at the top, and every screen follows the chosen station.'}
+                </p>
+                {extraSet.size > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {[...extraSet].map(id => {
+                      const st = stations.find(x => x.id === id)
+                      return (
+                        <span key={id} className="inline-flex items-center gap-1.5 bg-white border border-gray-200 rounded-full ps-3 pe-1.5 py-1 text-xs font-semibold text-gray-700">
+                          {st ? (isAr ? st.name_ar : st.name_en) : id}
+                          <button type="button" onClick={() => setExtraSet(prev => { const n = new Set(prev); n.delete(id); return n })}
+                            className="w-4 h-4 grid place-items-center rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="remove">×</button>
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+                <SelectField className={inputCls} value="" onChange={e => { const v = e.target.value; if (v) setExtraSet(prev => new Set(prev).add(v)) }}>
+                  <option value="">{isAr ? '+ إضافة محطة عمل…' : '+ Add a work station…'}</option>
+                  {stations.filter(x => x.id !== form.station_id && !extraSet.has(x.id)).map(x => (
+                    <option key={x.id} value={x.id}>{isAr ? x.name_ar : x.name_en}</option>
                   ))}
                 </SelectField>
               </div>
