@@ -876,18 +876,60 @@ export default function SalesPage() {
   // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام، وللمحاسب فقط إذا فعّل له الأدمن الصلاحية
   const canExportDaily = isGeneralAdmin || (isAccountant && grantCap('sales_export_daily'))
   const [xlBusy, setXlBusy] = useState(false)
+  const [xlOpen, setXlOpen] = useState(false)
+  const [xlFrom, setXlFrom] = useState(filterDate)
+  const [xlTo, setXlTo] = useState(filterDate)
+  const [xlStation, setXlStation] = useState('')
+  const [xlErr, setXlErr] = useState('')
+  const dayShift = n => { const d = new Date(); d.setDate(d.getDate() + n); return toLocalDateStr(d) }
+  const xlPresets = [
+    [isAr ? 'اليوم' : 'Today', dayShift(0), dayShift(0)],
+    [isAr ? 'أمس' : 'Yesterday', dayShift(-1), dayShift(-1)],
+    [isAr ? 'آخر 7 أيام' : 'Last 7 days', dayShift(-6), dayShift(0)],
+    [isAr ? 'آخر 30 يوماً' : 'Last 30 days', dayShift(-29), dayShift(0)],
+    [isAr ? 'هذا الشهر' : 'This month', toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), dayShift(0)],
+    [isAr ? 'الشهر الماضي' : 'Last month', toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)), toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 0))],
+  ]
+  function openXl() { setXlFrom(filterDate); setXlTo(filterDate); setXlStation(filterStation || ''); setXlErr(''); setXlOpen(true) }
   async function downloadDailyExcel() {
-    if (!canExportDaily || !records.length) return
-    setXlBusy(true)
+    if (!canExportDaily) return
+    if (!xlFrom || !xlTo || xlFrom > xlTo) { setXlErr(isAr ? 'حدّد فترة صحيحة' : 'Pick a valid period'); return }
+    if ((new Date(xlTo) - new Date(xlFrom)) / 86400000 > 92) { setXlErr(isAr ? 'الحد الأقصى للفترة 93 يوماً' : 'Maximum period is 93 days'); return }
+    setXlBusy(true); setXlErr('')
     try {
+      // نفس نطاق الصلاحية الذي يطبّقه جلب السجلات في الصفحة
+      const build = () => {
+        let q = supabase.from('sales_records').select('*, station:station_id(name_ar, name_en)')
+          .gte('sale_date', xlFrom).lte('sale_date', xlTo).order('sale_date').order('shift').order('id')
+        if (isGeneralAdmin) { if (xlStation) q = q.eq('station_id', xlStation) }
+        else if (workStations?.length > 1) q = q.in('station_id', workStations.map(x => x.id))
+        else q = q.eq('station_id', profile.station_id)
+        return q
+      }
+      let all = []
+      for (let page = 0; page < 50; page++) {
+        const { data, error } = await build().range(page * 1000, page * 1000 + 999)
+        if (error) throw new Error(error.message)
+        all = all.concat(data ?? [])
+        if (!data || data.length < 1000) break
+      }
+      if (!all.length) { setXlErr(isAr ? 'لا توجد سجلات إيرادات في هذه الفترة' : 'No revenue records in this period'); setXlBusy(false); return }
+      const creatorIds = [...new Set(all.map(r => r.created_by).filter(Boolean))]
+      const jobMap = {}
+      for (let i = 0; i < creatorIds.length; i += 150) {
+        const { data: us } = await supabase.from('users').select('id, job_number').in('id', creatorIds.slice(i, i + 150))
+        ;(us ?? []).forEach(u => { jobMap[u.id] = u.job_number })
+      }
+      const rows = all.map(r => ({ ...r, created_by_user: { job_number: jobMap[r.created_by] ?? null } }))
       const { exportDailySalesExcel } = await safeImport(() => import('../utils/salesDailyExport'))
-      const st = filterStation ? stations.find(x => x.id === filterStation) : null
+      const st = xlStation ? stations.find(x => x.id === xlStation) : null
       await exportDailySalesExcel({
-        isAr, records, date: filterDate,
-        scopeText: st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : (isAr ? 'جميع المحطات' : 'All stations'),
+        isAr, records: rows, from: xlFrom, to: xlTo,
+        scopeText: st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : (isGeneralAdmin ? (isAr ? 'جميع المحطات' : 'All stations') : (isAr ? 'محطتك' : 'Your station')),
         preparedBy: profile?.full_name_ar || '',
       })
-    } catch (e) { alert((isAr ? 'تعذّر إنشاء الملف: ' : 'Could not create the file: ') + (e?.message || e)) }
+      setXlOpen(false)
+    } catch (e) { setXlErr((isAr ? 'تعذّر إنشاء الملف: ' : 'Could not create the file: ') + (e?.message || e)) }
     setXlBusy(false)
   }
   const canAdd           = !isAccountant && allowCap('sales_add')
@@ -908,10 +950,10 @@ export default function SalesPage() {
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
         {canExportDaily && (
-          <button type="button" onClick={downloadDailyExcel} disabled={xlBusy || records.length === 0}
+          <button type="button" onClick={openXl} disabled={xlBusy}
             title={isAr ? 'جدول يومي بأسلوب محاسبي: قيود + تسوية ورديات + توزيع طرق الدفع + توقيعات الاعتماد' : 'Accounting-style daily workbook'}
             className="bg-white text-gray-800 border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-40">
-            {xlBusy ? (isAr ? 'جارٍ التجهيز…' : 'Preparing…') : (isAr ? 'تنزيل الجدول اليومي (Excel)' : 'Daily sheet (Excel)')}
+            {isAr ? 'تنزيل الجدول (Excel)' : 'Download sheet (Excel)'}
           </button>
         )}
         {canAdd && (
@@ -1118,6 +1160,56 @@ export default function SalesPage() {
           </div>
         )
       })()}
+
+      {xlOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-3" dir={isAr ? 'rtl' : 'ltr'} onClick={e => { if (e.target === e.currentTarget && !xlBusy) setXlOpen(false) }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900">{isAr ? 'تنزيل جدول الإيرادات (Excel)' : 'Download revenue sheet (Excel)'}</h3>
+                <p className="text-[11px] text-gray-400 mt-0.5">{isAr ? 'قيود مفصّلة + ملخص محاسبي + تسوية الورديات + توقيعات الاعتماد' : 'Entries + accounting summary + shift reconciliation + sign-off'}</p>
+              </div>
+              <button type="button" onClick={() => !xlBusy && setXlOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex flex-wrap gap-1.5">
+                {xlPresets.map(([l, a, b]) => {
+                  const on = xlFrom === a && xlTo === b
+                  return <button key={l} type="button" onClick={() => { setXlFrom(a); setXlTo(b) }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${on ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{l}</button>
+                })}
+              </div>
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'من' : 'From'}</label>
+                  <DatePicker value={xlFrom} onChange={v => { setXlFrom(v); if (v && xlTo && v > xlTo) setXlTo(v) }} isAr={isAr} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-44" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'إلى' : 'To'}</label>
+                  <DatePicker value={xlTo} onChange={v => { setXlTo(v); if (v && xlFrom && v < xlFrom) setXlFrom(v) }} isAr={isAr} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-44" />
+                </div>
+              </div>
+              {isGeneralAdmin && stations.length > 0 && (
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'المحطة' : 'Station'}</label>
+                  <SelectField value={xlStation} onChange={e => setXlStation(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-full">
+                    <option value="">{isAr ? 'جميع المحطات' : 'All stations'}</option>
+                    {stations.map(x => <option key={x.id} value={x.id}>{isAr ? x.name_ar : x.name_en}</option>)}
+                  </SelectField>
+                </div>
+              )}
+              {xlErr && <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{xlErr}</p>}
+            </div>
+            <div className="px-5 py-3.5 border-t border-gray-100 flex items-center gap-2.5">
+              <button type="button" onClick={downloadDailyExcel} disabled={xlBusy}
+                className="flex-1 bg-gray-900 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-black disabled:opacity-50">
+                {xlBusy ? (isAr ? 'جارٍ التجهيز…' : 'Preparing…') : (isAr ? 'تنزيل الملف' : 'Download')}
+              </button>
+              <button type="button" onClick={() => setXlOpen(false)} disabled={xlBusy} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 bg-white hover:bg-gray-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modal && (
         <SalesModal
