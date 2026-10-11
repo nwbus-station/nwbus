@@ -64,7 +64,9 @@ function SectionCard({ n, title, children, tone = 'bg-white border-gray-200' }) 
 /* ─── Sales Modal ───────────────────────────────────────── */
 export function SalesModal({ sale, stations, onClose, onSaved }) {
   useEscapeKey(onClose)
-  const { profile, isAccountant, isGeneralAdmin, allowCap } = useAuth()
+  const { profile, isAccountant, isGeneralAdmin, allowCap, workStations } = useAuth()
+  // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
+  const multi = !isGeneralAdmin && workStations?.length > 1
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -304,7 +306,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   const [form, setForm] = useState({
     sale_date:         sale?.sale_date ?? suggested.date,
     shift:             sale?.shift ?? suggested.shift,
-    station_id:        sale?.station_id ?? profile.station_id ?? '',
+    station_id:        sale?.station_id ?? (multi ? '' : (profile.station_id ?? '')),
     employee_name:     sale?.employee_name      ?? profile?.full_name_ar          ?? '',
     cashier_ref:       sale ? (parseInitialRefs(sale.balance_ref)[0] ?? '') : savedCashier,
     balance_refs:      sale ? (parseInitialRefs(sale.balance_ref).slice(1).length > 0 ? parseInitialRefs(sale.balance_ref).slice(1) : ['']) : [''],
@@ -354,11 +356,11 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     }
     setSaving(true); setError('')
 
-    const stationId = isGeneralAdmin ? form.station_id : profile.station_id
+    const stationId = (isGeneralAdmin || multi) ? form.station_id : profile.station_id
     if (!stationId) {
       setError(isAr
-        ? (isGeneralAdmin ? 'اختر المحطة أولاً' : 'حسابك غير مرتبط بمحطة — تواصل مع الأدمن')
-        : (isGeneralAdmin ? 'Please select a station' : 'Your account is not linked to a station'))
+        ? ((isGeneralAdmin || multi) ? 'اختر المحطة أولاً' : 'حسابك غير مرتبط بمحطة — تواصل مع الأدمن')
+        : ((isGeneralAdmin || multi) ? 'Please select a station' : 'Your account is not linked to a station'))
       setSaving(false)
       return
     }
@@ -432,7 +434,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     ? ((!sale.employee_name || sale.employee_name === sale.created_by_name) ? (sale.created_by_user?.job_number ?? null) : null)
     : (profile?.job_number ?? null)
   const stationLabel = (() => {
-    const id = isGeneralAdmin ? form.station_id : (sale?.station_id ?? profile.station_id)
+    const id = (isGeneralAdmin || multi) ? form.station_id : (sale?.station_id ?? profile.station_id)
     const st = stations.find(s => s.id === id) ?? sale?.station
     return st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : null
   })()
@@ -502,12 +504,12 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
             {/* بيانات السجل */}
             <SectionCard n={1} title={isAr ? 'بيانات السجل' : 'Record details'}>
               <div className="space-y-3">
-                {isGeneralAdmin && (
+                {(isGeneralAdmin || multi) && (
                   <div>
                     <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'المحطة *' : 'Station *'}</label>
-                    <SelectField required={isGeneralAdmin} className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
+                    <SelectField required className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
                       <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
-                      {stations.map(s => <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>)}
+                      {(multi ? workStations : stations).map(s => <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>)}
                     </SelectField>
                   </div>
                 )}
@@ -753,7 +755,7 @@ function AuditModal({ sale, onClose }) {
 
 /* ─── Main Page ────────────────────────────────────────── */
 export default function SalesPage() {
-  const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds, allowCap } = useAuth()
+  const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds, allowCap, workStations } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -832,7 +834,7 @@ export default function SalesPage() {
       const ids = filterStation ? [filterStation] : allowedStationIds
       q = q.in('station_id', ids)
     } else if (isStationAdmin || isAccountant) {
-      q = q.eq('station_id', profile.station_id)
+      q = workStations?.length > 1 ? q.in('station_id', workStations.map(x => x.id)) : q.eq('station_id', profile.station_id)
     } else {
       q = q.eq('created_by', profile.id)
     }
@@ -853,7 +855,7 @@ export default function SalesPage() {
     if (finalRows.length) setCached(cacheKey, finalRows)
     setRecords(finalRows)
     setLoading(false)
-  }, [filterDate, filterStation, profile?.id, profile?.station_id, isEmployee, isStationAdmin, isAccountant, isGeneralAdmin, isAreaSupervisor, allowedStationIds])
+  }, [filterDate, filterStation, profile?.id, profile?.station_id, isEmployee, isStationAdmin, isAccountant, isGeneralAdmin, isAreaSupervisor, allowedStationIds, workStations])
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
 

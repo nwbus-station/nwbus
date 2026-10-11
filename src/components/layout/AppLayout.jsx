@@ -7,7 +7,6 @@ import { createClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
 import { onPwaUpdateAvailable, applyPwaUpdate } from '../../lib/pwaUpdate'
-import SelectField from '../shared/SelectField'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -411,21 +410,6 @@ function NavTab({ item, isAr }) {
 
 // قائمة الجوال (الدرج الجانبي) — تعرض كل الأقسام المتاحة دفعة وحدة، بدل الاكتفاء بأول 5
 // بالشريط السفلي أو الاضطرار لتدوير الشاشة لعرض الشريط العلوي (نفس محتوى top-nav بالضبط)
-// تبديل محطة العمل — يظهر فقط للموظف المربوط بأكثر من محطة
-function StationSwitcher({ isAr, full = false }) {
-  const { profile, workStations, switchStation } = useAuth()
-  if (!workStations || workStations.length < 2) return null
-  return (
-    <div className="station-switcher" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, ...(full ? { width: '100%' } : {}) }}>
-      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{isAr ? 'محطة العمل' : 'Working at'}</span>
-      <SelectField value={profile?.station_id ?? ''} onChange={e => e.target.value !== profile?.station_id && switchStation(e.target.value)}
-        className="border border-gray-200 rounded-md px-2 py-1 text-xs font-bold bg-white" style={full ? { flex: 1 } : { maxWidth: 190 }}>
-        {workStations.map(st => <option key={st.id} value={st.id}>{isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)}</option>)}
-      </SelectField>
-    </div>
-  )
-}
-
 function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, stationName }) {
   useEffect(() => {
     if (!open) return
@@ -451,7 +435,6 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
             <Icon d={ICONS.x} size={14} />
           </button>
         </div>
-        <div style={{ padding: '8px 16px 0' }}><StationSwitcher isAr={isAr} full /></div>
         <nav className="mobile-menu-body">
           {visibleGroups.map((group, gi) => (
             <div key={gi} className="mobile-menu-group">
@@ -642,8 +625,6 @@ export default function AppLayout() {
         </div>
 
         <div style={{ flex: 1 }} />
-
-        <span className="header-station-switcher" style={{ display: 'contents' }}><StationSwitcher isAr={isAr} /></span>
 
         {/* شاشة العرض */}
         {canSeeModule('live_board') && (

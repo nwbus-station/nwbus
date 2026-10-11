@@ -374,6 +374,7 @@ function LostReportTab({ stations, profile, isAr }) {
    TAB 2 — تسليم موجودات
 ══════════════════════════════════════════════════════════ */
 function HandoverTab({ profile, isAr }) {
+  const { workStations } = useAuth()
   const [items, setItems]   = useState([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -384,7 +385,8 @@ function HandoverTab({ profile, isAr }) {
 
   useEffect(() => {
     let q = supabase.from('lost_found_items').select('*').eq('status', 'unclaimed')
-    if (profile.station_id) q = q.eq('station_id', profile.station_id)
+    if (workStations?.length > 1) q = q.in('station_id', workStations.map(x => x.id))
+    else if (profile.station_id) q = q.eq('station_id', profile.station_id)
     q.order('created_at', { ascending: false })
       .then(({ data }) => { setItems(data ?? []); setLoading(false) })
   }, [done])
@@ -485,14 +487,18 @@ function HandoverTab({ profile, isAr }) {
    TAB 3 — تسجيل موجود
 ══════════════════════════════════════════════════════════ */
 function RegisterItemTab({ profile, isAr, stations }) {
-  const hasStation = !!profile?.station_id
-  const [selectedStationId, setSelectedStationId] = useState(profile?.station_id || '')
+  // موظف يعمل بأكثر من محطة: لازم يحدد محطة التسجيل من محطاته (الأساسية + الإضافية)
+  const { workStations } = useAuth()
+  const multi = workStations?.length > 1
+  const pickStations = multi ? workStations : stations
+  const hasStation = !multi && !!profile?.station_id
+  const [selectedStationId, setSelectedStationId] = useState(multi ? '' : (profile?.station_id || ''))
   const [stationSearch, setStationSearch] = useState('')
 
   const effectiveStationId = hasStation ? profile.station_id : selectedStationId
   const effectiveStation = hasStation
     ? (profile?.station?.name_ar || '—')
-    : (stations.find(s => s.id === selectedStationId)?.name_ar || '—')
+    : (pickStations.find(s => s.id === selectedStationId)?.name_ar || '—')
 
   const empty = {
     item_description: '', item_type: 'other', found_date: todayStr(),
@@ -583,10 +589,10 @@ function RegisterItemTab({ profile, isAr, stations }) {
                 style={inp} />
               {!selectedStationId ? (
                 <SelectField value={selectedStationId}
-                  onChange={e => { setSelectedStationId(e.target.value); setStationSearch(stations.find(s => s.id === e.target.value)?.name_ar || '') }}
+                  onChange={e => { setSelectedStationId(e.target.value); setStationSearch(pickStations.find(s => s.id === e.target.value)?.name_ar || '') }}
                   size={4} style={{ ...inp, height: 'auto', padding: '4px 8px', fontSize: '0.82rem' }}>
                   <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
-                  {stations.filter(s => !stationSearch || s.name_ar.includes(stationSearch)).map(s => (
+                  {pickStations.filter(s => !stationSearch || s.name_ar.includes(stationSearch)).map(s => (
                     <option key={s.id} value={s.id}>{s.name_ar}</option>
                   ))}
                 </SelectField>
@@ -1183,6 +1189,8 @@ export default function LostFoundPage() {
   const [stations, setStations] = useState([])
   const [counts, setCounts] = useState({ unclaimed: null, reports: null, aging: null })
   const narrow = useNarrow()
+  const { workStations } = useAuth()
+  const multi = workStations?.length > 1
 
   useEffect(() => {
     supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
@@ -1196,7 +1204,7 @@ export default function LostFoundPage() {
   // ملخص سريع أعلى الصفحة — يتحدّث عند تبديل التبويب (بعد تسجيل أو تسليم)
   useEffect(() => {
     const cutoff30 = new Date(Date.now() - 30 * 86400000).toISOString()
-    const sid = profile?.station_id || null
+    const sid = multi ? null : (profile?.station_id || null)   // متعدد المحطات: صلاحيات القاعدة تحصره بمحطاته
     let uq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed')
     let aq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed').lt('created_at', cutoff30)
     let rq = supabase.from('lost_reports').select('id', { count: 'exact', head: true })
@@ -1250,7 +1258,7 @@ export default function LostFoundPage() {
       {activeTab === 'report'   && !isEmployee && <LostReportTab   stations={stations} profile={profile} isAr={isAr} />}
       {activeTab === 'handover' && <HandoverTab    profile={profile} isAr={isAr} />}
       {activeTab === 'register' && <RegisterItemTab profile={profile} isAr={isAr} stations={stations} />}
-      {activeTab === 'logs'     && <LogsTab stationFilter={isEmployee ? profile?.station_id : null} isAdmin={isAdmin} isAr={isAr} />}
+      {activeTab === 'logs'     && <LogsTab stationFilter={isEmployee && !multi ? profile?.station_id : null} isAdmin={isAdmin} isAr={isAr} />}
     </div>
   )
 }

@@ -683,7 +683,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
 /* ─── Main Page ─────────────────────────────────────────── */
 export default function TransportationPage() {
-  const { profile, isGeneralAdmin, isRestricted, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds } = useAuth()
+  const { profile, isGeneralAdmin, isRestricted, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds, workStations } = useAuth()
   // الحساب المقيّد (مسمى مخصص) يستخدم أزرار الأدمن حسب المفاتيح المفعّلة له فقط
   const adminLike = isGeneralAdmin || isRestricted
   // الرحلة الإضافية RF: للأدمن ومشرف المحطة/المنطقة فقط — مو مشرف الوردية ولا الموظف
@@ -756,6 +756,9 @@ export default function TransportationPage() {
     } else if (isAreaSupervisor && allowedStationIds?.length) {
       supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
+    } else if (workStations?.length > 1) {
+      // موظف/محاسب يعمل بأكثر من محطة (محطته الأساسية أولاً ثم الإضافية التي حدّدها الأدمن) — يتنقّل بينها مثل المشرف
+      setStations(workStations.filter(s => !isRestStation(s)))
     } else if ((isStationAdmin || isAccountant) && profile?.id) {
       supabase.from('user_stations').select('station:station_id(id, name_ar, name_en, city_group, combined_arr_dep)').eq('user_id', profile.id)
         .then(async ({ data }) => {
@@ -771,7 +774,7 @@ export default function TransportationPage() {
       supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').eq('id', profile.station_id).maybeSingle()
         .then(({ data }) => { if (data) setStations([data]) })
     }
-  }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id, profile?.station_id, scopedIds?.join(',')])
+  }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id, profile?.station_id, scopedIds?.join(','), workStations])
 
   // اختيار محطة افتراضية
   useEffect(() => {
@@ -1244,7 +1247,7 @@ export default function TransportationPage() {
             </button>
           )}
           {/* Station selector — admin/accountant always, supervisor when multi-station */}
-          {(isGeneralAdmin || ((isStationAdmin || isAccountant) && stations.length > 1)) && stations.length > 0 && (
+          {(isGeneralAdmin || ((isStationAdmin || isAccountant || workStations?.length > 1) && stations.length > 1)) && stations.length > 0 && (
             <div className="flex items-center gap-1">
               <SearchSelect isAr={isAr} value={selectedStation} onChange={setSelectedStation}
                 placeholder={isAr ? '— اختر محطة —' : '— Select station —'}

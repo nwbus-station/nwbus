@@ -698,7 +698,6 @@ html.dark .border-gray-100 {
 
   /* header simplify */
   .header-live-board { display: none !important; }
-  .header-station-switcher { display: none !important; }
 
   /* زر القائمة (الهامبرغر) يظهر بالجوال فقط */
   .mobile-menu-btn { display: flex !important; }

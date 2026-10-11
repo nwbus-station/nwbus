@@ -1666,7 +1666,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50/60 p-3">
                 <label className="block text-xs font-bold text-gray-700 mb-0.5">{isAr ? 'محطات عمل إضافية (اختياري)' : 'Additional work stations (optional)'}</label>
                 <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">
-                  {isAr ? 'لو الموظف يعمل بأكثر من محطة، أضف محطاته الأخرى هنا. تُربط بحسابه فيظهر له تبديل «محطة العمل» أعلى الشاشة، وكل شاشة (الترحيل، المبيعات، الموجودات…) تتبع المحطة التي يختارها، وصلاحياته تشمل كل محطاته.' : 'If the employee works at more than one station, add the others here. They are linked to the account, a “Working at” switcher appears at the top, and every screen follows the chosen station.'}
+                  {isAr ? 'للموظف الذي يعمل بأكثر من محطة: المحطة الأساسية (فوق) تبقى للتقييم والإجازات والأقسام الأخرى، والمحطات الإضافية هنا للتشغيل فقط. يختار منها بين محطاته في الترحيل، ويحدد المحطة عند كل يومية (مبيعات/موجودات). الإضافة والتعديل للأدمن فقط.' : 'For an employee working at several stations: the primary station (above) stays for evaluation, leaves and other sections; additional stations here are for operations only. They pick among them in Transportation and must choose the station for each daily entry. Admin-only.'}
                 </p>
                 {extraSet.size > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
