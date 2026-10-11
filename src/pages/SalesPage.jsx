@@ -10,6 +10,7 @@ import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { todayStr, toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
+import { safeImport } from '../lib/chunkReload'
 import SelectField from '../components/shared/SelectField'
 
 const SHIFTS = [
@@ -871,6 +872,23 @@ export default function SalesPage() {
   const totalActualSum   = records.reduce((s, r) => s + Number(r.total_actual   ?? 0), 0)
   const totalExpectedSum = records.reduce((s, r) => s + Number(r.total_expected  ?? 0), 0)
   const confirmed        = records.filter(r => r.is_confirmed).length
+
+  // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام فقط
+  const [xlBusy, setXlBusy] = useState(false)
+  async function downloadDailyExcel() {
+    if (!isGeneralAdmin || !records.length) return
+    setXlBusy(true)
+    try {
+      const { exportDailySalesExcel } = await safeImport(() => import('../utils/salesDailyExport'))
+      const st = filterStation ? stations.find(x => x.id === filterStation) : null
+      await exportDailySalesExcel({
+        isAr, records, date: filterDate,
+        scopeText: st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : (isAr ? 'جميع المحطات' : 'All stations'),
+        preparedBy: profile?.full_name_ar || '',
+      })
+    } catch (e) { alert((isAr ? 'تعذّر إنشاء الملف: ' : 'Could not create the file: ') + (e?.message || e)) }
+    setXlBusy(false)
+  }
   const canAdd           = !isAccountant && allowCap('sales_add')
 
   return (
@@ -887,12 +905,21 @@ export default function SalesPage() {
               : (isAr ? 'مبيعاتك الخاصة' : 'Your own entries')}
           </p>
         </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+        {isGeneralAdmin && (
+          <button type="button" onClick={downloadDailyExcel} disabled={xlBusy || records.length === 0}
+            title={isAr ? 'جدول يومي بأسلوب محاسبي: قيود + تسوية ورديات + توزيع طرق الدفع + توقيعات الاعتماد' : 'Accounting-style daily workbook'}
+            className="bg-white text-gray-800 border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-40">
+            {xlBusy ? (isAr ? 'جارٍ التجهيز…' : 'Preparing…') : (isAr ? 'تنزيل الجدول اليومي (Excel)' : 'Daily sheet (Excel)')}
+          </button>
+        )}
         {canAdd && (
           <button onClick={() => setModal('new')}
             className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-black transition-colors self-start sm:self-auto">
             + {isAr ? 'إدخال إيرادات' : 'New Entry'}
           </button>
         )}
+        </div>
       </div>
 
       {/* Date + Station filter */}
