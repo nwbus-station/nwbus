@@ -21,6 +21,7 @@ export function AuthProvider({ children }) {
   const [customTitle, setCustomTitle] = useState(null)  // المسمى المخصص للمستخدم (مصفوفة الصلاحيات)
   const [assignedEmployeeIds, setAssignedEmployeeIds] = useState([])  // موظفون محددون له (يقيّمهم ويوافق على إجازاتهم)
   const [supervisedStationIds, setSupervisedStationIds] = useState([])  // محطات مساعد المدير كمشرف (لا تقيّد صلاحياته كأدمن)
+  const [workStations, setWorkStations] = useState([])  // محطات عمل الموظف (الأساسية + الإضافية من user_stations) — فقط لو عنده أكثر من محطة
   const profileIdRef = useRef(null)
   const authUserIdRef = useRef(null) // auth.users id لآخر مستخدم تم جلب بروفايله فعلياً
 
@@ -79,8 +80,30 @@ export function AuthProvider({ children }) {
           .select('station_id')
           .eq('user_id', data.id)
         setAllowedStationIds(us?.length ? us.map(r => r.station_id) : null)
+        setWorkStations([])
       } else {
         setAllowedStationIds(null)
+        // موظف/محاسب/مشرف وردية يعمل بأكثر من محطة: محطته الأساسية + المحطات الإضافية المربوطة به (user_stations).
+        // المحطة النشطة (يختارها من الهيدر) تحلّ محل station_id بالبروفايل فتتبعها كل الشاشات تلقائياً
+        let list = []
+        if (data.role !== 'general_admin' && data.role !== ASSISTANT_DIRECTOR_ROLE && data.station_id) {
+          const { data: us } = await supabase.from('user_stations').select('station_id').eq('user_id', data.id)
+          const extra = [...new Set((us ?? []).map(r => r.station_id).filter(x => x && x !== data.station_id))]
+          if (extra.length) {
+            const { data: sts } = await supabase.from('stations').select('id, name_ar, name_en, type, survey_city').in('id', [data.station_id, ...extra])
+            const byId = Object.fromEntries((sts ?? []).map(x => [x.id, x]))
+            list = [data.station_id, ...extra].map(id => byId[id]).filter(Boolean)
+          }
+        }
+        setWorkStations(list.length > 1 ? list : [])
+        if (list.length > 1) {
+          let active = data.station_id
+          try { const v = localStorage.getItem(`nwbus_active_station_${data.id}`); if (v && list.some(x => x.id === v)) active = v } catch { /* بدون تخزين */ }
+          if (active !== data.station_id) {
+            const obj = list.find(x => x.id === active)
+            setProfile({ ...data, station_id: active, station: obj, primary_station_id: data.station_id })
+          }
+        }
       }
     } else {
       const msg = error?.message || 'No profile row found for auth_id: ' + authUser.id
@@ -268,6 +291,12 @@ export function AuthProvider({ children }) {
   const canManageUsers    = isGeneralAdmin
   const canViewAllStations = isGeneralAdmin
 
+  // تبديل محطة العمل الحالية: نحفظ الاختيار ثم نعيد التحميل لتقرأ كل الشاشات المحطة الجديدة
+  function switchStation(id) {
+    try { localStorage.setItem(`nwbus_active_station_${profile?.id}`, id) } catch { /* بدون تخزين */ }
+    window.location.reload()
+  }
+
   return (
     <AuthContext.Provider value={{
       session,
@@ -288,6 +317,8 @@ export function AuthProvider({ children }) {
       actsAsSupervisor,
       evaluatesOwnEmployees,
       supervisedStationIds,
+      workStations,
+      switchStation,
       assignedEmployeeIds,
       isShiftSupervisor,
       isStationAdmin,
