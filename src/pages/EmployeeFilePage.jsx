@@ -1,4 +1,4 @@
-// ملف الموظف (للأدمن فقط): معلومات الموظف كاملة + إجازاته + إيراداته + تقييمه الوظيفي + تقييمات العملاء + دخوله للبرنامج،
+// الملف الوظيفي (للأدمن فقط): معلومات الموظف كاملة + إجازاته + إيراداته + تقييمه الوظيفي + تقييمات العملاء + دخوله للبرنامج،
 // بفلتر موظف/محطة/فترة وأقسام قابلة للاختيار، وطباعة رسمية بالشعار.
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -17,7 +17,7 @@ const LEAVE_AR = { annual: 'سنوية', casual: 'استئذان خروج', comp
 const STATUS_AR = { approved: 'مقبولة', rejected: 'مرفوضة', pending: 'قيد المراجعة' }
 const STATUS_COL = { approved: ['#15803d', '#dcfce7'], rejected: ['#b91c1c', '#fee2e2'], pending: ['#b45309', '#fef3c7'] }
 const SRC_AR = { shift_supervisor: 'مشرف الوردية', station_admin: 'مشرف المحطة', stations_executive_director: 'المدير التنفيذي', dispatcher_supervisor: 'مشرف المرحّلين' }
-const SECTIONS = [['leaves', 'الإجازات والاستئذان'], ['sales', 'الإيرادات'], ['eval', 'التقييم الوظيفي'], ['ratings', 'تقييمات العملاء'], ['activity', 'الدخول والنشاط']]
+const SECTIONS = [['leaves', 'الإجازات والاستئذان'], ['ops', 'الأداء التشغيلي'], ['sales', 'الإيرادات'], ['eval', 'التقييم الوظيفي'], ['ratings', 'تقييمات العملاء'], ['activity', 'الدخول والنشاط']]
 const n0 = n => Math.round(Number(n) || 0).toLocaleString('en-US')
 const hhmm = h => { const m = Math.max(0, Math.round((Number(h) || 0) * 60)); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` }
 const fmtDT = d => (d ? new Date(d).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' }) : '—')
@@ -28,7 +28,7 @@ const daysBetween = (a, b) => Math.max(1, Math.round((new Date(b + 'T00:00:00Z')
 
 // ── تحليل البيانات ────────────────────────────────────────────
 function analyze(raw, user, from, to) {
-  const { leaves = [], sales = [], evals = [], ratings = [], logins = [] } = raw
+  const { leaves = [], sales = [], evals = [], ratings = [], logins = [], trips = [] } = raw
   // الإجازات
   const L = { total: leaves.length, approved: 0, rejected: 0, pending: 0, permReq: 0, permOk: 0, permHours: 0, leaveReq: 0, leaveOk: 0, leaveDays: 0, byType: {} }
   leaves.forEach(r => {
@@ -53,9 +53,29 @@ function analyze(raw, user, from, to) {
   const E = Object.keys(byMonth).sort().reverse().map(k => ({ key: k, ...computeFinalScore(byMonth[k]), rows: byMonth[k] }))
   const rated = E.filter(x => x.final != null)
   const evalAvg = rated.length ? rated.reduce((a, x) => a + x.final, 0) / rated.length : null
+  // الأداء التشغيلي: الرحلات المُدخلة + الركاب المرحَّلون (المُقلّون) + المتخلفون عن الرحلة
+  const O = { n: 0, dep: 0, arr: 0, extra: 0, pax: 0, missed: 0, byMonth: {}, byStation: {} }
+  trips.forEach(r => {
+    O.n++
+    if (r.is_arrival) { O.arr++; return }
+    O.dep++; if (r.is_extra_trip) O.extra++
+    const pc = Number(r.passenger_count) || 0, ms = Number(r.missed_count) || 0
+    O.pax += pc; O.missed += ms
+    const mk = String(r.record_date).slice(0, 7); const mb = (O.byMonth[mk] ??= { n: 0, pax: 0, missed: 0 }); mb.n++; mb.pax += pc; mb.missed += ms
+    const sn = r.station?.name_ar || r.station?.name_en || '—'; const sb = (O.byStation[sn] ??= { n: 0, pax: 0, missed: 0 }); sb.n++; sb.pax += pc; sb.missed += ms
+  })
+  O.avg = O.dep ? O.pax / O.dep : 0
+  O.rate = O.pax + O.missed ? O.missed / (O.pax + O.missed) : 0
   // تقييمات العملاء
   const R = { n: ratings.length, avg: ratings.length ? ratings.reduce((a, r) => a + r.rating, 0) / ratings.length : null, dist: [0, 0, 0, 0, 0], comments: ratings.filter(r => r.comment) }
-  ratings.forEach(r => { if (r.rating >= 1 && r.rating <= 5) R.dist[r.rating - 1]++ })
+  R.sat = R.n ? ratings.filter(r => r.rating >= 4).length / R.n : null
+  R.low = ratings.filter(r => r.rating <= 2).length
+  R.byMonth = {}; R.byShift = {}
+  ratings.forEach(r => {
+    if (r.rating >= 1 && r.rating <= 5) R.dist[r.rating - 1]++
+    const mk = riyadhDay(r.created_at).slice(0, 7); const mb = (R.byMonth[mk] ??= { n: 0, sum: 0 }); mb.n++; mb.sum += r.rating
+    if (r.shift) { const sb = (R.byShift[r.shift] ??= { n: 0, sum: 0 }); sb.n++; sb.sum += r.rating }
+  })
   // الدخول: كل تحديث لـ last_login في سجل التدقيق = دخول
   const loginTimes = logins.map(r => r.created_at).sort().reverse()
   const loginDays = new Set(loginTimes.map(riyadhDay))
@@ -65,7 +85,7 @@ function analyze(raw, user, from, to) {
   const hours = Array(24).fill(0); loginTimes.forEach(t => { hours[riyadhHour(t)]++ })
   const peak = hours.indexOf(Math.max(...hours))
   const A = { count: loginTimes.length, days: loginDays.size, periodDays, rate: periodDays ? Math.min(1, loginDays.size / periodDays) : 0, times: loginTimes, loginDays, hours, peak: loginTimes.length ? peak : null, effFrom, effTo }
-  return { L, S, E, evalAvg, R, A }
+  return { L, S, E, evalAvg, R, A, O }
 }
 
 // ── عناصر الواجهة ────────────────────────────────────────────
@@ -107,6 +127,38 @@ const Td = ({ children, l, b, c }) => <td style={{ padding: '8px 10px', borderTo
 const Chip = ({ children, c = '#334155', bg = '#e2e8f0' }) => <span style={{ background: bg, color: c, borderRadius: 99, padding: '2px 11px', fontSize: '0.7rem', fontWeight: 800 }}>{children}</span>
 const Bar = ({ pct, color = '#1C2B4A' }) => <div style={{ flex: 1, height: 9, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}><div style={{ width: `${Math.max(0, Math.min(100, pct))}%`, height: '100%', background: color, borderRadius: 99 }} /></div>
 
+function Stars({ value, size = 18, color = '#EE712D' }) {
+  const path = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z'
+  const row = c => <span style={{ display: 'inline-flex', gap: 2 }}>{[0, 1, 2, 3, 4].map(i => <svg key={i} width={size} height={size} viewBox="0 0 24 24" fill={c} aria-hidden="true"><path d={path} /></svg>)}</span>
+  const pct = Math.max(0, Math.min(100, ((value || 0) / 5) * 100))
+  return (
+    <span dir="ltr" role="img" aria-label={`${(value || 0).toFixed(1)} / 5`} style={{ position: 'relative', display: 'inline-flex' }}>
+      {row('#d5dbe5')}
+      <span style={{ position: 'absolute', insetBlock: 0, left: 0, width: `${pct}%`, overflow: 'hidden', whiteSpace: 'nowrap' }}>{row(color)}</span>
+    </span>
+  )
+}
+// لوحة مؤشر تشغيلي: رقم كبير + عنوان + سطرا تفاصيل (موزونة بنفس الأبعاد)
+function OpsPanel({ title, value, unit, color, lines }) {
+  return (
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ height: 4, background: color }} />
+      <div style={{ padding: '14px 18px 12px', flex: 1 }}>
+        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-3)', letterSpacing: 0.2 }}>{title}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '6px 0 10px' }} dir="ltr">
+          <span style={{ fontFamily: MONO, fontSize: '2rem', fontWeight: 800, color: 'var(--text-1)', lineHeight: 1 }}>{value}</span>
+          {unit && <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-3)' }}>{unit}</span>}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+          {lines.map(([k, v]) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem' }}><span style={{ color: 'var(--text-3)', fontWeight: 600 }}>{k}</span><span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }} dir="ltr">{v}</span></div>)}
+        </div>
+      </div>
+    </div>
+  )
+}
+const SHIFT_AR = { A: 'الوردية A', B: 'الوردية B', C: 'الوردية C' }
+const pct1 = x => `${(x * 100).toFixed(1)}%`
+
 export default function EmployeeFilePage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -140,13 +192,14 @@ export default function EmployeeFilePage() {
     setLoading(true); setErr(''); setData(null)
     try {
       const fT = `${from}T00:00:00+03:00`, tT = `${to}T23:59:59.999+03:00`
-      const [u, sens, leaves, sales, evals, ratings, logins] = await Promise.all([
+      const [u, sens, leaves, sales, evals, ratings, trips, logins] = await Promise.all([
         supabase.from('users').select('*, station:station_id(name_ar, name_en), supervisor:supervisor_id(full_name_ar)').eq('id', empId).maybeSingle(),
         supabase.rpc('get_user_sensitive', { p_id: empId }),
         supabase.from('leaves').select('id, leave_type, status, start_date, end_date, days_count, notes, created_at').eq('employee_id', empId).gte('start_date', from).lte('start_date', to).order('start_date', { ascending: false }),
         supabase.from('sales_records').select('id, sale_date, shift, total_actual, total_expected, is_confirmed, station:station_id(name_ar, name_en)').eq('created_by', empId).gte('sale_date', from).lte('sale_date', to).order('sale_date', { ascending: false }).limit(3000),
         supabase.from('employee_evaluations').select('eval_month, eval_year, eval_source, total_score, notes, evaluator:evaluator_id(full_name_ar)').eq('employee_id', empId),
         supabase.from('customer_ratings').select('rating, comment, created_at, shift, window_number, station:station_id(name_ar, name_en)').eq('employee_id', empId).gte('created_at', fT).lte('created_at', tT).order('created_at', { ascending: false }).limit(3000),
+        supabase.from('trip_records').select('record_date, is_arrival, is_extra_trip, passenger_count, missed_count, station:station_id(name_ar, name_en)').eq('created_by', empId).gte('record_date', from).lte('record_date', to).limit(10000),
         supabase.from('audit_log').select('created_at, before_data, after_data').eq('table_name', 'users').eq('record_id', empId).eq('action', 'UPDATE').gte('created_at', fT).lte('created_at', tT).order('created_at', { ascending: false }).limit(5000),
       ])
       if (u.error || !u.data) throw new Error(u.error?.message || 'تعذّر تحميل بيانات الموظف')
@@ -154,7 +207,7 @@ export default function EmployeeFilePage() {
       if (u.data.custom_title_id) { const { data: t } = await supabase.from('custom_titles').select('name_ar').eq('id', u.data.custom_title_id).maybeSingle(); title = t?.name_ar ?? null }
       // الدخول = تحديث last_login (يُسجَّل بسجل التدقيق عند كل دخول)
       const loginRows = (logins.data ?? []).filter(r => !r.before_data || !r.after_data || r.after_data.last_login !== r.before_data.last_login)
-      setData({ user: u.data, sens: Array.isArray(sens.data) ? sens.data[0] : null, title, loginsOk: !logins.error, raw: { leaves: leaves.data ?? [], sales: sales.data ?? [], evals: evals.data ?? [], ratings: ratings.data ?? [], logins: loginRows } })
+      setData({ user: u.data, sens: Array.isArray(sens.data) ? sens.data[0] : null, title, loginsOk: !logins.error, raw: { leaves: leaves.data ?? [], sales: sales.data ?? [], evals: evals.data ?? [], ratings: ratings.data ?? [], trips: trips.data ?? [], logins: loginRows } })
     } catch (e) { setErr(e.message || String(e)) }
     setLoading(false)
   }
@@ -212,6 +265,7 @@ export default function EmployeeFilePage() {
       if (an.L.rejected) watch.push(`${an.L.rejected} طلب مرفوض من أصل ${an.L.total} طلباً`)
       if (an.L.total && !an.L.rejected) good.push(`جميع الطلبات (${an.L.total}) ضمن الضوابط دون رفض`)
     }
+    if (show('ops') && an.O.dep) (an.O.rate <= 0.02 ? good : an.O.rate > 0.05 ? watch : []).push(`رحّل ${n0(an.O.pax)} راكباً في ${n0(an.O.dep)} رحلة مغادرة، وتخلف ${n0(an.O.missed)} راكباً (${pct1(an.O.rate)})`)
     if (show('activity')) (an.A.rate >= 0.5 ? good : an.A.rate < 0.2 ? watch : []).push(`نسبة الدخول للبرنامج ${Math.round(an.A.rate * 100)}% (${an.A.days} يوم دخول من ${an.A.periodDays})`)
     const list = (arr, c) => arr.map(t => `<li style="--c:${c}">${esc(t)}</li>`).join('')
     const P = []
@@ -222,6 +276,7 @@ export default function EmployeeFilePage() {
     // 3) المؤشرات
     const kpis = []
     if (show('leaves')) kpis.push(['إجازات مقبولة', `${an.L.leaveOk}`, `${Number(an.L.leaveDays.toFixed(2))} يوم`, '#0f766e'], ['استئذان مقبول', hhmm(an.L.permHours), `${an.L.permOk} مرة`, '#7c3aed'])
+    if (show('ops')) kpis.push(['رحلات مُدخلة', n0(an.O.n), `${an.O.extra} إضافية`, '#1C2B4A'], ['ركاب مرحَّلون', n0(an.O.pax), `متوسط ${an.O.avg.toFixed(1)} للرحلة`, '#15803d'], ['ركاب متخلفون', n0(an.O.missed), `نسبة ${pct1(an.O.rate)}`, an.O.rate > 0.05 ? '#dc2626' : '#d97706'])
     if (show('sales')) kpis.push(['قيود الإيرادات', n0(an.S.n), `${n0(an.S.collected)} ر.س`, '#15803d'], ['صافي الفرق', sgn(an.S.diff), `${an.S.deficits} عجز · ${an.S.surpluses} زيادة`, an.S.diff < 0 ? '#dc2626' : '#1d4ed8'])
     if (show('eval')) kpis.push(['التقييم الوظيفي', ev10 != null ? `${ev10.toFixed(1)} / 10` : '—', `${ratedMonths} شهر مقيَّم`, '#1C2B4A'])
     if (show('ratings')) kpis.push(['تقييم العملاء', an.R.avg != null ? `${an.R.avg.toFixed(2)} / 5` : '—', `${an.R.n} تقييم`, '#EE712D'])
@@ -233,6 +288,15 @@ export default function EmployeeFilePage() {
     if (show('leaves')) {
       P.push(`<div class="sec"><h3>الإجازات والاستئذان</h3><table class="t"><thead><tr><th rowspan="2">الفترة</th><th colspan="3" style="background:#5b21b6">الاستئذان</th><th colspan="3" style="background:#0f766e">الإجازات</th><th rowspan="2">مرفوضة</th><th rowspan="2">الإجمالي</th></tr><tr><th style="background:#7c3aed">مقدَّمة</th><th style="background:#7c3aed">مقبولة</th><th style="background:#7c3aed">المدة</th><th style="background:#14958a">مقدَّمة</th><th style="background:#14958a">مقبولة</th><th style="background:#14958a">الأيام</th></tr></thead><tbody><tr><td class="l"><b>${esc(from)} ← ${esc(to)}</b></td><td>${an.L.permReq}</td><td>${an.L.permOk}</td><td>${an.L.permHours ? hhmm(an.L.permHours) : '—'}</td><td>${an.L.leaveReq}</td><td>${an.L.leaveOk}</td><td>${an.L.leaveDays ? Number(an.L.leaveDays.toFixed(2)) : '—'}</td><td>${an.L.rejected}</td><td><b>${an.L.total}</b></td></tr></tbody></table>
       ${data.raw.leaves.length ? `<table class="t" style="margin-top:8px"><thead><tr><th>#</th><th>النوع</th><th>من</th><th>إلى</th><th>المدة</th><th>الحالة</th></tr></thead><tbody>${data.raw.leaves.slice(0, 40).map((r, i) => `<tr><td>${i + 1}</td><td class="l">${esc(LEAVE_AR[r.leave_type] ?? r.leave_type)}</td><td>${esc(r.start_date)}</td><td>${r.leave_type === 'casual' ? '—' : esc(r.end_date)}</td><td>${r.leave_type === 'casual' ? hhmm((Number(r.days_count) || 0) * 24) : (Number(r.days_count) || 0) + ' يوم'}</td><td><span class="chip" style="background:${STATUS_COL[r.status]?.[1]};color:${STATUS_COL[r.status]?.[0]}">${STATUS_AR[r.status] ?? r.status}</span></td></tr>`).join('')}</tbody></table>${data.raw.leaves.length > 40 ? `<p class="muted">يعرض آخر 40 طلباً من ${data.raw.leaves.length}.</p>` : ''}` : '<p class="muted">لا توجد طلبات ضمن الفترة.</p>'}</div>`)
+    }
+    // 5b) الأداء التشغيلي
+    if (show('ops')) {
+      const om = Object.keys(an.O.byMonth).sort()
+      const sts = Object.entries(an.O.byStation).sort((x, y) => y[1].pax - x[1].pax)
+      P.push(`<div class="sec"><h3>الأداء التشغيلي — الترحيل</h3>${an.O.n ? `<div class="grid g3"><div class="kpi" style="--c:#1C2B4A"><small>الرحلات المُدخلة</small><b>${n0(an.O.n)}</b><em>${n0(an.O.dep)} مغادرة · ${n0(an.O.arr)} وصول · ${n0(an.O.extra)} إضافية</em></div><div class="kpi" style="--c:#15803d"><small>الركاب المرحَّلون</small><b>${n0(an.O.pax)}</b><em>متوسط ${an.O.avg.toFixed(1)} راكب للرحلة</em></div><div class="kpi" style="--c:${an.O.rate > 0.05 ? '#dc2626' : '#d97706'}"><small>الركاب المتخلفون</small><b>${n0(an.O.missed)}</b><em>نسبة التخلف ${pct1(an.O.rate)}</em></div></div>
+      ${an.O.pax + an.O.missed ? `<div class="stack"><i style="width:${(1 - an.O.rate) * 100}%;background:#15803d"></i><i style="width:${an.O.rate * 100}%;background:#dc2626"></i></div><div class="muted">أخضر: تم ترحيلهم ${pct1(1 - an.O.rate)} · أحمر: متخلفون ${pct1(an.O.rate)}</div>` : ''}
+      ${om.length ? `<table class="t" style="margin-top:8px"><thead><tr><th>الشهر</th><th>الرحلات</th><th>المرحَّلون</th><th>المتخلفون</th><th>نسبة التخلف</th></tr></thead><tbody>${om.slice().reverse().map(m => { const b = an.O.byMonth[m]; return `<tr><td class="l">${m}</td><td>${b.n}</td><td><b>${n0(b.pax)}</b></td><td style="color:${b.missed ? '#b91c1c' : '#0f172a'}">${n0(b.missed)}</td><td>${pct1(b.pax + b.missed ? b.missed / (b.pax + b.missed) : 0)}</td></tr>` }).join('')}<tr class="tot"><td class="l">الإجمالي</td><td>${an.O.dep}</td><td>${n0(an.O.pax)}</td><td>${n0(an.O.missed)}</td><td>${pct1(an.O.rate)}</td></tr></tbody></table>` : ''}
+      ${sts.length > 1 ? `<table class="t" style="margin-top:8px"><thead><tr><th>المحطة</th><th>الرحلات</th><th>المرحَّلون</th><th>المتخلفون</th><th>نسبة التخلف</th></tr></thead><tbody>${sts.map(([n, b]) => `<tr><td class="l">${esc(n)}</td><td>${b.n}</td><td><b>${n0(b.pax)}</b></td><td>${n0(b.missed)}</td><td>${pct1(b.pax + b.missed ? b.missed / (b.pax + b.missed) : 0)}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted">لا توجد رحلات مُدخلة من الموظف ضمن الفترة.</p>'}</div>`)
     }
     // 6) الإيرادات
     if (show('sales')) {
@@ -247,8 +311,12 @@ export default function EmployeeFilePage() {
     }
     // 8) تقييمات العملاء
     if (show('ratings')) {
-      P.push(`<div class="sec"><h3>تقييمات العملاء</h3>${an.R.n ? `<div class="grid g3" style="align-items:center"><div class="cell"><small>متوسط التقييم</small><b>${an.R.avg.toFixed(2)} / 5</b></div><div class="cell"><small>عدد التقييمات</small><b>${an.R.n}</b></div><div class="cell"><small>تقييمات 4 نجوم فأكثر</small><b>${Math.round(((an.R.dist[3] + an.R.dist[4]) / an.R.n) * 100)}%</b></div></div><div style="margin-top:8px">${barsSvg([5, 4, 3, 2, 1].map(s => ({ k: `${s} نجوم`, v: an.R.dist[s - 1], c: s >= 4 ? '#16a34a' : s === 3 ? '#d97706' : '#dc2626' })), '#16a34a', v => String(v))}</div>
-      ${an.R.comments.length ? `<table class="t" style="margin-top:6px"><thead><tr><th>التاريخ</th><th>التقييم</th><th>التعليق</th></tr></thead><tbody>${an.R.comments.slice(0, 15).map(r => `<tr><td>${esc(riyadhDay(r.created_at))}</td><td>${r.rating}/5</td><td class="l">${esc(r.comment)}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted">لا توجد تقييمات عملاء ضمن الفترة.</p>'}</div>`)
+      const starsHtml = (v, sz = 13, c = '#EE712D') => { const one = f => `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="${f}"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>`; return `<span style="position:relative;display:inline-flex;direction:ltr;vertical-align:middle"><span style="display:inline-flex;gap:1px">${one('#d5dbe5').repeat(5)}</span><span style="position:absolute;top:0;left:0;height:100%;overflow:hidden;white-space:nowrap;width:${Math.max(0, Math.min(100, v / 5 * 100))}%"><span style="display:inline-flex;gap:1px">${one(c).repeat(5)}</span></span></span>` }
+      const shifts = Object.entries(an.R.byShift).sort()
+      const rm = Object.keys(an.R.byMonth).sort()
+      P.push(`<div class="sec"><h3>تقييمات العملاء</h3>${an.R.n ? `<div class="rate"><div class="hero"><small>متوسط رضا العملاء</small><b>${an.R.avg.toFixed(2)}<span> / 5</span></b>${starsHtml(an.R.avg, 17, '#F5A623')}<div class="two"><div><b>${Math.round(an.R.sat * 100)}%</b><small>راضون (4 نجوم فأكثر)</small></div><div><b>${an.R.n}</b><small>تقييم</small></div></div></div><div class="bars">${[5, 4, 3, 2, 1].map(st => `<div class="r"><span class="k">${st} ${starsHtml(st, 9, st >= 4 ? '#16a34a' : st === 3 ? '#d97706' : '#dc2626')}</span><span class="bar" style="--c:${st >= 4 ? '#16a34a' : st === 3 ? '#d97706' : '#dc2626'}"><i style="width:${an.R.dist[st - 1] / Math.max(...an.R.dist, 1) * 100}%"></i></span><span class="v">${an.R.dist[st - 1]} (${Math.round(an.R.dist[st - 1] / an.R.n * 100)}%)</span></div>`).join('')}${an.R.low ? `<div class="muted" style="color:#b91c1c">${an.R.low} تقييم منخفض (نجمتان فأقل) يحتاج مراجعة</div>` : ''}</div></div>
+      ${shifts.length || rm.length > 1 ? `<table class="t" style="margin-top:8px"><thead><tr><th>${shifts.length ? 'الوردية' : 'الشهر'}</th><th>عدد التقييمات</th><th>المتوسط</th></tr></thead><tbody>${(shifts.length ? shifts.map(([k, b]) => [SHIFT_AR[k] ?? k, b]) : rm.map(k => [k, an.R.byMonth[k]])).map(([k, b]) => `<tr><td class="l">${esc(k)}</td><td>${b.n}</td><td><b>${(b.sum / b.n).toFixed(2)}</b></td></tr>`).join('')}</tbody></table>` : ''}
+      ${an.R.comments.length ? `<div class="quotes">${an.R.comments.slice(0, 6).map(r => `<div class="q" style="--c:${r.rating >= 4 ? '#16a34a' : r.rating === 3 ? '#d97706' : '#dc2626'}">${starsHtml(r.rating, 12)}<span class="d">${esc(riyadhDay(r.created_at))}${r.shift ? ' · ' + esc(r.shift) : ''}</span><p>${esc(r.comment)}</p></div>`).join('')}</div>` : ''}` : '<p class="muted">لا توجد تقييمات عملاء ضمن الفترة.</p>'}</div>`)
     }
     // 9) الدخول والنشاط
     if (show('activity')) {
@@ -262,8 +330,8 @@ export default function EmployeeFilePage() {
     // 10) الاعتماد
     P.push(`<div class="sec"><div class="sig"><div><span>أعدّه</span><b>${esc(issuer) || '&nbsp;'}</b><i></i></div><div><span>المراجعة</span><b>&nbsp;</b><i></i></div><div><span>الاعتماد</span><b>&nbsp;</b><i></i></div></div><p class="muted" style="text-align:center;margin-top:8px">أُعدّ هذا التقرير آلياً من بيانات نظام NW Station وقت الإصدار، وهو وثيقة داخلية سرّية للاستخدام الإداري فقط.</p></div>`)
     const html = docShell({
-      title: `ملف الموظف — ${u.full_name_ar}`,
-      body: docHeader({ title: 'تقرير ملف الموظف', infoLines: [`الموظف: <b>${esc(u.full_name_ar)}</b>`, `الفترة: من <b>${esc(from)}</b> إلى <b>${esc(to)}</b>`, `الرقم المرجعي: <b>${esc(ref)}</b>`] }) + `<div class="body">${P.join('')}</div>`,
+      title: `الملف الوظيفي — ${u.full_name_ar}`,
+      body: docHeader({ title: 'تقرير الملف الوظيفي', infoLines: [`الموظف: <b>${esc(u.full_name_ar)}</b>`, `الفترة: من <b>${esc(from)}</b> إلى <b>${esc(to)}</b>`, `الرقم المرجعي: <b>${esc(ref)}</b>`] }) + `<div class="body">${P.join('')}</div>`,
       footerLeft: `أُصدر: ${esc(fmtDT(new Date()))}${issuer ? ` · بواسطة ${esc(issuer)}` : ''}`, footerRight: 'سرّي — للأدمن فقط',
     })
     openDocWindow(html)
@@ -278,11 +346,11 @@ export default function EmployeeFilePage() {
       <div style={{ background: '#fff', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'ملف الموظف' : 'Employee file'}</h1>
-            <p style={{ margin: '3px 0 0', fontSize: '0.76rem', color: 'var(--text-3)' }}>{isAr ? 'معلومات كاملة وإجازات وإيرادات وتقييم ودخول — للأدمن فقط' : 'Full profile, leaves, revenue, evaluation, ratings and logins — admin only'}</p>
+            <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'الملف الوظيفي' : 'Staff profile'}</h1>
+            <p style={{ margin: '3px 0 0', fontSize: '0.76rem', color: 'var(--text-3)' }}>{isAr ? 'سجل شامل للموظف: البيانات، الإجازات، الأداء التشغيلي، الإيرادات، التقييمات، والدخول — للأدمن فقط' : 'Complete employee record: details, leaves, operations, revenue, evaluations and logins — admin only'}</p>
           </div>
           <button type="button" onClick={printFile} disabled={!an} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', fontFamily: 'inherit', opacity: an ? 1 : 0.4 }}>
-            {isAr ? 'طباعة الملف / PDF' : 'Print / PDF'}
+            {isAr ? 'طباعة التقرير / PDF' : 'Print report / PDF'}
           </button>
         </div>
       </div>
@@ -315,7 +383,7 @@ export default function EmployeeFilePage() {
           </div>
         </div>
 
-        {!empId && <div style={{ ...card, padding: '50px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.9rem' }}>{isAr ? 'اختر موظفاً لعرض ملفه الكامل' : 'Pick an employee to view the file'}</div>}
+        {!empId && <div style={{ ...card, padding: '50px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.9rem' }}>{isAr ? 'اختر موظفاً لعرض ملفه الوظيفي الكامل' : 'Pick an employee to view the file'}</div>}
         {empId && loading && <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>}
         {err && <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: '0.82rem' }}>{err}</div>}
 
@@ -342,6 +410,9 @@ export default function EmployeeFilePage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
               {show('leaves') && <><Kpi title={isAr ? 'إجازات مقبولة' : 'Leaves'} value={`${an.L.leaveOk}`} sub={`${Number(an.L.leaveDays.toFixed(2))} ${isAr ? 'يوم' : 'days'}`} color="#0f766e" />
                 <Kpi title={isAr ? 'استئذان مقبول' : 'Permissions'} value={hhmm(an.L.permHours)} sub={`${an.L.permOk} ${isAr ? 'مرة' : 'times'}`} color="#7c3aed" /></>}
+              {show('ops') && <><Kpi title={isAr ? 'رحلات مُدخلة' : 'Trips entered'} value={n0(an.O.n)} sub={`${an.O.extra} ${isAr ? 'إضافية' : 'extra'}`} color="#1C2B4A" />
+                <Kpi title={isAr ? 'ركاب مرحَّلون' : 'Dispatched'} value={n0(an.O.pax)} sub={`${isAr ? 'متوسط' : 'avg'} ${an.O.avg.toFixed(1)}`} color="#15803d" />
+                <Kpi title={isAr ? 'ركاب متخلفون' : 'Missed'} value={n0(an.O.missed)} sub={pct1(an.O.rate)} color={an.O.rate > 0.05 ? '#dc2626' : '#d97706'} /></>}
               {show('sales') && <><Kpi title={isAr ? 'إيرادات مُدخلة' : 'Entries'} value={n0(an.S.n)} sub={`${n0(an.S.collected)} ${isAr ? 'ر.س' : 'SAR'}`} color="#15803d" />
                 <Kpi title={isAr ? 'صافي الفرق' : 'Net diff'} value={`${an.S.diff > 0 ? '+' : ''}${n0(an.S.diff)}`} sub={`${an.S.deficits} ${isAr ? 'عجز' : 'deficits'}`} color={an.S.diff < 0 ? '#dc2626' : '#1d4ed8'} /></>}
               {show('eval') && <Kpi title={isAr ? 'التقييم الوظيفي' : 'Evaluation'} value={an.evalAvg != null ? (an.evalAvg / 10).toFixed(1) : '—'} sub={`${an.E.filter(x => x.final != null).length} ${isAr ? 'شهر مقيَّم' : 'months'}`} color="#1C2B4A" />}
@@ -436,32 +507,129 @@ export default function EmployeeFilePage() {
               </SecCard>
             )}
 
+            {/* الأداء التشغيلي */}
+            {show('ops') && (
+              <SecCard title={isAr ? 'الأداء التشغيلي — الترحيل' : 'Operations — dispatch'} hint={`${from} ← ${to}`}>
+                {an.O.n === 0 ? <p style={{ color: 'var(--text-3)', fontSize: '0.8rem', margin: 0 }}>{isAr ? 'لا توجد رحلات مُدخلة من هذا الموظف ضمن الفترة' : 'No trips entered by this employee in the period'}</p> : (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                      <OpsPanel title={isAr ? 'الرحلات المُدخلة' : 'Trips entered'} value={n0(an.O.n)} color="#1C2B4A" unit={isAr ? 'رحلة' : 'trips'}
+                        lines={[[isAr ? 'مغادرة' : 'Departures', n0(an.O.dep)], [isAr ? 'وصول' : 'Arrivals', n0(an.O.arr)], [isAr ? 'إضافية (RF)' : 'Extra (RF)', n0(an.O.extra)]]} />
+                      <OpsPanel title={isAr ? 'الركاب المرحَّلون' : 'Passengers dispatched'} value={n0(an.O.pax)} color="#15803d" unit={isAr ? 'راكب' : 'pax'}
+                        lines={[[isAr ? 'متوسط الرحلة' : 'Avg per trip', an.O.avg.toFixed(1)], [isAr ? 'رحلات مغادرة' : 'Departures', n0(an.O.dep)]]} />
+                      <OpsPanel title={isAr ? 'الركاب المتخلفون' : 'Passengers missed'} value={n0(an.O.missed)} color={an.O.rate > 0.05 ? '#dc2626' : '#d97706'} unit={isAr ? 'راكب' : 'pax'}
+                        lines={[[isAr ? 'نسبة التخلف' : 'Miss rate', pct1(an.O.rate)], [isAr ? 'من إجمالي الحاضرين' : 'Of all present', n0(an.O.pax + an.O.missed)]]} />
+                    </div>
+                    {an.O.pax + an.O.missed > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <div style={{ display: 'flex', height: 12, borderRadius: 99, overflow: 'hidden', background: 'var(--border)' }} role="img" aria-label={`${pct1(1 - an.O.rate)} / ${pct1(an.O.rate)}`}>
+                          <div style={{ width: `${(1 - an.O.rate) * 100}%`, background: '#15803d' }} />
+                          <div style={{ width: `${an.O.rate * 100}%`, background: '#dc2626', minWidth: an.O.missed ? 3 : 0 }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 18, marginTop: 7, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', flexWrap: 'wrap' }}>
+                          <span><i style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#15803d', marginInlineEnd: 6 }} />{isAr ? 'تم ترحيلهم' : 'Dispatched'} <bdi dir="ltr">{pct1(1 - an.O.rate)}</bdi></span>
+                          <span><i style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#dc2626', marginInlineEnd: 6 }} />{isAr ? 'متخلفون' : 'Missed'} <bdi dir="ltr">{pct1(an.O.rate)}</bdi></span>
+                        </div>
+                      </div>
+                    )}
+                    {(() => {
+                      const months = Object.keys(an.O.byMonth).sort().reverse(), mx = Math.max(...months.map(m => an.O.byMonth[m].pax), 1)
+                      const sts = Object.entries(an.O.byStation).sort((x, y) => y[1].pax - x[1].pax)
+                      const tbl = (head, rows) => (
+                        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, marginTop: 14 }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+                            <thead><tr>{head.map(h => <Th key={h}>{h}</Th>)}</tr></thead>
+                            <tbody>{rows}</tbody>
+                          </table>
+                        </div>
+                      )
+                      return (
+                        <>
+                          {months.length > 0 && tbl([isAr ? 'الشهر' : 'Month', isAr ? 'الرحلات' : 'Trips', isAr ? 'المرحَّلون' : 'Dispatched', isAr ? 'المتخلفون' : 'Missed', isAr ? 'نسبة التخلف' : 'Miss rate', ''],
+                            months.map(m => { const b = an.O.byMonth[m], r = b.pax + b.missed ? b.missed / (b.pax + b.missed) : 0; return (
+                              <tr key={m}><Td l b>{m}</Td><Td>{b.n}</Td><Td b>{n0(b.pax)}</Td><Td c={b.missed ? '#dc2626' : undefined}>{n0(b.missed)}</Td><Td>{pct1(r)}</Td>
+                                <td style={{ padding: '8px 10px', borderTop: '1px solid var(--border)', width: '24%' }}><Bar pct={(b.pax / mx) * 100} color="#15803d" /></td></tr>) }))}
+                          {sts.length > 1 && tbl([isAr ? 'المحطة' : 'Station', isAr ? 'الرحلات' : 'Trips', isAr ? 'المرحَّلون' : 'Dispatched', isAr ? 'المتخلفون' : 'Missed', isAr ? 'نسبة التخلف' : 'Miss rate'],
+                            sts.map(([n, b]) => <tr key={n}><Td l b>{n}</Td><Td>{b.n}</Td><Td b>{n0(b.pax)}</Td><Td c={b.missed ? '#dc2626' : undefined}>{n0(b.missed)}</Td><Td>{pct1(b.pax + b.missed ? b.missed / (b.pax + b.missed) : 0)}</Td></tr>))}
+                        </>
+                      )
+                    })()}
+                  </>
+                )}
+              </SecCard>
+            )}
+
             {/* تقييمات العملاء */}
             {show('ratings') && (
               <SecCard title={isAr ? 'تقييمات العملاء' : 'Customer ratings'} hint={`${an.R.n} ${isAr ? 'تقييم' : 'ratings'}`}>
                 {an.R.n === 0 ? <p style={{ color: 'var(--text-3)', fontSize: '0.8rem', margin: 0 }}>{isAr ? 'لا توجد تقييمات عملاء ضمن الفترة' : 'No ratings in the period'}</p> : (
                   <>
-                    <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Ring pct={(an.R.avg / 5) * 100} color="#EE712D" label={an.R.avg.toFixed(2)} sub={isAr ? 'من 5' : 'of 5'} />
-                      <div style={{ flex: 1, minWidth: 240, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {[5, 4, 3, 2, 1].map(s => (
-                          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ width: 52, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-2)' }}>{s} {isAr ? 'نجوم' : '★'}</span>
-                            <Bar pct={(an.R.dist[s - 1] / Math.max(...an.R.dist, 1)) * 100} color={s >= 4 ? '#16a34a' : s === 3 ? '#d97706' : '#dc2626'} />
-                            <span style={{ width: 38, textAlign: 'left', fontFamily: MONO, fontWeight: 800, fontSize: '0.78rem' }}>{an.R.dist[s - 1]}</span>
-                          </div>
-                        ))}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 16 }}>
+                      <div style={{ background: 'linear-gradient(160deg,#1C2B4A,#2d4a7a)', color: '#fff', borderRadius: 14, padding: '20px 18px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, opacity: 0.75 }}>{isAr ? 'متوسط رضا العملاء' : 'Average satisfaction'}</div>
+                        <div style={{ fontFamily: MONO, fontSize: '3rem', fontWeight: 800, lineHeight: 1 }} dir="ltr">{an.R.avg.toFixed(2)}<span style={{ fontSize: '1rem', opacity: 0.6 }}> / 5</span></div>
+                        <Stars value={an.R.avg} size={22} color="#F5A623" />
+                        <div style={{ display: 'flex', gap: 10, marginTop: 6, width: '100%' }}>
+                          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 4px' }}><div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.1rem' }} dir="ltr">{Math.round(an.R.sat * 100)}%</div><div style={{ fontSize: '0.64rem', opacity: 0.8 }}>{isAr ? 'راضون (4+)' : 'Satisfied (4+)'}</div></div>
+                          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 4px' }}><div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.1rem' }} dir="ltr">{an.R.n}</div><div style={{ fontSize: '0.64rem', opacity: 0.8 }}>{isAr ? 'تقييم' : 'ratings'}</div></div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, justifyContent: 'center' }}>
+                        {[5, 4, 3, 2, 1].map(st => {
+                          const c = an.R.dist[st - 1], col = st >= 4 ? '#16a34a' : st === 3 ? '#d97706' : '#dc2626'
+                          return (
+                            <div key={st} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ width: 58, display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-2)' }}><span dir="ltr" style={{ fontFamily: MONO }}>{st}</span><Stars value={st} size={11} color={col} /></span>
+                              <Bar pct={(c / Math.max(...an.R.dist, 1)) * 100} color={col} />
+                              <span style={{ width: 82, textAlign: 'left', fontFamily: MONO, fontSize: '0.76rem', fontWeight: 800 }} dir="ltr">{c} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>({Math.round((c / an.R.n) * 100)}%)</span></span>
+                            </div>
+                          )
+                        })}
+                        {an.R.low > 0 && <div style={{ fontSize: '0.72rem', color: '#b91c1c', fontWeight: 700, marginTop: 2 }}>{isAr ? `${an.R.low} تقييم منخفض (نجمتان فأقل) يحتاج مراجعة` : `${an.R.low} low ratings (2 stars or fewer) need review`}</div>}
                       </div>
                     </div>
-                    {an.R.comments.length > 0 && (
-                      <div style={{ marginTop: 14, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                        {an.R.comments.slice(0, 12).map((r, i) => (
-                          <div key={i} style={{ padding: '9px 14px', borderTop: i ? '1px solid var(--border)' : 'none', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                            <Chip c={r.rating >= 4 ? '#15803d' : r.rating === 3 ? '#b45309' : '#b91c1c'} bg={r.rating >= 4 ? '#dcfce7' : r.rating === 3 ? '#fef3c7' : '#fee2e2'}>{r.rating}/5</Chip>
-                            <div style={{ flex: 1, fontSize: '0.8rem', color: 'var(--text-1)', lineHeight: 1.6 }}>{r.comment}</div>
-                            <span style={{ fontFamily: MONO, fontSize: '0.68rem', color: 'var(--text-3)' }}>{riyadhDay(r.created_at)}</span>
+                    {(Object.keys(an.R.byShift).length > 0 || Object.keys(an.R.byMonth).length > 1) && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 14 }}>
+                        {Object.keys(an.R.byShift).length > 0 && (
+                          <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
+                            <div style={{ fontSize: '0.74rem', fontWeight: 800, marginBottom: 8, color: 'var(--text-2)' }}>{isAr ? 'المتوسط حسب الوردية' : 'By shift'}</div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              {Object.entries(an.R.byShift).sort().map(([sh, b]) => (
+                                <div key={sh} style={{ flex: 1, textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '8px 4px' }}>
+                                  <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontWeight: 700 }}>{SHIFT_AR[sh] ?? sh}</div>
+                                  <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.2rem' }} dir="ltr">{(b.sum / b.n).toFixed(2)}</div>
+                                  <div style={{ fontSize: '0.62rem', color: 'var(--text-3)' }}>{b.n} {isAr ? 'تقييم' : 'ratings'}</div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        ))}
+                        )}
+                        {Object.keys(an.R.byMonth).length > 1 && (
+                          <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
+                            <div style={{ fontSize: '0.74rem', fontWeight: 800, marginBottom: 8, color: 'var(--text-2)' }}>{isAr ? 'اتجاه المتوسط الشهري' : 'Monthly trend'}</div>
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 70 }} dir="ltr">
+                              {Object.keys(an.R.byMonth).sort().slice(-12).map(m => { const v = an.R.byMonth[m].sum / an.R.byMonth[m].n; return (
+                                <div key={m} title={`${m}: ${v.toFixed(2)}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                                  <span style={{ fontFamily: MONO, fontSize: '0.6rem', fontWeight: 800 }}>{v.toFixed(1)}</span>
+                                  <div style={{ width: '100%', maxWidth: 26, height: `${(v / 5) * 46}px`, background: v >= 4 ? '#16a34a' : v >= 3 ? '#d97706' : '#dc2626', borderRadius: '4px 4px 0 0', minHeight: 3 }} />
+                                  <span style={{ fontFamily: MONO, fontSize: '0.56rem', color: 'var(--text-3)' }}>{m.slice(5)}</span>
+                                </div>) })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {an.R.comments.length > 0 && (
+                      <div style={{ marginTop: 14 }}>
+                        <div style={{ fontSize: '0.74rem', fontWeight: 800, marginBottom: 8, color: 'var(--text-2)' }}>{isAr ? 'آراء العملاء' : 'Customer comments'}</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+                          {an.R.comments.slice(0, 8).map((r, i) => (
+                            <figure key={i} style={{ margin: 0, border: '1px solid var(--border)', borderInlineStart: `4px solid ${r.rating >= 4 ? '#16a34a' : r.rating === 3 ? '#d97706' : '#dc2626'}`, borderRadius: 10, padding: '10px 14px', background: 'var(--surface)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}><Stars value={r.rating} size={13} /><span style={{ fontFamily: MONO, fontSize: '0.64rem', color: 'var(--text-3)' }}>{riyadhDay(r.created_at)}{r.shift ? ` · ${r.shift}` : ''}</span></div>
+                              <blockquote style={{ margin: 0, fontSize: '0.8rem', lineHeight: 1.7, color: 'var(--text-1)' }}>{r.comment}</blockquote>
+                            </figure>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </>
