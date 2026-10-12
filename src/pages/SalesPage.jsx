@@ -7,6 +7,9 @@ import { toLatinDigits, cleanNumber } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
 import StatStrip from '../components/shared/StatStrip'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
+import PrintAccessModal from '../components/sales/PrintAccessModal'
+import { useAppSettings } from '../context/AppSettingsContext'
+import { PRINT_ACCESS_KEY, parseAccess, accountState } from '../utils/printAccess'
 import { todayStr, toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -276,6 +279,7 @@ export function printSaleRecord({ sale, isAr, profile }) {
 export function SalesModal({ sale, stations, onClose, onSaved }) {
   useEscapeKey(onClose)
   const { profile, isAccountant, isGeneralAdmin, allowCap, workStations } = useAuth()
+  const { settings } = useAppSettings()
   // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
   const multi = !isGeneralAdmin && workStations?.length > 1
   const { i18n } = useTranslation()
@@ -700,7 +704,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ السجل' : 'Save record')}
             </button>
           )}
-          {sale && allowCap('sales_print') && (
+          {sale && (isGeneralAdmin || (allowCap('sales_print') && sale.created_by === profile?.id && accountState(parseAccess(settings?.[PRINT_ACCESS_KEY]), profile?.id, todayStr()).allowed)) && (
             <button type="button" onClick={handlePrint}
               className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
               {isAr ? 'طباعة' : 'Print'}
@@ -821,21 +825,6 @@ export default function SalesPage() {
     fetchRecords()
   }
 
-  // الأدمن يفعّل/يوقف طباعة السجل عند الموظف — فردياً أو للكل (سجلات اليوم المعروض). الكاش يُحدَّث مع الحالة حتى لا ترجع القيمة القديمة لحظياً
-  async function setPrintFlag(ids, value) {
-    if (!ids.length) return
-    const prev = records
-    const cacheKey = `sales_${filterDate}_${filterStation}_${profile?.id}`
-    const apply = list => { setRecords(list); if (list.length) setCached(cacheKey, list) }
-    apply(records.map(x => ids.includes(x.id) ? { ...x, print_enabled: value } : x))
-    const { error } = await supabase.from('sales_records').update({ print_enabled: value }).in('id', ids)
-    if (error) {
-      apply(prev)
-      alert(isAr ? 'تعذر الحفظ: ' + error.message : 'Save failed: ' + error.message)
-    }
-  }
-  const togglePrint = r => setPrintFlag([r.id], !r.print_enabled)
-
   const fetchRecords = useCallback(async () => {
     const cacheKey = `sales_${filterDate}_${filterStation}_${profile?.id}`
     const cached = getCached(cacheKey)
@@ -893,8 +882,13 @@ export default function SalesPage() {
 
   // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام، وللمحاسب فقط إذا فعّل له الأدمن الصلاحية
   const canExportDaily = isGeneralAdmin || (isAccountant && grantCap('sales_export_daily'))
-  // طباعة اليومية (الكشف الكامل لليوم) — للأدمن فقط. طباعة كل سجل على حدة تُفعَّل من الأدمن لكل سجل (print_enabled)
+  // طباعة اليومية (الكشف الكامل لليوم) — للأدمن فقط
   const canPrintDaily = isGeneralAdmin
+  // صلاحية طباعة يوميات الموظفين: إعداد عام يديره الأدمن (وضع عام + استثناءات حسابات، مستمر أو مؤقت)
+  const { settings, saveSetting } = useAppSettings()
+  const printAccess = parseAccess(settings?.[PRINT_ACCESS_KEY])
+  const [printAccessOpen, setPrintAccessOpen] = useState(false)
+  const canPrintRecord = r => isGeneralAdmin || (r.created_by === profile?.id && allowCap('sales_print') && accountState(printAccess, profile?.id, todayStr()).allowed)
   function printDaily() {
     if (!records.length) return
     const sName = r => (isAr ? (r.station?.name_ar || r.station?.name_en) : (r.station?.name_en || r.station?.name_ar)) || '—'
@@ -1013,16 +1007,16 @@ export default function SalesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-        {isGeneralAdmin && records.length > 0 && (
-          <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white text-xs font-bold" role="group" aria-label={isAr ? 'طباعة السجلات' : 'Record printing'}>
-            <span className="px-3 py-2 text-gray-500 bg-gray-50 border-e border-gray-200">
-              {isAr ? `طباعة الموظفين: ${records.filter(r => r.print_enabled).length}/${records.length}` : `Staff print: ${records.filter(r => r.print_enabled).length}/${records.length}`}
+        {isGeneralAdmin && (
+          <button type="button" onClick={() => setPrintAccessOpen(true)}
+            title={isAr ? 'تحكّم في من يستطيع طباعة يومياته' : 'Control who can print their dailies'}
+            className="flex items-center gap-2 bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
+            {isAr ? 'صلاحية الطباعة' : 'Print access'}
+            <span className={`text-[10px] rounded-full px-2 py-0.5 font-extrabold ${printAccess.all ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+              {printAccess.all ? (isAr ? 'مفتوحة' : 'Open') : (isAr ? 'مغلقة' : 'Closed')}{Object.keys(printAccess.accounts).length ? ` · ${Object.keys(printAccess.accounts).length}` : ''}
             </span>
-            <button type="button" onClick={() => setPrintFlag(records.map(r => r.id), true)}
-              className="px-3 py-2 text-green-700 hover:bg-green-50 transition-colors border-e border-gray-200">{isAr ? 'تفعيل للكل' : 'Enable all'}</button>
-            <button type="button" onClick={() => setPrintFlag(records.map(r => r.id), false)}
-              className="px-3 py-2 text-red-600 hover:bg-red-50 transition-colors">{isAr ? 'إغلاق عن الكل' : 'Disable all'}</button>
-          </div>
+          </button>
         )}
         {canPrintDaily && records.length > 0 && (
           <button type="button" onClick={printDaily}
@@ -1218,18 +1212,11 @@ export default function SalesPage() {
                                     <button onClick={() => setAudit(r)}
                                       className="text-xs border border-gray-200 text-gray-500 rounded-lg px-2 py-1 hover:bg-gray-50"
                                       title={isAr ? 'سجل التعديلات' : 'Audit History'}>{isAr ? 'السجل' : 'Log'}</button>
-                                    {(isGeneralAdmin || r.print_enabled) && (
+                                    {canPrintRecord(r) && (
                                       <button type="button" onClick={() => printSaleRecord({ sale: r, isAr, profile })}
                                         className="border border-gray-200 text-gray-600 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors"
                                         title={isAr ? 'طباعة هذه اليومية' : 'Print this daily sheet'} aria-label={isAr ? 'طباعة هذه اليومية' : 'Print this daily sheet'}>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
-                                      </button>
-                                    )}
-                                    {isGeneralAdmin && (
-                                      <button type="button" role="switch" aria-checked={!!r.print_enabled} onClick={() => togglePrint(r)}
-                                        title={r.print_enabled ? (isAr ? 'الطباعة مفعّلة للموظف — اضغط للإيقاف' : 'Printing on for staff — click to stop') : (isAr ? 'الطباعة موقوفة عن الموظف — اضغط للتفعيل' : 'Printing off for staff — click to enable')}
-                                        className={`w-8 h-[18px] rounded-full relative transition-colors shrink-0 ${r.print_enabled ? 'bg-green-500' : 'bg-gray-300'}`}>
-                                        <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all ${r.print_enabled ? 'end-[2px]' : 'start-[2px]'}`} />
                                       </button>
                                     )}
                                     {r.is_confirmed && !isGeneralAdmin
@@ -1283,6 +1270,11 @@ export default function SalesPage() {
           </div>
         )
       })()}
+
+      {printAccessOpen && (
+        <PrintAccessModal isAr={isAr} access={printAccess} onClose={() => setPrintAccessOpen(false)}
+          onSave={next => saveSetting(PRINT_ACCESS_KEY, JSON.stringify(next))} />
+      )}
 
       {xlOpen && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-3" dir={isAr ? 'rtl' : 'ltr'} onClick={e => { if (e.target === e.currentTarget && !xlBusy) setXlOpen(false) }}>
