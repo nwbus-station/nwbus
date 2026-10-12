@@ -7,6 +7,7 @@ import DatePicker from '../components/shared/DatePicker'
 import { useAuth } from '../context/AuthContext'
 import FeedbackReport from '../components/feedback/FeedbackReport'
 import SelectField from '../components/shared/SelectField'
+import { brandHeader } from '../utils/printDoc'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ', en: 'Shift A' },
@@ -183,7 +184,13 @@ function RatingsTab() {
       </tr>`).join('')
 
     // صندوق السياق — بيانات الموظف كاملة لو التقرير لموظف واحد، وإلا اسم المحطة
-    const contextBoxHtml = selectedEmployee ? `
+    const brandHtml = brandHeader({
+      title: isAr ? 'تقرير تقييم العملاء' : 'Customer Ratings Report',
+      subtitle: selectedEmployee ? '' : (selectedStation ? escapeHtml(stationLabel(selectedStation, isAr)) : ''),
+      lines: [`${rows.length} ${isAr ? 'تقييم' : 'ratings'}`, `${isAr ? 'المتوسط' : 'Average'} <b>${avg} / 5</b>`, new Date().toLocaleDateString(loc)],
+      dir: isAr ? 'rtl' : 'ltr',
+    })
+    const contextBoxHtml = brandHtml + (selectedEmployee ? `
       <div style="background:#1C2B36;color:#fff;padding:16px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
         <div>
           <div style="font-size:16px;font-weight:800">${escapeHtml(selectedEmployee.full_name_ar)}</div>
@@ -195,14 +202,7 @@ function RatingsTab() {
           <div style="font-size:20px;font-weight:800;color:#F59E0B">${avg} / 5</div>
           <div style="font-size:10px;opacity:0.7">${rows.length} ${isAr ? 'تقييم' : 'ratings'}</div>
         </div>
-      </div>` : `
-      <div style="background:#1C2B36;color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-        <div>
-          <div style="font-size:15px;font-weight:800">${isAr ? 'تقرير تقييم العملاء' : 'Customer Ratings Report'}${selectedStation ? ` — ${escapeHtml(stationLabel(selectedStation, isAr))}` : ''}</div>
-          <div style="font-size:10px;opacity:0.7;margin-top:3px">${rows.length} ${isAr ? 'تقييم' : 'ratings'} · ${isAr ? 'المتوسط' : 'Average'} ${avg} / 5 · ${new Date().toLocaleDateString(loc)}</div>
-        </div>
-        <div style="font-size:12px;font-weight:800;letter-spacing:1px">NORTH WEST BUS</div>
-      </div>`
+      </div>` : '')
 
     const html = `<!DOCTYPE html><html dir="${isAr ? 'rtl' : 'ltr'}" lang="${isAr ? 'ar' : 'en'}"><head><meta charset="UTF-8"><title>${isAr ? 'تقرير تقييم العملاء' : 'Customer Ratings Report'}</title>
       <style>

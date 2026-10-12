@@ -3,6 +3,20 @@ import { NWB_LOGO_SVG } from './logo'
 
 export const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
+
+// شعار الشركة بحجم مناسب للطباعة (يعمل داخل أي مستند بدون CSS خارجي)
+export const brandLogo = (w = 130) => NWB_LOGO_SVG.replace('<svg ', `<svg style="display:block;width:${w}px;height:auto" `)
+
+// ترويسة موحّدة لكل المستندات المطبوعة: المعلومات بجانب، العنوان وسطاً، الشعار بالجهة المقابلة، وخط برتقالي سفلي
+// كلها inline-style فتُحقن بأي مستند طباعة قديم بدون الاعتماد على PRINT_CSS
+export function brandHeader({ title, subtitle = '', lines = [], dir = 'rtl', logoW = 130, margin = '0 0 14px' }) {
+  const ff = "font-family:'IBM Plex Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif"
+  return `<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding:12px 6px 10px;border-bottom:3px solid #EE712D;margin:${margin};direction:${dir};${ff}">
+<div style="font-size:10px;color:#475569;line-height:1.8;text-align:start">${lines.map(l => `<div>${l}</div>`).join('')}</div>
+<div style="text-align:center"><b style="display:block;font-size:20px;font-weight:900;color:#264673;line-height:1.3">${title}</b>${subtitle ? `<span style="font-size:11px;color:#64748b;font-weight:600">${subtitle}</span>` : ''}</div>
+<div style="justify-self:end">${brandLogo(logoW)}</div></div>`
+}
+
 export const PRINT_CSS = `
   @page { size: A4; margin: 9mm; }
   * { box-sizing: border-box; }

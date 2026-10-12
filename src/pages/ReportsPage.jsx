@@ -13,6 +13,7 @@ import { toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
 import { USER_ROLES } from '../utils/constants'
 import SelectField from '../components/shared/SelectField'
+import { brandHeader } from '../utils/printDoc'
 
 const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { minimumFractionDigits: 2 })
 const fmtN = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn')
@@ -1045,13 +1046,7 @@ export default function ReportsPage() {
 
       return `
         <div style="page-break-after:${idx < targetStations.length-1 ? 'always' : 'avoid'}">
-          <div style="background:#1C2B36;color:#fff;padding:8px 16px;display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <div style="font-size:14px;font-weight:700">${escapeHtml(stnName)}</div>
-              <div style="font-size:8px;opacity:.7;margin-top:2px">${isAr?'تقرير الوصول والمغادرة':'Arrivals & Departures'} · ${dateFrom} → ${dateTo}</div>
-            </div>
-            <div style="font-size:10px;font-weight:800;letter-spacing:1px;opacity:.7">NORTH WEST BUS</div>
-          </div>
+          ${brandHeader({ title: isAr?'تقرير الوصول والمغادرة':'Arrivals & Departures', subtitle: escapeHtml(stnName), lines: [`${dateFrom} → ${dateTo}`], dir: isAr?'rtl':'ltr', logoW: 105, margin: '0 0 6px' })}
           ${kpiBar}
           <div style="padding:0 4px">
             ${moveTable(deps, '#1C2B36', isAr?'رحلات المغادرة':'Departures')}
@@ -1072,19 +1067,12 @@ export default function ReportsPage() {
     const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost'].filter(typeAllowed)
     const types = reportTypes.length === 0 ? ALL_TYPES : ALL_TYPES.filter(t => reportTypes.includes(t))
     // header احترافي موحّد لجميع الأقسام
-    const printHeader = `
-      <div style="background:#1C2B36;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0">
-        <div>
-          <div style="font-size:11px;font-weight:700;letter-spacing:.2px">${reportTypes.length === 0 ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', ')}</div>
-          <div style="font-size:9px;opacity:.7;margin-top:3px">الفترة: ${dateFrom} → ${dateTo} &nbsp;·&nbsp; المحطة: ${stationLabel}</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:16px;font-weight:800;letter-spacing:1px">NORTH WEST BUS</div>
-          <div style="width:36px;height:2px;background:#38bdf8;margin:3px auto"></div>
-          <div style="font-size:9px;opacity:.6;letter-spacing:.5px">نورث وست باص</div>
-        </div>
-        <div style="width:200px"></div>
-      </div>`
+    const printHeader = brandHeader({
+      title: reportTypes.length === 0 ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', '),
+      subtitle: `${isAr ? 'المحطة' : 'Station'}: ${stationLabel}`,
+      lines: [`${isAr ? 'الفترة' : 'Period'}: <b>${dateFrom}</b> → <b>${dateTo}</b>`, `${isAr ? 'أعدّه' : 'By'}: ${escapeHtml(profile?.full_name_ar ?? '—')}`],
+      dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 8px',
+    })
 
     const sections = types.map((tp, idx) => {
       const body = reportBody(tp)

@@ -15,6 +15,7 @@ import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { SHIFTS, computeActiveUntil } from '../utils/ratingShifts'
 import { leaveRemaining } from '../utils/leaveBalance'
 import SelectField from '../components/shared/SelectField'
+import { brandHeader, brandLogo } from '../utils/printDoc'
 const XL_GREEN = 'FF15803D', XL_RED = 'FFB91C1C'
 
 function RatingActivationAdmin({ userId, isAr }) {
@@ -380,11 +381,11 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
       @page{size:A4;margin:0}
       body{font-family:Arial,sans-serif;direction:rtl;background:#EBEBEB;display:flex;align-items:center;justify-content:center;min-height:100vh;print-color-adjust:exact;-webkit-print-color-adjust:exact}
       .card{width:480px;background:#fff;border-radius:0;overflow:hidden;border:1px solid #D1D1D1}
-      .header{background:#2C2C2C;padding:30px 32px 24px}
+      .header{background:#fff;padding:22px 32px 16px;border-bottom:3px solid #EE712D;display:flex;justify-content:space-between;align-items:center}
       .brand{font-size:9px;letter-spacing:4px;color:#888;margin-bottom:10px;font-weight:600;text-transform:uppercase}
-      .header-title{font-size:20px;font-weight:700;color:#fff;letter-spacing:0.5px}
-      .header-sub{font-size:11px;color:#666;margin-top:5px;letter-spacing:1px}
-      .stripe{height:2px;background:#888}
+      .header-title{font-size:20px;font-weight:900;color:#264673;letter-spacing:0.5px}
+      .header-sub{font-size:11px;color:#64748b;margin-top:5px;letter-spacing:1px}
+      .stripe{display:none}
       .body{padding:28px 32px;background:#fff}
       .employee-section{margin-bottom:26px;padding-bottom:22px;border-bottom:1px solid #EBEBEB}
       .section-label{font-size:9px;letter-spacing:3px;color:#999;font-weight:600;text-transform:uppercase;margin-bottom:10px}
@@ -409,9 +410,11 @@ function CredentialCard({ username, password, nameAr, jobNumber, phone, hireDate
     </style></head><body>
     <div class="card">
       <div class="header">
-        <div class="brand">NORTH WEST BUS · نظام المحطات</div>
-        <div class="header-title">بطاقة بيانات الدخول</div>
-        <div class="header-sub">Credential Card</div>
+        <div>
+          <div class="header-title">بطاقة بيانات الدخول</div>
+          <div class="header-sub">Credential Card · نظام المحطات</div>
+        </div>
+        ${brandLogo(105)}
       </div>
       <div class="stripe"></div>
       <div class="body">
@@ -2310,13 +2313,7 @@ function UsersPageFull() {
         </button>
       </div>
       <div style="padding:24px 28px">
-        <div style="background:#1C2B36;color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-          <div>
-            <div style="font-size:15px;font-weight:800">${isAr ? 'قائمة الموظفين' : 'Staff Roster'} — ${escapeHtml(stationTitle)}</div>
-            <div style="font-size:10px;opacity:0.7;margin-top:3px">${printTargets.length} ${isAr ? 'موظف' : 'staff'} · ${new Date().toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB')}</div>
-          </div>
-          <div style="font-size:12px;font-weight:800;letter-spacing:1px">NORTH WEST BUS</div>
-        </div>
+        ${brandHeader({ title: isAr ? 'قائمة الموظفين' : 'Staff Roster', subtitle: escapeHtml(stationTitle), lines: [`${printTargets.length} ${isAr ? 'موظف' : 'staff'}`, new Date().toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB')], dir: isAr ? 'rtl' : 'ltr' })}
         ${bodyHtml}
       </div>
     </body></html>`

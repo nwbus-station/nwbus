@@ -6,6 +6,7 @@ import { escapeHtml, matchesSearch } from '../utils/digits'
 import { ADMIN_ROLE_VALUES, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS, DISPATCHER_SOURCE } from '../utils/constants'
 import { createNotification } from '../utils/notifications'
 import SelectField from '../components/shared/SelectField'
+import { brandLogo } from '../utils/printDoc'
 
 // ── تقييم الموظفين متعدد المصادر: مشرف الوردية + مشرف المحطة + المدير التنفيذي للمحطات ──
 // كل مصدر له وزنه، والنتيجة النهائية تُحسب فقط بعد اكتمال الثلاثة
@@ -2283,16 +2284,16 @@ function reportCss() {
   .print-btn:hover{background:#101B2E}
 
   /* ── رأس الصفحة ── */
-  .cover{background:linear-gradient(135deg,#1C2B4A,#141F38);padding:32px 36px;margin:24px 0;border-radius:14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 8px 24px rgba(28,43,74,0.18);position:relative;overflow:hidden}
-  .cover::before{content:'';position:absolute;inset:0;background:linear-gradient(120deg,rgba(91,91,214,0.18),transparent 60%)}
+  .cover{background:#fff;border-bottom:3px solid #EE712D;padding:14px 8px 12px;margin:14px 0 18px;border-radius:0;display:flex;align-items:center;justify-content:space-between;position:relative}
+  .cover::before{display:none}
   .cover-right{position:relative}
   .logo-mark{display:none}
-  .cover-title{font-size:23px;font-weight:800;color:#fff;line-height:1.25;margin-bottom:5px}
-  .cover-sub{font-size:12.5px;color:rgba(255,255,255,0.55);font-weight:500}
+  .cover-title{font-size:23px;font-weight:900;color:#264673;line-height:1.25;margin-bottom:5px}
+  .cover-sub{font-size:12.5px;color:#64748b;font-weight:500}
   .cover-left{display:flex;flex-direction:column;align-items:flex-end;gap:4px;position:relative}
   .nw-logo{font-size:13px;font-weight:800;color:rgba(255,255,255,0.9);letter-spacing:0.02em}
   .nw-logo-line{width:36px;height:2px;background:rgba(255,255,255,0.3);margin:6px 0;border-radius:2px}
-  .cover-date{font-size:10.5px;color:rgba(255,255,255,0.4);letter-spacing:0.05em;margin-top:8px}
+  .cover-date{font-size:10.5px;color:#64748b;letter-spacing:0.05em;margin-top:8px}
 
   /* ── إحصاءات ── */
   .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
@@ -2415,8 +2416,7 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[month-1]} ${year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NORTHWESTBUS</div>
-      <div class="nw-logo-line"></div>
+      ${brandLogo(120)}
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}</div>
     </div>
   </div>
@@ -2491,8 +2491,7 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[month-1]} ${year}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NORTHWESTBUS</div>
-      <div class="nw-logo-line"></div>
+      ${brandLogo(120)}
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}</div>
     </div>
   </div>
@@ -2535,8 +2534,7 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${empName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NORTHWESTBUS</div>
-      <div class="nw-logo-line"></div>
+      ${brandLogo(120)}
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}</div>
     </div>
   </div>
@@ -2582,8 +2580,7 @@ ${printBarHtml()}
       <div class="cover-sub">${MN[rangeStart.month-1]} ${rangeStart.year} — ${MN[rangeEnd.month-1]} ${rangeEnd.year} &nbsp;·&nbsp; ${stnName}</div>
     </div>
     <div class="cover-left">
-      <div class="nw-logo">NORTHWESTBUS</div>
-      <div class="nw-logo-line"></div>
+      ${brandLogo(120)}
       <div class="cover-date">${new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')}</div>
     </div>
   </div>
