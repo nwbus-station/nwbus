@@ -232,8 +232,9 @@ function summarizeLeaves(rows, year) {
   return { year, yr, all }
 }
 async function fetchEmployeeLeaveStats(employeeId) {
-  const { data } = await supabase.from('leaves').select('leave_type, status, start_date, days_count').eq('employee_id', employeeId)
-  return summarizeLeaves(data ?? [], new Date().getFullYear())
+  const { data } = await supabase.from('leaves').select('id, leave_type, status, start_date, days_count, created_at').eq('employee_id', employeeId).order('created_at', { ascending: false })
+  const rows = data ?? []
+  return { ...summarizeLeaves(rows, new Date().getFullYear()), rows, recent: rows.slice(0, 6) }
 }
 
 const PRINT_CSS = `
@@ -1064,45 +1065,128 @@ function PermissionQuotaCard({ isAr = true }) {
 
 function EmployeeStatsModal({ leave, onClose, isAr = true }) {
   const [stats, setStats] = useState(null)
+  const { settings } = useAppSettings()
+  const quota = readQuota(settings)
   useEffect(() => { fetchEmployeeLeaveStats(leave.employee_id).then(setStats) }, [leave.employee_id])
-  const hrs = h => (h > 0 ? formatHoursAr(h) : '—')
-  const box = (title, n, sub) => (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)' }}>
-      <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', fontWeight: 700 }}>{title}</div>
-      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.2 }}>{n}</div>
-      {sub != null && <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{sub}</div>}
+  const hrs = h => (h > 0 ? hhmmOf(h) : '—')
+  const mono = { fontFamily: 'ui-monospace, Menlo, Consolas, monospace', letterSpacing: '0.03em' }
+  const tile = (title, val, sub, tone) => (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)', borderTop: `3px solid ${tone}` }}>
+      <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', fontWeight: 700 }}>{title}</div>
+      <div style={{ ...mono, fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.2, marginTop: 2 }} dir="ltr">{val}</div>
+      {sub != null && <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', marginTop: 2, fontWeight: 600 }}>{sub}</div>}
     </div>
   )
-  const part = (label, b) => (
-    <div>
-      <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)', margin: '4px 0 8px' }}>{label}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-        {box(isAr ? 'استئذانات مقبولة' : 'Permissions approved', b.permOk, `${isAr ? 'من' : 'of'} ${b.permReq} ${isAr ? 'مقدَّمة' : 'requested'} · ${hrs(b.permHours)}`)}
-        {box(isAr ? 'إجازات مقبولة' : 'Leaves approved', b.leaveOk, `${isAr ? 'من' : 'of'} ${b.leaveReq} ${isAr ? 'مقدَّمة' : 'requested'} · ${b.leaveDays ? Number(b.leaveDays.toFixed(2)) + (isAr ? ' يوم' : ' d') : '—'}`)}
-        {box(isAr ? 'طلبات مرفوضة' : 'Rejected', b.rejected, b.pending ? `${b.pending} ${isAr ? 'قيد المراجعة' : 'pending'}` : null)}
-        {box(isAr ? 'إجمالي الطلبات' : 'All requests', b.total, null)}
-      </div>
-    </div>
+  // استخدام حدّ الاستئذان في الفترة الحالية (مقبولة + قيد المراجعة)
+  const qb = periodBounds(new Date().toISOString().slice(0, 10), quota.period)
+  const permUsed = (stats?.rows ?? []).filter(r => r.leave_type === 'casual' && ['approved', 'pending'].includes(r.status) && r.start_date >= qb.from && r.start_date <= qb.to)
+    .reduce((a, r) => a + (Number(r.days_count) || 0) * 24, 0)
+  const pct = quota.hours > 0 ? Math.min(100, (permUsed / quota.hours) * 100) : 0
+  const th = (c, extra = {}) => ({ padding: '7px 8px', color: '#fff', fontSize: '0.68rem', fontWeight: 700, textAlign: 'center', background: c, ...extra })
+  const td = (extra = {}) => ({ padding: '9px 8px', textAlign: 'center', fontSize: '0.84rem', borderTop: '1px solid var(--border)', ...mono, ...extra })
+  const rowOf = (name, b) => (
+    <tr key={name}>
+      <td style={td({ textAlign: 'right', fontFamily: 'inherit', fontWeight: 800, background: 'var(--surface)' })}>{name}</td>
+      <td style={td()}>{b.permReq}</td><td style={td({ fontWeight: 800 })}>{b.permOk}</td><td style={td()}>{hrs(b.permHours)}</td>
+      <td style={td()}>{b.leaveReq}</td><td style={td({ fontWeight: 800 })}>{b.leaveOk}</td><td style={td()}>{b.leaveDays ? Number(b.leaveDays.toFixed(2)) : '—'}</td>
+      <td style={td({ color: b.rejected ? '#dc2626' : undefined })}>{b.rejected}</td><td style={td({ fontWeight: 800 })}>{b.total}</td>
+    </tr>
   )
+  const ST_COL = { approved: ['#15803d', '#dcfce7', 'مقبولة'], rejected: ['#b91c1c', '#fee2e2', 'مرفوضة'], pending: ['#b45309', '#fef3c7', 'قيد المراجعة'] }
+  const initial = String(leave.employee_name || '?').trim().charAt(0).toUpperCase()
   return (
-    <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
-      <div dir={isAr ? 'rtl' : 'ltr'} style={{ background: 'var(--card, #fff)', borderRadius: 12, width: '100%', maxWidth: 620, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{isAr ? 'سجل الموظف' : 'Employee record'}</div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--text-3)' }}>{leave.employee_name}{leave.job_title ? ` · ${leave.job_title}` : ''}</div>
+    <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
+      <div dir={isAr ? 'rtl' : 'ltr'} style={{ background: 'var(--card, #fff)', borderRadius: 16, width: '100%', maxWidth: 740, maxHeight: '92vh', overflow: 'auto', boxShadow: '0 12px 50px rgba(0,0,0,0.28)' }}>
+        {/* الرأس */}
+        <div style={{ padding: '16px 22px', display: 'flex', alignItems: 'center', gap: 14, background: '#1C2B4A', color: '#fff', borderRadius: '16px 16px 0 0' }}>
+          <span style={{ width: 44, height: 44, borderRadius: '50%', background: '#EE712D', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '1.15rem', flexShrink: 0 }}>{initial}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: '1.02rem' }}>{leave.employee_name}</div>
+            <div style={{ fontSize: '0.74rem', opacity: 0.8, marginTop: 2 }}>{[leave.job_title, isAr ? leave.station?.name_ar : leave.station?.name_en].filter(Boolean).join(' · ') || (isAr ? 'سجل الإجازات والاستئذان' : 'Leave & permission record')}</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'var(--text-3)', fontFamily: 'inherit' }}>✕</button>
+          <button onClick={onClose} aria-label="close" style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', color: '#fff', fontSize: '1rem', fontFamily: 'inherit' }}>✕</button>
         </div>
-        <div style={{ padding: '14px 20px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {!stats ? <div style={{ textAlign: 'center', color: 'var(--text-3)', padding: 24 }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div> : (
+
+        <div style={{ padding: '18px 22px 22px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {!stats ? <div style={{ textAlign: 'center', color: 'var(--text-3)', padding: 30 }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div> : (
             <>
-              {part(isAr ? `هذا العام (${stats.year})` : `This year (${stats.year})`, stats.yr)}
-              {part(isAr ? 'الإجمالي (كل الفترات)' : 'All time', stats.all)}
+              {/* ملخص هذا العام */}
+              <div>
+                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>{isAr ? `ملخص ${stats.year}` : `Summary ${stats.year}`}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 10 }}>
+                  {tile(isAr ? 'إجمالي الطلبات' : 'All requests', String(stats.yr.total).padStart(2, '0'), stats.yr.pending ? `${stats.yr.pending} ${isAr ? 'قيد المراجعة' : 'pending'}` : null, '#1C2B4A')}
+                  {tile(isAr ? 'الاستئذان المقبول' : 'Permission time', hhmmOf(stats.yr.permHours), `${stats.yr.permOk} ${isAr ? 'مرة من' : 'of'} ${stats.yr.permReq}`, '#7c3aed')}
+                  {tile(isAr ? 'الإجازات المقبولة' : 'Leave days', String(Number(stats.yr.leaveDays.toFixed(2))), `${stats.yr.leaveOk} ${isAr ? 'مرة من' : 'of'} ${stats.yr.leaveReq}`, '#0f766e')}
+                  {tile(isAr ? 'المرفوضة' : 'Rejected', String(stats.yr.rejected).padStart(2, '0'), null, stats.yr.rejected ? '#dc2626' : '#94a3b8')}
+                </div>
+              </div>
+
+              {/* حدّ الاستئذان */}
+              {quota.hours > 0 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', background: 'var(--surface)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? `حدّ الاستئذان ${quota.period === 'year' ? 'السنوي' : 'الشهري'} (${qb.label})` : 'Permission limit'}</span>
+                    <span style={{ ...mono, fontWeight: 800, fontSize: '0.95rem', color: pct >= 100 ? '#dc2626' : 'var(--text-1)' }} dir="ltr">{hhmmOf(permUsed)} / {hhmmOf(quota.hours)}</span>
+                  </div>
+                  <div style={{ marginTop: 8, height: 9, borderRadius: 99, background: 'var(--border)', overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', borderRadius: 99, background: pct >= 100 ? '#dc2626' : pct > 80 ? '#d97706' : '#1C2B4A' }} />
+                  </div>
+                  <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', marginTop: 5 }}>{isAr ? `المتبقي ${hhmmOf(Math.max(0, quota.hours - permUsed))}` : `Remaining ${hhmmOf(Math.max(0, quota.hours - permUsed))}`}</div>
+                </div>
+              )}
+
+              {/* مصفوفة هذا العام / الإجمالي */}
+              <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th rowSpan={2} style={th('#1C2B4A')}>{isAr ? 'الفترة' : 'Period'}</th>
+                      <th colSpan={3} style={th('#5b21b6')}>{isAr ? 'الاستئذان' : 'Permissions'}</th>
+                      <th colSpan={3} style={th('#0f766e')}>{isAr ? 'الإجازات' : 'Leaves'}</th>
+                      <th rowSpan={2} style={th('#1C2B4A')}>{isAr ? 'مرفوضة' : 'Rej.'}</th>
+                      <th rowSpan={2} style={th('#1C2B4A')}>{isAr ? 'الإجمالي' : 'Total'}</th>
+                    </tr>
+                    <tr>
+                      {[isAr ? 'مقدَّمة' : 'Req', isAr ? 'مقبولة' : 'OK', isAr ? 'المدة' : 'Time'].map(h => <th key={'p' + h} style={th('#7c3aed', { fontWeight: 600 })}>{h}</th>)}
+                      {[isAr ? 'مقدَّمة' : 'Req', isAr ? 'مقبولة' : 'OK', isAr ? 'الأيام' : 'Days'].map(h => <th key={'l' + h} style={th('#14958a', { fontWeight: 600 })}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>{rowOf(isAr ? `هذا العام (${stats.year})` : `This year (${stats.year})`, stats.yr)}{rowOf(isAr ? 'الإجمالي' : 'All time', stats.all)}</tbody>
+                </table>
+              </div>
+
+              {/* حسب النوع */}
               {Object.entries(stats.yr.byType).filter(([, n]) => n > 0).length > 0 && (
-                <div style={{ fontSize: '0.74rem', color: 'var(--text-2)' }}>
-                  {isAr ? 'الإجازات المقبولة هذا العام حسب النوع: ' : 'Approved leaves this year by type: '}
-                  {Object.entries(stats.yr.byType).filter(([, n]) => n > 0).map(([k, n]) => `${LEAVE_TYPES.find(t => t.id === k)?.ar ?? k}: ${n}`).join(' · ')}
+                <div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>{isAr ? 'الإجازات المقبولة هذا العام حسب النوع' : 'Approved leaves this year by type'}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {Object.entries(stats.yr.byType).filter(([, n]) => n > 0).map(([k, n]) => {
+                      const [c, bg] = TYPE_TONE[k] ?? ['#334155', '#e2e8f0']
+                      return <span key={k} style={{ background: bg, color: c, borderRadius: 8, padding: '4px 12px', fontSize: '0.76rem', fontWeight: 800 }}>{LEAVE_TYPES.find(t => t.id === k)?.ar ?? k} <span style={{ ...mono }}>× {n}</span></span>
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* آخر الطلبات */}
+              {stats.recent?.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>{isAr ? 'آخر الطلبات' : 'Latest requests'}</div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                    {stats.recent.map((r, i) => {
+                      const [c, bg] = TYPE_TONE[r.leave_type] ?? ['#334155', '#e2e8f0']
+                      const sc = ST_COL[r.status] ?? ST_COL.pending
+                      return (
+                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderTop: i ? '1px solid var(--border)' : 'none', flexWrap: 'wrap' }}>
+                          <span style={{ background: bg, color: c, borderRadius: 7, padding: '2px 10px', fontSize: '0.74rem', fontWeight: 800, minWidth: 92, textAlign: 'center' }}>{LEAVE_TYPES.find(t => t.id === r.leave_type)?.ar ?? r.leave_type}</span>
+                          <span style={{ ...mono, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{r.start_date}</span>
+                          <span style={{ ...mono, fontSize: '0.8rem', color: 'var(--text-2)' }}>{r.leave_type === 'casual' ? hhmmOf((Number(r.days_count) || 0) * 24) : `${Number(r.days_count) || 0} ${isAr ? 'يوم' : 'd'}`}</span>
+                          <span style={{ flex: 1 }} />
+                          <span style={{ background: sc[1], color: sc[0], borderRadius: 99, padding: '2px 11px', fontSize: '0.7rem', fontWeight: 800 }}>{sc[2]}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </>
