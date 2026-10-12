@@ -876,8 +876,8 @@ export default function SalesPage() {
 
   // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام، وللمحاسب فقط إذا فعّل له الأدمن الصلاحية
   const canExportDaily = isGeneralAdmin || (isAccountant && grantCap('sales_export_daily'))
-  // طباعة اليومية: كشف رسمي بالقيود المعروضة لليوم المختار — يُفعَّل من الأدمن عبر صلاحية sales_print_daily
-  const canPrintDaily = isGeneralAdmin || canExportDaily || grantCap('sales_print_daily')
+  // طباعة اليومية: كشف رسمي بالقيود المعروضة لليوم المختار — مفتوحة للجميع افتراضياً ويقفلها الأدمن عبر صلاحية sales_print_daily
+  const canPrintDaily = isGeneralAdmin || allowCap('sales_print_daily')
   function printDaily() {
     if (!records.length) return
     const sName = r => (isAr ? (r.station?.name_ar || r.station?.name_en) : (r.station?.name_en || r.station?.name_ar)) || '—'

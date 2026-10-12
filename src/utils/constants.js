@@ -72,7 +72,7 @@ export const TITLE_CAPABILITIES = [
   { group: 'الإيرادات', key: 'sales_deficit_ack', kind: 'allow', ar: 'مهام المحاسب: إقرار العجز وتحميله على الموظف', en: 'Accountant: acknowledge deficit' },
   { group: 'الإيرادات', key: 'sales_notes',       kind: 'allow', ar: 'مهام المحاسب: كتابة ملاحظات المحاسب', en: 'Accountant: write notes' },
   { group: 'الإيرادات', key: 'sales_export_daily', kind: 'grant', roleOk: true, ar: 'مهام المحاسب: تنزيل الجدول اليومي للإيرادات (Excel) — مغلقة افتراضياً، تُفعَّل للمحاسب فقط', en: 'Accountant: download the daily revenue sheet (Excel) — off by default' },
-  { group: 'الإيرادات', key: 'sales_print_daily', kind: 'grant', roleOk: true, ar: 'طباعة اليومية (كشف الإيرادات اليومي) — مغلقة افتراضياً، تُفعَّل لمن تحتاج', en: 'Print the daily revenue sheet — off by default' },
+  { group: 'الإيرادات', key: 'sales_print_daily', kind: 'allow', ar: 'طباعة اليومية (كشف الإيرادات اليومي) — مفتوحة للجميع، أغلقها لمن لا تريد له الطباعة', en: 'Print the daily revenue sheet — on by default, switch off to restrict' },
   // الموجودات
   { group: 'الموجودات', key: 'lostfound_report_tab',   kind: 'allow', ar: 'تبويب بلاغ مفقودات', en: 'Lost report tab' },
   { group: 'الموجودات', key: 'lostfound_handover_tab', kind: 'allow', ar: 'تبويب تسليم موجودات', en: 'Handover tab' },
