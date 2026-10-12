@@ -21,7 +21,7 @@ const EVAL_SOURCE_SHORT   = { shift_supervisor: 'وردية', station_admin: 'م
 // لو مصدر واحد بس قيّم، ياخذ الـ100٪ كاملة أياً كان.
 // مشرف المرحّلين مصدر مرن: تقييمه يحل محل مشرف المحطة لو ما قيّم، وإلا محل مشرف الوردية، وإن قيّم الاثنان يُهمل —
 // يُحسب وقت القراءة (مو عند الحفظ) فما يصير تعارض سواء قيّم قبل أو بعد مشرف المحطة والوردية.
-function computeFinalScore(rows) {
+export function computeFinalScore(rows) {
   const bySource = {}
   for (const role of EVAL_SOURCE_ORDER) {
     const row = (rows || []).find(r => r.eval_source === role)

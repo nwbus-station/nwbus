@@ -138,6 +138,7 @@ const MODULE_ROLE_LIMITS = {
   users:            ['station_admin', 'area_supervisor'],
   // الخريطة: عامة لكل الأدوار — تظهر لمن يُضاف له القسم
   customer_ratings: [],
+  employee_file:    [],
   stations:         [],
   settings:         [],
   magazine:         [],   // نشر وإدارة Event: للأدمن أو لحساب عليه مسمى مخصص (مثل التسويق)
@@ -156,7 +157,7 @@ export const GROUP_MODULE = {
 }
 
 // أقسام ما تنفتح للأدوار الأساسية أبداً: بياناتها في القاعدة للأدمن فقط، ففتحها يعطي صفحة فاضية/مرفوضة
-export const MODULE_LOCKED_FOR_ROLES = ['settings', 'customer_ratings']
+export const MODULE_LOCKED_FOR_ROLES = ['settings', 'customer_ratings', 'employee_file']
 // أقسام كانت موجودة قبل ما نحفظ الإعداد كخريطة (صيغة قديمة: مصفوفة permissions.modules)
 const LEGACY_MODULES = ['transportation', 'lost_found', 'sales', 'reports', 'leaves', 'survey', 'evaluation', 'users', 'map', 'customer_ratings', 'live_board', 'magazine']
 
@@ -190,6 +191,7 @@ export const MODULES = [
   { value: 'settings',       ar: 'الإعدادات',        en: 'Settings' },
   { value: 'map',            ar: 'الخريطة',          en: 'Map' },
   { value: 'customer_ratings', ar: 'تقييمات العملاء', en: 'Customer Ratings' },
+  { value: 'employee_file',  ar: 'ملف الموظف',       en: 'Employee File' },
   { value: 'live_board',     ar: 'شاشة العرض',       en: 'Live Board' },
   { value: 'pa_calls',       ar: 'نداء الركاب',      en: 'Passenger Calls' },
   { value: 'event',          ar: 'Event (اطلاع)',      en: 'Event (view)' },
