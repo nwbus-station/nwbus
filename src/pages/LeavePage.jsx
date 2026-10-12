@@ -16,6 +16,7 @@ import { yearsOfService, annualEntitlement, accruedBalance, leaveRemaining } fro
 const LEAVE_TYPES = [
   { id: 'annual',        ar: 'إجازة سنوية',       icon: '' },
   { id: 'unpaid',        ar: 'إجازة بدون راتب',   icon: '' },
+  { id: 'emergency',     ar: 'إجازة اضطرارية',     icon: '' },
   { id: 'sick',          ar: 'إجازة مرضية',        icon: '' },
   { id: 'marriage',      ar: 'إجازة زواج',         icon: '' },
   { id: 'paternity',     ar: 'إجازة مولود',        icon: '' },
@@ -42,6 +43,7 @@ const BEREAVEMENT_RELS = [
 const LEAVE_MAX = {
   annual:      null, // يحسب حسب سنوات الخدمة
   unpaid:      null,
+  emergency:   null,
   sick:        null,
   marriage:    5,
   paternity:   3,
@@ -70,6 +72,12 @@ function addDays(dateStr, n) {
 }
 
 // الأنواع التي تتطلب مرفق إثبات
+// أنواع سبب الإجازة فيها إلزامي، وكلها لا تُخصم من رصيد الإجازة السنوية (الرصيد يجمع الإجازة السنوية فقط)
+const REASON_TYPES = {
+  casual:    { label: 'سبب الاستئذان', labelEn: 'Reason', ph: 'أدخل سبب الاستئذان (إلزامي)...' },
+  emergency: { label: 'سبب الإجازة الاضطرارية', labelEn: 'Emergency reason', ph: 'اكتب سبب الإجازة الاضطرارية (إلزامي)...' },
+  unpaid:    { label: 'سبب الإجازة بدون راتب', labelEn: 'Reason for unpaid leave', ph: 'اكتب سبب طلب الإجازة بدون راتب (إلزامي)...' },
+}
 const PROOF_TYPES = ['sick', 'marriage', 'paternity', 'bereavement']
 const PROOF_DAYS  = 5 // مهلة رفع الإثبات بالأيام من تاريخ التبليغ (لا تنطبق على الوفاة)
 const PROOF_NO_DEADLINE = ['bereavement'] // بدون مهلة زمنية
@@ -170,190 +178,186 @@ function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
-function printLeave(rawLeave, employeeName, stationName, profile, usedAnnual = 0) {
-  const leave = decodeLeaveNotes(rawLeave)
-  const typeLabel   = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
-  const relLabel    = BEREAVEMENT_RELS.find(r => r.id === leave.bereavement_rel)?.ar ?? ''
-  const compLabel   = leave.compensatory_reason ? (COMPENSATORY_REASONS.find(r => r.id === leave.compensatory_reason)?.ar ?? '') : ''
-  const isCasual    = leave.leave_type === 'casual'
-  const durationStr = isCasual ? formatHoursAr((leave.days_count ?? 0) * 24) : `${leave.days_count} يوم`
-  const printDate  = new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')
-  const printTime  = new Date().toLocaleTimeString('ar-SA-u-ca-gregory-nu-latn', { hour: '2-digit', minute: '2-digit' })
-  // بيانات الموظف تُقرأ من بطاقة الموظف (جدول users) — مصدر الحقيقة الوحيد
-  const hireStr    = profile?.hire_date ?? null
-  const entitlement = annualEntitlement(hireStr)
-  const accrued     = accruedBalance(hireStr, entitlement)
-  const remaining   = Math.max(0, accrued - usedAnnual)
-  const isAnnual    = leave.leave_type === 'annual'
-  const hireDate   = hireStr ?? '—'
-  const jobNum     = profile?.job_number ?? '—'
-  const phone      = profile?.phone ?? '—'
-  const nationalId = profile?.national_id ?? '—'
-  const jobTitle   = profile?.job_title ?? '—'
-
-  const supLabel = leave.supervisor_status === 'approved'
-    ? `✓ موافق${leave.supervisor_by ? ' — ' + leave.supervisor_by : ''}`
-    : leave.supervisor_status === 'rejected' ? '✗ مرفوض' : 'بانتظار الموافقة'
-  const supColor = leave.supervisor_status === 'approved' ? '#166534'
-    : leave.supervisor_status === 'rejected' ? '#dc2626' : '#92400e'
-
-  const mgrLabel = leave.manager_status === 'approved'
-    ? `✓ موافق${leave.manager_by ? ' — ' + leave.manager_by : ''}`
-    : leave.manager_status === 'rejected' ? '✗ مرفوض' : 'بانتظار الموافقة'
-  const mgrColor = leave.manager_status === 'approved' ? '#166534'
-    : leave.manager_status === 'rejected' ? '#dc2626' : '#92400e'
-
-  const style = document.createElement('style')
-  style.innerHTML = `
-    @page { size: A4; margin: 8mm; }
-    @media print {
-      body > *:not(#__leave_print) { display: none !important; }
-      #__leave_print { display: block !important; }
+/* ── سجل الموظف: كم مرة استأذن / أخذ إجازة / قدّم طلباً ── */
+function summarizeLeaves(rows, year) {
+  const mk = () => ({ total: 0, approved: 0, rejected: 0, pending: 0, permReq: 0, permOk: 0, permHours: 0, leaveReq: 0, leaveOk: 0, leaveDays: 0, byType: {} })
+  const all = mk(), yr = mk()
+  for (const r of rows ?? []) {
+    const y = Number(String(r.start_date ?? '').slice(0, 4))
+    const casual = r.leave_type === 'casual'
+    for (const b of (y === year ? [all, yr] : [all])) {
+      b.total++
+      if (r.status === 'approved') b.approved++
+      else if (r.status === 'rejected') b.rejected++
+      else b.pending++
+      if (casual) { b.permReq++; if (r.status === 'approved') { b.permOk++; b.permHours += (Number(r.days_count) || 0) * 24 } }
+      else { b.leaveReq++; if (r.status === 'approved') { b.leaveOk++; b.leaveDays += Number(r.days_count) || 0 }; b.byType[r.leave_type] = (b.byType[r.leave_type] || 0) + (r.status === 'approved' ? 1 : 0) }
     }
-    #__leave_print {
-      display: none;
-      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-      font-size: 11px; color: #000; direction: rtl;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    #__leave_print .bordered { border: 1px solid #cbd5e1; border-collapse: collapse; width: 100%; }
-    #__leave_print .bordered td, #__leave_print .bordered th { border: 1px solid #cbd5e1; padding: 5px 9px; font-size: 10.5px; }
-    #__leave_print .lbl { color: #475569; font-size: 9.5px; white-space: nowrap; }
-    #__leave_print .val { font-weight: 700; color: #0f172a; }
-    #__leave_print .sec-hd { background: #1C2B36; color: #fff; padding: 4px 10px; font-weight: 700; font-size: 10.5px; margin-top: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  `
-  document.head.appendChild(style)
-
-  const div = document.createElement('div')
-  div.id = '__leave_print'
-  div.innerHTML = `
-    <!-- رأس الصفحة -->
-    <div style="background:#1C2B36;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-      <div style="width:160px;text-align:right;font-size:10px;opacity:.8">
-        <div>${esc(stationName)}</div>
-        <div>${esc(printDate)}</div>
-      </div>
-      <div style="text-align:center;flex:1">
-        <div style="font-size:17px;font-weight:900;letter-spacing:2px">NORTH WEST BUS</div>
-        <div style="width:40px;height:2px;background:#38bdf8;margin:3px auto"></div>
-        <div style="font-size:8px;opacity:.7">نورث وست باص</div>
-      </div>
-      <div style="width:160px;text-align:left">
-        <div style="font-size:16px;font-weight:800">${leave.leave_type === 'casual' ? 'طلب استئذان' : 'طلب إجازة'}</div>
-        <div style="font-size:9px;opacity:.7;margin-top:2px">المحطة: ${esc(stationName)}</div>
-      </div>
-    </div>
-
-
-    <!-- صف معلومات -->
-    <table class="bordered" style="margin-bottom:6px">
-      <tr>
-        <td class="lbl">تاريخ الوثيقة</td><td class="val">${esc(printDate)}</td>
-        <td class="lbl">رقم الموظف</td><td class="val">${esc(jobNum)}</td>
-        <td class="lbl">المحطة</td><td class="val">${esc(stationName)}</td>
-      </tr>
-    </table>
-
-    <!-- بيانات الإجازة -->
-    <div class="sec-hd">بيانات الإجازة</div>
-    <table class="bordered">
-      <thead>
-        <tr>
-          <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">نوع الإجازة</th>
-          <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">من تاريخ</th>
-          <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">إلى تاريخ</th>
-          <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">المدة</th>
-          <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">تاريخ المباشرة</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td style="text-align:center">${esc(typeLabel)}${compLabel ? '<br><span style="font-size:9px;color:#0f766e">' + esc(compLabel) + '</span>' : ''}</td>
-          <td style="text-align:center">${esc(leave.start_date)}${leave.time_from ? '<br><span style="font-size:9px">' + esc(leave.time_from) + '</span>' : ''}</td>
-          <td style="text-align:center">${esc(leave.end_date)}${leave.time_to ? '<br><span style="font-size:9px">' + esc(leave.time_to) + '</span>' : ''}</td>
-          <td style="text-align:center;font-weight:900;color:#1C2B36;font-size:${isCasual ? '11' : '13'}px">${esc(durationStr)}</td>
-          <td style="text-align:center">${esc(leave.return_date ?? '—')}</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <!-- بيانات الموظف -->
-    <div class="sec-hd">بيانات الموظف</div>
-    <table class="bordered">
-      <tr>
-        <td class="lbl">اسم الموظف</td><td class="val">${esc(employeeName)}</td>
-        <td class="lbl">المحطة / الإدارة</td><td class="val">${esc(stationName)}</td>
-      </tr>
-      <tr>
-        <td class="lbl">المسمى الوظيفي</td><td class="val">${esc(jobTitle)}</td>
-        <td class="lbl">رقم الموظف</td><td class="val">${esc(jobNum)}</td>
-      </tr>
-      <tr>
-        <td class="lbl">تاريخ المباشرة</td><td class="val">${esc(hireDate)}</td>
-        <td class="lbl">رقم الجوال</td><td class="val">${esc(phone)}</td>
-      </tr>
-      <tr>
-        <td class="lbl">رقم الهوية</td><td class="val">${esc(nationalId)}</td>
-        <td class="lbl">ملاحظات</td><td class="val">${esc(leave.notes ?? '—')}</td>
-      </tr>
-    </table>
-
-    ${isAnnual ? `
-    <!-- رصيد الإجازة السنوية -->
-    <div class="sec-hd">رصيد الإجازة السنوية</div>
-    <table class="bordered">
-      <tr>
-        <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">الرصيد السنوي</th>
-        <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">المستخدم</th>
-        <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">المتبقي الفعلي</th>
-        <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px">سنوات الخدمة</th>
-      </tr>
-      <tr>
-        <td style="text-align:center;font-weight:900;font-size:15px">${accrued.toFixed(3)} يوم</td>
-        <td style="text-align:center;font-weight:900;font-size:15px">${usedAnnual.toFixed(3)} يوم</td>
-        <td style="text-align:center;font-weight:900;font-size:15px">${remaining.toFixed(3)} يوم</td>
-        <td style="text-align:center;font-weight:700">${yearsOfService(hireStr)} سنة</td>
-      </tr>
-    </table>
-    ` : ''}
-
-    <!-- حالة الموافقة -->
-    <div class="sec-hd">حالة الموافقة</div>
-    <table class="bordered">
-      <tr>
-        <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px;width:33%">مقدم الطلب</th>
-        <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px;width:33%">المشرف المباشر</th>
-        <th style="background:#1e3a5f;color:#fff;text-align:center;font-size:10px;width:33%">المدير المباشر</th>
-      </tr>
-      <tr>
-        <td style="padding:14px 9px 6px;vertical-align:top">
-          <div style="font-size:10px">${esc(employeeName)}</div>
-          <div style="border-top:1px solid #cbd5e1;margin-top:22px;font-size:9px;color:#64748b">التوقيع</div>
-        </td>
-        <td style="padding:14px 9px 6px;vertical-align:top">
-          <div style="font-size:10px;font-weight:700;color:${supColor}">${esc(supLabel)}</div>
-          <div style="border-top:1px solid #cbd5e1;margin-top:22px;font-size:9px;color:#64748b">التوقيع</div>
-        </td>
-        <td style="padding:14px 9px 6px;vertical-align:top">
-          <div style="font-size:10px;font-weight:700;color:${mgrColor}">${esc(mgrLabel)}</div>
-          <div style="border-top:1px solid #cbd5e1;margin-top:22px;font-size:9px;color:#64748b">التوقيع</div>
-        </td>
-      </tr>
-    </table>
-
-    <!-- تذييل -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:6px;border-top:1px solid #cbd5e1;font-size:9px;color:#64748b">
-      <span>طُبع بواسطة : ${esc(employeeName)}</span>
-      <span style="background:#1C2B36;color:#fff;padding:2px 12px;border-radius:20px;font-size:8px;font-weight:700">NORTH WEST BUS</span>
-      <span>${printDate} — ${printTime}</span>
-    </div>
-  `
-  document.body.appendChild(div)
-  try { window.print() } finally {
-    document.body.removeChild(div)
-    document.head.removeChild(style)
   }
+  return { year, yr, all }
+}
+async function fetchEmployeeLeaveStats(employeeId) {
+  const { data } = await supabase.from('leaves').select('leave_type, status, start_date, days_count').eq('employee_id', employeeId)
+  return summarizeLeaves(data ?? [], new Date().getFullYear())
+}
+
+const PRINT_CSS = `
+  @page { size: A4; margin: 9mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #e8ecf1; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #0f172a; direction: rtl; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .toolbar { position: sticky; top: 0; z-index: 5; background: #1C2B36; color: #fff; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+  .toolbar button { background: #fff; color: #1C2B36; border: 0; border-radius: 8px; padding: 9px 20px; font-weight: 800; font-size: 14px; font-family: inherit; }
+  .sheet { background: #fff; max-width: 820px; margin: 14px auto; padding: 0 0 14px; box-shadow: 0 2px 14px rgba(0,0,0,.12); }
+  .hd { background: #1C2B36; color: #fff; padding: 14px 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .hd .brand { font-size: 17px; font-weight: 900; letter-spacing: 2px; }
+  .hd .sub { font-size: 9px; opacity: .7; margin-top: 2px; }
+  .hd .title { text-align: left; }
+  .hd .title b { display: block; font-size: 18px; font-weight: 800; }
+  .hd .title span { font-size: 10px; opacity: .8; }
+  .body { padding: 0 22px; }
+  .meta { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 4px; font-size: 10px; color: #475569; gap: 8px; flex-wrap: wrap; }
+  .badge { display: inline-block; padding: 3px 12px; border-radius: 99px; font-weight: 800; font-size: 11px; }
+  .sec { margin-top: 14px; }
+  .sec > h3 { margin: 0 0 6px; font-size: 11.5px; font-weight: 800; color: #1C2B36; padding-right: 8px; border-right: 4px solid #EE712D; }
+  .grid { display: grid; gap: 6px; }
+  .g4 { grid-template-columns: repeat(4, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); } .g2 { grid-template-columns: repeat(2, 1fr); }
+  .cell { border: 1px solid #dbe2ea; border-radius: 7px; padding: 6px 9px; background: #f8fafc; }
+  .cell small { display: block; font-size: 8.5px; color: #64748b; margin-bottom: 2px; }
+  .cell b { font-size: 11.5px; color: #0f172a; word-break: break-word; }
+  .req { border: 1.5px solid #1C2B36; border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: 1.2fr 1fr 1fr .9fr; gap: 8px; align-items: center; }
+  .req .k { font-size: 8.5px; color: #64748b; } .req .v { font-size: 13px; font-weight: 800; }
+  .dur { background: #1C2B36; color: #fff; border-radius: 8px; padding: 8px 6px; text-align: center; font-weight: 900; font-size: 14px; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+  table.t th { background: #1e3a5f; color: #fff; padding: 5px 8px; font-size: 10px; }
+  table.t td { border: 1px solid #dbe2ea; padding: 5px 8px; text-align: center; }
+  table.t td:first-child { text-align: right; font-weight: 700; background: #f8fafc; }
+  .chips { margin-top: 6px; font-size: 10px; color: #334155; }
+  .chips span { display: inline-block; background: #eef2f7; border-radius: 99px; padding: 2px 10px; margin: 2px 0 2px 4px; font-weight: 700; }
+  .ap { border: 1px solid #dbe2ea; border-radius: 8px; padding: 8px 10px; }
+  .ap h4 { margin: 0 0 4px; font-size: 10px; color: #475569; font-weight: 700; }
+  .ap .st { font-size: 11px; font-weight: 800; }
+  .ap .dt { font-size: 9px; color: #64748b; margin-top: 2px; min-height: 12px; }
+  .sig { border-top: 1px solid #94a3b8; margin-top: 26px; padding-top: 3px; font-size: 8.5px; color: #64748b; }
+  .ft { display: flex; justify-content: space-between; align-items: center; margin: 14px 22px 0; padding-top: 6px; border-top: 1px solid #cbd5e1; font-size: 9px; color: #64748b; gap: 8px; }
+  .ft .pill { background: #1C2B36; color: #fff; padding: 2px 12px; border-radius: 20px; font-size: 8px; font-weight: 700; }
+  @media (max-width: 640px) {
+    .sheet { margin: 0; box-shadow: none; } .g4 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: 1fr; }
+    .req { grid-template-columns: 1fr 1fr; } .body { padding: 0 12px; } .hd { padding: 12px 14px; } .ft { margin: 12px 12px 0; flex-wrap: wrap; }
+  }
+  @media print { html, body { background: #fff; } .toolbar { display: none !important; } .sheet { margin: 0; max-width: none; box-shadow: none; padding: 0; }
+    .sec, .req, .ap, table.t { break-inside: avoid; } }
+`
+
+function buildLeavePrintHtml(rawLeave, employeeName, stationName, profile, usedAnnual, stats) {
+  const leave = decodeLeaveNotes(rawLeave)
+  const typeLabel = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
+  const relLabel = BEREAVEMENT_RELS.find(r => r.id === leave.bereavement_rel)?.ar ?? ''
+  const compLabel = leave.compensatory_reason ? (COMPENSATORY_REASONS.find(r => r.id === leave.compensatory_reason)?.ar ?? '') : ''
+  const isCasual = leave.leave_type === 'casual'
+  const isAnnual = leave.leave_type === 'annual'
+  const durationStr = isCasual ? formatHoursAr((leave.days_count ?? 0) * 24) : `${Number(leave.days_count) || 0} ${Number(leave.days_count) === 1 ? 'يوم' : 'أيام'}`
+  const fmtDT = d => (d ? new Date(d).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' }) : '')
+  const printStamp = fmtDT(new Date())
+  const hireStr = profile?.hire_date ?? null
+  const entitlement = annualEntitlement(hireStr)
+  const accrued = accruedBalance(hireStr, entitlement)
+  const remaining = Math.max(0, accrued - usedAnnual)
+  const docNo = String(leave.id ?? '').replace(/-/g, '').slice(0, 6).toUpperCase()
+  const docTitle = isCasual ? 'طلب استئذان خروج' : 'طلب إجازة'
+  const reasonLabel = REASON_TYPES[leave.leave_type]?.label ?? 'ملاحظات'
+
+  const st = leave.status === 'approved' ? ['معتمد نهائياً', '#dcfce7', '#166534'] : leave.status === 'rejected' ? ['مرفوض', '#fee2e2', '#b91c1c'] : ['قيد المراجعة', '#fef3c7', '#92400e']
+  const step = (status, by, at) => status === 'approved'
+    ? [`✓ موافق${by ? ' — ' + by : ''}`, '#166534', fmtDT(at)]
+    : status === 'rejected' ? ['✗ مرفوض', '#b91c1c', fmtDT(at)] : ['بانتظار الموافقة', '#92400e', '']
+  const sup = step(leave.supervisor_status, leave.supervisor_by, leave.supervisor_at)
+  const mgr = step(leave.manager_status, leave.manager_by, leave.manager_at)
+
+  const cell = (k, v) => `<div class="cell"><small>${esc(k)}</small><b>${esc(v || '—')}</b></div>`
+  const row = (label, a, b) => `<tr><td>${esc(label)}</td><td>${a}</td><td>${b}</td></tr>`
+  const S = stats ?? summarizeLeaves([], new Date().getFullYear())
+  const hrs = h => (h > 0 ? formatHoursAr(h) : '—')
+  const typeChips = Object.entries(S.yr.byType).filter(([, n]) => n > 0).map(([k, n]) => `<span>${esc(LEAVE_TYPES.find(t => t.id === k)?.ar ?? k)}: ${n}</span>`).join('')
+
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(docTitle)} — ${esc(employeeName)}</title><style>${PRINT_CSS}</style></head><body>
+<div class="toolbar"><span>اضغط «طباعة / حفظ PDF» ثم اختر الطابعة أو «حفظ كملف PDF»</span><button onclick="window.print()">طباعة / حفظ PDF</button></div>
+<div class="sheet">
+  <div class="hd">
+    <div><div class="brand">NORTH WEST BUS</div><div class="sub">نورث وست باص</div></div>
+    <div class="title"><b>${esc(docTitle)}</b><span>${esc(stationName || '')}</span></div>
+  </div>
+  <div class="body">
+    <div class="meta">
+      <span>رقم الطلب: <b>#${esc(docNo)}</b> &nbsp;·&nbsp; تاريخ الرفع: <b>${esc(fmtDT(leave.created_at) || '—')}</b></span>
+      <span class="badge" style="background:${st[1]};color:${st[2]}">${esc(st[0])}</span>
+    </div>
+
+    <div class="sec"><h3>بيانات الموظف</h3>
+      <div class="grid g4">
+        ${cell('اسم الموظف', employeeName)}${cell('الرقم الوظيفي', profile?.job_number)}${cell('المسمى الوظيفي', profile?.job_title)}${cell('المحطة / الإدارة', stationName)}
+        ${cell('تاريخ المباشرة', hireStr)}${cell('رقم الجوال', profile?.phone)}${cell('رقم الهوية', profile?.national_id)}${cell('سنوات الخدمة', hireStr ? yearsOfService(hireStr) + ' سنة' : '')}
+      </div>
+    </div>
+
+    <div class="sec"><h3>تفاصيل الطلب</h3>
+      <div class="req">
+        <div><div class="k">نوع الطلب</div><div class="v">${esc(typeLabel)}</div>${(relLabel || compLabel) ? `<div class="k" style="margin-top:2px">${esc(relLabel || compLabel)}</div>` : ''}</div>
+        <div><div class="k">من</div><div class="v">${esc(leave.start_date)}</div>${leave.time_from ? `<div class="k">${esc(leave.time_from)}</div>` : ''}</div>
+        <div><div class="k">إلى</div><div class="v">${esc(leave.end_date)}</div>${leave.time_to ? `<div class="k">${esc(leave.time_to)}</div>` : ''}</div>
+        <div class="dur">${esc(durationStr)}</div>
+      </div>
+      ${!isCasual && leave.return_date ? `<div class="grid g2" style="margin-top:6px">${cell('تاريخ المباشرة بعد الإجازة', leave.return_date)}${cell(reasonLabel, leave.notes)}</div>`
+        : `<div class="grid" style="margin-top:6px">${cell(reasonLabel, leave.notes)}</div>`}
+    </div>
+
+    <div class="sec"><h3>سجل الموظف — كم مرة استأذن وأخذ إجازة وقدّم طلباً</h3>
+      <table class="t">
+        <thead><tr><th style="width:46%">البند</th><th>هذا العام (${S.year})</th><th>الإجمالي</th></tr></thead>
+        <tbody>
+          ${row('طلبات الاستئذان المقدَّمة', S.yr.permReq, S.all.permReq)}
+          ${row('الاستئذانات المقبولة (عدد المرات · المدة)', `${S.yr.permOk} · ${hrs(S.yr.permHours)}`, `${S.all.permOk} · ${hrs(S.all.permHours)}`)}
+          ${row('طلبات الإجازات المقدَّمة', S.yr.leaveReq, S.all.leaveReq)}
+          ${row('الإجازات المقبولة (عدد المرات · الأيام)', `${S.yr.leaveOk} · ${S.yr.leaveDays ? Number(S.yr.leaveDays.toFixed(2)) + ' يوم' : '—'}`, `${S.all.leaveOk} · ${S.all.leaveDays ? Number(S.all.leaveDays.toFixed(2)) + ' يوم' : '—'}`)}
+          ${row('الطلبات المرفوضة', S.yr.rejected, S.all.rejected)}
+          ${row('إجمالي الطلبات المقدَّمة', `<b>${S.yr.total}</b>`, `<b>${S.all.total}</b>`)}
+        </tbody>
+      </table>
+      ${typeChips ? `<div class="chips">الإجازات المقبولة هذا العام حسب النوع: ${typeChips}</div>` : ''}
+    </div>
+
+    ${isAnnual ? `<div class="sec"><h3>رصيد الإجازة السنوية</h3>
+      <div class="grid g3">${cell('الرصيد المستحق', accrued.toFixed(3) + ' يوم')}${cell('المستخدم هذا العام', usedAnnual.toFixed(3) + ' يوم')}${cell('المتبقي الفعلي', remaining.toFixed(3) + ' يوم')}</div></div>` : ''}
+
+    <div class="sec"><h3>مسار الموافقة والتوقيعات</h3>
+      <div class="grid g3">
+        <div class="ap"><h4>مقدّم الطلب</h4><div class="st">${esc(employeeName)}</div><div class="dt">${esc(fmtDT(leave.created_at))}</div><div class="sig">التوقيع</div></div>
+        <div class="ap"><h4>المشرف المباشر</h4><div class="st" style="color:${sup[1]}">${esc(sup[0])}</div><div class="dt">${esc(sup[2])}</div><div class="sig">التوقيع</div></div>
+        <div class="ap"><h4>المدير المعتمِد</h4><div class="st" style="color:${mgr[1]}">${esc(mgr[0])}</div><div class="dt">${esc(mgr[2])}</div><div class="sig">التوقيع</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="ft"><span>طُبع بواسطة: ${esc(employeeName)}</span><span class="pill">NORTH WEST BUS</span><span>${esc(printStamp)}</span></div>
+</div></body></html>`
+}
+
+// الطباعة بنافذة مستقلة (تعمل من الجوال والكمبيوتر) — النافذة تُفتح فور الضغط (قبل جلب البيانات) لتفادي حجب النوافذ
+function printLeave(w, rawLeave, employeeName, stationName, profile, usedAnnual, stats) {
+  const html = buildLeavePrintHtml(rawLeave, employeeName, stationName, profile, usedAnnual, stats)
+  if (w) {
+    w.document.open(); w.document.write(html); w.document.close()
+    // على الكمبيوتر نفتح نافذة الطباعة تلقائياً، وعلى الجوال يبقى زر «طباعة / حفظ PDF» ظاهراً أعلى الصفحة
+    if (!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) setTimeout(() => { try { w.focus(); w.print() } catch { /* يطبع يدوياً */ } }, 500)
+    return true
+  }
+  // النوافذ المنبثقة محجوبة: نطبع من إطار مخفي
+  const f = document.createElement('iframe')
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  document.body.appendChild(f)
+  f.contentDocument.open(); f.contentDocument.write(html); f.contentDocument.close()
+  setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print() } finally { setTimeout(() => f.remove(), 2000) } }, 500)
+  return false
 }
 
 // مستلمو مرحلة المشرف: المسؤول المباشر إن وُجد، وإلا كل مشرفي المحطة + مساعد المدير المخصصة له المحطة
@@ -451,7 +455,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
     setError('')
     if (form.leave_type !== 'casual' && days < 1) { setError('تاريخ النهاية يجب أن يكون بعد تاريخ البداية'); return }
     if (form.leave_type === 'casual' && casualHours <= 0) { setError('وقت الانتهاء يجب أن يكون بعد وقت البداية'); return }
-    if (form.leave_type === 'casual' && !form.notes?.trim()) { setError('سبب الإجازة إلزامي'); return }
+    if (REASON_TYPES[form.leave_type] && !form.notes?.trim()) { setError(`${REASON_TYPES[form.leave_type].label} إلزامي`); return }
     if (maxDays && days > maxDays) { setError(`هذه الإجازة لا تتجاوز ${maxDays} أيام`); return }
 
     // التحقق من مواعيد التقديم حسب السياسة (الأدمن يمكنه تجاوزها)
@@ -606,8 +610,8 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
       id: 'emergency',
       ar: 'إجازة اضطرارية',
       en: 'Emergency Leave',
-      desc_ar: 'مرضية، زواج، مولود، وفاة',
-      types: ['sick', 'marriage', 'paternity', 'bereavement', 'unpaid'],
+      desc_ar: 'مرضية، زواج، مولود، وفاة، اضطرارية، بدون راتب',
+      types: ['sick', 'marriage', 'paternity', 'bereavement', 'emergency', 'unpaid'],
       defaultType: 'sick',
     },
     {
@@ -632,6 +636,8 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
     { id: 'marriage',   ar: 'زواج'     },
     { id: 'paternity',  ar: 'مولود'    },
     { id: 'bereavement',ar: 'وفاة'     },
+    { id: 'emergency',  ar: 'اضطرارية (سبب آخر)' },
+    { id: 'unpaid',     ar: 'بدون راتب' },
   ]
   const activeCat = MAIN_CATS.find(c => c.types.includes(form.leave_type)) ?? MAIN_CATS[0]
 
@@ -697,6 +703,16 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
               </button>
             ))}
           </div>
+          {form.leave_type === 'emergency' && (
+            <div style={{ marginTop: 10, padding: '9px 12px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', fontSize: '0.76rem', color: 'var(--text-2)', lineHeight: 1.7 }}>
+              {isAr ? 'إجازة اضطرارية لظرف طارئ: لا تُخصم من رصيد الإجازة السنوية، وتحتاج موافقة المشرف والمدير. اكتب سبب الإجازة في خانة السبب أدناه (إلزامي).' : 'Emergency leave: not deducted from the annual balance; needs supervisor and manager approval. A reason is required.'}
+            </div>
+          )}
+          {form.leave_type === 'unpaid' && (
+            <div style={{ marginTop: 10, padding: '9px 12px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', fontSize: '0.76rem', color: 'var(--text-2)', lineHeight: 1.7 }}>
+              {isAr ? 'إجازة بدون راتب: لا تُخصم من رصيد الإجازة السنوية ولا تدخل فيه، وتحتاج موافقة المشرف والمدير. اكتب سبب الطلب (إلزامي).' : 'Unpaid leave: not deducted from the annual balance; needs supervisor and manager approval. A reason is required.'}
+            </div>
+          )}
           {/* قرابة الوفاة */}
           {form.leave_type === 'bereavement' && (
             <div style={{ marginTop: 12 }}>
@@ -859,10 +875,10 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
       )}
 
       {/* ملاحظات */}
-      <Field label={form.leave_type === 'casual' ? (isAr ? 'سبب الاستئذان *' : 'Reason *') : (isAr ? 'ملاحظات' : 'Notes')}>
+      <Field label={REASON_TYPES[form.leave_type] ? (isAr ? `${REASON_TYPES[form.leave_type].label} *` : `${REASON_TYPES[form.leave_type].labelEn} *`) : (isAr ? 'ملاحظات' : 'Notes')}>
         <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)}
-          style={{ ...inp, resize: 'none', borderColor: form.leave_type === 'casual' && !form.notes?.trim() ? '#fca5a5' : undefined }}
-          placeholder={form.leave_type === 'casual' ? (isAr ? 'أدخل سبب الاستئذان (إلزامي)...' : 'Enter reason (required)...') : (isAr ? 'أي تفاصيل إضافية...' : 'Any additional details...')} />
+          style={{ ...inp, resize: 'none', borderColor: REASON_TYPES[form.leave_type] && !form.notes?.trim() ? '#fca5a5' : undefined }}
+          placeholder={REASON_TYPES[form.leave_type] ? (isAr ? REASON_TYPES[form.leave_type].ph : 'Enter reason (required)...') : (isAr ? 'أي تفاصيل إضافية...' : 'Any additional details...')} />
       </Field>
 
       <button type="submit"
@@ -896,7 +912,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
                   ? { label: isAr ? 'تاريخ المباشرة' : 'Return', value: form.return_date }
                   : null,
                 form.notes?.trim()
-                  ? { label: isAr ? 'ملاحظات' : 'Notes', value: form.notes }
+                  ? { label: REASON_TYPES[form.leave_type] ? (isAr ? 'السبب' : 'Reason') : (isAr ? 'ملاحظات' : 'Notes'), value: form.notes }
                   : null,
               ].filter(Boolean).map((row, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, fontSize: '0.83rem' }}>
@@ -930,7 +946,59 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
 /* ══════════════════════════════════════════
    بطاقة إجازة مع خطوات الموافقة
 ══════════════════════════════════════════ */
-function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploaded, onDelete, isAr = true }) {
+// نافذة «سجل الموظف»: كم مرة استأذن وأخذ إجازة وقدّم طلباً
+function EmployeeStatsModal({ leave, onClose, isAr = true }) {
+  const [stats, setStats] = useState(null)
+  useEffect(() => { fetchEmployeeLeaveStats(leave.employee_id).then(setStats) }, [leave.employee_id])
+  const hrs = h => (h > 0 ? formatHoursAr(h) : '—')
+  const box = (title, n, sub) => (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface)' }}>
+      <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', fontWeight: 700 }}>{title}</div>
+      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.2 }}>{n}</div>
+      {sub != null && <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+  const part = (label, b) => (
+    <div>
+      <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)', margin: '4px 0 8px' }}>{label}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+        {box(isAr ? 'استئذانات مقبولة' : 'Permissions approved', b.permOk, `${isAr ? 'من' : 'of'} ${b.permReq} ${isAr ? 'مقدَّمة' : 'requested'} · ${hrs(b.permHours)}`)}
+        {box(isAr ? 'إجازات مقبولة' : 'Leaves approved', b.leaveOk, `${isAr ? 'من' : 'of'} ${b.leaveReq} ${isAr ? 'مقدَّمة' : 'requested'} · ${b.leaveDays ? Number(b.leaveDays.toFixed(2)) + (isAr ? ' يوم' : ' d') : '—'}`)}
+        {box(isAr ? 'طلبات مرفوضة' : 'Rejected', b.rejected, b.pending ? `${b.pending} ${isAr ? 'قيد المراجعة' : 'pending'}` : null)}
+        {box(isAr ? 'إجمالي الطلبات' : 'All requests', b.total, null)}
+      </div>
+    </div>
+  )
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
+      <div dir={isAr ? 'rtl' : 'ltr'} style={{ background: 'var(--card, #fff)', borderRadius: 12, width: '100%', maxWidth: 620, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{isAr ? 'سجل الموظف' : 'Employee record'}</div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-3)' }}>{leave.employee_name}{leave.job_title ? ` · ${leave.job_title}` : ''}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'var(--text-3)', fontFamily: 'inherit' }}>✕</button>
+        </div>
+        <div style={{ padding: '14px 20px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {!stats ? <div style={{ textAlign: 'center', color: 'var(--text-3)', padding: 24 }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div> : (
+            <>
+              {part(isAr ? `هذا العام (${stats.year})` : `This year (${stats.year})`, stats.yr)}
+              {part(isAr ? 'الإجمالي (كل الفترات)' : 'All time', stats.all)}
+              {Object.entries(stats.yr.byType).filter(([, n]) => n > 0).length > 0 && (
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-2)' }}>
+                  {isAr ? 'الإجازات المقبولة هذا العام حسب النوع: ' : 'Approved leaves this year by type: '}
+                  {Object.entries(stats.yr.byType).filter(([, n]) => n > 0).map(([k, n]) => `${LEAVE_TYPES.find(t => t.id === k)?.ar ?? k}: ${n}`).join(' · ')}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onProofUploaded, onDelete, isAr = true }) {
   const leave = decodeLeaveNotes(rawLeave)
   const [showNotes, setShowNotes]  = useState(false)
   const [actionNotes, setActionNotes] = useState('')
@@ -1045,7 +1113,15 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onProofUploade
         </div>
 
         {/* أزرار الطباعة/الحذف */}
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button onClick={() => onStats?.(leave)} style={{
+            padding: '5px 12px', borderRadius: 7,
+            border: '1px solid var(--border)', background: 'var(--card)',
+            color: 'var(--text-2)', fontSize: '0.72rem', fontWeight: 600,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            {isAr ? 'سجل الموظف' : 'Record'}
+          </button>
           {(fullyApproved || isOwn) && allowCap('leaves_print') && (
             <button onClick={() => onPrint(leave)} style={{
               padding: '5px 12px', borderRadius: 7,
@@ -1250,6 +1326,7 @@ export default function LeavePage() {
   const [leaves, setLeaves] = useState([])
   const [loading, setLoading] = useState(false)
   const [saved, setSaved]   = useState(false)
+  const [statsFor, setStatsFor] = useState(null)   // طلب نعرض سجل صاحبه
   const [filterStatus, setFilterStatus] = useState('all')
   const [balances, setBalances] = useState([])
   const [loadingBalances, setLoadingBalances] = useState(false)
@@ -1411,6 +1488,9 @@ export default function LeavePage() {
   }
 
   async function handlePrint(leave) {
+    // نافذة الطباعة تُفتح فور الضغط قبل أي انتظار (وإلا يحجبها المتصفح، خصوصاً بالجوال)
+    const w = window.open('', '_blank')
+    if (w) { w.document.write('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;color:#64748b;text-align:center;padding-top:38vh">جارٍ تجهيز النموذج…</body>'); w.document.close() }
     const thisYear = new Date().getFullYear()
     const usedAnnual = leaves
       .filter(l => l.employee_id === leave.employee_id
@@ -1434,7 +1514,8 @@ export default function LeavePage() {
     }
     const empProfile = emp ?? profile
     const stationName = emp?.station?.name_ar ?? profile?.station?.name_ar ?? ''
-    printLeave(leave, emp?.full_name_ar ?? leave.employee_name, stationName, empProfile, usedAnnual)
+    const stats = await fetchEmployeeLeaveStats(leave.employee_id)
+    printLeave(w, leave, emp?.full_name_ar ?? leave.employee_name, stationName, empProfile, usedAnnual, stats)
   }
 
   const filtered = leaves.filter(l => filterStatus === 'all' || l.status === filterStatus)
@@ -1453,6 +1534,8 @@ export default function LeavePage() {
       </div>
 
       <div style={{ maxWidth: tab === 'new' ? 860 : tab === 'balances' ? 960 : 720, margin: '0 auto', padding: '24px 20px' }}>
+
+        {statsFor && <EmployeeStatsModal leave={statsFor} isAr={isAr} onClose={() => setStatsFor(null)} />}
 
         {/* طلب جديد */}
         {tab === 'new' && (
@@ -1549,7 +1632,7 @@ export default function LeavePage() {
             ) : filtered.length === 0 ? (
               <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: 40 }}>{isAr ? 'لا توجد طلبات' : 'No requests found'}</p>
             ) : filtered.map(l => (
-              <LeaveCard key={l.id} leave={l} profile={profile} isAr={isAr} onAction={handleAction} onPrint={handlePrint} onProofUploaded={load} onDelete={handleDelete} />
+              <LeaveCard key={l.id} leave={l} profile={profile} isAr={isAr} onAction={handleAction} onPrint={handlePrint} onStats={setStatsFor} onProofUploaded={load} onDelete={handleDelete} />
             ))}
           </div>
         )}
