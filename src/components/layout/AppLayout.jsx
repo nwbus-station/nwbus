@@ -349,7 +349,7 @@ const NAV_GROUPS = [
       { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ADMIN_ROLE_VALUES,               module: 'settings', capKey: 'settings_access' },
       { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'map' },
       { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings', allowKey: 'customer_ratings_view' },
-      { to: '/employee-file', labelAr: 'ملف الموظف', labelEn: 'Employee File', icon: 'users', roles: ADMIN_ROLE_VALUES, module: 'employee_file' },
+      { to: '/employee-file', labelAr: 'ملف الموظف', labelEn: 'Employee File', icon: 'users', roles: ADMIN_ROLE_VALUES, module: 'employee_file', adminOnly: true },
       { to: '/calls', labelAr: 'نداء الركاب', labelEn: 'Passenger Calls', icon: 'call', roles: ADMIN_ROLE_VALUES, module: 'pa_calls' },
     ]
   },
@@ -492,7 +492,7 @@ function ScrollToTopButton() {
 
 export default function AppLayout() {
   const { i18n } = useTranslation()
-  const { profile, signOut, customTitle, allowCap, grantCap, isRestricted, canSeeModule } = useAuth()
+  const { profile, signOut, customTitle, allowCap, grantCap, isRestricted, canSeeModule, isGeneralAdmin } = useAuth()
   const navigate = useNavigate()
   const isAr = i18n.language === 'ar'
   const { settings } = useAppSettings()
@@ -567,6 +567,7 @@ export default function AppLayout() {
       // مصدر واحد: قسم الحساب + سقف دوره/مسماه (بدل مصفوفات الأدوار المكتوبة يدوياً)
       if (n.module) { if (!canSeeModule(n.module)) return false }
       else if (n.roles && !n.roles.includes(profile?.role)) return false
+      if (n.adminOnly && !isGeneralAdmin) return false
       if (n.requireFlag && !profile?.[n.requireFlag]) return false
       if (n.capKey && (!allowCap(n.capKey) || (isRestricted && !(n.capKey === 'stations_page' && grantCap('stations_manage_assigned'))))) return false
       if (n.allowKey && !allowCap(n.allowKey)) return false

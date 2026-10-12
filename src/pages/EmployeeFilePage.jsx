@@ -110,7 +110,7 @@ const Bar = ({ pct, color = '#1C2B4A' }) => <div style={{ flex: 1, height: 9, ba
 export default function EmployeeFilePage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const { isGeneralAdmin, isAdmin } = useAuth()
+  const { isGeneralAdmin, isAdmin, profile } = useAuth()
   const [users, setUsers] = useState([])
   const [stations, setStations] = useState([])
   const [stationF, setStationF] = useState('')
@@ -185,41 +185,86 @@ export default function EmployeeFilePage() {
 
   function printFile() {
     if (!u || !an) return
+    const grade = s10 => (s10 >= 9 ? 'ممتاز' : s10 >= 8 ? 'جيد جداً' : s10 >= 7 ? 'جيد' : s10 >= 6 ? 'مقبول' : 'يحتاج تحسين')
+    const ev10 = an.evalAvg != null ? an.evalAvg / 10 : null
+    const ratedMonths = an.E.filter(x => x.final != null).length
+    const ref = `NWB-EF-${u.job_number || String(u.id).slice(0, 6)}-${todayStr().replace(/-/g, '')}`
+    const issuer = profile?.full_name_ar || ''
+    const sgn = v => `${v > 0 ? '+' : ''}${n0(v)}`
+    // رسم أعمدة SVG بسيط (قيم + تسميات) — يطبع بوضوح ويعمل على الجوال
+    const barsSvg = (items, color, fmt = n0) => {
+      if (!items.length) return ''
+      const W = 640, rowH = 20, H = items.length * rowH + 4, mx = Math.max(...items.map(i => i.v), 1), lw = 62, vw = 74
+      return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;direction:ltr">${items.map((it, i) => {
+        const y = i * rowH + 2, bw = Math.max(2, (W - lw - vw) * (it.v / mx))
+        return `<text x="${lw - 6}" y="${y + 13}" text-anchor="end" font-size="10" fill="#475569" font-family="monospace">${esc(it.k)}</text><rect x="${lw}" y="${y + 3}" width="${W - lw - vw}" height="11" rx="5.5" fill="#e8edf3"/><rect x="${lw}" y="${y + 3}" width="${bw}" height="11" rx="5.5" fill="${it.c || color}"/><text x="${lw + (W - lw - vw) + 6}" y="${y + 13}" font-size="10.5" font-weight="700" fill="#0f172a" font-family="monospace">${esc(fmt(it.v))}</text>`
+      }).join('')}</svg>`
+    }
+    // ملخص تنفيذي: ملاحظات تُستنتج من الأرقام (إيجابية / تستحق الانتباه)
+    const good = [], watch = []
+    if (show('eval') && ev10 != null) (ev10 >= 8 ? good : ev10 < 7 ? watch : []).push(`التقييم الوظيفي ${ev10.toFixed(1)} من 10 (${grade(ev10)}) خلال ${ratedMonths} شهر مقيَّم`)
+    if (show('ratings') && an.R.avg != null) (an.R.avg >= 4.3 ? good : an.R.avg < 3.5 ? watch : []).push(`متوسط تقييم العملاء ${an.R.avg.toFixed(2)} من 5 من ${an.R.n} تقييماً`)
+    if (show('sales') && an.S.n) {
+      if (an.S.deficits === 0) good.push(`لا توجد حالات عجز في ${an.S.n} قيداً إيرادياً`)
+      else watch.push(`${an.S.deficits} حالة عجز من أصل ${an.S.n} قيداً، بصافي فرق ${sgn(an.S.diff)} ر.س`)
+    }
+    if (show('leaves')) {
+      if (an.L.rejected) watch.push(`${an.L.rejected} طلب مرفوض من أصل ${an.L.total} طلباً`)
+      if (an.L.total && !an.L.rejected) good.push(`جميع الطلبات (${an.L.total}) ضمن الضوابط دون رفض`)
+    }
+    if (show('activity')) (an.A.rate >= 0.5 ? good : an.A.rate < 0.2 ? watch : []).push(`نسبة الدخول للبرنامج ${Math.round(an.A.rate * 100)}% (${an.A.days} يوم دخول من ${an.A.periodDays})`)
+    const list = (arr, c) => arr.map(t => `<li style="--c:${c}">${esc(t)}</li>`).join('')
     const P = []
+    // 1) بطاقة الموظف
+    P.push(`<div class="sec"><div class="person"><div class="av">${esc(String(u.full_name_ar || '?').trim().charAt(0))}</div><div style="flex:1"><b>${esc(u.full_name_ar)}</b><span>${esc([u.job_title, data.title, stName].filter(Boolean).join(' · '))}</span><span>الرقم الوظيفي: ${esc(u.job_number || '—')} · ${esc(roleName)} · ${u.is_active === false ? 'معطّل' : 'نشط'}${u.hire_date ? ` · مباشرة منذ ${esc(u.hire_date)}` : ''}</span></div>${ev10 != null && show('eval') ? `<div class="score"><b>${ev10.toFixed(1)}</b><small>${esc(grade(ev10))}</small></div>` : ''}</div></div>`)
+    // 2) الملخص التنفيذي
+    if (good.length || watch.length) P.push(`<div class="sec"><h3>الملخص التنفيذي</h3><div class="grid g2" style="align-items:start"><div class="ins ok"><h4>نقاط القوة</h4><ul>${list(good, '#16a34a') || '<li class="none">—</li>'}</ul></div><div class="ins no"><h4>نقاط تستحق المتابعة</h4><ul>${list(watch, '#d97706') || '<li class="none">لا توجد</li>'}</ul></div></div></div>`)
+    // 3) المؤشرات
     const kpis = []
     if (show('leaves')) kpis.push(['إجازات مقبولة', `${an.L.leaveOk}`, `${Number(an.L.leaveDays.toFixed(2))} يوم`, '#0f766e'], ['استئذان مقبول', hhmm(an.L.permHours), `${an.L.permOk} مرة`, '#7c3aed'])
-    if (show('sales')) kpis.push(['إيرادات مُدخلة', n0(an.S.n), `${n0(an.S.collected)} ر.س`, '#15803d'], ['صافي الفرق', `${an.S.diff > 0 ? '+' : ''}${n0(an.S.diff)}`, `${an.S.deficits} عجز`, an.S.diff < 0 ? '#dc2626' : '#1d4ed8'])
-    if (show('eval')) kpis.push(['التقييم الوظيفي', an.evalAvg != null ? (an.evalAvg / 10).toFixed(1) + ' / 10' : '—', `${an.E.filter(x => x.final != null).length} شهر مقيَّم`, '#1C2B4A'])
-    if (show('ratings')) kpis.push(['تقييم العملاء', an.R.avg != null ? an.R.avg.toFixed(2) + ' / 5' : '—', `${an.R.n} تقييم`, '#EE712D'])
+    if (show('sales')) kpis.push(['قيود الإيرادات', n0(an.S.n), `${n0(an.S.collected)} ر.س`, '#15803d'], ['صافي الفرق', sgn(an.S.diff), `${an.S.deficits} عجز · ${an.S.surpluses} زيادة`, an.S.diff < 0 ? '#dc2626' : '#1d4ed8'])
+    if (show('eval')) kpis.push(['التقييم الوظيفي', ev10 != null ? `${ev10.toFixed(1)} / 10` : '—', `${ratedMonths} شهر مقيَّم`, '#1C2B4A'])
+    if (show('ratings')) kpis.push(['تقييم العملاء', an.R.avg != null ? `${an.R.avg.toFixed(2)} / 5` : '—', `${an.R.n} تقييم`, '#EE712D'])
     if (show('activity')) kpis.push(['نسبة الدخول', `${Math.round(an.A.rate * 100)}%`, `${an.A.days} من ${an.A.periodDays} يوماً`, '#0369a1'])
-    P.push(`<div class="sec"><div class="person"><div class="av">${esc(String(u.full_name_ar || '?').trim().charAt(0))}</div><div style="flex:1"><b>${esc(u.full_name_ar)}</b><span>${esc([u.job_title, data.title, stName].filter(Boolean).join(' · '))}</span><span>الرقم الوظيفي: ${esc(u.job_number || '—')} · ${esc(roleName)} · ${u.is_active === false ? 'معطّل' : 'نشط'}</span></div></div></div>`)
-    P.push(`<div class="sec"><h3>بيانات الموظف الكاملة</h3><div class="grid g4">${infoFields.filter(([, v]) => v).map(([k, v]) => `<div class="cell"><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}</div>${modNames.length ? `<div class="muted" style="margin-top:6px">الأقسام المسموحة: ${esc(modNames.join('، '))}</div>` : ''}</div>`)
-    if (kpis.length) P.push(`<div class="sec"><h3>مؤشرات الفترة</h3><div class="grid g${Math.min(5, Math.max(2, kpis.length))}">${kpis.map(([t, v, s, c]) => `<div class="kpi" style="--c:${c}"><small>${esc(t)}</small><b>${esc(v)}</b><em>${esc(s)}</em></div>`).join('')}</div></div>`)
+    if (kpis.length) P.push(`<div class="sec"><h3>مؤشرات الأداء للفترة</h3><div class="grid g${Math.min(5, Math.max(2, kpis.length))}">${kpis.map(([t, v, s, c]) => `<div class="kpi" style="--c:${c}"><small>${esc(t)}</small><b>${esc(v)}</b><em>${esc(s)}</em></div>`).join('')}</div></div>`)
+    // 4) البيانات الكاملة
+    P.push(`<div class="sec"><h3>بيانات الموظف</h3><div class="grid g4">${infoFields.filter(([, v]) => v).map(([k, v]) => `<div class="cell"><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}</div>${modNames.length ? `<div class="muted" style="margin-top:6px">الأقسام المسموحة: ${esc(modNames.join('، '))}</div>` : ''}</div>`)
+    // 5) الإجازات
     if (show('leaves')) {
-      P.push(`<div class="sec"><h3>الإجازات والاستئذان</h3><table class="t"><thead><tr><th rowspan="2">الفترة</th><th colspan="3" style="background:#5b21b6">الاستئذان</th><th colspan="3" style="background:#0f766e">الإجازات</th><th rowspan="2">مرفوضة</th><th rowspan="2">الإجمالي</th></tr><tr><th style="background:#7c3aed">مقدَّمة</th><th style="background:#7c3aed">مقبولة</th><th style="background:#7c3aed">المدة</th><th style="background:#14958a">مقدَّمة</th><th style="background:#14958a">مقبولة</th><th style="background:#14958a">الأيام</th></tr></thead><tbody><tr><td class="l"><b>${from} ← ${to}</b></td><td>${an.L.permReq}</td><td>${an.L.permOk}</td><td>${an.L.permHours ? hhmm(an.L.permHours) : '—'}</td><td>${an.L.leaveReq}</td><td>${an.L.leaveOk}</td><td>${an.L.leaveDays ? Number(an.L.leaveDays.toFixed(2)) : '—'}</td><td>${an.L.rejected}</td><td><b>${an.L.total}</b></td></tr></tbody></table>
-      ${data.raw.leaves.length ? `<table class="t" style="margin-top:8px"><thead><tr><th>#</th><th>النوع</th><th>من</th><th>إلى</th><th>المدة</th><th>الحالة</th></tr></thead><tbody>${data.raw.leaves.slice(0, 60).map((r, i) => `<tr><td>${i + 1}</td><td class="l">${esc(LEAVE_AR[r.leave_type] ?? r.leave_type)}</td><td>${esc(r.start_date)}</td><td>${r.leave_type === 'casual' ? '—' : esc(r.end_date)}</td><td>${r.leave_type === 'casual' ? hhmm((Number(r.days_count) || 0) * 24) : (Number(r.days_count) || 0) + ' يوم'}</td><td><span class="chip" style="background:${STATUS_COL[r.status]?.[1]};color:${STATUS_COL[r.status]?.[0]}">${STATUS_AR[r.status] ?? r.status}</span></td></tr>`).join('')}</tbody></table>` : '<p class="muted">لا توجد طلبات ضمن الفترة.</p>'}</div>`)
+      P.push(`<div class="sec"><h3>الإجازات والاستئذان</h3><table class="t"><thead><tr><th rowspan="2">الفترة</th><th colspan="3" style="background:#5b21b6">الاستئذان</th><th colspan="3" style="background:#0f766e">الإجازات</th><th rowspan="2">مرفوضة</th><th rowspan="2">الإجمالي</th></tr><tr><th style="background:#7c3aed">مقدَّمة</th><th style="background:#7c3aed">مقبولة</th><th style="background:#7c3aed">المدة</th><th style="background:#14958a">مقدَّمة</th><th style="background:#14958a">مقبولة</th><th style="background:#14958a">الأيام</th></tr></thead><tbody><tr><td class="l"><b>${esc(from)} ← ${esc(to)}</b></td><td>${an.L.permReq}</td><td>${an.L.permOk}</td><td>${an.L.permHours ? hhmm(an.L.permHours) : '—'}</td><td>${an.L.leaveReq}</td><td>${an.L.leaveOk}</td><td>${an.L.leaveDays ? Number(an.L.leaveDays.toFixed(2)) : '—'}</td><td>${an.L.rejected}</td><td><b>${an.L.total}</b></td></tr></tbody></table>
+      ${data.raw.leaves.length ? `<table class="t" style="margin-top:8px"><thead><tr><th>#</th><th>النوع</th><th>من</th><th>إلى</th><th>المدة</th><th>الحالة</th></tr></thead><tbody>${data.raw.leaves.slice(0, 40).map((r, i) => `<tr><td>${i + 1}</td><td class="l">${esc(LEAVE_AR[r.leave_type] ?? r.leave_type)}</td><td>${esc(r.start_date)}</td><td>${r.leave_type === 'casual' ? '—' : esc(r.end_date)}</td><td>${r.leave_type === 'casual' ? hhmm((Number(r.days_count) || 0) * 24) : (Number(r.days_count) || 0) + ' يوم'}</td><td><span class="chip" style="background:${STATUS_COL[r.status]?.[1]};color:${STATUS_COL[r.status]?.[0]}">${STATUS_AR[r.status] ?? r.status}</span></td></tr>`).join('')}</tbody></table>${data.raw.leaves.length > 40 ? `<p class="muted">يعرض آخر 40 طلباً من ${data.raw.leaves.length}.</p>` : ''}` : '<p class="muted">لا توجد طلبات ضمن الفترة.</p>'}</div>`)
     }
+    // 6) الإيرادات
     if (show('sales')) {
-      const months = Object.keys(an.S.byMonth).sort().reverse()
-      P.push(`<div class="sec"><h3>الإيرادات</h3><div class="grid g4"><div class="cell"><small>القيود المُدخلة</small><b>${n0(an.S.n)}</b></div><div class="cell"><small>إجمالي المحصَّل</small><b>${n0(an.S.collected)} ر.س</b></div><div class="cell"><small>إجمالي المبيعات</small><b>${n0(an.S.expected)} ر.س</b></div><div class="cell"><small>صافي الفرق</small><b style="color:${an.S.diff < 0 ? '#b91c1c' : '#0f172a'}">${an.S.diff > 0 ? '+' : ''}${n0(an.S.diff)} ر.س</b></div></div>
-      ${months.length ? `<table class="t" style="margin-top:8px"><thead><tr><th>الشهر</th><th>القيود</th><th>المحصَّل</th><th>الفرق</th></tr></thead><tbody>${months.map(m => `<tr><td class="l">${m}</td><td>${an.S.byMonth[m].n}</td><td>${n0(an.S.byMonth[m].collected)}</td><td style="color:${an.S.byMonth[m].diff < 0 ? '#b91c1c' : '#0f172a'}">${an.S.byMonth[m].diff > 0 ? '+' : ''}${n0(an.S.byMonth[m].diff)}</td></tr>`).join('')}<tr class="tot"><td class="l">الإجمالي</td><td>${an.S.n}</td><td>${n0(an.S.collected)}</td><td>${an.S.diff > 0 ? '+' : ''}${n0(an.S.diff)}</td></tr></tbody></table>` : '<p class="muted">لا توجد إيرادات ضمن الفترة.</p>'}</div>`)
+      const months = Object.keys(an.S.byMonth).sort()
+      P.push(`<div class="sec"><h3>الإيرادات</h3>${an.S.n ? `<div class="grid g4"><div class="cell"><small>القيود المُدخلة</small><b>${n0(an.S.n)}</b></div><div class="cell"><small>إجمالي المحصَّل</small><b>${n0(an.S.collected)} ر.س</b></div><div class="cell"><small>إجمالي المبيعات</small><b>${n0(an.S.expected)} ر.س</b></div><div class="cell"><small>صافي الفرق</small><b style="color:${an.S.diff < 0 ? '#b91c1c' : '#0f172a'}">${sgn(an.S.diff)} ر.س</b></div></div>
+      <div style="margin-top:8px">${barsSvg(months.map(m => ({ k: m, v: an.S.byMonth[m].collected })), '#15803d')}</div>
+      <table class="t" style="margin-top:6px"><thead><tr><th>الشهر</th><th>القيود</th><th>المحصَّل</th><th>الفرق</th></tr></thead><tbody>${months.slice().reverse().map(m => `<tr><td class="l">${m}</td><td>${an.S.byMonth[m].n}</td><td>${n0(an.S.byMonth[m].collected)}</td><td style="color:${an.S.byMonth[m].diff < 0 ? '#b91c1c' : '#0f172a'}">${sgn(an.S.byMonth[m].diff)}</td></tr>`).join('')}<tr class="tot"><td class="l">الإجمالي</td><td>${an.S.n}</td><td>${n0(an.S.collected)}</td><td>${sgn(an.S.diff)}</td></tr></tbody></table>` : '<p class="muted">لا توجد إيرادات ضمن الفترة.</p>'}</div>`)
     }
+    // 7) التقييم الوظيفي
     if (show('eval')) {
-      P.push(`<div class="sec"><h3>التقييم الوظيفي</h3>${an.E.length ? `<table class="t"><thead><tr><th>الشهر</th><th>النتيجة /10</th><th>المصادر</th></tr></thead><tbody>${an.E.map(x => `<tr><td class="l">${x.key}</td><td><b>${x.final != null ? (x.final / 10).toFixed(1) : '—'}</b></td><td class="l">${x.rows.map(r => `${esc(SRC_AR[r.eval_source] ?? r.eval_source)}: ${(r.total_score / 10).toFixed(1)}`).join(' · ')}</td></tr>`).join('')}</tbody></table>${an.evalAvg != null ? `<p class="muted">متوسط الفترة: <b>${(an.evalAvg / 10).toFixed(1)} / 10</b></p>` : ''}` : '<p class="muted">لا توجد تقييمات ضمن الفترة.</p>'}</div>`)
+      P.push(`<div class="sec"><h3>التقييم الوظيفي</h3>${an.E.length ? `${barsSvg(an.E.slice().reverse().filter(x => x.final != null).map(x => ({ k: x.key, v: x.final / 10, c: x.final >= 85 ? '#15803d' : x.final >= 60 ? '#1C2B4A' : '#d97706' })), '#1C2B4A', v => v.toFixed(1))}<table class="t" style="margin-top:6px"><thead><tr><th>الشهر</th><th>النتيجة /10</th><th>التقدير</th><th>المصادر</th></tr></thead><tbody>${an.E.map(x => `<tr><td class="l">${x.key}</td><td><b>${x.final != null ? (x.final / 10).toFixed(1) : '—'}</b></td><td>${x.final != null ? grade(x.final / 10) : '—'}</td><td class="l">${x.rows.map(r => `${esc(SRC_AR[r.eval_source] ?? r.eval_source)}: ${(r.total_score / 10).toFixed(1)}`).join(' · ')}</td></tr>`).join('')}</tbody></table>${ev10 != null ? `<p class="muted">متوسط الفترة: <b>${ev10.toFixed(1)} / 10</b> — ${esc(grade(ev10))}</p>` : ''}` : '<p class="muted">لا توجد تقييمات ضمن الفترة.</p>'}</div>`)
     }
+    // 8) تقييمات العملاء
     if (show('ratings')) {
-      const mx = Math.max(...an.R.dist, 1)
-      P.push(`<div class="sec"><h3>تقييمات العملاء</h3>${an.R.n ? `<div class="grid g3" style="align-items:start"><div class="cell"><small>متوسط التقييم</small><b>${an.R.avg.toFixed(2)} / 5</b></div><div class="cell"><small>عدد التقييمات</small><b>${an.R.n}</b></div><div class="bars">${[5, 4, 3, 2, 1].map(s => `<div class="r"><span class="k">${s} نجوم</span><span class="bar" style="--c:${s >= 4 ? '#16a34a' : s === 3 ? '#d97706' : '#dc2626'}"><i style="width:${an.R.dist[s - 1] / mx * 100}%"></i></span><span class="v">${an.R.dist[s - 1]}</span></div>`).join('')}</div></div>
-      ${an.R.comments.length ? `<table class="t" style="margin-top:8px"><thead><tr><th>التاريخ</th><th>التقييم</th><th>التعليق</th></tr></thead><tbody>${an.R.comments.slice(0, 20).map(r => `<tr><td>${esc(riyadhDay(r.created_at))}</td><td>${r.rating}/5</td><td class="l">${esc(r.comment)}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted">لا توجد تقييمات عملاء ضمن الفترة.</p>'}</div>`)
+      P.push(`<div class="sec"><h3>تقييمات العملاء</h3>${an.R.n ? `<div class="grid g3" style="align-items:center"><div class="cell"><small>متوسط التقييم</small><b>${an.R.avg.toFixed(2)} / 5</b></div><div class="cell"><small>عدد التقييمات</small><b>${an.R.n}</b></div><div class="cell"><small>تقييمات 4 نجوم فأكثر</small><b>${Math.round(((an.R.dist[3] + an.R.dist[4]) / an.R.n) * 100)}%</b></div></div><div style="margin-top:8px">${barsSvg([5, 4, 3, 2, 1].map(s => ({ k: `${s} نجوم`, v: an.R.dist[s - 1], c: s >= 4 ? '#16a34a' : s === 3 ? '#d97706' : '#dc2626' })), '#16a34a', v => String(v))}</div>
+      ${an.R.comments.length ? `<table class="t" style="margin-top:6px"><thead><tr><th>التاريخ</th><th>التقييم</th><th>التعليق</th></tr></thead><tbody>${an.R.comments.slice(0, 15).map(r => `<tr><td>${esc(riyadhDay(r.created_at))}</td><td>${r.rating}/5</td><td class="l">${esc(r.comment)}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted">لا توجد تقييمات عملاء ضمن الفترة.</p>'}</div>`)
     }
+    // 9) الدخول والنشاط
     if (show('activity')) {
+      const days = an.A.periodDays <= 140 ? Array.from({ length: an.A.periodDays }, (_, i) => addDays(an.A.effFrom, i)) : []
+      const hrMax = Math.max(...an.A.hours, 1)
       P.push(`<div class="sec"><h3>الدخول والنشاط</h3><div class="grid g4"><div class="cell"><small>آخر دخول</small><b>${esc(fmtDT(u.last_login))}</b></div><div class="cell"><small>مرات الدخول في الفترة</small><b>${an.A.count}</b></div><div class="cell"><small>أيام الدخول</small><b>${an.A.days} من ${an.A.periodDays}</b></div><div class="cell"><small>نسبة الدخول</small><b>${Math.round(an.A.rate * 100)}%</b></div></div>
-      ${an.A.times.length ? `<div class="muted" style="margin-top:6px">ساعة الدخول الأكثر: ${an.A.peak != null ? String(an.A.peak).padStart(2, '0') + ':00' : '—'} · آخر عمليات الدخول: ${an.A.times.slice(0, 8).map(t => esc(fmtDT(t))).join(' | ')}</div>` : ''}</div>`)
+      ${days.length ? `<div class="muted" style="margin:8px 0 3px">أيام الدخول (الملوَّن = دخل في ذلك اليوم)</div><div class="strip">${days.map(d => `<i class="${an.A.loginDays.has(d) ? 'on' : ''}"></i>`).join('')}</div>` : ''}
+      ${an.A.count ? `<div class="muted" style="margin:8px 0 3px">توزيع الدخول على ساعات اليوم (بتوقيت الرياض) — الأكثر: ${an.A.peak != null ? String(an.A.peak).padStart(2, '0') + ':00' : '—'}</div><div class="hist">${an.A.hours.map((h, i) => `<span><i style="height:${Math.max(2, (h / hrMax) * 34)}px"></i><em>${i % 3 === 0 ? i : ''}</em></span>`).join('')}</div>
+      <table class="t" style="margin-top:8px"><thead><tr><th>#</th><th>وقت الدخول</th><th>اليوم</th></tr></thead><tbody>${an.A.times.slice(0, 12).map((t, i) => `<tr><td>${i + 1}</td><td>${esc(fmtDT(t))}</td><td>${['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][new Date(riyadhDay(t) + 'T00:00:00Z').getUTCDay()]}</td></tr>`).join('')}</tbody></table>` : `<p class="muted">${data.loginsOk ? 'لا توجد عمليات دخول مسجَّلة ضمن الفترة.' : 'سجل الدخول التفصيلي غير متاح؛ المتوفر آخر دخول فقط.'}</p>`}</div>`)
     }
+    // 10) الاعتماد
+    P.push(`<div class="sec"><div class="sig"><div><span>أعدّه</span><b>${esc(issuer) || '&nbsp;'}</b><i></i></div><div><span>المراجعة</span><b>&nbsp;</b><i></i></div><div><span>الاعتماد</span><b>&nbsp;</b><i></i></div></div><p class="muted" style="text-align:center;margin-top:8px">أُعدّ هذا التقرير آلياً من بيانات نظام NW Station وقت الإصدار، وهو وثيقة داخلية سرّية للاستخدام الإداري فقط.</p></div>`)
     const html = docShell({
       title: `ملف الموظف — ${u.full_name_ar}`,
-      body: docHeader({ title: 'ملف الموظف', infoLines: [`الموظف: <b>${esc(u.full_name_ar)}</b>`, `الفترة: من <b>${esc(from)}</b> إلى <b>${esc(to)}</b>`] }) + `<div class="body">${P.join('')}</div>`,
-      footerLeft: `أُصدر: ${esc(fmtDT(new Date()))}`, footerRight: 'وثيقة داخلية — للأدمن فقط',
+      body: docHeader({ title: 'تقرير ملف الموظف', infoLines: [`الموظف: <b>${esc(u.full_name_ar)}</b>`, `الفترة: من <b>${esc(from)}</b> إلى <b>${esc(to)}</b>`, `الرقم المرجعي: <b>${esc(ref)}</b>`] }) + `<div class="body">${P.join('')}</div>`,
+      footerLeft: `أُصدر: ${esc(fmtDT(new Date()))}${issuer ? ` · بواسطة ${esc(issuer)}` : ''}`, footerRight: 'سرّي — للأدمن فقط',
     })
     openDocWindow(html)
   }
