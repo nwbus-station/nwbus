@@ -97,8 +97,8 @@ function analyze(raw, user, from, to) {
     rb.n++
     if (r.operational_status && r.operational_status !== 'Normal') O.incidents[r.operational_status] = (O.incidents[r.operational_status] || 0) + 1
     O.list.push({ date: day, trip: rk, name: tr.route || tr.trip_name || '', type: isArr ? 'arr' : r.is_extra_trip ? 'extra' : 'dep', station: r.station?.name_ar || r.station?.name_en || '—',
-      sched: (isArr ? tr.scheduled_arrival : tr.scheduled_departure) ? String(isArr ? tr.scheduled_arrival : tr.scheduled_departure).slice(0, 5) : null,
-      actual: tsx ? String(tsx).slice(11, 16) : null, delay: isArr || r.delay_minutes == null ? null : Number(r.delay_minutes), acc: r.departure_accuracy || null, shift: sk,
+      sched: (isArr ? r.sched_arr : r.sched_dep) ? String(isArr ? r.sched_arr : r.sched_dep).slice(0, 5) : null,
+      actual: tsx ? String(tsx).slice(11, 16) : null, delay: r.delay_calc ?? null, acc: r.acc_calc || null, shift: sk,
       pax: Number(r.passenger_count) || 0, missed: Number(r.missed_count) || 0, bus: r.bus_number || '', status: r.operational_status || 'Normal' })
     const sb = sk ? O.byShift[sk] : null
     if (h != null) O.hours[h]++
@@ -109,13 +109,13 @@ function analyze(raw, user, from, to) {
     O.pax += pc; O.missed += ms
     ;[bd, bw, bm].forEach(b => { b.dep++; b.pax += pc; b.missed += ms })
     dw.pax += pc; dw.missed += ms; rb.dep++; rb.pax += pc; rb.missed += ms
-    if (r.delay_minutes != null && Number.isFinite(Number(r.delay_minutes))) { rb.delaySum += Number(r.delay_minutes); rb.delayN++ }
+    if (r.delay_calc != null) { rb.delaySum += r.delay_calc; rb.delayN++ }
     const sn = r.station?.name_ar || r.station?.name_en || '—'; const st = (O.byStation[sn] ??= mkC()); st.n++; st.dep++; st.pax += pc; st.missed += ms
     if (sb) { sb.dep++; sb.pax += pc; sb.missed += ms }
-    const acc = r.departure_accuracy
+    const acc = r.acc_calc
     const ak = acc === 'Early' ? 'early' : acc === 'On Time' ? 'ontime' : acc === 'Not On Time' ? 'late' : acc === 'Delayed' ? 'delayed' : null
     if (ak) { O.acc[ak]++; if (sb) { sb.accN++; if (ak === 'early' || ak === 'ontime') sb.punct++ } }
-    if (r.delay_minutes != null && Number.isFinite(Number(r.delay_minutes))) { O.delaySum += Number(r.delay_minutes); O.delayN++; if (sb) { sb.delaySum += Number(r.delay_minutes); sb.delayN++ } }
+    if (r.delay_calc != null) { O.delaySum += r.delay_calc; O.delayN++; if (sb) { sb.delaySum += r.delay_calc; sb.delayN++ } }
   })
   O.avg = O.dep ? O.pax / O.dep : 0
   O.rate = O.pax + O.missed ? O.missed / (O.pax + O.missed) : 0
@@ -150,21 +150,20 @@ function analyze(raw, user, from, to) {
     const m = {}
     peers.forEach(r => {
       const k = r.created_by; if (!k) return
-      const e = (m[k] ??= { id: k, n: 0, dep: 0, pax: 0, missed: 0, punct: 0, accN: 0 })
+      const e = (m[k] ??= { id: k, n: 0, dep: 0, pax: 0, missed: 0 })
       e.n++
       if (r.is_arrival) return
       e.dep++; e.pax += Number(r.passenger_count) || 0; e.missed += Number(r.missed_count) || 0
-      if (r.departure_accuracy) { e.accN++; if (r.departure_accuracy === 'Early' || r.departure_accuracy === 'On Time') e.punct++ }
     })
     const list = Object.values(m).filter(e => e.dep > 0)
     const me = list.find(e => e.id === user?.id)
     if (me && list.length > 1) {
       const rank = f => 1 + list.filter(e => f(e) > f(me)).length
       const sum = f => list.reduce((a, e) => a + f(e), 0)
-      const tp = sum(e => e.pax), tm = sum(e => e.missed), td2 = sum(e => e.dep), ta = sum(e => e.accN), tpu = sum(e => e.punct)
+      const tp = sum(e => e.pax), tm = sum(e => e.missed), td2 = sum(e => e.dep)
       O.peer = {
-        count: list.length, rankPax: rank(e => e.pax), rankTrips: rank(e => e.n), rankPunct: me.accN ? 1 + list.filter(e => e.accN >= 5 && e.punct / e.accN > me.punct / me.accN).length : null,
-        teamAvgPax: td2 ? tp / td2 : 0, teamMiss: tp + tm ? tm / (tp + tm) : 0, teamPunct: ta ? tpu / ta : null,
+        count: list.length, rankPax: rank(e => e.pax), rankTrips: rank(e => e.n),
+        teamAvgPax: td2 ? tp / td2 : 0, teamMiss: tp + tm ? tm / (tp + tm) : 0,
         teamAvgTrips: sum(e => e.n) / list.length, teamAvgPaxTotal: tp / list.length,
         top: [...list].sort((a, b) => b.pax - a.pax).slice(0, 6).map(e => ({ id: e.id, pax: e.pax, n: e.n, me: e.id === me.id })),
       }
@@ -203,7 +202,7 @@ function analyze(raw, user, from, to) {
   }
   if (O.peer) {
     const pr = O.peer
-    ins.push({ t: pr.rankPax <= Math.ceil(pr.count / 3) ? 'good' : pr.rankPax > Math.ceil((pr.count * 2) / 3) ? 'watch' : 'info', text: `الترتيب بين ${pr.count} من زملاء المحطة: ${pr.rankPax} في عدد الركاب المرحَّلين، و${pr.rankTrips} في عدد الرحلات${pr.rankPunct ? `، و${pr.rankPunct} في الالتزام بالموعد` : ''}` })
+    ins.push({ t: pr.rankPax <= Math.ceil(pr.count / 3) ? 'good' : pr.rankPax > Math.ceil((pr.count * 2) / 3) ? 'watch' : 'info', text: `الترتيب بين ${pr.count} من زملاء المحطة: ${pr.rankPax} في عدد الركاب المرحَّلين، و${pr.rankTrips} في عدد الرحلات` })
     if (pr.teamAvgPax && Math.abs(O.avg - pr.teamAvgPax) / pr.teamAvgPax >= 0.1) ins.push({ t: O.avg > pr.teamAvgPax ? 'good' : 'info', text: `متوسط ركاب الرحلة ${O.avg.toFixed(1)} مقابل ${pr.teamAvgPax.toFixed(1)} لمتوسط الزملاء` })
   }
   const dows = O.byDow.map((v, i) => [i, v]).filter(([, v]) => v.days.size)
@@ -575,32 +574,33 @@ function TripLog({ O, isAr }) {
 
 // ── الحصيلة الحالية: اليوم / هذا الأسبوع / هذا الشهر (مستقلة عن الفترة المختارة) ──
 function OpsNow({ O, isAr }) {
-  const items = [['day', isAr ? 'اليوم' : 'Today', O.now.dates.day, '#1C2B4A'], ['week', isAr ? 'هذا الأسبوع' : 'This week', `${O.now.dates.week.slice(5)} ←`, '#0f766e'], ['month', isAr ? 'هذا الشهر' : 'This month', O.now.dates.month, '#7c3aed']]
+  const items = [['day', isAr ? 'اليوم' : 'Today', O.now.dates.day, '#1C2B4A'], ['week', isAr ? 'هذا الأسبوع' : 'This week', `${isAr ? 'من' : 'from'} ${O.now.dates.week}`, '#0f766e'], ['month', isAr ? 'هذا الشهر' : 'This month', O.now.dates.month, '#7c3aed']]
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{isAr ? 'الحصيلة الحالية — بغضّ النظر عن الفترة المختارة' : 'Right now — independent of the selected period'}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
         {items.map(([k, label, sub, c]) => {
           const v = O.now[k]
+          const cell = (val, lbl, col) => (
+            <div style={{ textAlign: 'center', padding: '12px 6px' }}>
+              <div style={{ fontFamily: MONO, fontSize: '2rem', fontWeight: 800, lineHeight: 1, color: col }}>{n0(val)}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-2)', fontWeight: 800, marginTop: 6 }}>{lbl}</div>
+            </div>
+          )
           return (
-            <div key={k} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderTop: `4px solid ${c}`, borderRadius: 14, padding: '12px 16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-                <span style={{ fontWeight: 900, fontSize: '0.88rem', color: 'var(--text-1)' }}>{label}</span>
-                <span style={{ fontFamily: MONO, fontSize: '0.64rem', color: 'var(--text-3)' }} dir="ltr">{sub}</span>
+            <div key={k} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+              <div style={{ background: c, color: '#fff', padding: '8px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 900, fontSize: '0.86rem' }}>{label}</span>
+                <span style={{ fontFamily: MONO, fontSize: '0.66rem', opacity: 0.85 }} dir="ltr">{sub}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <div style={{ fontFamily: MONO, fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: c }} dir="ltr">{n0(v.n)}</div>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', fontWeight: 700, marginTop: 4 }}>{isAr ? 'رحلة مُدخلة' : 'trips entered'}</div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: MONO, fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: '#15803d' }} dir="ltr">{n0(v.pax)}</div>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', fontWeight: 700, marginTop: 4 }}>{isAr ? 'راكب مرحَّل' : 'dispatched'}</div>
-                </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr' }}>
+                {cell(v.n, isAr ? 'رحلة مُدخلة' : 'trips entered', c)}
+                <div style={{ background: 'var(--border)' }} />
+                {cell(v.pax, isAr ? 'راكب مرحَّل' : 'dispatched', '#15803d')}
               </div>
-              <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px dashed var(--border)', display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: 700 }}>
-                <span style={{ color: 'var(--text-3)' }}>{isAr ? 'متخلفون' : 'Missed'}</span>
-                <span style={{ fontFamily: MONO, color: v.missed ? '#dc2626' : 'var(--text-2)' }} dir="ltr">{n0(v.missed)}</span>
+              <div style={{ borderTop: '1px solid var(--border)', padding: '7px 14px', display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 700, background: 'var(--surface)' }}>
+                <span style={{ color: 'var(--text-3)' }}>{isAr ? 'ركاب متخلفون' : 'Missed'}</span>
+                <span style={{ fontFamily: MONO, fontWeight: 800, color: v.missed ? '#dc2626' : 'var(--text-2)' }}>{n0(v.missed)}</span>
               </div>
             </div>
           )
@@ -640,7 +640,7 @@ function OpsVerdict({ O, isAr, from, to, names }) {
           <p style={{ margin: 0, fontSize: '0.86rem', lineHeight: 2, color: 'var(--text-1)', fontWeight: 600 }}>{narrative(O, from, to)}</p>
           {pr && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-              {[[isAr ? 'المرتبة في الركاب' : 'Rank — passengers', pr.rankPax], [isAr ? 'المرتبة في الرحلات' : 'Rank — trips', pr.rankTrips], ...(pr.rankPunct ? [[isAr ? 'المرتبة في الالتزام' : 'Rank — punctuality', pr.rankPunct]] : [])].map(([l, r]) => (
+              {[[isAr ? 'المرتبة في الركاب' : 'Rank — passengers', pr.rankPax], [isAr ? 'المرتبة في الرحلات' : 'Rank — trips', pr.rankTrips]].map(([l, r]) => (
                 <div key={l} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '8px 14px', textAlign: 'center', minWidth: 104 }}>
                   <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.15rem', color: r === 1 ? '#EE712D' : 'var(--text-1)' }} dir="ltr">{r}<span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}> / {pr.count}</span></div>
                   <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontWeight: 700 }}>{l}</div>
@@ -663,7 +663,7 @@ function OpsVerdict({ O, isAr, from, to, names }) {
               ))}
             </div>
             <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: 8, lineHeight: 1.7 }} dir="ltr">
-              {isAr ? '' : ''}<bdi>{isAr ? `متوسط الزميل: ${n0(pr.teamAvgPaxTotal)} راكب · ${pr.teamAvgTrips.toFixed(0)} رحلة · تخلف ${pct1(pr.teamMiss)}${pr.teamPunct != null ? ` · التزام ${Math.round(pr.teamPunct * 100)}%` : ''}` : `Peer average: ${n0(pr.teamAvgPaxTotal)} pax`}</bdi>
+              {isAr ? '' : ''}<bdi>{isAr ? `متوسط الزميل: ${n0(pr.teamAvgPaxTotal)} راكب · ${pr.teamAvgTrips.toFixed(0)} رحلة · تخلف ${pct1(pr.teamMiss)}` : `Peer average: ${n0(pr.teamAvgPaxTotal)} pax`}</bdi>
             </div>
           </div>
         )}
@@ -708,7 +708,7 @@ export default function EmployeeFilePage() {
     try {
       const fT = `${from}T00:00:00+03:00`, tT = `${to}T23:59:59.999+03:00`
       const today = todayStr(), curFrom = [weekStart(today), today.slice(0, 7) + '-01'].sort()[0]
-      const tripCols = 'record_date, is_arrival, is_extra_trip, passenger_count, missed_count, actual_departure, actual_arrival, delay_minutes, departure_accuracy, bus_number, operational_status, station_id, trip:trip_schedule_id(trip_number, trip_name, route, scheduled_departure, scheduled_arrival), station:station_id(name_ar, name_en)'
+      const tripCols = 'record_date, is_arrival, is_extra_trip, passenger_count, missed_count, actual_departure, actual_arrival, trip_schedule_id, bus_number, operational_status, station_id, trip:trip_schedule_id(trip_number, trip_name, route, from_station_id, to_station_id, scheduled_departure, scheduled_arrival), station:station_id(name_ar, name_en)'
       const [u, sens, leaves, sales, evals, ratings, trips, cur, logins] = await Promise.all([
         supabase.from('users').select('*, station:station_id(name_ar, name_en), supervisor:supervisor_id(full_name_ar)').eq('id', empId).maybeSingle(),
         supabase.rpc('get_user_sensitive', { p_id: empId }),
@@ -720,9 +720,30 @@ export default function EmployeeFilePage() {
         fetchAll(() => supabase.from('trip_records').select('record_date, is_arrival, passenger_count, missed_count').eq('created_by', empId).gte('record_date', curFrom).lte('record_date', today).order('id'), 5000),
         fetchAll(() => supabase.from('audit_log').select('id, created_at, before_data, after_data').eq('table_name', 'users').eq('record_id', empId).eq('action', 'UPDATE').gte('created_at', fT).lte('created_at', tT).order('created_at', { ascending: false }).order('id'), 5000),
       ])
+      // الفرق عن الموعد يُحسب مثل صفحة الترحيل (لا يوجد عمود مخزَّن): الفعلي − المجدول لمحطة التسجيل (مع عبور منتصف الليل)
+      const tripRows = trips.data ?? []
+      const tids = [...new Set(tripRows.map(r => r.trip_schedule_id).filter(Boolean))]
+      const stopMap = {}
+      for (let i = 0; i < tids.length; i += 120) {
+        const { data: st } = await supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time').in('trip_schedule_id', tids.slice(i, i + 120))
+        ;(st ?? []).forEach(x => { stopMap[`${x.trip_schedule_id}|${x.station_id}`] = x })
+      }
+      const toMin = t => { const [h, m] = String(t).slice(0, 5).split(':').map(Number); return h * 60 + m }
+      tripRows.forEach(r => {
+        const tr = r.trip || {}, stp = stopMap[`${r.trip_schedule_id}|${r.station_id}`]
+        r.sched_dep = stp?.departure_time || (r.station_id === tr.from_station_id ? tr.scheduled_departure : null)
+        r.sched_arr = stp?.arrival_time || (r.station_id === tr.to_station_id ? tr.scheduled_arrival : null)
+        r.delay_calc = null; r.acc_calc = null
+        if (!r.is_arrival && r.sched_dep && r.actual_departure) {
+          let d = toMin(String(r.actual_departure).slice(11, 16)) - toMin(r.sched_dep)
+          if (d < -720) d += 1440; else if (d > 720) d -= 1440
+          r.delay_calc = d
+          r.acc_calc = d < -2 ? 'Early' : d <= 5 ? 'On Time' : d <= 15 ? 'Not On Time' : 'Delayed'
+        }
+      })
       // مقارنة بزملاء نفس المحطة (من سجلوا رحلات في المحطات التي سجّل فيها الموظف خلال الفترة)
       const stIds = [...new Set((trips.data ?? []).map(r => r.station_id).filter(Boolean))]
-      const peersRes = stIds.length ? await fetchAll(() => supabase.from('trip_records').select('created_by, is_arrival, passenger_count, missed_count, departure_accuracy').in('station_id', stIds).gte('record_date', from).lte('record_date', to).order('id'), 15000) : { data: [], error: null }
+      const peersRes = stIds.length ? await fetchAll(() => supabase.from('trip_records').select('created_by, is_arrival, passenger_count, missed_count').in('station_id', stIds).gte('record_date', from).lte('record_date', to).order('id'), 15000) : { data: [], error: null }
       if (u.error || !u.data) throw new Error(u.error?.message || 'تعذّر تحميل بيانات الموظف')
       let title = null
       if (u.data.custom_title_id) { const { data: t } = await supabase.from('custom_titles').select('name_ar').eq('id', u.data.custom_title_id).maybeSingle(); title = t?.name_ar ?? null }
@@ -823,7 +844,7 @@ export default function EmployeeFilePage() {
       ${O.pax + O.missed ? `<div class="stack"><i style="width:${(1 - O.rate) * 100}%;background:#15803d"></i><i style="width:${O.rate * 100}%;background:#dc2626"></i></div><div class="muted">أخضر: تم ترحيلهم ${pct1(1 - O.rate)} · أحمر: متخلفون ${pct1(O.rate)}</div>` : ''}
       <div class="verdict"><b>النتيجة النهائية</b>${O.score != null ? `<span class="vg" style="background:${O.score >= 85 ? '#16a34a' : O.score >= 70 ? '#1C2B4A' : O.score >= 55 ? '#d97706' : '#dc2626'}">${O.score >= 85 ? 'ممتاز' : O.score >= 70 ? 'جيد' : O.score >= 55 ? 'مقبول' : 'يحتاج تحسين'} · ${O.score}</span>` : ''}<p>${esc(narrative(O, from, to))}</p></div>
       <h4 class="sub">الحصيلة الحالية (بغضّ النظر عن الفترة المختارة)</h4><table class="t"><thead><tr><th>الفترة</th><th>رحلات مُدخلة</th><th>ركاب مرحَّلون</th><th>متخلفون</th></tr></thead><tbody>${[['اليوم ' + O.now.dates.day, O.now.day], ['هذا الأسبوع (من ' + O.now.dates.week + ')', O.now.week], ['هذا الشهر ' + O.now.dates.month, O.now.month]].map(([l, v]) => `<tr><td class="l"><b>${l}</b></td><td>${n0(v.n)}</td><td><b>${n0(v.pax)}</b></td><td style="color:${v.missed ? '#b91c1c' : '#0f172a'}">${n0(v.missed)}</td></tr>`).join('')}</tbody></table>
-      ${O.peer ? `<h4 class="sub">الترتيب بين زملاء المحطة (${O.peer.count} موظفاً)</h4><table class="t"><thead><tr><th>#</th><th>الموظف</th><th>رحلات</th><th>ركاب مرحَّلون</th></tr></thead><tbody>${O.peer.top.map((x, i) => `<tr style="${x.me ? 'background:#fff7ed;font-weight:800' : ''}"><td>${i + 1}</td><td class="l">${x.me ? 'هذا الموظف' : esc(nameById[x.id] || '—')}</td><td>${x.n}</td><td><b>${n0(x.pax)}</b></td></tr>`).join('')}</tbody></table><p class="muted">ترتيبه: ${O.peer.rankPax} في الركاب · ${O.peer.rankTrips} في الرحلات${O.peer.rankPunct ? ` · ${O.peer.rankPunct} في الالتزام بالموعد` : ''} — من ${O.peer.count}. متوسط الزميل: ${n0(O.peer.teamAvgPaxTotal)} راكباً.</p>` : ''}
+      ${O.peer ? `<h4 class="sub">الترتيب بين زملاء المحطة (${O.peer.count} موظفاً)</h4><table class="t"><thead><tr><th>#</th><th>الموظف</th><th>رحلات</th><th>ركاب مرحَّلون</th></tr></thead><tbody>${O.peer.top.map((x, i) => `<tr style="${x.me ? 'background:#fff7ed;font-weight:800' : ''}"><td>${i + 1}</td><td class="l">${x.me ? 'هذا الموظف' : esc(nameById[x.id] || '—')}</td><td>${x.n}</td><td><b>${n0(x.pax)}</b></td></tr>`).join('')}</tbody></table><p class="muted">ترتيبه: ${O.peer.rankPax} في الركاب · ${O.peer.rankTrips} في الرحلات — من ${O.peer.count}. متوسط الزميل: ${n0(O.peer.teamAvgPaxTotal)} راكباً.</p>` : ''}
       ${O.score != null ? `<div class="grid g4" style="margin-top:8px"><div class="kpi" style="--c:${O.score >= 85 ? '#16a34a' : O.score >= 70 ? '#1C2B4A' : O.score >= 55 ? '#d97706' : '#dc2626'}"><small>مؤشر الأداء التشغيلي (استرشادي)</small><b>${O.score}</b><em>${O.score >= 85 ? 'ممتاز' : O.score >= 70 ? 'جيد' : O.score >= 55 ? 'مقبول' : 'يحتاج تحسين'}</em></div>${O.scoreParts.punct != null ? `<div class="cell"><small>الالتزام بالموعد (50%)</small><b>${Math.round(O.scoreParts.punct * 100)}%</b></div>` : ''}${O.scoreParts.miss != null ? `<div class="cell"><small>انضباط الترحيل (30%)</small><b>${Math.round(O.scoreParts.miss * 100)}%</b></div>` : ''}${O.scoreParts.cov != null ? `<div class="cell"><small>اكتمال تسجيل الأوقات (20%)</small><b>${Math.round(O.scoreParts.cov * 100)}%</b></div>` : ''}</div>` : ''}
       <h4 class="sub">متوسط الإنتاجية (يومي / أسبوعي / شهري)</h4><table class="t"><thead><tr><th>الفترة</th><th>فترات نشطة</th><th>متوسط الرحلات</th><th>متوسط الركاب</th><th>الأعلى</th></tr></thead><tbody>${avgRow('يومي', 'day')}${avgRow('أسبوعي (يبدأ السبت)', 'week')}${avgRow('شهري', 'month')}</tbody></table>
       ${scaleTbl('الحصيلة الأسبوعية', O.byWeek, k => `${k} ← ${addDays(k, 6)}`, 26)}
