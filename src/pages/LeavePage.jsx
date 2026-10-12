@@ -244,11 +244,14 @@ const PRINT_CSS = `
   .toolbar { position: sticky; top: 0; z-index: 5; background: #1C2B36; color: #fff; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
   .toolbar button { background: #fff; color: #1C2B36; border: 0; border-radius: 8px; padding: 9px 20px; font-weight: 800; font-size: 14px; font-family: inherit; }
   .sheet { background: #fff; max-width: 820px; margin: 14px auto; padding: 0 0 14px; box-shadow: 0 2px 14px rgba(0,0,0,.12); }
-  .hd { background: #fff; padding: 14px 22px 10px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 3px solid #EE712D; }
-  .hd .logo svg { display: block; width: 150px; height: auto; }
-  .hd .title { text-align: right; }
-  .hd .title b { display: block; font-size: 19px; font-weight: 900; color: #264673; }
-  .hd .title span { font-size: 10px; color: #64748b; }
+  .hd { background: #fff; padding: 14px 22px 10px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; border-bottom: 3px solid #EE712D; }
+  .hd .logo svg { display: block; width: 140px; height: auto; }
+  .hd .logo { justify-self: end; }
+  .hd .title { text-align: center; }
+  .hd .title b { display: block; font-size: 22px; font-weight: 900; color: #264673; letter-spacing: .3px; }
+  .hd .title span { display: inline-block; margin-top: 3px; font-size: 10px; color: #64748b; }
+  .hd .info { justify-self: start; text-align: right; font-size: 10px; color: #475569; line-height: 1.8; }
+  .hd .info b { color: #0f172a; }
   .body { padding: 0 22px; }
   .meta { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 4px; font-size: 10px; color: #475569; gap: 8px; flex-wrap: wrap; }
   .badge { display: inline-block; padding: 3px 12px; border-radius: 99px; font-weight: 800; font-size: 11px; }
@@ -266,6 +269,11 @@ const PRINT_CSS = `
   table.t th { background: #1e3a5f; color: #fff; padding: 5px 8px; font-size: 10px; }
   table.t td { border: 1px solid #dbe2ea; padding: 5px 8px; text-align: center; }
   table.t td:first-child { text-align: right; font-weight: 700; background: #f8fafc; }
+  table.rec th { text-align: center; line-height: 1.5; }
+  table.rec th.gp { background: #5b21b6; } table.rec th.gp2 { background: #7c3aed; font-weight: 600; }
+  table.rec th.gl { background: #0f766e; } table.rec th.gl2 { background: #14958a; font-weight: 600; }
+  table.rec td { font-size: 12px; padding: 7px 8px; }
+  table.rec tbody tr:nth-child(1) td { background: #fbfcfe; }
   .chips { margin-top: 6px; font-size: 10px; color: #334155; }
   .chips span { display: inline-block; background: #eef2f7; border-radius: 99px; padding: 2px 10px; margin: 2px 0 2px 4px; font-weight: 700; }
   .ap { border: 1px solid #dbe2ea; border-radius: 8px; padding: 8px 10px; }
@@ -276,6 +284,7 @@ const PRINT_CSS = `
   .ft { display: flex; justify-content: space-between; align-items: center; margin: 14px 22px 0; padding-top: 6px; border-top: 1px solid #cbd5e1; font-size: 9px; color: #64748b; gap: 8px; }
   .ft .pill { background: #1C2B36; color: #fff; padding: 2px 12px; border-radius: 20px; font-size: 8px; font-weight: 700; }
   @media (max-width: 640px) {
+    .hd { grid-template-columns: 1fr; text-align: center; } .hd .logo, .hd .info { justify-self: center; text-align: center; } .hd .logo svg { margin: 0 auto; }
     .sheet { margin: 0; box-shadow: none; } .g4 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: 1fr; }
     .req { grid-template-columns: 1fr 1fr; } .body { padding: 0 12px; } .hd { padding: 12px 14px; } .ft { margin: 12px 12px 0; flex-wrap: wrap; }
   }
@@ -319,7 +328,8 @@ function buildLeavePrintHtml(rawLeave, employeeName, stationName, profile, usedA
 <div class="toolbar"><span>معاينة النموذج</span><button onclick="window.print()">طباعة / حفظ PDF</button></div>
 <div class="sheet">
   <div class="hd">
-    <div class="title"><b>${esc(docTitle)}</b><span>${esc(stationName || '')}</span></div>
+    <div class="info"><div>المحطة: <b>${esc(stationName || '—')}</b></div><div>رقم الطلب: <b>#${esc(docNo)}</b></div></div>
+    <div class="title"><b>${esc(docTitle)}</b></div>
     <div class="logo">${NWB_LOGO_SVG}</div>
   </div>
   <div class="body">
@@ -347,15 +357,26 @@ function buildLeavePrintHtml(rawLeave, employeeName, stationName, profile, usedA
     </div>
 
     <div class="sec"><h3>سجل الموظف</h3>
-      <table class="t">
-        <thead><tr><th style="width:46%">البند</th><th>هذا العام (${S.year})</th><th>الإجمالي</th></tr></thead>
+      <table class="t rec">
+        <thead>
+          <tr>
+            <th rowspan="2" style="width:15%">الفترة</th>
+            <th colspan="3" class="gp">الاستئذان</th>
+            <th colspan="3" class="gl">الإجازات</th>
+            <th rowspan="2">الطلبات<br>المرفوضة</th>
+            <th rowspan="2">إجمالي<br>الطلبات</th>
+          </tr>
+          <tr>
+            <th class="gp2">مقدَّمة</th><th class="gp2">مقبولة</th><th class="gp2">المدة</th>
+            <th class="gl2">مقدَّمة</th><th class="gl2">مقبولة</th><th class="gl2">الأيام</th>
+          </tr>
+        </thead>
         <tbody>
-          ${row('طلبات الاستئذان المقدَّمة', S.yr.permReq, S.all.permReq)}
-          ${row('الاستئذانات المقبولة (عدد المرات · المدة)', `${S.yr.permOk} · ${hrs(S.yr.permHours)}`, `${S.all.permOk} · ${hrs(S.all.permHours)}`)}
-          ${row('طلبات الإجازات المقدَّمة', S.yr.leaveReq, S.all.leaveReq)}
-          ${row('الإجازات المقبولة (عدد المرات · الأيام)', `${S.yr.leaveOk} · ${S.yr.leaveDays ? Number(S.yr.leaveDays.toFixed(2)) + ' يوم' : '—'}`, `${S.all.leaveOk} · ${S.all.leaveDays ? Number(S.all.leaveDays.toFixed(2)) + ' يوم' : '—'}`)}
-          ${row('الطلبات المرفوضة', S.yr.rejected, S.all.rejected)}
-          ${row('إجمالي الطلبات المقدَّمة', `<b>${S.yr.total}</b>`, `<b>${S.all.total}</b>`)}
+          ${[[`هذا العام (${S.year})`, S.yr], ['الإجمالي', S.all]].map(([name, b]) => `<tr>
+            <td>${esc(name)}</td>
+            <td>${b.permReq}</td><td>${b.permOk}</td><td>${hrs(b.permHours)}</td>
+            <td>${b.leaveReq}</td><td>${b.leaveOk}</td><td>${b.leaveDays ? Number(b.leaveDays.toFixed(2)) : '—'}</td>
+            <td>${b.rejected}</td><td><b>${b.total}</b></td></tr>`).join('')}
         </tbody>
       </table>
       ${typeChips ? `<div class="chips">الإجازات المقبولة هذا العام حسب النوع: ${typeChips}</div>` : ''}
