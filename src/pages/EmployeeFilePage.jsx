@@ -32,6 +32,9 @@ const weekStart = day => { const t = new Date(day + 'T00:00:00Z'); t.setUTCDate(
 const hourOf = ts => { if (!ts) return null; const h = Number(String(ts).slice(11, 13)); return Number.isFinite(h) && h >= 0 && h < 24 ? h : null }
 const shiftOfHour = h => (h == null ? null : h < 8 ? 'A' : h < 16 ? 'B' : 'C')
 const SHIFT_AR = { A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج' }
+const OPS_STATUS_AR = { 'Accident between other vehicles': 'حادث بين مركبات أخرى', 'Health (Driver/Passengers)': 'حالة صحية', 'Passenger Misbehavior': 'سلوك ركاب', 'Police Control': 'ضبط مروري', 'Traffic Jam': 'ازدحام مروري', Weather: 'أحوال جوية', 'Accident with NWB bus': 'حادث مع حافلة الشركة', 'Malfunction inside the station': 'عطل داخل المحطة', 'Out-of-station malfunction': 'عطل خارج المحطة', Normal: 'عادي' }
+const DOW_AR = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']
+const dowIdx = day => (new Date(day + 'T00:00:00Z').getUTCDay() + 1) % 7
 const SHIFT_RANGE = { A: '00:00–08:00', B: '08:00–16:00', C: '16:00–24:00' }
 function analyze(raw, user, from, to) {
   const { leaves = [], sales = [], evals = [], ratings = [], logins = [], trips = [] } = raw
@@ -64,13 +67,27 @@ function analyze(raw, user, from, to) {
   const mkC = () => ({ n: 0, dep: 0, pax: 0, missed: 0 })
   const mkS = () => ({ n: 0, dep: 0, pax: 0, missed: 0, punct: 0, accN: 0, delaySum: 0, delayN: 0 })
   const O = { n: 0, dep: 0, arr: 0, extra: 0, pax: 0, missed: 0, byDay: {}, byWeek: {}, byMonth: {}, byStation: {}, byShift: { A: mkS(), B: mkS(), C: mkS() }, hours: Array(24).fill(0), acc: { early: 0, ontime: 0, late: 0, delayed: 0 }, delaySum: 0, delayN: 0 }
+  O.byDow = Array.from({ length: 7 }, () => ({ n: 0, pax: 0, missed: 0, days: new Set() }))
+  O.byRoute = {}; O.incidents = {}; O.list = []; O.timed = 0
   trips.forEach(r => {
     O.n++
     const day = String(r.record_date).slice(0, 10), wk = weekStart(day), mo = day.slice(0, 7)
     const bd = (O.byDay[day] ??= mkC()), bw = (O.byWeek[wk] ??= mkC()), bm = (O.byMonth[mo] ??= mkC())
     bd.n++; bw.n++; bm.n++
     const isArr = !!r.is_arrival
-    const h = hourOf(isArr ? r.actual_arrival : r.actual_departure), sk = shiftOfHour(h)
+    const tsx = isArr ? r.actual_arrival : r.actual_departure
+    const h = hourOf(tsx), sk = shiftOfHour(h)
+    if (h != null) O.timed++
+    const dw = O.byDow[dowIdx(day)]; dw.n++; dw.days.add(day)
+    const tr = r.trip || {}
+    const rk = tr.trip_number || '—'
+    const rb = (O.byRoute[rk] ??= { name: tr.route || tr.trip_name || '', n: 0, dep: 0, pax: 0, missed: 0, delaySum: 0, delayN: 0 })
+    rb.n++
+    if (r.operational_status && r.operational_status !== 'Normal') O.incidents[r.operational_status] = (O.incidents[r.operational_status] || 0) + 1
+    O.list.push({ date: day, trip: rk, name: tr.route || tr.trip_name || '', type: isArr ? 'arr' : r.is_extra_trip ? 'extra' : 'dep', station: r.station?.name_ar || r.station?.name_en || '—',
+      sched: (isArr ? tr.scheduled_arrival : tr.scheduled_departure) ? String(isArr ? tr.scheduled_arrival : tr.scheduled_departure).slice(0, 5) : null,
+      actual: tsx ? String(tsx).slice(11, 16) : null, delay: isArr || r.delay_minutes == null ? null : Number(r.delay_minutes), acc: r.departure_accuracy || null, shift: sk,
+      pax: Number(r.passenger_count) || 0, missed: Number(r.missed_count) || 0, bus: r.bus_number || '', status: r.operational_status || 'Normal' })
     const sb = sk ? O.byShift[sk] : null
     if (h != null) O.hours[h]++
     if (sb) sb.n++
@@ -79,6 +96,8 @@ function analyze(raw, user, from, to) {
     const pc = Number(r.passenger_count) || 0, ms = Number(r.missed_count) || 0
     O.pax += pc; O.missed += ms
     ;[bd, bw, bm].forEach(b => { b.dep++; b.pax += pc; b.missed += ms })
+    dw.pax += pc; dw.missed += ms; rb.dep++; rb.pax += pc; rb.missed += ms
+    if (r.delay_minutes != null && Number.isFinite(Number(r.delay_minutes))) { rb.delaySum += Number(r.delay_minutes); rb.delayN++ }
     const sn = r.station?.name_ar || r.station?.name_en || '—'; const st = (O.byStation[sn] ??= mkC()); st.n++; st.dep++; st.pax += pc; st.missed += ms
     if (sb) { sb.dep++; sb.pax += pc; sb.missed += ms }
     const acc = r.departure_accuracy
@@ -98,6 +117,15 @@ function analyze(raw, user, from, to) {
     day: { trips: mean(O.byDay, v => v.n), pax: mean(O.byDay, v => v.pax), count: Object.keys(O.byDay).length, peak: maxBy(O.byDay, v => v.pax) },
     week: { trips: mean(O.byWeek, v => v.n), pax: mean(O.byWeek, v => v.pax), count: Object.keys(O.byWeek).length, peak: maxBy(O.byWeek, v => v.pax) },
     month: { trips: mean(O.byMonth, v => v.n), pax: mean(O.byMonth, v => v.pax), count: Object.keys(O.byMonth).length, peak: maxBy(O.byMonth, v => v.pax) },
+  }
+  O.list.sort((a, b) => b.date.localeCompare(a.date) || String(b.actual).localeCompare(String(a.actual)))
+  // مؤشر الأداء التشغيلي (استرشادي): الالتزام بالموعد 50% + انضباط الترحيل (تخلف 10% = صفر) 30% + اكتمال تسجيل الأوقات 20%
+  {
+    const cov = O.n ? O.timed / O.n : 0, miss = Math.max(0, 1 - O.rate / 0.1)
+    const parts = [[O.punctRate, 0.5], [O.pax + O.missed ? miss : null, 0.3], [O.n ? cov : null, 0.2]].filter(([v]) => v != null)
+    const w = parts.reduce((a, [, x]) => a + x, 0)
+    O.score = w ? Math.round((parts.reduce((a, [v, x]) => a + v * x, 0) / w) * 100) : null
+    O.scoreParts = { punct: O.punctRate, miss: O.pax + O.missed ? miss : null, cov: O.n ? cov : null }
   }
   O.peakHour = O.n && O.hours.some(x => x) ? O.hours.indexOf(Math.max(...O.hours)) : null
   // نتائج تحليل الأداء (وقت + وردية + عدد الرحلات): ملاحظات تُستنتج آلياً من الأرقام
@@ -130,6 +158,14 @@ function analyze(raw, user, from, to) {
     const cur = O.byMonth[mKeys[mKeys.length - 1]], prev = O.byMonth[mKeys[mKeys.length - 2]]
     if (prev.n) { const ch = ((cur.n - prev.n) / prev.n) * 100; if (Math.abs(ch) >= 10) ins.push({ t: ch > 0 ? 'good' : 'watch', text: `عدد الرحلات في ${mKeys[mKeys.length - 1]} ${ch > 0 ? 'ارتفع' : 'انخفض'} ${Math.abs(Math.round(ch))}% عن ${mKeys[mKeys.length - 2]}` }) }
   }
+  const dows = O.byDow.map((v, i) => [i, v]).filter(([, v]) => v.days.size)
+  if (dows.length > 1) {
+    const [bi, bv] = dows.reduce((x, y) => (y[1].pax / y[1].days.size > x[1].pax / x[1].days.size ? y : x))
+    ins.push({ t: 'info', text: `أعلى الأيام إنتاجية: ${DOW_AR[bi]} بمتوسط ${Math.round(bv.pax / bv.days.size)} راكب لليوم` })
+  }
+  const incTot = Object.values(O.incidents).reduce((a, b) => a + b, 0)
+  if (incTot) { const [ik, iv] = Object.entries(O.incidents).sort((a, b) => b[1] - a[1])[0]; ins.push({ t: 'watch', text: `${incTot} رحلة بظرف تشغيلي غير عادي، أكثرها: ${OPS_STATUS_AR[ik] || ik} (${iv})` }) }
+  else if (O.n) ins.push({ t: 'good', text: 'لا توجد رحلات بظروف تشغيلية غير عادية' })
   O.insights = ins
   // تقييمات العملاء
   const R = { n: ratings.length, avg: ratings.length ? ratings.reduce((a, r) => a + r.rating, 0) / ratings.length : null, dist: [0, 0, 0, 0, 0], comments: ratings.filter(r => r.comment) }
@@ -357,6 +393,138 @@ function OpsAnalysis({ O, isAr }) {
   )
 }
 
+// ── مؤشر الأداء التشغيلي (استرشادي) ─────────────────────────────
+function OpsScorecard({ O, isAr }) {
+  if (O.score == null) return null
+  const g = O.score >= 85 ? [isAr ? 'ممتاز' : 'Excellent', '#16a34a'] : O.score >= 70 ? [isAr ? 'جيد' : 'Good', '#1C2B4A'] : O.score >= 55 ? [isAr ? 'مقبول' : 'Fair', '#d97706'] : [isAr ? 'يحتاج تحسين' : 'Needs work', '#dc2626']
+  const parts = [[isAr ? 'الالتزام بموعد المغادرة' : 'Departure punctuality', O.scoreParts.punct, '50%'], [isAr ? 'انضباط الترحيل (قلة المتخلفين)' : 'Boarding discipline', O.scoreParts.miss, '30%'], [isAr ? 'اكتمال تسجيل الأوقات' : 'Time-entry completeness', O.scoreParts.cov, '20%']]
+  return (
+    <div style={{ marginTop: 16, border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', background: 'var(--card)' }}>
+      <Ring pct={O.score} color={g[1]} label={String(O.score)} sub={isAr ? 'مؤشر الأداء التشغيلي' : 'Ops score'} size={96} />
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <span style={{ background: g[1], color: '#fff', borderRadius: 99, padding: '2px 14px', fontSize: '0.74rem', fontWeight: 800 }}>{g[0]}</span>
+          <span style={{ fontSize: '0.68rem', color: 'var(--text-3)' }}>{isAr ? 'مؤشر استرشادي مبني على الأرقام المسجلة' : 'Indicative score based on recorded figures'}</span>
+        </div>
+        {parts.map(([l, v, w]) => v != null && (
+          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span style={{ width: 190, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-2)' }}>{l} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>({w})</span></span>
+            <Bar pct={v * 100} color={v >= 0.85 ? '#16a34a' : v >= 0.6 ? '#1C2B4A' : '#d97706'} />
+            <span style={{ width: 44, textAlign: 'left', fontFamily: MONO, fontWeight: 800, fontSize: '0.76rem' }} dir="ltr">{Math.round(v * 100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── تفاصيل إضافية: الأيام + المسارات + الظروف التشغيلية ──────────────
+function OpsBreakdown({ O, isAr }) {
+  const dows = O.byDow.map((v, i) => ({ i, ...v, d: v.days.size })).filter(x => x.d)
+  const dmx = Math.max(...dows.map(x => x.pax / x.d), 1)
+  const routes = Object.entries(O.byRoute).sort((a, b) => b[1].pax - a[1].pax).slice(0, 12)
+  const inc = Object.entries(O.incidents).sort((a, b) => b[1] - a[1])
+  const box = { border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--card)' }
+  const ttl = t => <div style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{t}</div>
+  return (
+    <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+      {dows.length > 0 && (
+        <div style={box}>{ttl(isAr ? 'متوسط الركاب حسب يوم الأسبوع' : 'Avg passengers by weekday')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {dows.map(x => (
+              <div key={x.i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 62, fontSize: '0.74rem', fontWeight: 700 }}>{DOW_AR[x.i]}</span>
+                <Bar pct={(x.pax / x.d / dmx) * 100} color="#1C2B4A" />
+                <span style={{ width: 96, textAlign: 'left', fontFamily: MONO, fontSize: '0.7rem', fontWeight: 800 }} dir="ltr">{Math.round(x.pax / x.d)} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>· {(x.n / x.d).toFixed(1)}t</span></span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {inc.length > 0 && (
+        <div style={box}>{ttl(isAr ? 'الظروف التشغيلية المسجَّلة' : 'Operational conditions')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {inc.map(([k, v]) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', borderBottom: '1px dashed var(--border)', paddingBottom: 4 }}><span style={{ fontWeight: 600 }}>{OPS_STATUS_AR[k] || k}</span><span style={{ fontFamily: MONO, fontWeight: 800 }}>{v}</span></div>)}
+          </div>
+        </div>
+      )}
+      {routes.length > 0 && (
+        <div style={{ ...box, gridColumn: '1 / -1', padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 14px 0' }}>{ttl(isAr ? 'أداء الرحلات (الأكثر ركاباً)' : 'Top trips')}</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+              <thead><tr>{[isAr ? 'الرحلة' : 'Trip', isAr ? 'المسار' : 'Route', isAr ? 'السجلات' : 'Records', isAr ? 'ركاب مرحَّلون' : 'Dispatched', isAr ? 'متخلفون' : 'Missed', isAr ? 'متوسط الفرق (د)' : 'Avg delta'].map(h => <Th key={h}>{h}</Th>)}</tr></thead>
+              <tbody>{routes.map(([k, v]) => <tr key={k}><Td l b>{k}</Td><Td l>{v.name || '—'}</Td><Td>{v.n}</Td><Td b>{n0(v.pax)}</Td><Td c={v.missed ? '#dc2626' : undefined}>{n0(v.missed)}</Td><Td>{v.delayN ? `${v.delaySum / v.delayN > 0 ? '+' : ''}${(v.delaySum / v.delayN).toFixed(1)}` : '—'}</Td></tr>)}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── سجل الرحلات التفصيلي: بحث + تصفية + ترقيم صفحات ────────────────
+function TripLog({ O, isAr }) {
+  const [type, setType] = useState('all')
+  const [shift, setShift] = useState('all')
+  const [q, setQ] = useState('')
+  const [page, setPage] = useState(0)
+  const PER = 40
+  const rows = O.list.filter(r => (type === 'all' || (type === 'dep' ? r.type !== 'arr' : r.type === 'arr')) && (shift === 'all' || r.shift === shift)
+    && (!q.trim() || `${r.trip} ${r.name} ${r.bus} ${r.station}`.toLowerCase().includes(q.trim().toLowerCase())))
+  const pages = Math.max(1, Math.ceil(rows.length / PER))
+  const cur = Math.min(page, pages - 1)
+  const slice = rows.slice(cur * PER, cur * PER + PER)
+  const pill = on => ({ padding: '5px 13px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', border: `1.5px solid ${on ? '#1C2B4A' : 'var(--border)'}`, background: on ? '#1C2B4A' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' })
+  const accCol = a => (a === 'Early' ? ['#0369a1', '#e0f2fe', isAr ? 'مبكر' : 'Early'] : a === 'On Time' ? ['#15803d', '#dcfce7', isAr ? 'في الموعد' : 'On time'] : a === 'Not On Time' ? ['#b45309', '#fef3c7', isAr ? 'تأخر بسيط' : 'Slightly late'] : a === 'Delayed' ? ['#b91c1c', '#fee2e2', isAr ? 'متأخر' : 'Delayed'] : null)
+  return (
+    <div style={{ marginTop: 22, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ width: 4, height: 16, background: '#EE712D', borderRadius: 2 }} />
+        <span style={{ fontWeight: 800, fontSize: '0.88rem' }}>{isAr ? 'سجل الرحلات التفصيلي' : 'Detailed trip log'}</span>
+        <span style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--text-3)' }}>{rows.length} / {O.list.length}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+        {[['all', isAr ? 'الكل' : 'All'], ['dep', isAr ? 'مغادرة' : 'Departures'], ['arr', isAr ? 'وصول' : 'Arrivals']].map(([v, l]) => <button key={v} type="button" style={pill(type === v)} onClick={() => { setType(v); setPage(0) }}>{l}</button>)}
+        <span style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px' }} />
+        {[['all', isAr ? 'كل الورديات' : 'All shifts'], ['A', SHIFT_AR.A], ['B', SHIFT_AR.B], ['C', SHIFT_AR.C]].map(([v, l]) => <button key={v} type="button" style={pill(shift === v)} onClick={() => { setShift(v); setPage(0) }}>{l}</button>)}
+        <input value={q} onChange={e => { setQ(e.target.value); setPage(0) }} placeholder={isAr ? 'بحث: رقم الرحلة / الحافلة / المحطة' : 'Search trip / bus / station'} aria-label={isAr ? 'بحث في سجل الرحلات' : 'Search trip log'}
+          style={{ flex: 1, minWidth: 190, border: '1px solid var(--border)', borderRadius: 10, padding: '7px 12px', fontSize: '0.78rem', fontFamily: 'inherit', background: 'var(--card)' }} />
+      </div>
+      <div style={{ overflow: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 880 }}>
+          <thead><tr>{[isAr ? 'التاريخ' : 'Date', isAr ? 'الرحلة' : 'Trip', isAr ? 'النوع' : 'Type', isAr ? 'المحطة' : 'Station', isAr ? 'المجدول' : 'Sched.', isAr ? 'الفعلي' : 'Actual', isAr ? 'الفرق (د)' : 'Delta', isAr ? 'الوردية' : 'Shift', isAr ? 'الركاب' : 'Pax', isAr ? 'متخلفون' : 'Missed', isAr ? 'الحافلة' : 'Bus', isAr ? 'الحالة' : 'Status'].map(h => <Th key={h}>{h}</Th>)}</tr></thead>
+          <tbody>
+            {slice.map((r, i) => { const ac = accCol(r.acc); return (
+              <tr key={i}>
+                <Td>{r.date}</Td>
+                <Td l><b style={{ fontFamily: MONO }}>{r.trip}</b>{r.name ? <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontFamily: 'inherit' }}>{r.name}</div> : null}</Td>
+                <Td><Chip c={r.type === 'arr' ? '#0369a1' : r.type === 'extra' ? '#7c3aed' : '#1C2B4A'} bg={r.type === 'arr' ? '#e0f2fe' : r.type === 'extra' ? '#ede9fe' : '#e2e8f0'}>{r.type === 'arr' ? (isAr ? 'وصول' : 'Arr') : r.type === 'extra' ? (isAr ? 'إضافية' : 'Extra') : (isAr ? 'مغادرة' : 'Dep')}</Chip></Td>
+                <Td l>{r.station}</Td>
+                <Td>{r.sched || '—'}</Td>
+                <Td>{r.actual || '—'}</Td>
+                <Td>{r.delay != null ? (ac ? <span style={{ background: ac[1], color: ac[0], borderRadius: 99, padding: '1px 9px', fontWeight: 800 }} title={ac[2]}>{r.delay > 0 ? '+' : ''}{r.delay}</span> : `${r.delay > 0 ? '+' : ''}${r.delay}`) : '—'}</Td>
+                <Td>{r.shift ? SHIFT_AR[r.shift].replace('الوردية ', '') : '—'}</Td>
+                <Td b>{r.type === 'arr' ? '—' : r.pax}</Td>
+                <Td c={r.missed ? '#dc2626' : undefined}>{r.type === 'arr' ? '—' : r.missed}</Td>
+                <Td>{r.bus || '—'}</Td>
+                <Td l>{r.status !== 'Normal' ? <span style={{ color: '#b45309', fontWeight: 700, fontSize: '0.72rem' }}>{OPS_STATUS_AR[r.status] || r.status}</span> : <span style={{ color: 'var(--text-3)', fontSize: '0.72rem' }}>{isAr ? 'عادي' : 'Normal'}</span>}</Td>
+              </tr>) })}
+            {slice.length === 0 && <tr><td colSpan={12} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>{isAr ? 'لا نتائج مطابقة' : 'No matching trips'}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {pages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 10 }}>
+          <button type="button" disabled={cur === 0} onClick={() => setPage(cur - 1)} style={{ ...pill(false), opacity: cur === 0 ? 0.4 : 1 }}>{isAr ? 'السابق' : 'Prev'}</button>
+          <span style={{ fontFamily: MONO, fontSize: '0.74rem', fontWeight: 700 }}>{cur + 1} / {pages}</span>
+          <button type="button" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)} style={{ ...pill(false), opacity: cur >= pages - 1 ? 0.4 : 1 }}>{isAr ? 'التالي' : 'Next'}</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const pct1 = x => `${(x * 100).toFixed(1)}%`
 
 export default function EmployeeFilePage() {
@@ -399,7 +567,7 @@ export default function EmployeeFilePage() {
         supabase.from('sales_records').select('id, sale_date, shift, total_actual, total_expected, is_confirmed, station:station_id(name_ar, name_en)').eq('created_by', empId).gte('sale_date', from).lte('sale_date', to).order('sale_date', { ascending: false }).limit(3000),
         supabase.from('employee_evaluations').select('eval_month, eval_year, eval_source, total_score, notes, evaluator:evaluator_id(full_name_ar)').eq('employee_id', empId),
         supabase.from('customer_ratings').select('rating, comment, created_at, shift, window_number, station:station_id(name_ar, name_en)').eq('employee_id', empId).gte('created_at', fT).lte('created_at', tT).order('created_at', { ascending: false }).limit(3000),
-        supabase.from('trip_records').select('record_date, is_arrival, is_extra_trip, passenger_count, missed_count, actual_departure, actual_arrival, delay_minutes, departure_accuracy, station:station_id(name_ar, name_en)').eq('created_by', empId).gte('record_date', from).lte('record_date', to).limit(10000),
+        supabase.from('trip_records').select('record_date, is_arrival, is_extra_trip, passenger_count, missed_count, actual_departure, actual_arrival, delay_minutes, departure_accuracy, bus_number, operational_status, trip:trip_schedule_id(trip_number, trip_name, route, scheduled_departure, scheduled_arrival), station:station_id(name_ar, name_en)').eq('created_by', empId).gte('record_date', from).lte('record_date', to).limit(10000),
         supabase.from('audit_log').select('created_at, before_data, after_data').eq('table_name', 'users').eq('record_id', empId).eq('action', 'UPDATE').gte('created_at', fT).lte('created_at', tT).order('created_at', { ascending: false }).limit(5000),
       ])
       if (u.error || !u.data) throw new Error(u.error?.message || 'تعذّر تحميل بيانات الموظف')
@@ -499,6 +667,7 @@ export default function EmployeeFilePage() {
       const avgRow = (name, k) => { const a = O.avgScale[k]; return `<tr><td class="l"><b>${name}</b></td><td>${a.count}</td><td>${a.trips.toFixed(1)}</td><td><b>${n0(a.pax)}</b></td><td>${a.peak ? `${a.peak[0]} (${n0(a.peak[1].pax)} راكب)` : '—'}</td></tr>` }
       P.push(`<div class="sec"><h3>الأداء التشغيلي — الترحيل</h3>${O.n ? `<div class="grid g3"><div class="kpi" style="--c:#1C2B4A"><small>الرحلات المُدخلة</small><b>${n0(O.n)}</b><em>${n0(O.dep)} مغادرة · ${n0(O.arr)} وصول · ${n0(O.extra)} إضافية</em></div><div class="kpi" style="--c:#15803d"><small>الركاب المرحَّلون</small><b>${n0(O.pax)}</b><em>متوسط ${O.avg.toFixed(1)} راكب للرحلة</em></div><div class="kpi" style="--c:${O.rate > 0.05 ? '#dc2626' : '#d97706'}"><small>الركاب المتخلفون</small><b>${n0(O.missed)}</b><em>نسبة التخلف ${pct1(O.rate)}</em></div></div>
       ${O.pax + O.missed ? `<div class="stack"><i style="width:${(1 - O.rate) * 100}%;background:#15803d"></i><i style="width:${O.rate * 100}%;background:#dc2626"></i></div><div class="muted">أخضر: تم ترحيلهم ${pct1(1 - O.rate)} · أحمر: متخلفون ${pct1(O.rate)}</div>` : ''}
+      ${O.score != null ? `<div class="grid g4" style="margin-top:8px"><div class="kpi" style="--c:${O.score >= 85 ? '#16a34a' : O.score >= 70 ? '#1C2B4A' : O.score >= 55 ? '#d97706' : '#dc2626'}"><small>مؤشر الأداء التشغيلي (استرشادي)</small><b>${O.score}</b><em>${O.score >= 85 ? 'ممتاز' : O.score >= 70 ? 'جيد' : O.score >= 55 ? 'مقبول' : 'يحتاج تحسين'}</em></div>${O.scoreParts.punct != null ? `<div class="cell"><small>الالتزام بالموعد (50%)</small><b>${Math.round(O.scoreParts.punct * 100)}%</b></div>` : ''}${O.scoreParts.miss != null ? `<div class="cell"><small>انضباط الترحيل (30%)</small><b>${Math.round(O.scoreParts.miss * 100)}%</b></div>` : ''}${O.scoreParts.cov != null ? `<div class="cell"><small>اكتمال تسجيل الأوقات (20%)</small><b>${Math.round(O.scoreParts.cov * 100)}%</b></div>` : ''}</div>` : ''}
       <h4 class="sub">متوسط الإنتاجية (يومي / أسبوعي / شهري)</h4><table class="t"><thead><tr><th>الفترة</th><th>فترات نشطة</th><th>متوسط الرحلات</th><th>متوسط الركاب</th><th>الأعلى</th></tr></thead><tbody>${avgRow('يومي', 'day')}${avgRow('أسبوعي (يبدأ السبت)', 'week')}${avgRow('شهري', 'month')}</tbody></table>
       ${scaleTbl('الحصيلة الأسبوعية', O.byWeek, k => `${k} ← ${addDays(k, 6)}`, 26)}
       ${scaleTbl('الحصيلة الشهرية', O.byMonth, k => k, 24)}
@@ -507,6 +676,10 @@ export default function EmployeeFilePage() {
       ${O.hours.some(x => x) ? `<div class="muted" style="margin:8px 0 3px">توزيع الرحلات على ساعات اليوم${O.peakHour != null ? ` — الذروة ${String(O.peakHour).padStart(2, '0')}:00` : ''}</div><div class="hist">${O.hours.map((h, i) => `<span><i style="height:${Math.max(h ? 3 : 1, h / hrMax * 34)}px;${i === O.peakHour ? 'background:#EE712D' : ''}"></i><em>${i % 3 === 0 ? i : ''}</em></span>`).join('')}</div>` : ''}
       ${O.accN ? `<div class="muted" style="margin:8px 0 3px">الالتزام بموعد المغادرة: ${Math.round(O.punctRate * 100)}% — مبكر ${O.acc.early} · في الموعد ${O.acc.ontime} · تأخر بسيط ${O.acc.late} · متأخر ${O.acc.delayed}</div><div class="stack">${[['early', '#0369a1'], ['ontime', '#16a34a'], ['late', '#d97706'], ['delayed', '#dc2626']].map(([k, c]) => `<i style="width:${O.acc[k] / O.accN * 100}%;background:${c}"></i>`).join('')}</div>` : ''}
       ${O.insights.length ? `<h4 class="sub">خلاصة التحليل</h4><div class="grid g2" style="align-items:start"><div class="ins ok"><h4>إيجابي</h4><ul>${O.insights.filter(x => x.t === 'good').map(x => `<li style="--c:#16a34a">${esc(x.text)}</li>`).join('') || '<li class="none">—</li>'}</ul></div><div class="ins no"><h4>متابعة</h4><ul>${O.insights.filter(x => x.t === 'watch').map(x => `<li style="--c:#d97706">${esc(x.text)}</li>`).join('') || '<li class="none">لا توجد</li>'}</ul></div></div><ul class="notes">${O.insights.filter(x => x.t === 'info').map(x => `<li>${esc(x.text)}</li>`).join('')}</ul>` : ''}
+      ${O.byDow.some(v => v.days.size) ? `<h4 class="sub">حسب يوم الأسبوع</h4><table class="t"><thead><tr><th>اليوم</th><th>أيام عمل</th><th>متوسط الرحلات</th><th>متوسط الركاب</th><th>نسبة التخلف</th></tr></thead><tbody>${O.byDow.map((v, i) => v.days.size ? `<tr><td class="l">${DOW_AR[i]}</td><td>${v.days.size}</td><td>${(v.n / v.days.size).toFixed(1)}</td><td><b>${Math.round(v.pax / v.days.size)}</b></td><td>${v.pax + v.missed ? pct1(v.missed / (v.pax + v.missed)) : '—'}</td></tr>` : '').join('')}</tbody></table>` : ''}
+      ${Object.keys(O.byRoute).length ? `<h4 class="sub">أداء الرحلات (الأكثر ركاباً)</h4><table class="t"><thead><tr><th>الرحلة</th><th>المسار</th><th>السجلات</th><th>ركاب مرحَّلون</th><th>متخلفون</th><th>متوسط الفرق (د)</th></tr></thead><tbody>${Object.entries(O.byRoute).sort((a, b) => b[1].pax - a[1].pax).slice(0, 12).map(([k, v]) => `<tr><td class="l"><b>${esc(k)}</b></td><td class="l">${esc(v.name || '—')}</td><td>${v.n}</td><td><b>${n0(v.pax)}</b></td><td>${n0(v.missed)}</td><td>${v.delayN ? (v.delaySum / v.delayN > 0 ? '+' : '') + (v.delaySum / v.delayN).toFixed(1) : '—'}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${Object.keys(O.incidents).length ? `<h4 class="sub">الظروف التشغيلية المسجَّلة</h4><table class="t"><thead><tr><th>الظرف</th><th>عدد الرحلات</th></tr></thead><tbody>${Object.entries(O.incidents).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<tr><td class="l">${esc(OPS_STATUS_AR[k] || k)}</td><td>${v}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${O.list.length ? `<h4 class="sub">سجل الرحلات التفصيلي (آخر ${Math.min(60, O.list.length)} من ${O.list.length})</h4><table class="t"><thead><tr><th>التاريخ</th><th>الرحلة</th><th>النوع</th><th>المحطة</th><th>المجدول</th><th>الفعلي</th><th>الفرق</th><th>الوردية</th><th>الركاب</th><th>متخلفون</th><th>الحافلة</th></tr></thead><tbody>${O.list.slice(0, 60).map(r => `<tr><td>${r.date}</td><td class="l"><b>${esc(r.trip)}</b></td><td>${r.type === 'arr' ? 'وصول' : r.type === 'extra' ? 'إضافية' : 'مغادرة'}</td><td class="l">${esc(r.station)}</td><td>${r.sched || '—'}</td><td>${r.actual || '—'}</td><td style="direction:ltr">${r.delay != null ? (r.delay > 0 ? '+' : '') + r.delay : '—'}</td><td>${r.shift ? SHIFT_AR[r.shift].replace('الوردية ', '') : '—'}</td><td>${r.type === 'arr' ? '—' : r.pax}</td><td style="color:${r.missed ? '#b91c1c' : '#0f172a'}">${r.type === 'arr' ? '—' : r.missed}</td><td>${esc(r.bus || '—')}</td></tr>`).join('')}</tbody></table>` : ''}
       ${sts.length > 1 ? `<h4 class="sub">حسب المحطة</h4><table class="t"><thead><tr><th>المحطة</th><th>الرحلات</th><th>المرحَّلون</th><th>المتخلفون</th><th>نسبة التخلف</th></tr></thead><tbody>${sts.map(([n, b]) => `<tr><td class="l">${esc(n)}</td><td>${b.n}</td><td><b>${n0(b.pax)}</b></td><td>${n0(b.missed)}</td><td>${rate(b)}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted">لا توجد رحلات مُدخلة من الموظف ضمن الفترة.</p>'}</div>`)
     }
     // 6) الإيرادات
@@ -744,8 +917,11 @@ export default function EmployeeFilePage() {
                         </div>
                       </div>
                     )}
+                    <OpsScorecard O={an.O} isAr={isAr} />
                     <OpsScaleSection O={an.O} isAr={isAr} />
                     <OpsAnalysis O={an.O} isAr={isAr} />
+                    <OpsBreakdown O={an.O} isAr={isAr} />
+                    <TripLog O={an.O} isAr={isAr} />
                     {(() => {
                       const sts = Object.entries(an.O.byStation).sort((x, y) => y[1].pax - x[1].pax)
                       if (sts.length < 2) return null
