@@ -191,7 +191,7 @@ export const MODULES = [
   { value: 'settings',       ar: 'الإعدادات',        en: 'Settings' },
   { value: 'map',            ar: 'الخريطة',          en: 'Map' },
   { value: 'customer_ratings', ar: 'تقييمات العملاء', en: 'Customer Ratings' },
-  { value: 'employee_file',  ar: 'الملف الوظيفي',     en: 'Staff Profile' },
+  { value: 'employee_file',  ar: 'السجل الوظيفي',     en: 'Staff Record' },
   { value: 'live_board',     ar: 'شاشة العرض',       en: 'Live Board' },
   { value: 'pa_calls',       ar: 'نداء الركاب',      en: 'Passenger Calls' },
   { value: 'event',          ar: 'Event (اطلاع)',      en: 'Event (view)' },

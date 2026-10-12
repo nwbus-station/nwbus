@@ -349,7 +349,7 @@ const NAV_GROUPS = [
       { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ADMIN_ROLE_VALUES,               module: 'settings', capKey: 'settings_access' },
       { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'map' },
       { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings', allowKey: 'customer_ratings_view' },
-      { to: '/employee-file', labelAr: 'الملف الوظيفي', labelEn: 'Staff Profile', icon: 'users', roles: ADMIN_ROLE_VALUES, module: 'employee_file', adminOnly: true },
+      { to: '/employee-file', labelAr: 'السجل الوظيفي', labelEn: 'Staff Record', icon: 'users', roles: ADMIN_ROLE_VALUES, module: 'employee_file', adminOnly: true },
       { to: '/calls', labelAr: 'نداء الركاب', labelEn: 'Passenger Calls', icon: 'call', roles: ADMIN_ROLE_VALUES, module: 'pa_calls' },
     ]
   },
