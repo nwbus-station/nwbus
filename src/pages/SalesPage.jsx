@@ -12,7 +12,7 @@ import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { safeImport } from '../lib/chunkReload'
 import SelectField from '../components/shared/SelectField'
-import { brandHeader, docHeader, docShell, openDocWindow, esc } from '../utils/printDoc'
+import { brandHeader, docHeader, docShell, openDocWindow, previewToolbar, TOOLBAR_CSS, esc } from '../utils/printDoc'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ', en: 'Shift A', range: '00:00 – 08:00', end: 8 },
@@ -80,11 +80,20 @@ export function printSaleRecord({ sale, isAr, profile }) {
     const deficitAcknowledged = sale?.accountant_notes?.includes('تم إقرار العجز')
     const shiftLabel = { A: isAr ? 'الوردية أ' : 'Shift A', B: isAr ? 'الوردية ب' : 'Shift B', C: isAr ? 'الوردية ج' : 'Shift C' }[sale?.shift] ?? sale?.shift ?? '—'
 
+    const shareText = [
+      `${isAr ? 'كشف الإيرادات اليومية' : 'Daily Revenue Report'} — ${stationName}`,
+      `${isAr ? 'التاريخ' : 'Date'}: ${sale?.sale_date ?? '—'} · ${shiftLabel}`,
+      `${isAr ? 'الموظف' : 'Employee'}: ${employeeName}${jobNumber !== '—' ? ` (#${jobNumber})` : ''}`,
+      `${isAr ? 'المحصَّل' : 'Collected'}: ${fmt(totalActualVal)} ${isAr ? 'ر.س' : 'SAR'} · ${isAr ? 'المبيعات' : 'Sales'}: ${fmt(sale?.total_expected)} · ${isAr ? 'الفرق' : 'Diff'}: ${diff > 0 ? '+' : ''}${fmt(diff)}`,
+    ].join('\n')
     const docTitle = `إيرادات_${stationName}_${sale?.sale_date ?? ''}_${shiftLabel}`.replace(/\s+/g, '_')
     const html = `<!DOCTYPE html><html dir="${dir}"><head>
       <meta charset="UTF-8"/>
+      <meta name="viewport" content="width=device-width,initial-scale=1"/>
       <title>${docTitle}</title>
       <style>
+        ${TOOLBAR_CSS}
+        @media (max-width: 640px) { .page { padding: 14px 12px !important; } .meta { flex-wrap: wrap; } .meta-cell { flex: 1 1 45%; border-bottom: 1px solid #d1d5db; } .footer { flex-direction: column; gap: 16px; } .print-footer { flex-direction: column; gap: 6px; align-items: flex-start; } .print-footer .pf-left { flex-wrap: wrap; gap: 8px 14px; } }
         @import url('https://fonts.googleapis.com/css2?family=IBM Plex Sans Arabic:wght@400;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'IBM Plex Sans Arabic', Arial, sans-serif; background: #fff; color: #1a1a2e; direction: ${dir}; font-size: 13px; }
@@ -145,6 +154,7 @@ export function printSaleRecord({ sale, isAr, profile }) {
         }
       </style>
     </head><body>
+    ${previewToolbar({ label: isAr ? 'معاينة كشف الإيرادات' : 'Revenue sheet preview', shareTitle: docTitle, shareText })}
     <div class="page">
 
       <!-- Header -->
@@ -258,19 +268,8 @@ export function printSaleRecord({ sale, isAr, profile }) {
     </div>
     </body></html>`
 
-    // فتح نافذة جديدة تحتوي المحتوى كاملاً — يعمل على الجوال والكمبيوتر
-    const win = window.open('', '_blank', 'width=800,height=900')
-    if (!win) return // المتصفح منع النافذة المنبثقة
-    win.document.write(html)
-    win.document.close()
-    win.focus()
-    // انتظار تحميل الخط قبل الطباعة
-    win.onload = () => {
-      setTimeout(() => {
-        win.print()
-        win.close()
-      }, 400)
-    }
+    // صفحة معاينة بزر طباعة/حفظ PDF ومشاركة — تعمل على الجوال والكمبيوتر
+    openDocWindow(html)
 }
 
 /* ─── Sales Modal ───────────────────────────────────────── */
@@ -926,6 +925,7 @@ export default function SalesPage() {
       title: `اليومية — ${filterDate}`,
       body: docHeader({ title: 'كشف الإيرادات اليومي', infoLines: [`اليوم: <b>${esc(dayLabel)}</b>`, `المحطة: <b>${esc(groups.length === 1 ? groups[0].name : `${groups.length} محطات`)}</b>`, `الطابع: <b>${esc(profile?.full_name_ar ?? '—')}</b>`] }) + body,
       footerLeft: `طُبع: ${esc(new Date().toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' }))}`, footerRight: 'وثيقة داخلية',
+      shareText: `كشف الإيرادات اليومي — ${dayLabel}\nالقيود: ${records.length} · المحصَّل: ${fmt(tA)} ر.س · المبيعات: ${fmt(tE)} · الفرق: ${tD > 0 ? '+' : ''}${fmt(tD)}`,
     })
     openDocWindow(html)
   }

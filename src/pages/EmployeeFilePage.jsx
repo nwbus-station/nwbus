@@ -333,6 +333,7 @@ export default function EmployeeFilePage() {
       title: `الملف الوظيفي — ${u.full_name_ar}`,
       body: docHeader({ title: 'تقرير الملف الوظيفي', infoLines: [`الموظف: <b>${esc(u.full_name_ar)}</b>`, `الفترة: من <b>${esc(from)}</b> إلى <b>${esc(to)}</b>`, `الرقم المرجعي: <b>${esc(ref)}</b>`] }) + `<div class="body">${P.join('')}</div>`,
       footerLeft: `أُصدر: ${esc(fmtDT(new Date()))}${issuer ? ` · بواسطة ${esc(issuer)}` : ''}`, footerRight: 'سرّي — للأدمن فقط',
+      shareText: `الملف الوظيفي — ${u.full_name_ar}\nالفترة: ${from} إلى ${to}\nالرقم المرجعي: ${ref}`,
     })
     openDocWindow(html)
   }

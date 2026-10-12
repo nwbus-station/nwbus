@@ -17,13 +17,26 @@ export function brandHeader({ title, subtitle = '', lines = [], dir = 'rtl', log
 <div style="justify-self:end">${brandLogo(logoW)}</div></div>`
 }
 
+export const TOOLBAR_CSS = `
+  .toolbar { position: sticky; top: 0; z-index: 5; background: #1C2B36; color: #fff; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; }
+  .toolbar .acts { display: flex; gap: 8px; }
+  .toolbar button { background: #fff; color: #1C2B36; border: 0; border-radius: 8px; padding: 9px 18px; font-weight: 800; font-size: 14px; font-family: inherit; cursor: pointer; }
+  .toolbar button.sh { background: #EE712D; color: #fff; display: none; }
+  @media print { .toolbar { display: none !important; } }
+`
+
+// شريط المعاينة: زر طباعة/حفظ PDF + زر مشاركة (يظهر على الأجهزة التي تدعم المشاركة، مثل الجوال)
+export function previewToolbar({ label = 'معاينة المستند', shareTitle = '', shareText = '' } = {}) {
+  return `<div class="toolbar" data-t="${esc(shareTitle)}" data-x="${esc(shareText)}"><span>${esc(label)}</span><span class="acts"><button class="sh" type="button">مشاركة / إرسال</button><button type="button" onclick="window.print()">طباعة / حفظ PDF</button></span></div>
+<script>(function(){var t=document.querySelector('.toolbar');if(!t)return;var x=t.getAttribute('data-x');var b=t.querySelector('.sh');if(navigator.share&&x&&b){b.style.display='inline-block';b.onclick=function(){navigator.share({title:t.getAttribute('data-t')||document.title,text:x}).catch(function(){})}}})();</script>`
+}
+
 export const PRINT_CSS = `
   @page { size: A4; margin: 9mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #e8ecf1; }
   body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #0f172a; direction: rtl; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .toolbar { position: sticky; top: 0; z-index: 5; background: #1C2B36; color: #fff; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
-  .toolbar button { background: #fff; color: #1C2B36; border: 0; border-radius: 8px; padding: 9px 20px; font-weight: 800; font-size: 14px; font-family: inherit; }
+  ${TOOLBAR_CSS}
   .sheet { background: #fff; max-width: 860px; margin: 14px auto; padding: 0 0 14px; box-shadow: 0 2px 14px rgba(0,0,0,.12); }
   .hd { background: #fff; padding: 14px 22px 10px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; border-bottom: 3px solid #EE712D; }
   .hd .logo { justify-self: end; } .hd .logo svg { display: block; width: 140px; height: auto; }
@@ -63,7 +76,7 @@ export const PRINT_CSS = `
     .sheet { margin: 0; box-shadow: none; } .g4, .g5 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: 1fr; } .rate { grid-template-columns: 1fr; } .quotes { grid-template-columns: 1fr; } .body { padding: 0 12px; } .ft { margin: 12px 12px 0; flex-wrap: wrap; }
     table.t { font-size: 9px; }
   }
-  @media print { html, body { background: #fff; } .toolbar { display: none !important; } .sheet { margin: 0; max-width: none; box-shadow: none; padding: 0; } .sec, .person, table.t tr { break-inside: avoid; } }
+  @media print { html, body { background: #fff; } .sheet { margin: 0; max-width: none; box-shadow: none; padding: 0; } .sec, .person, table.t tr { break-inside: avoid; } }
 `
 
 // ترويسة رسمية: المعلومات يميناً، العنوان وسطاً، الشعار يساراً
@@ -71,20 +84,21 @@ export function docHeader({ title, infoLines = [] }) {
   return `<div class="hd"><div class="info">${infoLines.map(l => `<div>${l}</div>`).join('')}</div><div class="title"><b>${esc(title)}</b></div><div class="logo">${NWB_LOGO_SVG}</div></div>`
 }
 
-export function docShell({ title, body, footerLeft = '', footerRight = '' }) {
+export function docShell({ title, body, footerLeft = '', footerRight = '', shareText = '' }) {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${PRINT_CSS}</style></head><body>
-<div class="toolbar"><span>معاينة المستند</span><button onclick="window.print()">طباعة / حفظ PDF</button></div>
+${previewToolbar({ shareTitle: title, shareText })}
 <div class="sheet">${body}<div class="ft"><span>${footerLeft}</span><span class="pill">NORTH WEST BUS</span><span>${footerRight}</span></div></div></body></html>`
 }
 
 // يفتح نافذة الطباعة فور الضغط؛ على الكمبيوتر تُفتح نافذة الطباعة تلقائياً وعلى الجوال يبقى الزر ظاهراً
-export function openDocWindow(html) {
+export function openDocWindow(html, { autoPrint = false } = {}) {
   const w = window.open('', '_blank')
   if (w) {
     w.document.open(); w.document.write(html); w.document.close()
-    if (!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) setTimeout(() => { try { w.focus(); w.print() } catch { /* يطبع يدوياً */ } }, 500)
+    if (autoPrint && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) setTimeout(() => { try { w.focus(); w.print() } catch { /* يطبع يدوياً */ } }, 500)
     return true
   }
+  // المتصفح منع النافذة: نطبع من إطار مخفي كحل أخير
   const f = document.createElement('iframe')
   f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
   document.body.appendChild(f)
