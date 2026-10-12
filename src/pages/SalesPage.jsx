@@ -12,7 +12,6 @@ import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { safeImport } from '../lib/chunkReload'
 import SelectField from '../components/shared/SelectField'
-import { useAppSettings } from '../context/AppSettingsContext'
 import { brandHeader, docHeader, docShell, openDocWindow, esc } from '../utils/printDoc'
 
 const SHIFTS = [
@@ -64,24 +63,8 @@ function SectionCard({ n, title, children, tone = 'bg-white border-gray-200' }) 
   )
 }
 
-/* ─── Sales Modal ───────────────────────────────────────── */
-export function SalesModal({ sale, stations, onClose, onSaved }) {
-  useEscapeKey(onClose)
-  const { profile, isAccountant, isGeneralAdmin, allowCap, workStations } = useAuth()
-  // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
-  const multi = !isGeneralAdmin && workStations?.length > 1
-  const { i18n } = useTranslation()
-  const isAr = i18n.language === 'ar'
-
-  const [savedCashier]  = useState(() => localStorage.getItem(CASHIER_KEY)  ?? '')
-
-  // لا توجد مسودات: نمسح أي مسودة قديمة محفوظة بالمتصفح
-  useEffect(() => { try { localStorage.removeItem(DRAFT_KEY) } catch { /* لا شي */ } }, [])
-
-  // السجل مقفول إذا كان مؤكداً وليس الأدمن
-  const isLocked = sale?.is_confirmed && !isGeneralAdmin
-
-  function handlePrint() {
+/* ─── طباعة سجل إيراد واحد (كشف الإيرادات اليومية) — تُستدعى من النافذة ومن زر الطباعة بصف السجل ─── */
+export function printSaleRecord({ sale, isAr, profile }) {
     const dir = isAr ? 'rtl' : 'ltr'
     const now = new Date()
     const printDate = now.toLocaleDateString('en-GB')
@@ -288,7 +271,26 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         win.close()
       }, 400)
     }
-  }
+}
+
+/* ─── Sales Modal ───────────────────────────────────────── */
+export function SalesModal({ sale, stations, onClose, onSaved }) {
+  useEscapeKey(onClose)
+  const { profile, isAccountant, isGeneralAdmin, allowCap, workStations } = useAuth()
+  // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
+  const multi = !isGeneralAdmin && workStations?.length > 1
+  const { i18n } = useTranslation()
+  const isAr = i18n.language === 'ar'
+
+  const [savedCashier]  = useState(() => localStorage.getItem(CASHIER_KEY)  ?? '')
+
+  // لا توجد مسودات: نمسح أي مسودة قديمة محفوظة بالمتصفح
+  useEffect(() => { try { localStorage.removeItem(DRAFT_KEY) } catch { /* لا شي */ } }, [])
+
+  // السجل مقفول إذا كان مؤكداً وليس الأدمن
+  const isLocked = sale?.is_confirmed && !isGeneralAdmin
+
+  const handlePrint = () => printSaleRecord({ sale, isAr, profile })
 
   // الوردية المتوقعة تُحسب مرة واحدة عند فتح السجل الجديد
   const [suggested] = useState(() => suggestShift())
@@ -820,6 +822,17 @@ export default function SalesPage() {
     fetchRecords()
   }
 
+  // الأدمن يفعّل/يوقف طباعة السجل عند الموظف
+  async function togglePrint(r) {
+    const next = !r.print_enabled
+    setRecords(rs => rs.map(x => x.id === r.id ? { ...x, print_enabled: next } : x))
+    const { error } = await supabase.from('sales_records').update({ print_enabled: next }).eq('id', r.id)
+    if (error) {
+      setRecords(rs => rs.map(x => x.id === r.id ? { ...x, print_enabled: !next } : x))
+      alert(isAr ? 'تعذر الحفظ: ' + error.message + '\nتأكد من تنفيذ SQL إضافة عمود print_enabled.' : 'Save failed: ' + error.message)
+    }
+  }
+
   const fetchRecords = useCallback(async () => {
     const cacheKey = `sales_${filterDate}_${filterStation}_${profile?.id}`
     const cached = getCached(cacheKey)
@@ -877,10 +890,8 @@ export default function SalesPage() {
 
   // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام، وللمحاسب فقط إذا فعّل له الأدمن الصلاحية
   const canExportDaily = isGeneralAdmin || (isAccountant && grantCap('sales_export_daily'))
-  // طباعة اليومية: كشف رسمي بالقيود المعروضة لليوم المختار — مغلقة للموظفين افتراضياً، والأدمن وحده يفعّلها ويوقفها من هنا (إعداد عام)
-  const { settings, saveSetting } = useAppSettings()
-  const dailyPrintOn = settings?.sales_print_daily === 'true'
-  const canPrintDaily = isGeneralAdmin || dailyPrintOn
+  // طباعة اليومية (الكشف الكامل لليوم) — للأدمن فقط. طباعة كل سجل على حدة تُفعَّل من الأدمن لكل سجل (print_enabled)
+  const canPrintDaily = isGeneralAdmin
   function printDaily() {
     if (!records.length) return
     const sName = r => (isAr ? (r.station?.name_ar || r.station?.name_en) : (r.station?.name_en || r.station?.name_ar)) || '—'
@@ -998,16 +1009,6 @@ export default function SalesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-        {isGeneralAdmin && (
-          <button type="button" role="switch" aria-checked={dailyPrintOn} onClick={() => saveSetting('sales_print_daily', dailyPrintOn ? 'false' : 'true')}
-            title={isAr ? 'تفعيل أو إيقاف زر طباعة اليومية عند الموظفين (للأدمن فقط)' : 'Enable or stop the daily-sheet print button for staff (admin only)'}
-            className={`flex items-center gap-2 border rounded-lg px-3 py-2 text-xs font-bold transition-colors ${dailyPrintOn ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-500'}`}>
-            <span className={`w-8 h-[18px] rounded-full relative transition-colors ${dailyPrintOn ? 'bg-green-500' : 'bg-gray-300'}`}>
-              <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all ${dailyPrintOn ? 'end-[2px]' : 'start-[2px]'}`} />
-            </span>
-            {isAr ? (dailyPrintOn ? 'طباعة اليومية للموظفين: مفعّلة' : 'طباعة اليومية للموظفين: موقوفة') : (dailyPrintOn ? 'Staff daily print: on' : 'Staff daily print: off')}
-          </button>
-        )}
         {canPrintDaily && records.length > 0 && (
           <button type="button" onClick={printDaily}
             title={isAr ? 'كشف اليومية للطباعة بالشعار والتواقيع' : 'Daily sheet for printing'}
@@ -1202,6 +1203,20 @@ export default function SalesPage() {
                                     <button onClick={() => setAudit(r)}
                                       className="text-xs border border-gray-200 text-gray-500 rounded-lg px-2 py-1 hover:bg-gray-50"
                                       title={isAr ? 'سجل التعديلات' : 'Audit History'}>{isAr ? 'السجل' : 'Log'}</button>
+                                    {(isGeneralAdmin || r.print_enabled) && (
+                                      <button type="button" onClick={() => printSaleRecord({ sale: r, isAr, profile })}
+                                        className="border border-gray-200 text-gray-600 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors"
+                                        title={isAr ? 'طباعة هذه اليومية' : 'Print this daily sheet'} aria-label={isAr ? 'طباعة هذه اليومية' : 'Print this daily sheet'}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
+                                      </button>
+                                    )}
+                                    {isGeneralAdmin && (
+                                      <button type="button" role="switch" aria-checked={!!r.print_enabled} onClick={() => togglePrint(r)}
+                                        title={r.print_enabled ? (isAr ? 'الطباعة مفعّلة للموظف — اضغط للإيقاف' : 'Printing on for staff — click to stop') : (isAr ? 'الطباعة موقوفة عن الموظف — اضغط للتفعيل' : 'Printing off for staff — click to enable')}
+                                        className={`w-8 h-[18px] rounded-full relative transition-colors shrink-0 ${r.print_enabled ? 'bg-green-500' : 'bg-gray-300'}`}>
+                                        <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all ${r.print_enabled ? 'end-[2px]' : 'start-[2px]'}`} />
+                                      </button>
+                                    )}
                                     {r.is_confirmed && !isGeneralAdmin
                                       ? (
                                         <button onClick={() => setModal(r)}
