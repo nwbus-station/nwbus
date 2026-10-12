@@ -12,6 +12,7 @@ import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { safeImport } from '../lib/chunkReload'
 import SelectField from '../components/shared/SelectField'
+import { useAppSettings } from '../context/AppSettingsContext'
 import { brandHeader, docHeader, docShell, openDocWindow, esc } from '../utils/printDoc'
 
 const SHIFTS = [
@@ -876,8 +877,10 @@ export default function SalesPage() {
 
   // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام، وللمحاسب فقط إذا فعّل له الأدمن الصلاحية
   const canExportDaily = isGeneralAdmin || (isAccountant && grantCap('sales_export_daily'))
-  // طباعة اليومية: كشف رسمي بالقيود المعروضة لليوم المختار — مفتوحة للجميع افتراضياً ويقفلها الأدمن عبر صلاحية sales_print_daily
-  const canPrintDaily = isGeneralAdmin || allowCap('sales_print_daily')
+  // طباعة اليومية: كشف رسمي بالقيود المعروضة لليوم المختار — مغلقة للموظفين افتراضياً، والأدمن وحده يفعّلها ويوقفها من هنا (إعداد عام)
+  const { settings, saveSetting } = useAppSettings()
+  const dailyPrintOn = settings?.sales_print_daily === 'true'
+  const canPrintDaily = isGeneralAdmin || dailyPrintOn
   function printDaily() {
     if (!records.length) return
     const sName = r => (isAr ? (r.station?.name_ar || r.station?.name_en) : (r.station?.name_en || r.station?.name_ar)) || '—'
@@ -995,6 +998,16 @@ export default function SalesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
+        {isGeneralAdmin && (
+          <button type="button" role="switch" aria-checked={dailyPrintOn} onClick={() => saveSetting('sales_print_daily', dailyPrintOn ? 'false' : 'true')}
+            title={isAr ? 'تفعيل أو إيقاف زر طباعة اليومية عند الموظفين (للأدمن فقط)' : 'Enable or stop the daily-sheet print button for staff (admin only)'}
+            className={`flex items-center gap-2 border rounded-lg px-3 py-2 text-xs font-bold transition-colors ${dailyPrintOn ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-500'}`}>
+            <span className={`w-8 h-[18px] rounded-full relative transition-colors ${dailyPrintOn ? 'bg-green-500' : 'bg-gray-300'}`}>
+              <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all ${dailyPrintOn ? 'end-[2px]' : 'start-[2px]'}`} />
+            </span>
+            {isAr ? (dailyPrintOn ? 'طباعة اليومية للموظفين: مفعّلة' : 'طباعة اليومية للموظفين: موقوفة') : (dailyPrintOn ? 'Staff daily print: on' : 'Staff daily print: off')}
+          </button>
+        )}
         {canPrintDaily && records.length > 0 && (
           <button type="button" onClick={printDaily}
             title={isAr ? 'كشف اليومية للطباعة بالشعار والتواقيع' : 'Daily sheet for printing'}
