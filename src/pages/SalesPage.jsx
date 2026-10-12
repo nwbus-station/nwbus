@@ -822,16 +822,20 @@ export default function SalesPage() {
     fetchRecords()
   }
 
-  // الأدمن يفعّل/يوقف طباعة السجل عند الموظف
-  async function togglePrint(r) {
-    const next = !r.print_enabled
-    setRecords(rs => rs.map(x => x.id === r.id ? { ...x, print_enabled: next } : x))
-    const { error } = await supabase.from('sales_records').update({ print_enabled: next }).eq('id', r.id)
+  // الأدمن يفعّل/يوقف طباعة السجل عند الموظف — فردياً أو للكل (سجلات اليوم المعروض). الكاش يُحدَّث مع الحالة حتى لا ترجع القيمة القديمة لحظياً
+  async function setPrintFlag(ids, value) {
+    if (!ids.length) return
+    const prev = records
+    const cacheKey = `sales_${filterDate}_${filterStation}_${profile?.id}`
+    const apply = list => { setRecords(list); if (list.length) setCached(cacheKey, list) }
+    apply(records.map(x => ids.includes(x.id) ? { ...x, print_enabled: value } : x))
+    const { error } = await supabase.from('sales_records').update({ print_enabled: value }).in('id', ids)
     if (error) {
-      setRecords(rs => rs.map(x => x.id === r.id ? { ...x, print_enabled: !next } : x))
-      alert(isAr ? 'تعذر الحفظ: ' + error.message + '\nتأكد من تنفيذ SQL إضافة عمود print_enabled.' : 'Save failed: ' + error.message)
+      apply(prev)
+      alert(isAr ? 'تعذر الحفظ: ' + error.message : 'Save failed: ' + error.message)
     }
   }
+  const togglePrint = r => setPrintFlag([r.id], !r.print_enabled)
 
   const fetchRecords = useCallback(async () => {
     const cacheKey = `sales_${filterDate}_${filterStation}_${profile?.id}`
@@ -1009,6 +1013,17 @@ export default function SalesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
+        {isGeneralAdmin && records.length > 0 && (
+          <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white text-xs font-bold" role="group" aria-label={isAr ? 'طباعة السجلات' : 'Record printing'}>
+            <span className="px-3 py-2 text-gray-500 bg-gray-50 border-e border-gray-200">
+              {isAr ? `طباعة الموظفين: ${records.filter(r => r.print_enabled).length}/${records.length}` : `Staff print: ${records.filter(r => r.print_enabled).length}/${records.length}`}
+            </span>
+            <button type="button" onClick={() => setPrintFlag(records.map(r => r.id), true)}
+              className="px-3 py-2 text-green-700 hover:bg-green-50 transition-colors border-e border-gray-200">{isAr ? 'تفعيل للكل' : 'Enable all'}</button>
+            <button type="button" onClick={() => setPrintFlag(records.map(r => r.id), false)}
+              className="px-3 py-2 text-red-600 hover:bg-red-50 transition-colors">{isAr ? 'إغلاق عن الكل' : 'Disable all'}</button>
+          </div>
+        )}
         {canPrintDaily && records.length > 0 && (
           <button type="button" onClick={printDaily}
             title={isAr ? 'كشف اليومية للطباعة بالشعار والتواقيع' : 'Daily sheet for printing'}
