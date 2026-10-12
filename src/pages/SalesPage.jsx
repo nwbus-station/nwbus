@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { Fragment, useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -778,6 +778,13 @@ export default function SalesPage() {
   const [showPinModal, setShowPinModal] = useState(false)
 
   const setStation = v => { setFilterStation(v); localStorage.setItem('sales_filter_station', v) }
+  const stationOrder = [...stations.filter(x => pinnedStations.includes(x.id)), ...stations.filter(x => !pinnedStations.includes(x.id))]
+  const stepStation = dir => {
+    if (!stationOrder.length) return
+    const i = stationOrder.findIndex(x => x.id === filterStation)
+    const n = i < 0 ? (dir > 0 ? 0 : stationOrder.length - 1) : (i + dir + stationOrder.length) % stationOrder.length
+    setStation(stationOrder[n].id)
+  }
   const togglePin = id => {
     const next = pinnedStations.includes(id) ? pinnedStations.filter(x => x !== id) : [...pinnedStations, id]
     setPinnedStations(next)
@@ -986,6 +993,8 @@ export default function SalesPage() {
         </div>
         {(isGeneralAdmin || isAreaSupervisor || isStationAdmin) && stations.length > 0 && (
           <>
+            <button type="button" onClick={() => stepStation(isAr ? 1 : -1)} title={isAr ? 'المحطة السابقة' : 'Previous station'}
+              className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 text-sm font-bold leading-none">{isAr ? '›' : '‹'}</button>
             <SelectField value={filterStation} onChange={e => setStation(e.target.value)}
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white min-w-[180px]">
               <option value="">{isAr ? 'جميع المحطات' : 'All stations'}</option>
@@ -1005,6 +1014,8 @@ export default function SalesPage() {
                 <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
               ))}
             </SelectField>
+            <button type="button" onClick={() => stepStation(isAr ? -1 : 1)} title={isAr ? 'المحطة التالية' : 'Next station'}
+              className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 text-sm font-bold leading-none">{isAr ? '‹' : '›'}</button>
             <button onClick={() => setShowPinModal(true)}
               title={isAr ? 'تثبيت محطات' : 'Pin stations'}
               className={`text-sm leading-none rounded-lg px-2.5 py-2 border transition-colors ${pinnedStations.length > 0 ? 'text-amber-600 border-amber-300 bg-amber-50' : 'text-gray-400 border-gray-200 bg-white hover:text-amber-600'}`}>
@@ -1047,6 +1058,10 @@ export default function SalesPage() {
               const dayDiff = dayActual - daySales
               const dayConfirmed = dayRecs.filter(r => r.is_confirmed).length
               const dayHasDeficit = dayRecs.some(r => Number(r.total_actual ?? 0) - Number(r.total_expected ?? 0) < 0)
+              const stName = r => (isAr ? (r.station?.name_ar || r.station?.name_en) : (r.station?.name_en || r.station?.name_ar)) || '—'
+              const stIds = [...new Set(dayRecs.map(r => r.station_id))]
+              const multiSt = stIds.length > 1
+              const sortedRecs = multiSt ? [...dayRecs].sort((a, b) => stName(a).localeCompare(stName(b), isAr ? 'ar' : 'en') || String(a.shift).localeCompare(String(b.shift))) : dayRecs
               const dayLabel = new Date(day + 'T00:00:00').toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
               return (
@@ -1057,7 +1072,7 @@ export default function SalesPage() {
                       <div className="min-w-0">
                         <div className="font-bold text-gray-900 text-sm truncate">{dayLabel}</div>
                         <div className="text-xs text-gray-400 mt-0.5">
-                          {dayRecs.length} {isAr ? 'سجل' : 'records'} · {dayConfirmed} {isAr ? 'مؤكد' : 'confirmed'}
+                          {multiSt ? `${stIds.length} ${isAr ? 'محطة' : 'stations'} · ` : (dayRecs[0] ? `${stName(dayRecs[0])} · ` : '')}{dayRecs.length} {isAr ? 'سجل' : 'records'} · {dayConfirmed} {isAr ? 'مؤكد' : 'confirmed'}
                           {dayHasDeficit && <span className="text-red-500 font-semibold"> · {isAr ? 'يوجد عجز' : 'deficit'}</span>}
                         </div>
                       </div>
@@ -1090,11 +1105,29 @@ export default function SalesPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                          {dayRecs.map(r => {
+                          {sortedRecs.map((r, ri) => {
                             const diff = Number(r.total_actual ?? 0) - Number(r.total_expected ?? 0)
                             const nm = r.employee_name || r.created_by_name || '—'
+                            const newSt = multiSt && (ri === 0 || sortedRecs[ri - 1].station_id !== r.station_id)
+                            const grp = newSt ? sortedRecs.filter(x => x.station_id === r.station_id) : null
+                            const gAct = grp ? grp.reduce((a, x) => a + Number(x.total_actual ?? 0), 0) : 0
+                            const gDiff = grp ? gAct - grp.reduce((a, x) => a + Number(x.total_expected ?? 0), 0) : 0
                             return (
-                              <tr key={r.id} className={`hover:bg-gray-50 transition-colors ${diff < 0 && r.is_confirmed ? 'bg-red-50/30' : ''}`}>
+                              <Fragment key={r.id}>
+                              {newSt && (
+                                <tr className="bg-nwbus-primary/5 border-t-2 border-nwbus-primary/20">
+                                  <td colSpan={10} className="px-3 py-2">
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                      <span className="w-1 h-4 rounded bg-nwbus-primary" />
+                                      <span className="text-[13px] font-extrabold text-gray-900">{stName(r)}</span>
+                                      <span className="text-[11px] text-gray-500">{grp.length} {isAr ? 'سجل' : 'records'}</span>
+                                      <span className="ms-auto font-mono text-xs font-bold text-green-700" dir="ltr">{fmt(gAct)} {isAr ? 'ر.س' : 'SAR'}</span>
+                                      <span className={`font-mono text-xs font-bold ${gDiff === 0 ? 'text-gray-400' : gDiff > 0 ? 'text-blue-600' : 'text-red-600'}`} dir="ltr">{gDiff > 0 ? '+' : ''}{fmt(gDiff)}</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                              <tr className={`hover:bg-gray-50 transition-colors ${diff < 0 && r.is_confirmed ? 'bg-red-50/30' : ''}`}>
                                 <td className="px-3 py-3 font-bold text-nwbus-primary">{r.shift}</td>
                                 <td className="px-3 py-3 min-w-[140px]">
                                   <div className="text-[13px] text-gray-800 truncate max-w-[160px]" title={nm} dir="auto">{nm}</div>
@@ -1143,6 +1176,7 @@ export default function SalesPage() {
                                   </div>
                                 </td>
                               </tr>
+                              </Fragment>
                             )
                           })}
                         </tbody>
