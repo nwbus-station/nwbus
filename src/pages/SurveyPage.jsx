@@ -18,7 +18,7 @@ export const SURVEY_STATIONS = [
   { city: 'Taif',    ar: 'الطائف',           en: 'Taif',        color: '#BE185D' },
   { city: 'jazan',   ar: 'جازان',            en: 'Jazan',       color: '#16A34A' },
   { city: 'Yanbu',   ar: 'ينبع',             en: 'Yanbu',       color: '#9333EA' },
-  { city: 'T1',      ar: 'مطار جدة — صالة 1', en: 'Jeddah T1',  color: '#475569' },
+  { city: 'T1',      ar: 'مطار جدة — صالة 1', en: 'Jeddah T1',  color: 'var(--text-2)' },
 ]
 
 // تحويل صف القاعدة لنفس شكل SURVEY_STATIONS المستخدم بالواجهة
@@ -194,7 +194,7 @@ function CityCard({ station, onOpen, manage, busy, isAr = true, onEdit, onToggle
         <div style={{ position: 'absolute', insetInlineStart: 10, insetInlineEnd: 10, bottom: 8, display: 'flex', gap: 6 }}>
           <button disabled={busy} onClick={onEdit} style={{ flex: 1, fontSize: '0.68rem', fontWeight: 700, padding: '5px 0', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'تعديل' : 'Edit'}</button>
           <button disabled={busy} onClick={onToggleActive} style={{ flex: 1, fontSize: '0.68rem', fontWeight: 700, padding: '5px 0', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', fontFamily: 'inherit' }}>{inactive ? (isAr ? 'تفعيل' : 'Enable') : (isAr ? 'تعطيل' : 'Disable')}</button>
-          <button disabled={busy} onClick={onDelete} style={{ flex: 1, fontSize: '0.68rem', fontWeight: 700, padding: '5px 0', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'حذف' : 'Delete'}</button>
+          <button disabled={busy} onClick={onDelete} style={{ flex: 1, fontSize: '0.68rem', fontWeight: 700, padding: '5px 0', borderRadius: 6, border: '1px solid #fecaca', background: 'var(--card)', color: '#dc2626', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'حذف' : 'Delete'}</button>
         </div>
       )}
     </div>
@@ -208,7 +208,7 @@ function CityFormModal({ city, isNew, isAr, busy, error, onCancel, onSave }) {
     color: city.color || '#5B5BD6', url: city.url || '', is_active: city.is_active !== false,
   })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  const inputCls = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: '0.82rem', outline: 'none', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit', color: '#0f172a' }
+  const inputCls = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: '0.82rem', outline: 'none', background: 'var(--card)', boxSizing: 'border-box', fontFamily: 'inherit', color: 'var(--text-1)' }
   const lbl = { display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }
 
   // ربط محطات بهذي المدينة من القاعدة (stations.survey_city) — الموظف بهذي المحطة يفتح
@@ -230,8 +230,8 @@ function CityFormModal({ city, isNew, isAr, busy, error, onCancel, onSave }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} dir={isAr ? 'rtl' : 'ltr'}
       onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
-      <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,.3)' }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+      <div style={{ background: 'var(--card)', borderRadius: 14, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,.3)' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1 }}>
           <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>{isNew ? (isAr ? 'إضافة مدينة' : 'Add city') : (isAr ? 'تعديل المدينة' : 'Edit city')}</h3>
         </div>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -274,7 +274,7 @@ function CityFormModal({ city, isNew, isAr, busy, error, onCancel, onSave }) {
               ) : shownStations.map(s => {
                 const otherCity = s.survey_city && s.survey_city !== city.city ? s.survey_city : null
                 return (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: '0.78rem', color: 'var(--text-2)', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: '0.78rem', color: 'var(--text-2)', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
                     <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleStation(s.id)} />
                     <span style={{ flex: 1 }}>{isAr ? (s.name_ar || s.name_en) : (s.name_en || s.name_ar)}{s.is_active === false ? (isAr ? ' (معطّلة)' : ' (inactive)') : ''}</span>
                     {otherCity && <span style={{ fontSize: '0.65rem', color: '#b45309' }}>{isAr ? `مرتبطة بـ ${otherCity}` : `linked to ${otherCity}`}</span>}
@@ -287,7 +287,7 @@ function CityFormModal({ city, isNew, isAr, busy, error, onCancel, onSave }) {
           {error && <p style={{ margin: 0, fontSize: '0.76rem', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '7px 10px' }}>{error}</p>}
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <button disabled={busy} onClick={() => onSave(form, [...selected])} style={{ flex: 1, background: '#1C2B36', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 0', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>{busy ? '…' : (isAr ? 'حفظ' : 'Save')}</button>
-            <button onClick={onCancel} style={{ padding: '9px 16px', borderRadius: 9, border: '1.5px solid var(--border)', background: '#fff', color: '#334155', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+            <button onClick={onCancel} style={{ padding: '9px 16px', borderRadius: 9, border: '1.5px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
           </div>
         </div>
       </div>

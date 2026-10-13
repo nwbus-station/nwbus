@@ -367,21 +367,21 @@ export default function MapPage() {
   /* ══ الواجهة ══════════════════════════════════════════ */
   const chip = (active, color = '#1C2B36') => ({
     padding: '5px 11px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-    border: `1.5px solid ${active ? color : '#e5e7eb'}`, background: active ? color : '#fff', color: active ? '#fff' : '#475569',
+    border: `1.5px solid ${active ? color : 'var(--border-2)'}`, background: active ? color : 'var(--card)', color: active ? '#fff' : 'var(--text-2)',
   })
   const btn = (kind = 'ghost') => ({
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 12px', borderRadius: 9, cursor: 'pointer',
     fontSize: '0.76rem', fontWeight: 700, fontFamily: 'inherit', textDecoration: 'none', whiteSpace: 'nowrap',
     ...(kind === 'primary' ? { background: '#1C2B36', color: '#fff', border: '1.5px solid #1C2B36' }
-      : kind === 'danger' ? { background: '#fff', color: '#dc2626', border: '1.5px solid #fecaca' }
+      : kind === 'danger' ? { background: 'var(--card)', color: '#dc2626', border: '1.5px solid #fecaca' }
       : kind === 'accent' ? { background: '#E8930C', color: '#fff', border: '1.5px solid #E8930C' }
-      : { background: '#fff', color: '#334155', border: '1.5px solid #e2e8f0' }),
+      : { background: 'var(--card)', color: 'var(--text-2)', border: '1.5px solid var(--border-2)' }),
   })
-  const input = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.82rem', outline: 'none', background: '#fff', boxSizing: 'border-box', fontFamily: 'inherit' }
-  const lbl = { display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: 4 }
+  const input = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1.5px solid var(--border-2)', fontSize: '0.82rem', outline: 'none', background: 'var(--card)', boxSizing: 'border-box', fontFamily: 'inherit' }
+  const lbl = { display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }
 
   const Legend = () => (
-    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: '0.68rem', color: '#475569' }}>
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: '0.68rem', color: 'var(--text-2)' }}>
       {Object.entries(KINDS).map(([k, v]) => (
         <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           <span style={{ width: 9, height: 9, borderRadius: '50%', background: v.color, display: 'inline-block' }} />{isAr ? v.ar : v.en}
@@ -394,7 +394,7 @@ export default function MapPage() {
   )
 
   return (
-    <div className="map-outer" dir={isAr ? 'rtl' : 'ltr'} style={{ display: 'flex', height: 'calc(100vh - 98px)', background: '#eef1f4', position: 'relative' }}>
+    <div className="map-outer" dir={isAr ? 'rtl' : 'ltr'} style={{ display: 'flex', height: 'calc(100vh - 98px)', background: 'var(--surface-2)', position: 'relative' }}>
       <style>{`
         @media (max-width: 767px) {
           .map-outer { height: calc(100vh - 54px - 60px - env(safe-area-inset-bottom)) !important; }
@@ -418,15 +418,15 @@ export default function MapPage() {
       </button>
 
       {/* ══ الشريط الجانبي ══ */}
-      <aside className={`map-sidebar${drawerOpen ? ' open' : ''}`} style={{ width: 340, background: '#fff', borderInlineEnd: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', zIndex: 10, flexShrink: 0 }}>
+      <aside className={`map-sidebar${drawerOpen ? ' open' : ''}`} style={{ width: 340, background: 'var(--card)', borderInlineEnd: '1px solid var(--border-2)', display: 'flex', flexDirection: 'column', zIndex: 10, flexShrink: 0 }}>
         <div className="map-handle" style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 2px' }}><div style={{ width: 36, height: 4, borderRadius: 99, background: '#ddd' }} /></div>
 
         {/* الرأس */}
-        <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #f1f5f9' }}>
+        <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div>
               <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? 'خريطة المحطات' : 'Stations Map'}</h2>
-              <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: '#94a3b8' }}>
+              <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: 'var(--text-3)' }}>
                 {isAr ? `${counts.all} نقطة · ${located.length} بموقع · ${unlocated.length} بدون موقع` : `${counts.all} points · ${located.length} located · ${unlocated.length} unlocated`}
               </p>
             </div>
@@ -449,7 +449,7 @@ export default function MapPage() {
         </div>
 
         {/* التبويبات */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #f1f5f9' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
           {[
             ['list', isAr ? 'النقاط' : 'Points'],
             ...(canManage ? [['noloc', `${isAr ? 'بدون موقع' : 'No location'} (${unlocated.length})`]] : []),
@@ -465,13 +465,13 @@ export default function MapPage() {
 
         {/* المسار */}
         {tab === 'route' && (
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
-            <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 6 }}>{isAr ? 'اختر نقطتين من القائمة أو الخريطة' : 'Pick two points from the list or map'}</div>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginBottom: 6 }}>{isAr ? 'اختر نقطتين من القائمة أو الخريطة' : 'Pick two points from the list or map'}</div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <div style={{ flex: 1, padding: '6px 8px', borderRadius: 7, background: routeFrom ? '#1C2B36' : '#e2e8f0', color: routeFrom ? '#fff' : '#94a3b8', fontSize: '0.72rem', fontWeight: 700 }}>{routeFrom ? nameOf(routeFrom, isAr) : (isAr ? 'من…' : 'From…')}</div>
-              <div style={{ flex: 1, padding: '6px 8px', borderRadius: 7, background: routeTo ? '#E8930C' : '#e2e8f0', color: routeTo ? '#fff' : '#94a3b8', fontSize: '0.72rem', fontWeight: 700 }}>{routeTo ? nameOf(routeTo, isAr) : (isAr ? 'إلى…' : 'To…')}</div>
+              <div style={{ flex: 1, padding: '6px 8px', borderRadius: 7, background: routeFrom ? '#1C2B36' : 'var(--border-2)', color: routeFrom ? '#fff' : '#94a3b8', fontSize: '0.72rem', fontWeight: 700 }}>{routeFrom ? nameOf(routeFrom, isAr) : (isAr ? 'من…' : 'From…')}</div>
+              <div style={{ flex: 1, padding: '6px 8px', borderRadius: 7, background: routeTo ? '#E8930C' : 'var(--border-2)', color: routeTo ? '#fff' : '#94a3b8', fontSize: '0.72rem', fontWeight: 700 }}>{routeTo ? nameOf(routeTo, isAr) : (isAr ? 'إلى…' : 'To…')}</div>
             </div>
-            {routeLoading && <div style={{ marginTop: 6, fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center' }}>{isAr ? 'جارٍ حساب المسافة…' : 'Calculating…'}</div>}
+            {routeLoading && <div style={{ marginTop: 6, fontSize: '0.72rem', color: 'var(--text-3)', textAlign: 'center' }}>{isAr ? 'جارٍ حساب المسافة…' : 'Calculating…'}</div>}
             {routeInfo && !routeLoading && (
               <div style={{ marginTop: 6, fontSize: '0.8rem', color: 'var(--text-1)', fontWeight: 800, textAlign: 'center' }}>
                 {isAr ? `${routeInfo.straight ? 'المسافة المباشرة' : 'مسافة الطريق'}: ${routeInfo.km} كم` : `${routeInfo.straight ? 'Straight distance' : 'Road distance'}: ${routeInfo.km} km`}
@@ -481,9 +481,9 @@ export default function MapPage() {
         )}
 
         {/* الفلاتر */}
-        <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', [isAr ? 'right' : 'left']: 10, color: '#94a3b8' }}><Ico d={ICONS.search} size={13} /></span>
+            <span style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', [isAr ? 'right' : 'left']: 10, color: 'var(--text-3)' }}><Ico d={ICONS.search} size={13} /></span>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={isAr ? 'ابحث بالاسم أو المنطقة…' : 'Search name or region…'}
               style={{ ...input, padding: isAr ? '8px 30px 8px 10px' : '8px 10px 8px 30px' }} />
           </div>
@@ -502,9 +502,9 @@ export default function MapPage() {
 
         {/* القائمة */}
         <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '6px 8px' }}>
-          {loading ? <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>
+          {loading ? <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>
             : listRows.length === 0 ? (
-              <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>
                 {tab === 'noloc' ? (isAr ? 'كل المحطات لها مواقع' : 'All stations have locations')
                   : tab === 'suspect' ? (isAr ? 'ما فيه مواقع مشبوهة حالياً' : 'No suspicious locations right now')
                   : (isAr ? 'لا نتائج' : 'No results')}
@@ -518,7 +518,7 @@ export default function MapPage() {
               return (
                 <div key={s.id} onClick={() => !noLoc && pick(s)}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 10, marginBottom: 2, cursor: noLoc ? 'default' : 'pointer',
-                    background: isFrom ? '#1C2B36' : isTo ? '#E8930C' : isSel ? '#eef2f7' : isSuspect ? '#fffbeb' : 'transparent', color: isFrom || isTo ? '#fff' : '#0f172a' }}>
+                    background: isFrom ? '#1C2B36' : isTo ? '#E8930C' : isSel ? 'var(--surface-2)' : isSuspect ? 'var(--warning-bg)' : 'transparent', color: isFrom || isTo ? '#fff' : 'var(--text-1)' }}>
                   <span style={{ width: 10, height: 10, borderRadius: '50%', background: isSuspect ? '#D97706' : colorOf(s), flexShrink: 0, boxShadow: on ? `0 0 0 3px ${colorOf(s)}33` : 'none' }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: '0.82rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf(s, isAr)}</div>
@@ -541,7 +541,7 @@ export default function MapPage() {
             })}
         </div>
 
-        <div style={{ padding: '10px 14px', borderTop: '1px solid #f1f5f9' }}><Legend /></div>
+        <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)' }}><Legend /></div>
       </aside>
 
       {/* ══ الخريطة ══ */}
@@ -586,17 +586,17 @@ export default function MapPage() {
 
         {/* شريط أدوات الخريطة */}
         <div style={{ position: 'absolute', top: 12, [isAr ? 'left' : 'right']: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 2px 12px rgba(0,0,0,.15)', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+          <div style={{ background: 'var(--card)', borderRadius: 10, boxShadow: '0 2px 12px rgba(0,0,0,.15)', overflow: 'hidden', border: '1px solid var(--border-2)' }}>
             {[{ l: '+', fn: () => mapRef.current?.zoomIn() }, { l: '−', fn: () => mapRef.current?.zoomOut() }].map((b, i) => (
-              <button key={i} onClick={b.fn} style={{ display: 'block', width: 36, height: 36, background: 'none', border: 'none', borderBottom: i === 0 ? '1px solid #f1f5f9' : 'none', cursor: 'pointer', fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-2)' }}>{b.l}</button>
+              <button key={i} onClick={b.fn} style={{ display: 'block', width: 36, height: 36, background: 'none', border: 'none', borderBottom: i === 0 ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-2)' }}>{b.l}</button>
             ))}
           </div>
           <button onClick={() => setBase(b => (b === 'map' ? 'sat' : 'map'))} title={isAr ? 'تبديل نوع الخريطة' : 'Toggle base map'}
-            style={{ width: 36, height: 36, borderRadius: 10, background: base === 'sat' ? '#1C2B36' : '#fff', color: base === 'sat' ? '#fff' : '#334155', border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,.15)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+            style={{ width: 36, height: 36, borderRadius: 10, background: base === 'sat' ? '#1C2B36' : 'var(--card)', color: base === 'sat' ? '#fff' : 'var(--text-2)', border: '1px solid var(--border-2)', boxShadow: '0 2px 12px rgba(0,0,0,.15)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
             <Ico d={ICONS.layers} size={16} />
           </button>
           <button onClick={() => located.length && mapRef.current?.fitBounds(L.latLngBounds(located.map(p => [p.lat, p.lng])), { padding: [50, 50] })} title={isAr ? 'عرض كل النقاط' : 'Fit all'}
-            style={{ width: 36, height: 36, borderRadius: 10, background: '#fff', color: '#334155', border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,.15)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+            style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--card)', color: 'var(--text-2)', border: '1px solid var(--border-2)', boxShadow: '0 2px 12px rgba(0,0,0,.15)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
             <Ico d={ICONS.pin} size={16} />
           </button>
         </div>
@@ -608,8 +608,8 @@ export default function MapPage() {
 
         {/* لوحة الإدارة: تعديل موقع / إضافة */}
         {(editing || form) && (
-          <div className="map-card" style={{ position: 'absolute', bottom: 16, [isAr ? 'right' : 'left']: 16, width: 360, maxHeight: '78%', overflowY: 'auto', zIndex: 1050, background: '#fff', borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,.28)', border: '1px solid #e2e8f0' }}>
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff7ed', borderRadius: '14px 14px 0 0' }}>
+          <div className="map-card" style={{ position: 'absolute', bottom: 16, [isAr ? 'right' : 'left']: 16, width: 360, maxHeight: '78%', overflowY: 'auto', zIndex: 1050, background: 'var(--card)', borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,.28)', border: '1px solid var(--border-2)' }}>
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff7ed', borderRadius: '14px 14px 0 0' }}>
               <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#9a3412' }}>
                 {editing?.mode === 'relocate' ? (isAr ? `تعديل موقع: ${editingStation ? nameOf(editingStation, isAr) : ''}` : 'Relocate')
                   : editing?.mode === 'place' ? (isAr ? 'تحديد موقع لمحطة موجودة' : 'Place point for a station')
@@ -646,7 +646,7 @@ export default function MapPage() {
 
               {editing && (
                 <>
-                  <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 10, padding: '9px 11px', fontSize: '0.76rem', color: '#475569', lineHeight: 1.7 }}>
+                  <div style={{ background: 'var(--surface)', border: '1px dashed var(--border-2)', borderRadius: 10, padding: '9px 11px', fontSize: '0.76rem', color: 'var(--text-2)', lineHeight: 1.7 }}>
                     {validCoords(editing.lat, editing.lng)
                       ? (editing.mode === 'place'
                           ? (isAr ? 'تم تحديد الموقع. اسحب النقطة لتعديلها، واختر تحت أي محطة تخصها.' : 'Location set. Drag to adjust, then choose which station it belongs to below.')
@@ -675,18 +675,18 @@ export default function MapPage() {
                       <label style={lbl}>{isAr ? 'اختر المحطة' : 'Choose station'}{placeStationId ? ` — ${nameOf(stations.find(s => s.id === placeStationId) ?? {}, isAr)}` : ''}</label>
                       <input style={{ ...input, marginBottom: 6 }} value={placeSearch} onChange={e => setPlaceSearch(e.target.value)}
                         placeholder={isAr ? 'ابحث عن محطة…' : 'Search stations…'} />
-                      <div style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, maxHeight: 170, overflowY: 'auto' }}>
+                      <div style={{ border: '1.5px solid var(--border-2)', borderRadius: 8, maxHeight: 170, overflowY: 'auto' }}>
                         {stations
                           .filter(s => { const q = placeSearch.trim().toLowerCase(); return !q || (s.name_ar || '').toLowerCase().includes(q) || (s.name_en || '').toLowerCase().includes(q) })
                           .sort((a, b) => (hasCoords(a) ? 1 : 0) - (hasCoords(b) ? 1 : 0))
                           .map(s => (
                             <div key={s.id} onClick={() => setPlaceStationId(s.id)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: '0.78rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', background: placeStationId === s.id ? '#eef2f7' : 'transparent' }}>
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', fontSize: '0.78rem', cursor: 'pointer', borderBottom: '1px solid var(--border)', background: placeStationId === s.id ? '#eef2f7' : 'transparent' }}>
                               <span style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${placeStationId === s.id ? '#1C2B36' : '#cbd5e1'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                                 {placeStationId === s.id && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#1C2B36' }} />}
                               </span>
                               <span style={{ flex: 1, fontWeight: placeStationId === s.id ? 700 : 500 }}>{nameOf(s, isAr)}</span>
-                              {!hasCoords(s) && <span style={{ fontSize: '0.64rem', color: '#94a3b8' }}>{isAr ? 'بدون موقع' : 'no location'}</span>}
+                              {!hasCoords(s) && <span style={{ fontSize: '0.64rem', color: 'var(--text-3)' }}>{isAr ? 'بدون موقع' : 'no location'}</span>}
                             </div>
                           ))}
                       </div>
@@ -707,29 +707,29 @@ export default function MapPage() {
 
         {/* بطاقة النقطة المحددة */}
         {selected && !editing && !form && tab !== 'route' && hasCoords(selected) && (
-          <div className="map-card" style={{ position: 'absolute', bottom: 16, [isAr ? 'right' : 'left']: 16, width: 340, zIndex: 1000, background: '#fff', borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,.25)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div className="map-card" style={{ position: 'absolute', bottom: 16, [isAr ? 'right' : 'left']: 16, width: 340, zIndex: 1000, background: 'var(--card)', borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,.25)', border: '1px solid var(--border-2)', overflow: 'hidden' }}>
             <div style={{ height: 5, background: colorOf(selected) }} />
             <div style={{ padding: '12px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>{nameOf(selected, isAr)}</div>
-                  {(isAr ? selected.name_en : selected.name_ar) && <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 1 }} dir={isAr ? 'ltr' : 'rtl'}>{isAr ? selected.name_en : selected.name_ar}</div>}
+                  {(isAr ? selected.name_en : selected.name_ar) && <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 1 }} dir={isAr ? 'ltr' : 'rtl'}>{isAr ? selected.name_en : selected.name_ar}</div>}
                 </div>
                 <button onClick={() => setSelectedId(null)} style={{ ...btn(), padding: 5 }}><Ico d={ICONS.x} size={12} sw={2.5} /></button>
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 9 }}>
                 <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '3px 9px', borderRadius: 99, background: `${colorOf(selected)}1f`, color: colorOf(selected) }}>{isAr ? KINDS[kindOf(selected)].ar : KINDS[kindOf(selected)].en}</span>
-                {selected.region && <span style={{ fontSize: '0.68rem', fontWeight: 600, padding: '3px 9px', borderRadius: 99, background: '#f1f5f9', color: '#475569' }}>{selected.region}</span>}
+                {selected.region && <span style={{ fontSize: '0.68rem', fontWeight: 600, padding: '3px 9px', borderRadius: 99, background: 'var(--surface-2)', color: 'var(--text-2)' }}>{selected.region}</span>}
                 {selected.is_active === false && <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '3px 9px', borderRadius: 99, background: '#fef2f2', color: '#dc2626' }}>{isAr ? 'غير نشطة' : 'Inactive'}</span>}
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace', marginTop: 9, direction: 'ltr', textAlign: isAr ? 'right' : 'left' }}>{selected.lat.toFixed(5)}, {selected.lng.toFixed(5)}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', fontFamily: 'monospace', marginTop: 9, direction: 'ltr', textAlign: isAr ? 'right' : 'left' }}>{selected.lat.toFixed(5)}, {selected.lng.toFixed(5)}</div>
               <div style={{ display: 'flex', gap: 7, marginTop: 11, flexWrap: 'wrap' }}>
                 <a href={mapsLink(selected)} target="_blank" rel="noopener noreferrer" style={{ ...btn('primary'), flex: 1 }}><Ico d={ICONS.pin} size={13} />{isAr ? 'فتح في الخرائط' : 'Open in Maps'}</a>
                 <button onClick={() => copyLink(selected)} style={btn()} title={isAr ? 'نسخ الرابط' : 'Copy link'}><Ico d={copiedId === selected.id ? ICONS.check : ICONS.copy} size={13} /></button>
                 <button onClick={() => { setTab('route'); setRouteFrom(selected); setRouteTo(null) }} style={btn()} title={isAr ? 'مسار من هنا' : 'Route from here'}><Ico d={ICONS.route} size={13} /></button>
               </div>
               {canManage && (
-                <div style={{ display: 'flex', gap: 7, marginTop: 8, paddingTop: 9, borderTop: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 7, marginTop: 8, paddingTop: 9, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
                   <button onClick={() => { setManageMode(true); startRelocate(selected) }} style={{ ...btn('accent'), flex: 1 }}><Ico d={ICONS.move} size={13} />{isAr ? 'تعديل الموقع' : 'Relocate'}</button>
                   <button onClick={() => { setManageMode(true); startEditInfo(selected) }} style={btn()}><Ico d={ICONS.edit} size={13} />{isAr ? 'البيانات' : 'Edit'}</button>
                   <button onClick={() => toggleActive(selected)} style={btn(selected.is_active === false ? 'ghost' : 'danger')}>{selected.is_active === false ? (isAr ? 'تفعيل' : 'Activate') : (isAr ? 'تعطيل' : 'Deactivate')}</button>

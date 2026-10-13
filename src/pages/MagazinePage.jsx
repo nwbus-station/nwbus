@@ -152,13 +152,13 @@ async function uploadMagazinePdf(file) {
 
 const inp = {
   width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #E5E7EB',
-  fontSize: '0.85rem', fontFamily: 'inherit', color: '#111827', background: '#fff', boxSizing: 'border-box', outline: 'none',
+  fontSize: '0.85rem', fontFamily: 'inherit', color: 'var(--text-1)', background: 'var(--card)', boxSizing: 'border-box', outline: 'none',
 }
 
 function Field({ label, children }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#4B5563', marginBottom: 6 }}>{label}</label>
+      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   )
@@ -209,7 +209,7 @@ function DateTimeField({ value, onChange, isAr }) {
       <select dir="ltr" value={hh} onChange={e => emit(y || new Date().getFullYear(), mo || new Date().getMonth() + 1, d || new Date().getDate(), e.target.value, mm)} style={{ ...selStyle, flex: '0 1 56px' }}>
         {Array.from({ length: 24 }, (_, i) => pad2(i)).map(h => <option key={h} value={h}>{h}</option>)}
       </select>
-      <span style={{ alignSelf: 'center', color: '#9CA3AF', fontWeight: 700 }}>:</span>
+      <span style={{ alignSelf: 'center', color: 'var(--text-3)', fontWeight: 700 }}>:</span>
       <select dir="ltr" value={mm} onChange={e => emit(y || new Date().getFullYear(), mo || new Date().getMonth() + 1, d || new Date().getDate(), hh, e.target.value)} style={{ ...selStyle, flex: '0 1 56px' }}>
         {['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].map(m => <option key={m} value={m}>{m}</option>)}
       </select>
@@ -219,8 +219,8 @@ function DateTimeField({ value, onChange, isAr }) {
 
 function SectionCard({ title, children }) {
   return (
-    <div style={{ border: '1px solid #EEF0F3', borderRadius: 12, padding: 16, background: '#FAFBFC' }}>
-      <p style={{ margin: '0 0 12px', fontSize: '0.7rem', fontWeight: 800, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{title}</p>
+    <div style={{ border: '1px solid var(--border-2)', borderRadius: 12, padding: 16, background: 'var(--surface-2)' }}>
+      <p style={{ margin: '0 0 12px', fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{title}</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
     </div>
   )
@@ -551,12 +551,12 @@ function ManagePanel({ posts, isAr, onChanged }) {
 
         {selectMode && selectedIds.size > 0 && (
           <>
-            <span style={{ fontSize: '0.72rem', color: '#6B7280', fontWeight: 700 }}>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-3)', fontWeight: 700 }}>
               {isAr ? `${selectedIds.size} محدد` : `${selectedIds.size} selected`}
             </span>
             <button onClick={() => sameTemplate && setBulkEditing(true)} disabled={!sameTemplate}
               title={!sameTemplate ? (isAr ? 'اختر منشورات من نفس القالب فقط' : 'Select posts of the same template only') : ''}
-              style={{ background: '#EEF0FF', color: '#5B5BD6', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: '0.76rem', fontWeight: 700, cursor: sameTemplate ? 'pointer' : 'not-allowed', opacity: sameTemplate ? 1 : 0.45, fontFamily: 'inherit' }}>
+              style={{ background: 'var(--gold-dim)', color: '#5B5BD6', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: '0.76rem', fontWeight: 700, cursor: sameTemplate ? 'pointer' : 'not-allowed', opacity: sameTemplate ? 1 : 0.45, fontFamily: 'inherit' }}>
               ✎ {isAr ? 'تعديل جماعي' : 'Bulk edit'}
             </button>
             {bulkDeleting ? (
@@ -564,7 +564,7 @@ function ManagePanel({ posts, isAr, onChanged }) {
                 <button onClick={doBulkDelete} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                   {isAr ? `تأكيد حذف ${selectedIds.size}` : `Confirm delete ${selectedIds.size}`}
                 </button>
-                <button onClick={() => setBulkDeleting(false)} style={{ background: 'none', border: 'none', fontSize: '0.76rem', color: '#9CA3AF', cursor: 'pointer' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button onClick={() => setBulkDeleting(false)} style={{ background: 'none', border: 'none', fontSize: '0.76rem', color: 'var(--text-3)', cursor: 'pointer' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
               </>
             ) : (
               <button onClick={() => setBulkDeleting(true)} style={{ background: 'none', border: '1.5px solid #FCA5A5', color: '#DC2626', borderRadius: 8, padding: '7px 14px', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -582,9 +582,9 @@ function ManagePanel({ posts, isAr, onChanged }) {
       )}
       {bulkErr && <p style={{ margin: '0 0 10px', fontSize: '0.76rem', color: '#DC2626' }}>⚠ {bulkErr}</p>}
 
-      <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--card)', borderRadius: 14, overflow: 'hidden' }}>
         {posts.length === 0 ? (
-          <p style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: '0.85rem' }}>{isAr ? 'لا يوجد منشورات' : 'No posts'}</p>
+          <p style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>{isAr ? 'لا يوجد منشورات' : 'No posts'}</p>
         ) : posts.map((p, i) => (
           <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < posts.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
             {selectMode && (
@@ -593,7 +593,7 @@ function ManagePanel({ posts, isAr, onChanged }) {
             <span style={{ fontSize: '1.1rem' }}>{TEMPLATES[p.template]?.badge ?? '📄'}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{p.title_ar}</p>
-              <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#9CA3AF' }}>
+              <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
                 {new Date(p.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-US')} · {
                   !p.is_published ? (isAr ? 'مسودة' : 'Draft')
                     : p.starts_at && new Date(p.starts_at) > new Date() ? (isAr ? '🕓 مجدول' : '🕓 Scheduled')
@@ -604,11 +604,11 @@ function ManagePanel({ posts, isAr, onChanged }) {
             </div>
             {!selectMode && (
               <>
-                <button onClick={() => setEditing(p)} style={{ background: '#F3F4F6', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>{isAr ? 'تعديل' : 'Edit'}</button>
+                <button onClick={() => setEditing(p)} style={{ background: 'var(--surface-2)', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>{isAr ? 'تعديل' : 'Edit'}</button>
                 {deleting === p.id ? (
                   <>
                     <button onClick={() => doDelete(p.id)} style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}>{isAr ? 'تأكيد الحذف' : 'Confirm'}</button>
-                    <button onClick={() => setDeleting(null)} style={{ background: 'none', border: 'none', fontSize: '0.72rem', color: '#9CA3AF', cursor: 'pointer' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+                    <button onClick={() => setDeleting(null)} style={{ background: 'none', border: 'none', fontSize: '0.72rem', color: 'var(--text-3)', cursor: 'pointer' }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
                   </>
                 ) : (
                   <button onClick={() => setDeleting(p.id)} style={{ background: 'none', border: 'none', color: '#DC2626', fontSize: '0.72rem', cursor: 'pointer' }}>{isAr ? 'حذف' : 'Delete'}</button>
@@ -671,16 +671,16 @@ function BulkEditForm({ posts, isAr, onCancel, onSaved }) {
   const checkboxLabel = { display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-2)', cursor: 'pointer', minWidth: 150 }
 
   return (
-    <div style={{ background: '#fff', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
+    <div style={{ background: 'var(--card)', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
       <div>
         <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>
           {isAr ? `تعديل جماعي — ${posts.length} منشورات` : `Bulk edit — ${posts.length} posts`}
         </p>
-        <p style={{ margin: '4px 0 0', fontSize: '0.76rem', color: '#6B7280' }}>
+        <p style={{ margin: '4px 0 0', fontSize: '0.76rem', color: 'var(--text-3)' }}>
           {TEMPLATES[template]?.badge} {isAr ? TEMPLATES[template]?.ar : TEMPLATES[template]?.en}
         </p>
       </div>
-      <p style={{ margin: 0, fontSize: '0.72rem', color: '#9CA3AF' }}>
+      <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-3)' }}>
         {isAr ? 'فعّل فقط الحقول اللي تبي تغيّرها لكل المنشورات المحددة — الباقي يبقى كما هو لكل منشور' : 'Enable only the fields you want to change for all selected posts — everything else stays as-is per post'}
       </p>
 
@@ -708,7 +708,7 @@ function BulkEditForm({ posts, isAr, onCancel, onSaved }) {
           <div style={{ display: 'flex', gap: 6 }}>
             {BG_EFFECT_ORDER.map(key => (
               <button key={key} type="button" onClick={() => setBgEffect(key)}
-                style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, border: `1.5px solid ${bgEffect === key ? '#5B5BD6' : '#E5E7EB'}`, background: bgEffect === key ? '#EEF0FF' : '#fff', color: '#374151' }}>
+                style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, border: `1.5px solid ${bgEffect === key ? '#5B5BD6' : '#E5E7EB'}`, background: bgEffect === key ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-2)' }}>
                 {isAr ? BG_EFFECTS[key].ar : BG_EFFECTS[key].en}
               </button>
             ))}
@@ -725,8 +725,8 @@ function BulkEditForm({ posts, isAr, onCancel, onSaved }) {
         <label style={checkboxLabel}><input type="checkbox" checked={changePublish} onChange={e => setChangePublish(e.target.checked)} /> {isAr ? 'حالة النشر' : 'Publish status'}</label>
         {changePublish && (
           <div style={{ display: 'flex', gap: 6 }}>
-            <button type="button" onClick={() => setIsPublished(true)} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, border: `1.5px solid ${isPublished ? '#5B5BD6' : '#E5E7EB'}`, background: isPublished ? '#EEF0FF' : '#fff', color: '#374151' }}>{isAr ? 'منشور' : 'Published'}</button>
-            <button type="button" onClick={() => setIsPublished(false)} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, border: `1.5px solid ${!isPublished ? '#5B5BD6' : '#E5E7EB'}`, background: !isPublished ? '#EEF0FF' : '#fff', color: '#374151' }}>{isAr ? 'مسودة' : 'Draft'}</button>
+            <button type="button" onClick={() => setIsPublished(true)} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, border: `1.5px solid ${isPublished ? '#5B5BD6' : '#E5E7EB'}`, background: isPublished ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-2)' }}>{isAr ? 'منشور' : 'Published'}</button>
+            <button type="button" onClick={() => setIsPublished(false)} style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, border: `1.5px solid ${!isPublished ? '#5B5BD6' : '#E5E7EB'}`, background: !isPublished ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-2)' }}>{isAr ? 'مسودة' : 'Draft'}</button>
           </div>
         )}
       </div>
@@ -752,7 +752,7 @@ function BulkEditForm({ posts, isAr, onCancel, onSaved }) {
           style={{ background: '#5B5BD6', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>
           {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? `تطبيق على ${posts.length}` : `Apply to ${posts.length}`)}
         </button>
-        <button onClick={onCancel} style={{ background: '#F3F4F6', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+        <button onClick={onCancel} style={{ background: 'var(--surface-2)', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
           {isAr ? 'إلغاء' : 'Cancel'}
         </button>
       </div>
@@ -987,7 +987,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
-      <div style={{ background: '#fff', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ background: 'var(--card)', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>
           {post ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'جديد' : 'New')}
         </p>
@@ -1009,7 +1009,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
           {form.template === 'spotlight' && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: '#4B5563' }}>
+                <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)' }}>
                   {isAr ? 'المتميزون حالياً (موظفون ومشرفون، ٩٨٪+)' : 'Currently outstanding (staff & supervisors, 98%+)'}
                 </p>
                 {candidates.length > 0 && (
@@ -1019,7 +1019,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                 )}
               </div>
               {candidates.length === 0 ? (
-                <p style={{ margin: 0, fontSize: '0.72rem', color: '#9CA3AF' }}>{isAr ? 'لا يوجد أحد بهذا المستوى حالياً' : 'No one at this level right now'}</p>
+                <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-3)' }}>{isAr ? 'لا يوجد أحد بهذا المستوى حالياً' : 'No one at this level right now'}</p>
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {candidates.map(c => {
@@ -1033,7 +1033,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                           cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)',
                         }}>
                         {on ? '✓' : '⭐'} {c.name}
-                        {c.station ? <span style={{ color: '#9CA3AF', fontWeight: 500 }}> · {c.station}</span> : null}
+                        {c.station ? <span style={{ color: 'var(--text-3)', fontWeight: 500 }}> · {c.station}</span> : null}
                         {c.streak >= 2 && <span style={{ color: '#B45309', fontWeight: 700 }}> · ×{c.streak}</span>}
                       </button>
                     )
@@ -1041,7 +1041,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                 </div>
               )}
               <div style={{ marginTop: 10 }}>
-                <p style={{ margin: '0 0 6px', fontSize: '0.72rem', fontWeight: 700, color: '#4B5563' }}>
+                <p style={{ margin: '0 0 6px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)' }}>
                   {isAr ? 'نمط نص التكريم' : 'Congratulation text style'}
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -1050,7 +1050,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                       style={{
                         padding: '5px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600,
                         border: `1.5px solid ${form.text_style === s.key ? '#5B5BD6' : '#E5E7EB'}`,
-                        background: form.text_style === s.key ? '#EEF0FF' : '#fff', color: '#374151',
+                        background: form.text_style === s.key ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-2)',
                       }}>
                       {isAr ? s.ar : s.en}
                     </button>
@@ -1076,14 +1076,14 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                   ? `سيُنشأ ${form.employee_ids.length} منشورات مستقلة — كل موظف/مشرف يأخذ صفحته الخاصة بنص تهنئة مخصص له تلقائياً (يذكر عدد أشهره المتتالية إن وُجد).`
                   : `${form.employee_ids.length} separate posts will be created — each person gets their own page with an automatically personalized congratulation.`)}
             </div>
-            <p style={{ margin: 0, fontSize: '0.7rem', color: '#9CA3AF' }}>
+            <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-3)' }}>
               {isAr ? 'تقدر تعدّل نص أي شخص يدوياً تحت — النص المولَّد تلقائياً نقطة بداية بس' : 'You can manually edit any person’s text below — the auto-generated text is just a starting point'}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 420, overflowY: 'auto' }}>
               {candidates.filter(c => form.employee_ids.includes(c.id)).map(c => {
                 const t = personTextFor(c)
                 return (
-                  <div key={c.id} style={{ border: '1px solid #EEF0F3', borderRadius: 10, padding: 12, background: '#fff' }}>
+                  <div key={c.id} style={{ border: '1px solid var(--border-2)', borderRadius: 10, padding: 12, background: 'var(--card)' }}>
                     <p style={{ margin: '0 0 8px', fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-2)' }}>
                       ⭐ {c.name}{c.station ? ` · ${c.station}` : ''}
                     </p>
@@ -1149,7 +1149,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                   style={{
                     flex: 1, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600,
                     border: `1.5px solid ${form.bg_effect === key ? '#5B5BD6' : '#E5E7EB'}`,
-                    background: form.bg_effect === key ? '#EEF0FF' : '#fff', color: '#374151',
+                    background: form.bg_effect === key ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-2)',
                   }}>
                   {isAr ? BG_EFFECTS[key].ar : BG_EFFECTS[key].en}
                 </button>
@@ -1159,7 +1159,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label={isAr ? 'أو ارفع صورة خاصة' : 'Or upload your own image'}>
               <input type="file" accept="image/*" onChange={handleImage} style={{ fontSize: '0.72rem' }} />
-              {uploading && <p style={{ margin: '4px 0 0', fontSize: '0.66rem', color: '#9CA3AF' }}>{isAr ? 'جارٍ الرفع...' : 'Uploading...'}</p>}
+              {uploading && <p style={{ margin: '4px 0 0', fontSize: '0.66rem', color: 'var(--text-3)' }}>{isAr ? 'جارٍ الرفع...' : 'Uploading...'}</p>}
               {form.background_image_url && !uploading && (
                 <button type="button" onClick={() => set('background_image_url', '')} style={{ marginTop: 4, fontSize: '0.66rem', color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer' }}>{isAr ? '✕ إزالة الصورة' : '✕ Remove image'}</button>
               )}
@@ -1176,7 +1176,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
           <SectionCard title={isAr ? 'محتوى المنشور' : 'Post content'}>
             <Field label={isAr ? 'ارفع ملف PDF (يُعرض كمحتوى رئيسي)' : 'Upload a PDF (shown as the main content)'}>
               <input type="file" accept="application/pdf" onChange={handlePdf} style={{ fontSize: '0.72rem' }} />
-              {uploadingPdf && <p style={{ margin: '4px 0 0', fontSize: '0.66rem', color: '#9CA3AF' }}>{isAr ? 'جارٍ الرفع...' : 'Uploading...'}</p>}
+              {uploadingPdf && <p style={{ margin: '4px 0 0', fontSize: '0.66rem', color: 'var(--text-3)' }}>{isAr ? 'جارٍ الرفع...' : 'Uploading...'}</p>}
               {form.pdf_url && !uploadingPdf && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
                   <a href={form.pdf_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.72rem', color: '#5B5BD6', fontWeight: 700 }}>{isAr ? '📄 عرض الملف المرفوع' : '📄 View uploaded file'}</a>
@@ -1185,7 +1185,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
               )}
             </Field>
 
-            <p style={{ margin: 0, fontSize: '0.7rem', color: '#9CA3AF' }}>
+            <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-3)' }}>
               {isAr ? 'الحقول التالية اختيارية وتُعرض تحت ملف الـ PDF إن رفعته (أو بديلاً عنه إن ما رفعت ملف):' : 'The fields below are optional and appear under the PDF if uploaded (or as a substitute if you skip the PDF):'}
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -1211,7 +1211,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
         )}
 
         <SectionCard title={isAr ? 'جدولة العرض' : 'Display schedule'}>
-          <p style={{ margin: 0, fontSize: '0.7rem', color: '#9CA3AF' }}>
+          <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-3)' }}>
             {isAr ? 'اختياري — اتركهما فارغين لعرض المنشور فوراً وبدون تاريخ انتهاء' : 'Optional — leave both empty to show the post immediately with no expiry'}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -1240,7 +1240,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                 ? (isAr ? `إنشاء ${form.employee_ids.length} منشورات` : `Create ${form.employee_ids.length} posts`)
                 : (isAr ? 'حفظ' : 'Save')}
           </button>
-          <button onClick={onCancel} style={{ background: '#F3F4F6', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button onClick={onCancel} style={{ background: 'var(--surface-2)', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             {isAr ? 'إلغاء' : 'Cancel'}
           </button>
         </div>
