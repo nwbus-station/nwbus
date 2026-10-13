@@ -441,9 +441,9 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     return st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : null
   })()
   const shiftObj = SHIFTS.find(s => s.value === form.shift)
-  const diffTone = diff === 0 ? { c: '#15803d', bg: '#f0fdf4', bd: '#bbf7d0', t: isAr ? 'مطابق ✓' : 'Matched ✓' }
-    : diff > 0 ? { c: '#1d4ed8', bg: '#eff6ff', bd: '#bfdbfe', t: isAr ? 'زيادة' : 'Surplus' }
-    : { c: '#b91c1c', bg: '#fef2f2', bd: '#fecaca', t: isAr ? 'عجز' : 'Deficit' }
+  const diffTone = diff === 0 ? { c: 'var(--success)', bg: 'var(--success-bg)', bd: 'rgba(22,163,74,0.35)', t: isAr ? 'مطابق ✓' : 'Matched ✓' }
+    : diff > 0 ? { c: 'var(--info)', bg: 'var(--info-bg)', bd: 'rgba(37,99,235,0.35)', t: isAr ? 'زيادة' : 'Surplus' }
+    : { c: 'var(--danger)', bg: 'var(--danger-bg)', bd: 'rgba(220,38,38,0.35)', t: isAr ? 'عجز' : 'Deficit' }
   const METHODS = [
     { key: 'cash_amount',       label: isAr ? 'نقداً' : 'Cash',  dot: '#16a34a' },
     { key: 'mada_amount',       label: isAr ? 'مدى' : 'Mada',    dot: '#2563eb', ref: 'mada_network_ref', refLabel: isAr ? 'الرقم المرجعي لمدى' : 'Mada reference' },
@@ -697,7 +697,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         </div>
 
         {/* ═ الذيل: أزرار ثابتة ═ */}
-        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-gray-200 flex items-center gap-2.5">
+        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-gray-200 flex items-center gap-2.5" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
           {!isLocked && (
             <button type="submit" disabled={saving}
               className="flex-1 bg-green-700 text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-green-800 transition-colors ">

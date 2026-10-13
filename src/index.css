@@ -854,3 +854,14 @@ html.dark .bg-amber-100, html.dark .bg-yellow-100 { background-color: var(--warn
 /* أي نص داخل نافذة/بطاقة داكنة يبقى مقروءاً: النص الافتراضي يتبع الرمز */
 [data-theme="dark"] body, html.dark body { color: var(--text-1); }
 [data-theme="dark"] .skeleton, html.dark .skeleton { background: linear-gradient(90deg, #232326 25%, #2C2C30 50%, #232326 75%); background-size: 200% 100%; }
+
+
+/* ═══ الجوال: النوافذ تعلو الشريط السفلي وتتسع لارتفاع الشاشة الفعلي (زر الحفظ يبقى ظاهراً) ═══ */
+@media (max-width: 768px) {
+  .fixed.inset-0.z-50, .fixed.inset-0.z-40, .fixed.inset-0.z-\[60\] { z-index: 700 !important; }
+  .fixed.inset-0.z-50, .fixed.inset-0.z-\[60\] { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+  .fixed.inset-0.z-50 > div, .fixed.inset-0.z-\[60\] > div {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+}

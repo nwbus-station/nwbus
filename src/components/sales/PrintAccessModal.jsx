@@ -79,7 +79,7 @@ export default function PrintAccessModal({ isAr = true, access, onSave, onClose 
 
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} onClick={e => { if (e.target === e.currentTarget && !saving) onClose() }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
       <div role="dialog" aria-modal="true" aria-label={isAr ? 'إدارة طباعة اليومية' : 'Daily print access'}
         style={{ background: 'var(--card, #fff)', borderRadius: 18, width: '100%', maxWidth: 680, maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
 

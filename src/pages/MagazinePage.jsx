@@ -229,7 +229,7 @@ function SectionCard({ title, children }) {
 // شريط جانبي (يغطي الشاشة) لتصفح كل الصفحات بصور مصغّرة — يوضّح الصفحة الحالية ويقفل بزر خروج
 function PageSidebar({ posts, activeIndex, onSelect, onClose, isAr }) {
   return (
-    <div dir={isAr ? 'rtl' : 'ltr'} style={{ position: 'fixed', inset: 0, background: 'rgba(6,10,20,0.96)', zIndex: 80, overflowY: 'auto', padding: '24px 20px' }}>
+    <div dir={isAr ? 'rtl' : 'ltr'} style={{ position: 'fixed', inset: 0, background: 'rgba(6,10,20,0.96)', zIndex: 700, overflowY: 'auto', padding: '24px 20px' }}>
       <div style={{ maxWidth: 960, margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <h2 style={{ margin: 0, color: '#fff', fontSize: '1.05rem', fontWeight: 800 }}>{isAr ? `كل الصفحات (${posts.length})` : `All pages (${posts.length})`}</h2>
