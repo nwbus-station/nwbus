@@ -329,14 +329,14 @@ function MoveTableComp({ list, color, label, isAr, storageKey }) {
             {list.map((m, i) => {
               const st = statusOf(m), edge = m.unentered ? '#d97706' : (m.acc?.color || color)
               return (
-                <div key={i} style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${edge}`, borderRadius: 12, background: m.unentered ? 'var(--warning-bg)' : 'var(--card)', padding: '10px 12px' }}>
+                <div key={i} dir="ltr" style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${edge}`, borderRadius: 12, background: m.unentered ? 'var(--warning-bg)' : 'var(--card)', padding: '10px 12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.92rem', color: m.unentered ? '#d97706' : 'var(--text-1)' }}>{m.trip}</span>
                     {chip(st)}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, margin: '9px 0 10px' }}>
                     <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45 }}>{m.from}</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isAr ? 'scaleX(-1)' : 'none' }} aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
                     <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45, textAlign: 'end' }}>{m.to}</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '8px 4px' }}>

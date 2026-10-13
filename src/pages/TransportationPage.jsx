@@ -1189,7 +1189,7 @@ export default function TransportationPage() {
     const isCancelled = rec?.is_cancelled
     const tripShipments = shipmentMap[trip.id] || []
     const bt = trip.bus_type && busTypeLookup(trip.bus_type)
-    const stn = st => (isAr ? st?.name_ar : st?.name_en) || '—'
+    const stn = st => st?.name_en || st?.name_ar || '—'
     const edge = isCancelled ? 'var(--border-2)' : isComplete ? 'var(--success)' : isEntry ? 'var(--warning)' : 'var(--accent)'
     // مغادرة مبكرة (ولو بدقيقة)
     let earlyMin = 0
@@ -1209,7 +1209,7 @@ export default function TransportationPage() {
     const route = (from, to) => (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45 }}>{stn(from)}</span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isAr ? 'scaleX(-1)' : 'none' }} aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
         <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45, textAlign: 'end' }}>{stn(to)}</span>
       </div>
     )
@@ -1220,7 +1220,7 @@ export default function TransportationPage() {
       </div>
     )
     return (
-      <div key={trip._key} style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${edge}`, borderRadius: 12, background: 'var(--card)', padding: '10px 12px', opacity: isCancelled ? 0.5 : 1 }}>
+      <div key={trip._key} dir="ltr" style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${edge}`, borderRadius: 12, background: 'var(--card)', padding: '10px 12px', opacity: isCancelled ? 0.5 : 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -1721,7 +1721,7 @@ export default function TransportationPage() {
                 {scheduleData.map(trip => {
                   const dep = trip.status === 'departed'
                   return (
-                    <div key={trip.id} style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${dep ? 'var(--success)' : 'var(--border-2)'}`, borderRadius: 12, background: 'var(--card)', padding: '10px 12px' }}>
+                    <div key={trip.id} dir="ltr" style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${dep ? 'var(--success)' : 'var(--border-2)'}`, borderRadius: 12, background: 'var(--card)', padding: '10px 12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                         <div>
                           <span style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{trip.trip_number}</span>
@@ -1730,9 +1730,9 @@ export default function TransportationPage() {
                         <span style={{ background: dep ? 'var(--success-bg)' : 'var(--surface-2)', color: dep ? 'var(--success)' : 'var(--text-3)', borderRadius: 99, padding: '2px 11px', fontSize: '0.7rem', fontWeight: 800 }}>{dep ? 'غادرت' : 'مجدول'}</span>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, margin: '9px 0' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45 }}>{trip.from_station?.name_ar}</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'scaleX(-1)' }} aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45, textAlign: 'end' }}>{trip.to_station?.name_ar}</span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45 }}>{trip.from_station?.name_en || trip.from_station?.name_ar}</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45, textAlign: 'end' }}>{trip.to_station?.name_en || trip.to_station?.name_ar}</span>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '8px 4px' }}>
                         {[['المجدول', trip.schedTime || '—', 'var(--text-2)'], ['الفعلي', trip.actual_departure || '—', dep ? 'var(--success)' : 'var(--text-3)'], ['الركاب', trip.passenger_count ?? '—', 'var(--text-1)'], ['الحافلة', trip.bus_number || '—', 'var(--text-1)']].map(([l, v, c]) => (

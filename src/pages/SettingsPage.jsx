@@ -58,7 +58,7 @@ const Section = ({ titleAr, titleEn, children }) => (
           </p>
         </div>
         {saved && (
-          <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:99, background:'#f0fdf4', border:'1px solid #bbf7d0', fontSize:'0.78rem', fontWeight:700, color:'#15803d' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:99, background:'var(--success-bg)', border:'1px solid rgba(22,163,74,0.35)', fontSize:'0.78rem', fontWeight:700, color:'var(--success)' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
             {isAr ? 'تم الحفظ' : 'Saved'}
           </div>
@@ -72,15 +72,15 @@ const Section = ({ titleAr, titleEn, children }) => (
             const active = settings.theme === t.id
             return (
               <button key={t.id} onClick={() => save('theme', t.id)}
-                style={{ border:`2px solid ${active ? t.preview[0] : 'var(--border)'}`, borderRadius:12, padding:'10px 8px', background: active ? `${t.preview[0]}12` : '#fff', cursor:'pointer', transition:'all 0.15s', textAlign:'center' }}>
+                style={{ border:`2px solid ${active ? 'var(--accent)' : 'var(--border-2)'}`, borderRadius:12, padding:'10px 8px', background: active ? 'var(--gold-dim)' : 'var(--card)', cursor:'pointer', transition:'all 0.15s', textAlign:'center' }}>
                 <div style={{ display:'flex', justifyContent:'center', gap:4, marginBottom:8 }}>
-                  {t.preview.map((c,i) => <div key={i} style={{ width:15, height:15, borderRadius:'50%', background:c, border:'1px solid rgba(0,0,0,0.08)' }} />)}
+                  {t.preview.map((c,i) => <div key={i} style={{ width:15, height:15, borderRadius:'50%', background:c, border:'1px solid var(--border-2)' }} />)}
                 </div>
-                <div style={{ fontSize:'0.7rem', fontWeight: active ? 700 : 500, color: active ? t.preview[0] : 'var(--text-2)' }}>
+                <div style={{ fontSize:'0.7rem', fontWeight: active ? 700 : 500, color: active ? 'var(--text-1)' : 'var(--text-2)' }}>
                   {isAr ? t.labelAr : t.labelEn}
                 </div>
                 {active && (
-                  <div style={{ marginTop:5, display:'inline-flex', alignItems:'center', justifyContent:'center', width:16, height:16, borderRadius:'50%', background:t.preview[0] }}>
+                  <div style={{ marginTop:5, display:'inline-flex', alignItems:'center', justifyContent:'center', width:16, height:16, borderRadius:'50%', background:'var(--accent)' }}>
                     <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                 )}
