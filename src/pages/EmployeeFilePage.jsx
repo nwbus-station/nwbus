@@ -906,7 +906,7 @@ export default function EmployeeFilePage() {
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)', paddingBottom: 40 }}>
       {/* الترويسة */}
-      <div style={{ background: '#fff', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'السجل الوظيفي' : 'Staff record'}</h1>

@@ -38,7 +38,7 @@ export default function SettingsPage() {
   }
 
 const Section = ({ titleAr, titleEn, children }) => (
-    <div style={{ background:'#fff', borderRadius:14, border:'1px solid var(--border)', padding:'20px 24px', marginBottom:16 }}>
+    <div style={{ background: 'var(--card)', borderRadius:14, border:'1px solid var(--border)', padding:'20px 24px', marginBottom:16 }}>
       <h3 style={{ margin:'0 0 16px', fontSize:'0.88rem', fontWeight:800, color:'var(--text-1)' }}>
         {isAr ? titleAr : titleEn}
       </h3>

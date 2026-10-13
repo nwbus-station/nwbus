@@ -63,7 +63,7 @@ export default function BackupSettings({ isAr }) {
     load(true)
   }
 
-  const card = { background: '#fff', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }
+  const card = { background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }
   const lbl = { fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 6, display: 'block' }
 
   if (missing) {
@@ -110,12 +110,12 @@ export default function BackupSettings({ isAr }) {
         <input value={draft} onChange={e => setDraft(e.target.value)} dir="ltr" inputMode="email" placeholder="name@company.com"
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addEmail() } }}
           style={{ flex: 1, padding: '9px 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: '0.82rem', outline: 'none' }} />
-        <button type="button" onClick={() => addEmail()} style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid var(--border)', background: '#fff', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}>{isAr ? 'إضافة' : 'Add'}</button>
+        <button type="button" onClick={() => addEmail()} style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}>{isAr ? 'إضافة' : 'Add'}</button>
       </div>
 
       <label style={lbl}>{isAr ? 'وقت الإرسال اليومي (بتوقيت الرياض)' : 'Daily send time (Riyadh)'}</label>
       <SelectField value={hour} onChange={e => setHour(Number(e.target.value))} dir="ltr"
-        style={{ padding: '9px 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: '0.82rem', background: '#fff', marginBottom: 14 }}>
+        style={{ padding: '9px 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: '0.82rem', background: 'var(--card)', marginBottom: 14 }}>
         {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
       </SelectField>
 
@@ -125,7 +125,7 @@ export default function BackupSettings({ isAr }) {
           {busy === 'save' ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'حفظ' : 'Save')}
         </button>
         <button type="button" onClick={sendNow} disabled={busy === 'now' || pending}
-          style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid #1C2B4A', background: '#fff', color: '#1C2B4A', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: (busy === 'now' || pending) ? 0.5 : 1 }}>
+          style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid #1C2B4A', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: (busy === 'now' || pending) ? 0.5 : 1 }}>
           {pending ? (isAr ? 'بانتظار التنفيذ…' : 'Waiting…') : (isAr ? 'إرسال الآن' : 'Send now')}
         </button>
         {msg && <span style={{ fontSize: '0.76rem', fontWeight: 600, color: msg.ok ? '#15803D' : '#B91C1C' }}>{msg.text}</span>}

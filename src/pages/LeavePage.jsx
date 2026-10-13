@@ -170,7 +170,7 @@ function proofWindowOpen(createdAt, leaveType) {
 const inp = {
   width: '100%', padding: '8px 10px', borderRadius: 8,
   border: '1.5px solid var(--border)', fontSize: '0.85rem',
-  fontFamily: 'inherit', color: 'var(--text-1)', background: '#fff',
+  fontFamily: 'inherit', color: 'var(--text-1)', background: 'var(--card)',
   boxSizing: 'border-box', outline: 'none',
 }
 
@@ -1687,7 +1687,7 @@ export default function LeavePage() {
     <div style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
 
       {/* ترويسة الصفحة + التبويبات */}
-      <div style={{ background: '#fff', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 960, margin: '0 auto', padding: '18px 20px 0' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>

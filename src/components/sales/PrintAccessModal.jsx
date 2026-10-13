@@ -151,7 +151,7 @@ export default function PrintAccessModal({ isAr = true, access, onSave, onClose 
                       <div style={{ width: 150 }}><DatePicker value={e.until || ''} onChange={v => edit(d => { d.accounts[id].until = v || null })} isAr={isAr} className={inp + ' w-full'} placeholder={isAr ? 'مستمر' : 'Ongoing'} /></div>
                     </div>
                     <button type="button" onClick={() => setConfirmRemove(id)} aria-label={isAr ? 'إزالة الحساب' : 'Remove account'} title={isAr ? 'إزالة من الاستثناءات' : 'Remove exception'}
-                      style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer', fontSize: '1rem', fontFamily: 'inherit' }}>×</button>
+                      style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid #fecaca', background: 'var(--card)', color: '#dc2626', cursor: 'pointer', fontSize: '1rem', fontFamily: 'inherit' }}>×</button>
                   </div>
                 ))}
               </div>

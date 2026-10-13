@@ -44,7 +44,7 @@ export default function OperationsReportDownload({ isAr }) {
 
   const inp = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white'
   return (
-    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
+    <div style={{ background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
       <h3 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{T('تنزيل التقرير التشغيلي التحليلي', 'Download the operations analytics report')}</h3>
       <p style={{ margin: '4px 0 14px', fontSize: '0.74rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
         {T('حدّد الفترة وانزّل ملف Excel مباشرة: ملخص بالمغادرة والوصول وعدد الزوار (أرقام وتحليل ورسوم)، جدول المحطات، الاتجاه اليومي، الوكلاء في ورقة مستقلة، رضا العملاء والاستبيانات، الحركات غير المُدخلة، كل السجلات، وورقة لكل محطة. بدون إرسال إيميل.',

@@ -1358,7 +1358,7 @@ export default function SalesPage() {
       {audit && <AuditModal sale={audit} onClose={() => setAudit(null)} />}
       {showPinModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 8px 40px rgba(0,0,0,0.15)', width: '100%', maxWidth: 400, maxHeight: '80vh', display: 'flex', flexDirection: 'column', direction: 'rtl' }}>
+          <div style={{ background: 'var(--card)', borderRadius: 14, boxShadow: '0 8px 40px rgba(0,0,0,0.15)', width: '100%', maxWidth: 400, maxHeight: '80vh', display: 'flex', flexDirection: 'column', direction: 'rtl' }}>
             <div style={{ background: '#1C2B36', color: '#fff', padding: '12px 16px', borderRadius: '14px 14px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 700 }}>{isAr ? 'اختر المحطات المثبّتة' : 'Pin Stations'}</span>
               <button onClick={() => setShowPinModal(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>×</button>

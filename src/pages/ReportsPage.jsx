@@ -1675,7 +1675,7 @@ export default function ReportsPage() {
             <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
               <button onClick={() => { const t = toLocalDateStr(); setAuditFrom(t); setAuditTo(t) }}
                 title={isAr ? 'إعادة التاريخ لليوم' : 'Reset to today'}
-                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-2)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 2v6h-6"/><path d="M3 22v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L21 8"/><path d="M21 16l-2.64 2.36A9 9 0 013.51 15"/>
                 </svg>
@@ -1685,7 +1685,7 @@ export default function ReportsPage() {
               <DatePicker value={auditTo} onChange={setAuditTo} isAr={isAr} className="px-2 py-1 rounded-lg border border-gray-200 text-xs bg-white text-right" />
 
               <SelectField value={auditTable} onChange={e => setAuditTable(e.target.value)}
-                style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
+                style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--card)', color: 'var(--text-1)' }}>
                 <option value="all">{isAr ? 'كل الأقسام' : 'All sections'}</option>
                 {AUDIT_FILTER_TABLES.map(t => (
                   <option key={t} value={t}>{auditTableMeta(t).label}</option>
@@ -1695,7 +1695,7 @@ export default function ReportsPage() {
               {/* فلتر المحطة — الأدمن يشوف كل الشبكة، وغيره يقتصر على محطاته المخصصة فقط */}
               {isGeneralAdmin ? (
                 <SelectField value={auditStation} onChange={e => setAuditStation(e.target.value)}
-                  style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
+                  style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--card)', color: 'var(--text-1)' }}>
                   <option value="all">{isAr ? 'كل المحطات' : 'All stations'}</option>
                   <option value="mine">{isAr ? 'محطتي' : 'My station'}</option>
                   {stations.map(s => (
@@ -1704,7 +1704,7 @@ export default function ReportsPage() {
                 </SelectField>
               ) : myStationIds.length > 1 && (
                 <SelectField value={auditStation} onChange={e => setAuditStation(e.target.value)}
-                  style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: '#fff', color: 'var(--text-1)' }}>
+                  style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--card)', color: 'var(--text-1)' }}>
                   <option value="mine">{isAr ? 'كل محطاتي' : 'All my stations'}</option>
                   {stations.map(s => (
                     <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>
@@ -1846,7 +1846,7 @@ export default function ReportsPage() {
               <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)' }}>
                 <button
                   onClick={() => fetchAudit(auditPage - 1)} disabled={auditPage === 0 || auditLoading}
-                  style={{ fontSize: '0.78rem', padding: '4px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-2)', cursor: auditPage === 0 ? 'not-allowed' : 'pointer', opacity: auditPage === 0 ? 0.4 : 1 }}>
+                  style={{ fontSize: '0.78rem', padding: '4px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', cursor: auditPage === 0 ? 'not-allowed' : 'pointer', opacity: auditPage === 0 ? 0.4 : 1 }}>
                   {isAr ? '→ السابق' : '← Prev'}
                 </button>
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>
@@ -1854,7 +1854,7 @@ export default function ReportsPage() {
                 </span>
                 <button
                   onClick={() => fetchAudit(auditPage + 1)} disabled={auditPage >= totalPages - 1 || auditLoading}
-                  style={{ fontSize: '0.78rem', padding: '4px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-2)', cursor: auditPage >= totalPages - 1 ? 'not-allowed' : 'pointer', opacity: auditPage >= totalPages - 1 ? 0.4 : 1 }}>
+                  style={{ fontSize: '0.78rem', padding: '4px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', cursor: auditPage >= totalPages - 1 ? 'not-allowed' : 'pointer', opacity: auditPage >= totalPages - 1 ? 0.4 : 1 }}>
                   {isAr ? '← التالي' : 'Next →'}
                 </button>
               </div>
