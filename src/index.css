@@ -888,3 +888,17 @@ html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled
 
 /* الحدود الافتراضية (بدون لون محدّد) كانت تظهر بيضاء ساطعة بالوضع الليلي — :where يجعلها بلا أولوية فلا تكسر أي لون حدود محدّد */
 :where([data-theme="dark"]) *, :where([data-theme="dark"]) ::before, :where([data-theme="dark"]) ::after { border-color: var(--border-2); }
+
+
+/* لوحة الترحيل (كمبيوتر) */
+@keyframes tpPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(1.5); } }
+.tp-pulse { animation: tpPulse 1.6s ease-in-out infinite; }
+.tp-row { transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease; }
+.tp-row:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); border-color: var(--border-2); }
+@media (prefers-reduced-motion: reduce) { .tp-pulse { animation: none; } .tp-row { transition: none; } .tp-row:hover { transform: none; } }
+
+.tp-row { display: grid; gap: 14px 18px; grid-template-columns: 104px minmax(150px, 0.9fr) minmax(280px, 1.8fr) minmax(190px, 1.1fr) auto; }
+@media (max-width: 1180px) {
+  .tp-row { grid-template-columns: 96px 1fr auto; grid-template-areas: "time trip act" "route route route" "exec exec exec"; }
+  .tp-time { grid-area: time; } .tp-trip { grid-area: trip; } .tp-act { grid-area: act; } .tp-route { grid-area: route; } .tp-exec { grid-area: exec; background: var(--surface); border-radius: 10px; padding: 8px 12px; }
+}

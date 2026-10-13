@@ -1151,6 +1151,177 @@ export default function TransportationPage() {
     )
   })
 
+  // ── لوحة الكمبيوتر: الرحلات مجمّعة بالورديات مع مؤشر "الآن" والرحلة القادمة ──────────
+  const renderTripRow = (trip, nowMin, isToday) => {
+    const { isBoth, isArrival, rec, arrRec, dRec, isEntry, isComplete, isCancelled, tripShipments, bt, stn, edge, earlyMin } = tripState(trip)
+    const t0 = isBoth ? trip.schedDep : trip.schedTime
+    const tm = t0 ? Number(String(t0).slice(0, 2)) * 60 + Number(String(t0).slice(3, 5)) : null
+    const overdue = isToday && !isEntry && !isCancelled && tm != null && tm < nowMin - 5
+    const chip = (bg, c) => ({ background: bg, color: c, borderRadius: 99, padding: '2px 10px', fontSize: '0.66rem', fontWeight: 800, whiteSpace: 'nowrap' })
+    const typeChip = isBoth ? { t: isAr ? 'وصول + مغادرة' : 'ARR + DEP', bg: 'var(--surface-2)', c: 'var(--text-2)' }
+      : isArrival ? { t: isAr ? 'وصول' : 'ARR', bg: 'var(--success-bg)', c: 'var(--success)' } : { t: isAr ? 'مغادرة' : 'DEP', bg: 'var(--info-bg)', c: 'var(--info)' }
+    const track = (from, to) => (
+      <div dir="ltr" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(36px, 70px) minmax(0,1fr)', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)', textAlign: 'end' }}>{stn(from)}</span>
+        <span aria-hidden="true" style={{ display: 'flex', alignItems: 'center', color: 'var(--text-3)' }}>
+          <i style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--text-3)' }} />
+          <i style={{ flex: 1, height: 0, borderTop: '2px dashed var(--border-2)', margin: '0 3px' }} />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 6 15 12 9 18" /></svg>
+        </span>
+        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{stn(to)}</span>
+      </div>
+    )
+    return (
+      <div key={trip._key} className="tp-row" style={{ alignItems: 'center', padding: '12px 18px', background: 'var(--card)', border: '1px solid var(--border-2)', borderInlineStart: `5px solid ${edge}`, borderRadius: 14, opacity: isCancelled ? 0.5 : 1 }}>
+        {/* الوقت */}
+        <div className="tp-time" style={{ textAlign: 'center' }}>
+          {isBoth ? (
+            <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-1)', lineHeight: 1.5 }}>
+              <div>{trip.schedDep}</div><div style={{ color: 'var(--text-3)' }}>{trip.schedArr}</div>
+            </div>
+          ) : <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.5rem', color: 'var(--text-1)', lineHeight: 1.1 }}>{trip.schedTime}</div>}
+          <span style={{ ...chip(typeChip.bg, typeChip.c), display: 'inline-block', marginTop: 6 }}>{typeChip.t}</span>
+        </div>
+
+        {/* الرحلة */}
+        <div className="tp-trip" style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.02rem', color: 'var(--text-1)', textDecoration: isCancelled ? 'line-through' : 'none' }}>{trip.trip_number}</span>
+            {(trip.is_rf || trip.is_extra || rec?.is_extra_trip) && <span style={chip('var(--info-bg)', 'var(--info)')}>RF</span>}
+            {bt && <span style={chip('var(--surface-2)', 'var(--text-2)')}>{isAr ? bt.ar : bt.en}</span>}
+            {trip.enabled === false && <span style={chip('var(--surface-2)', 'var(--text-3)')}>{isAr ? 'معلّقة' : 'OFF'}</span>}
+            {tripShipments.map((sh, si) => <span key={si} style={chip('var(--warning-bg)', 'var(--warning)')}><RouteText from={sh.from_st?.name_ar} to={sh.to_st?.name_ar} /></span>)}
+          </div>
+          {trip.trip_name && <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 3 }}>{trip.trip_name}</div>}
+          {overdue && <span style={{ ...chip('var(--warning-bg)', 'var(--warning)'), display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5 }}><i className="tp-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warning)' }} />{isAr ? 'بانتظار الإدخال' : 'Awaiting entry'}</span>}
+        </div>
+
+        {/* المسار */}
+        <div className="tp-route">
+          {isBoth ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={chip('var(--info-bg)', 'var(--info)')}>{isAr ? 'مغ' : 'DEP'}</span><div style={{ flex: 1 }}>{track(trip.depFromStation, trip.depToStation)}</div></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={chip('var(--success-bg)', 'var(--success)')}>{isAr ? 'وص' : 'ARR'}</span><div style={{ flex: 1 }}>{track(trip.from_station, trip.to_station)}</div></div>
+            </div>
+          ) : track(trip.from_station, trip.to_station)}
+        </div>
+
+        {/* التنفيذ */}
+        <div className="tp-exec" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 10px', fontSize: '0.76rem' }}>
+          {isEntry ? (
+            <>
+              {isBoth && !isComplete && <span style={chip('var(--warning-bg)', 'var(--warning)')}>{isAr ? (rec ? 'ناقص: الوصول' : 'ناقص: المغادرة') : (rec ? 'Missing arrival' : 'Missing departure')}</span>}
+              {rec && !isArrival && (earlyMin > 0
+                ? <span style={chip('var(--warning-bg)', 'var(--warning)')}>⚠ {isAr ? `قبل موعدها ${earlyMin} د` : `${earlyMin} min early`}</span>
+                : rec.departure_accuracy ? <span className={accuracyColor(rec.departure_accuracy)}>{isAr ? accuracyAr(rec.departure_accuracy) : rec.departure_accuracy}</span> : null)}
+              {rec?.actual_departure && !isArrival && <span style={{ fontFamily: MONO, fontWeight: 700, color: 'var(--text-1)' }}>{String(rec.actual_departure).slice(11, 16)}</span>}
+              {dRec?.bus_number && <span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)', background: 'var(--surface-2)', borderRadius: 6, padding: '1px 8px' }}>{dRec.bus_number}</span>}
+              {isBoth && arrRec?.passenger_count > 0 && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>↓ {arrRec.passenger_count}</span>}
+              {rec?.passenger_count > 0 && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{isBoth ? '↑ ' : ''}{rec.passenger_count} {isAr ? 'راكب' : 'pax'}</span>}
+              {dRec?.operational_status && dRec.operational_status !== 'Normal' && <span style={{ color: 'var(--danger)', fontWeight: 800 }}>{isAr ? TRIP_STATUSES.find(x => x.value === dRec.operational_status)?.ar : dRec.operational_status}</span>}
+            </>
+          ) : trip.upstream || (isArrival && trip.crossActualDep) ? (
+            <>
+              <UpstreamChip up={trip.upstream} isAr={isAr} />
+              {trip.crossActualDep && <span style={chip('var(--info-bg)', 'var(--info)')}>{isAr ? 'غادر' : 'Departed'} {new Date(trip.crossActualDep).toISOString().slice(11, 16)}</span>}
+            </>
+          ) : <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>{isAr ? 'لم تُدخل بعد' : 'Not entered yet'}</span>}
+        </div>
+
+        {/* إجراءات */}
+        <div className="tp-act" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+          {trip.is_rf && canManageRf && allowCap('transport_delete_rf') && (
+            <button onClick={() => deleteRfTrip(trip.id)} title={isAr ? 'حذف الرحلة الإضافية' : 'Delete extra trip'} aria-label={isAr ? 'حذف الرحلة الإضافية' : 'Delete extra trip'}
+              style={{ width: 36, height: 36, borderRadius: 9, border: '1px solid var(--border-2)', background: 'var(--card)', color: 'var(--danger)', cursor: 'pointer' }}>✕</button>
+          )}
+          {adminLike && allowCap('transport_manage_trips') && (
+            <button onClick={() => suspendStationTrip(trip.id, trip.role)} title={isAr ? 'إخفاء' : 'Hide'} aria-label={isAr ? 'إخفاء الرحلة' : 'Hide trip'}
+              style={{ width: 36, height: 36, borderRadius: 9, border: '1px solid var(--border-2)', background: 'var(--card)', color: 'var(--text-3)', cursor: 'pointer' }}>—</button>
+          )}
+          {canEdit ? (
+            <button onClick={() => setModal({ trip, record: rec ?? null, arrivalRecord: arrRec ?? null, combined: isBoth, isArrival, suggestedBusNumber: trip.upstream?.bus_number ?? null, schedTime: isBoth ? trip.schedDep : trip.schedTime })}
+              style={{ minWidth: 96, minHeight: 38, padding: '0 18px', borderRadius: 10, border: isEntry ? '1px solid var(--border-2)' : 'none', background: isEntry ? 'var(--card)' : 'var(--solid-btn)', color: isEntry ? 'var(--text-1)' : '#fff', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer' }}>
+              {isEntry ? (isComplete ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'إكمال' : 'Complete')) : (isAr ? '+ إدخال' : '+ Enter')}
+            </button>
+          ) : <span style={{ fontSize: '0.74rem', fontWeight: 700, color: isEntry ? 'var(--success)' : 'var(--text-3)' }}>{isEntry ? (isAr ? 'تم الإدخال' : 'Entered') : (isAr ? 'لم تُدخل' : 'Not entered')}</span>}
+        </div>
+      </div>
+    )
+  }
+
+  const renderBoard = () => {
+    const isToday = date === todayStr()
+    const now = new Date()
+    const nowMin = now.getHours() * 60 + now.getMinutes()
+    const minsOf = t => { const x = t.role === 'both' ? t.schedDep : t.schedTime; return x ? Number(String(x).slice(0, 2)) * 60 + Number(String(x).slice(3, 5)) : 0 }
+    const sorted = [...filtered].sort((a, b) => minsOf(a) - minsOf(b))
+    const shifts = [
+      { k: 'A', ar: 'الوردية أ', en: 'Shift A', from: 0, to: 480, range: '00:00 – 08:00' },
+      { k: 'B', ar: 'الوردية ب', en: 'Shift B', from: 480, to: 960, range: '08:00 – 16:00' },
+      { k: 'C', ar: 'الوردية ج', en: 'Shift C', from: 960, to: 1440, range: '16:00 – 24:00' },
+    ]
+    const entered = t => { const s = tripState(t); return s.isEntry }
+    // الرحلة القادمة: أول رحلة غير مُدخلة موعدها الآن أو بعده
+    const next = isToday ? sorted.find(t => !entered(t) && !tripState(t).isCancelled && minsOf(t) >= nowMin - 5) : null
+    const nextIn = next ? minsOf(next) - nowMin : null
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {next && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'linear-gradient(135deg, var(--solid-1), var(--solid-2))', color: '#fff', borderRadius: 14, padding: '12px 18px', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.72rem', fontWeight: 800, opacity: 0.85 }}><i className="tp-pulse" style={{ width: 8, height: 8, borderRadius: '50%', background: '#34D399' }} />{isAr ? 'الرحلة القادمة' : 'Next up'}</span>
+            <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.2rem' }}>{next.trip_number}</span>
+            <span dir="ltr" style={{ fontWeight: 700, fontSize: '0.84rem', opacity: 0.9 }}>{tripState(next).stn(next.from_station)} → {tripState(next).stn(next.to_station)}</span>
+            <span style={{ marginInlineStart: 'auto', fontFamily: MONO, fontWeight: 800, fontSize: '1.05rem' }} dir="ltr">{next.role === 'both' ? next.schedDep : next.schedTime}</span>
+            <span style={{ background: 'rgba(255,255,255,0.16)', borderRadius: 99, padding: '3px 14px', fontSize: '0.76rem', fontWeight: 800 }}>{nextIn <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${nextIn >= 60 ? `${Math.floor(nextIn / 60)}س ${nextIn % 60}د` : `${nextIn} د`}` : `in ${nextIn} min`)}</span>
+          </div>
+        )}
+        {shifts.map(sh => {
+          const list = sorted.filter(t => { const m = minsOf(t); return m >= sh.from && m < sh.to })
+          if (!list.length) return null
+          const done = list.filter(entered).length
+          const pct = Math.round((done / list.length) * 100)
+          const nowHere = isToday && nowMin >= sh.from && nowMin < sh.to
+          let nowPlaced = false
+          return (
+            <section key={sh.k}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+                <span style={{ width: 4, height: 18, background: 'var(--accent)', borderRadius: 2 }} />
+                <span style={{ fontWeight: 900, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? sh.ar : sh.en}</span>
+                <span dir="ltr" style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--text-3)' }}>{sh.range}</span>
+                {nowHere && <span style={{ background: 'var(--success-bg)', color: 'var(--success)', borderRadius: 99, padding: '1px 10px', fontSize: '0.66rem', fontWeight: 800 }}>{isAr ? 'الحالية' : 'Current'}</span>}
+                <span style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontFamily: MONO, fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)' }} dir="ltr">{done}/{list.length}</span>
+                  <span style={{ width: 120, height: 6, borderRadius: 99, background: 'var(--border-2)', overflow: 'hidden' }}><i style={{ display: 'block', width: `${pct}%`, height: '100%', background: pct === 100 ? 'var(--success)' : 'var(--accent)', borderRadius: 99 }} /></span>
+                  <span style={{ fontFamily: MONO, fontSize: '0.7rem', color: 'var(--text-3)' }}>{pct}%</span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {list.map(t => {
+                  const row = renderTripRow(t, nowMin, isToday)
+                  if (nowHere && !nowPlaced && minsOf(t) >= nowMin) {
+                    nowPlaced = true
+                    return (
+                      <div key={`now-${t._key}`} style={{ display: 'contents' }}>
+                        <div aria-label={isAr ? 'الوقت الآن' : 'Now'} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--danger)', fontFamily: MONO, fontSize: '0.7rem', fontWeight: 800 }}>
+                          <i style={{ flex: 1, height: 0, borderTop: '2px solid var(--danger)', opacity: 0.6 }} />
+                          <span dir="ltr" style={{ background: 'var(--danger-bg)', borderRadius: 99, padding: '1px 12px' }}>{isAr ? 'الآن' : 'NOW'} {String(now.getHours()).padStart(2, '0')}:{String(now.getMinutes()).padStart(2, '0')}</span>
+                          <i style={{ flex: 1, height: 0, borderTop: '2px solid var(--danger)', opacity: 0.6 }} />
+                        </div>
+                        {row}
+                      </div>
+                    )
+                  }
+                  return row
+                })}
+              </div>
+            </section>
+          )
+        })}
+      </div>
+    )
+  }
+
+
   // Stats
   const total        = trips.length
   const departureCnt = trips.filter(t => t.role === 'departure' || t.role === 'both').length
@@ -1178,7 +1349,8 @@ export default function TransportationPage() {
 
   // ── بطاقات الجوال (نفس تصميم بطاقات التقارير) ─────────────────────────
   const MONO = "'IBM Plex Mono', ui-monospace, monospace"
-  const renderTripCard = trip => {
+  // حالة الرحلة المشتركة بين البطاقة (جوال) واللوحة (كمبيوتر)
+  const tripState = trip => {
     const isBoth      = trip.role === 'both'
     const isArrival   = trip.role === 'arrival'
     const rec         = recordMap[`${trip.id}|${isArrival ? 'arrival' : 'departure'}`]
@@ -1191,7 +1363,6 @@ export default function TransportationPage() {
     const bt = trip.bus_type && busTypeLookup(trip.bus_type)
     const stn = st => st?.name_en || st?.name_ar || '—'
     const edge = isCancelled ? 'var(--border-2)' : isComplete ? 'var(--success)' : isEntry ? 'var(--warning)' : 'var(--accent)'
-    // مغادرة مبكرة (ولو بدقيقة)
     let earlyMin = 0
     if (rec && !isArrival) {
       const sched = isBoth ? trip.schedDep : trip.schedTime
@@ -1203,6 +1374,10 @@ export default function TransportationPage() {
         if (d < 0) earlyMin = -d
       }
     }
+    return { isBoth, isArrival, rec, arrRec, dRec, isEntry, isComplete, isCancelled, tripShipments, bt, stn, edge, earlyMin }
+  }
+  const renderTripCard = trip => {
+    const { isBoth, isArrival, rec, arrRec, dRec, isEntry, isComplete, isCancelled, tripShipments, bt, stn, edge, earlyMin } = tripState(trip)
     const typeChip = isBoth ? { t: isAr ? 'وصول + مغادرة' : 'ARR + DEP', bg: 'var(--surface-2)', c: 'var(--text-2)' }
       : isArrival ? { t: isAr ? 'وصول' : 'ARR', bg: 'var(--success-bg)', c: 'var(--success)' } : { t: isAr ? 'مغادرة' : 'DEP', bg: 'var(--info-bg)', c: 'var(--info)' }
     const chipStyle = (bg, c) => ({ background: bg, color: c, borderRadius: 99, padding: '1px 9px', fontSize: '0.64rem', fontWeight: 800, whiteSpace: 'nowrap' })
@@ -1478,209 +1653,7 @@ export default function TransportationPage() {
       ) : (
         <>
         <div className="md:hidden"><div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{filtered.map(renderTripCard)}</div></div>
-        <div className="hidden md:block bg-white border border-gray-200 rounded-lg overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-wider border-b border-gray-200">
-                <th className="px-3 py-2 text-center w-16 font-semibold">{isAr ? 'الوقت' : 'Time'}</th>
-                <th className="px-2 py-2 text-center w-16 font-semibold">{isAr ? 'النوع' : 'Type'}</th>
-                <th className="px-3 py-2 text-start font-semibold">{isAr ? 'الرحلة' : 'Trip'}</th>
-                <th className="px-3 py-2 text-start font-semibold hidden md:table-cell">{isAr ? 'الخط' : 'Route'}</th>
-                <th className="px-3 py-2 text-start font-semibold hidden lg:table-cell">{isAr ? 'التنفيذ' : 'Execution'}</th>
-                <th className="px-3 py-2 w-36"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(trip => {
-                const isBoth      = trip.role === 'both'
-                const isArrival   = trip.role === 'arrival'
-                const rec         = recordMap[`${trip.id}|${isArrival ? 'arrival' : 'departure'}`]
-                const arrRec      = isBoth ? recordMap[`${trip.id}|arrival`] : null
-                const dRec        = isBoth ? (rec || arrRec) : rec        // السجل المعروض في عمود التنفيذ
-                const isEntry     = isBoth ? !!(rec || arrRec) : !!rec      // فيه بيانات مدخلة (ولو جزئياً)
-                const isComplete  = isBoth ? !!(rec && arrRec) : !!rec
-                const isCancelled = rec?.is_cancelled
-                const showTime    = trip.schedTime
-                const tripShipments = shipmentMap[trip.id] || []
-                const bt = trip.bus_type && busTypeLookup(trip.bus_type)
-
-                return (
-                  <tr key={trip._key}
-                    className={`border-b border-gray-100 last:border-b-0 ${isCancelled ? 'opacity-45' : 'hover:bg-gray-50'}`}
-                    style={{ borderInlineStart: isEntry || isCancelled ? '3px solid transparent' : '3px solid var(--accent)' }}>
-
-                    {/* الوقت */}
-                    <td className="px-3 py-2.5 text-center">
-                      {isBoth ? (
-                        <div className="font-mono font-bold text-gray-800">
-                          <div className="h-7 flex items-center justify-center">{trip.schedDep}</div>
-                          <div className="h-7 flex items-center justify-center">{trip.schedArr}</div>
-                        </div>
-                      ) : (
-                        <span className="font-mono font-bold text-gray-800">{showTime}</span>
-                      )}
-                    </td>
-
-                    {/* النوع */}
-                    <td className="px-2 py-2.5 text-center">
-                      <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap"
-                        style={isBoth
-                          ? { background: 'var(--surface-2)', color: 'var(--text-2)' }
-                          : { background: isArrival ? 'var(--success-bg)' : 'var(--info-bg)', color: isArrival ? 'var(--success)' : 'var(--info)' }}>
-                        {isBoth ? (isAr ? 'وصول + مغادرة' : 'ARR + DEP') : isArrival ? (isAr ? 'وصول' : 'ARR') : (isAr ? 'مغادرة' : 'DEP')}
-                      </span>
-                    </td>
-
-                    {/* الرحلة */}
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`font-mono font-bold text-gray-800 ${isCancelled ? 'line-through' : ''}`}>{trip.trip_number}</span>
-                        {bt && (
-                          <span className="text-[9px] font-mono font-bold text-gray-500 bg-gray-100 rounded px-1.5 py-px">
-                            {isAr ? bt.ar : bt.en}
-                          </span>
-                        )}
-                        {(trip.is_rf || trip.is_extra || rec?.is_extra_trip) && (
-                          <span className="text-[9px] font-mono font-bold rounded px-1.5 py-px" style={{ background: 'var(--info-bg)', color: 'var(--info)' }}>RF</span>
-                        )}
-                        {trip.enabled === false && (
-                          <span className="text-[9px] font-bold text-gray-400 bg-gray-100 rounded px-1.5 py-px">
-                            {isAr ? 'معلّقة' : 'OFF'}
-                          </span>
-                        )}
-                        {tripShipments.map((sh, si) => (
-                          <span key={si} className="text-[9px] font-bold rounded px-1.5 py-px" style={{ background: 'var(--warning-bg)', color: 'var(--warning)' }}>
-                            <RouteText from={sh.from_st?.name_ar} to={sh.to_st?.name_ar} />
-                          </span>
-                        ))}
-                      </div>
-                      {trip.trip_name && <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-3)' }}>{trip.trip_name}</div>}
-                      {!isEntry && trip.upstream && <div className="lg:hidden mt-1"><UpstreamChip up={trip.upstream} isAr={isAr} /></div>}
-                      {/* اسم الخط على الجوال */}
-                      <div className="md:hidden text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-                        {isBoth ? (
-                          <>
-                            <div><b>{isAr ? 'مغادرة' : 'DEP'}:</b> <RouteText from={isAr ? trip.depFromStation?.name_ar : trip.depFromStation?.name_en} to={isAr ? trip.depToStation?.name_ar : trip.depToStation?.name_en} /></div>
-                            <div><b>{isAr ? 'وصول' : 'ARR'}:</b> <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} /></div>
-                          </>
-                        ) : (
-                          <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
-                        )}
-                      </div>
-                    </td>
-
-                    {/* الخط */}
-                    <td className="px-3 py-2.5 text-xs hidden md:table-cell" style={{ color: 'var(--text-3)' }}>
-                      {isBoth ? (
-                        <div className="flex flex-col">
-                          <div className="h-7 flex items-center gap-2">
-                            <span className="text-[9px] font-bold rounded px-1.5 py-px shrink-0" style={{ background: 'var(--info-bg)', color: 'var(--info)' }}>{isAr ? 'مغادرة' : 'DEP'}</span>
-                            <RouteText from={isAr ? trip.depFromStation?.name_ar : trip.depFromStation?.name_en} to={isAr ? trip.depToStation?.name_ar : trip.depToStation?.name_en} />
-                          </div>
-                          <div className="h-7 flex items-center gap-2">
-                            <span className="text-[9px] font-bold rounded px-1.5 py-px shrink-0" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>{isAr ? 'وصول' : 'ARR'}</span>
-                            <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
-                          </div>
-                        </div>
-                      ) : (
-                        <RouteText from={isAr ? trip.from_station?.name_ar : trip.from_station?.name_en} to={isAr ? trip.to_station?.name_ar : trip.to_station?.name_en} />
-                      )}
-                    </td>
-
-                    {/* التنفيذ */}
-                    <td className="px-3 py-2.5 hidden lg:table-cell">
-                      {isEntry ? (
-                        <div className="flex items-center gap-2.5 flex-wrap text-xs">
-                          {isBoth && !isComplete && (
-                            <span className="text-[10px] font-bold rounded px-1.5 py-px" style={{ background: 'var(--warning-bg)', color: 'var(--warning)' }}>
-                              {isAr ? (rec ? 'ناقص: الوصول' : 'ناقص: المغادرة') : (rec ? 'Missing arrival' : 'Missing departure')}
-                            </span>
-                          )}
-                          {rec && !isArrival && (() => {
-                            // مبكرة: نحسبها مقابل موعد المحطة نفسها (تنطبق على الأيام السابقة كذلك)
-                            const sched = isBoth ? trip.schedDep : trip.schedTime
-                            if (sched && rec.actual_departure) {
-                              const [ah, am] = String(rec.actual_departure).slice(11, 16).split(':').map(Number)
-                              const [sh, sm] = sched.split(':').map(Number)
-                              let d = (ah * 60 + am) - (sh * 60 + sm)
-                              if (d < -720) d += 1440
-                              else if (d > 720) d -= 1440
-                              if (d < 0) return (
-                                <span className="text-amber-800 font-semibold bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5">
-                                  ⚠ {isAr ? `غادرت قبل موعدها (${-d} د)` : `Left before schedule (${-d} min)`}
-                                </span>
-                              )
-                            }
-                            return rec.departure_accuracy ? (
-                              <span className={accuracyColor(rec.departure_accuracy)}>
-                                {isAr ? accuracyAr(rec.departure_accuracy) : rec.departure_accuracy}
-                              </span>
-                            ) : null
-                          })()}
-                          {dRec.bus_number && <span className="font-mono text-gray-500">{dRec.bus_number}</span>}
-                          {isBoth && arrRec?.passenger_count > 0 && (
-                            <span className="text-gray-500 font-mono">↓ {arrRec.passenger_count}</span>
-                          )}
-                          {rec?.passenger_count > 0 && (
-                            <span className="text-gray-500 font-mono">{isBoth ? '↑ ' : ''}{rec.passenger_count} {isAr ? 'راكب' : 'pax'}</span>
-                          )}
-                          {dRec.operational_status && dRec.operational_status !== 'Normal' && (
-                            <span className="text-red-600 font-semibold">
-                              {isAr ? TRIP_STATUSES.find(s => s.value === dRec.operational_status)?.ar : dRec.operational_status}
-                            </span>
-                          )}
-                        </div>
-                      ) : trip.upstream || (isArrival && trip.crossActualDep) ? (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <UpstreamChip up={trip.upstream} isAr={isAr} />
-                          {trip.crossActualDep && (
-                            <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 rounded px-2 py-0.5">
-                              {isAr ? 'غادر' : 'Departed'} {new Date(trip.crossActualDep).toISOString().slice(11, 16)}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-gray-300">{isAr ? 'لم تُدخل' : 'Not entered'}</span>
-                      )}
-                    </td>
-
-                    {/* إجراءات */}
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {trip.is_rf && canManageRf && allowCap('transport_delete_rf') && (
-                          <button onClick={() => deleteRfTrip(trip.id)}
-                            title={isAr ? 'حذف الرحلة الإضافية' : 'Delete extra trip'}
-                            className="text-[11px] border border-gray-300 text-gray-400 rounded-sm px-1.5 py-1 hover:border-red-400 hover:text-red-500">
-                            ✕
-                          </button>
-                        )}
-                        {adminLike && allowCap('transport_manage_trips') && (
-                          <button onClick={() => suspendStationTrip(trip.id, trip.role)}
-                            title={isAr ? (trip.role === 'arrival' ? 'إخفاء الوصول' : trip.role === 'both' ? 'إخفاء الوصول والمغادرة' : 'إخفاء المغادرة') : 'Hide'}
-                            className="text-[11px] border border-gray-300 text-gray-400 rounded-sm px-1.5 py-1 hover:border-red-400 hover:text-red-500">
-                            —
-                          </button>
-                        )}
-                        {canEdit ? (
-                          <button
-                            onClick={() => setModal({ trip, record: rec ?? null, arrivalRecord: arrRec ?? null, combined: isBoth, isArrival, suggestedBusNumber: trip.upstream?.bus_number ?? null, schedTime: isBoth ? trip.schedDep : trip.schedTime })}
-                            className={`text-xs rounded-sm px-3 py-1.5 font-semibold transition-colors whitespace-nowrap ${
-                              isEntry
-                                ? 'border border-gray-300 text-gray-500 hover:border-gray-400 bg-white'
-                                : 'bg-nwbus-primary text-white hover:bg-nwbus-dark'}`}>
-                            {isEntry ? (isComplete ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'إكمال' : 'Complete')) : (isAr ? '+ إدخال' : '+ Enter')}
-                          </button>
-                        ) : (
-                          <span className={`w-2.5 h-2.5 inline-block ${isEntry ? 'bg-green-600' : 'bg-gray-200'}`} style={{ borderRadius: 1 }} />
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <div className="hidden md:block">{renderBoard()}</div>
         </>
       )}
 
