@@ -289,6 +289,26 @@ async function resetPasswordViaEdge(authId, newPassword) {
   if (!res.ok) throw new Error(body.error || 'Failed to reset password')
 }
 
+// تغيير اسم المستخدم (الدخول username@nwbus.sa) من الخادم: يحدّث حساب المصادقة وجدول users معاً بنفس ضوابط الصلاحيات
+async function changeUsernameViaEdge(authId, newUsername) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  if (!token) throw new Error('No active session')
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/change-username`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY },
+    body: JSON.stringify({ auth_id: authId, new_username: newUsername }),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (res.status === 409) throw new Error('USERNAME_EXISTS')
+  if (res.status === 404 && !body?.error) throw new Error('FUNCTION_MISSING')
+  if (!res.ok) throw new Error(body?.error || 'Failed to change username')
+  return body
+}
+
+const USERNAME_RE = /^[a-z0-9._-]{2,40}$/
+const passScore = p => { const s = String(p || ''); let n = 0; if (s.length >= 8) n++; if (/[a-z]/.test(s) && /[A-Z]/.test(s)) n++; if (/\d/.test(s)) n++; if (/[^A-Za-z0-9]/.test(s)) n++; return s.length < 6 ? 0 : Math.max(1, n) }
+
 async function sendCredentialEmail(employeeId) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
@@ -311,10 +331,24 @@ function buildUsername(jobNum) {
   return jobNum ? 'NW' + jobNum : ''
 }
 
-function Section({ title, children }) {
+function UsernameStatus({ check, isAr }) {
+  if (!check || check.status === 'same') return null
+  const m = {
+    invalid:  ['text-red-600', isAr ? 'حروف إنجليزية وأرقام و . _ - فقط (2–40 حرفاً)' : 'Latin letters, digits and . _ - only (2–40 chars)'],
+    checking: ['text-gray-400', isAr ? 'جارٍ التحقق…' : 'Checking…'],
+    taken:    ['text-red-600 font-semibold', `⚠ ${isAr ? 'مستخدم بالفعل' : 'Already used'}${check.name ? ` — ${check.name}` : ''}`],
+    free:     ['text-green-700 font-semibold', `✓ ${isAr ? 'متاح' : 'Available'}`],
+  }[check.status]
+  return m ? <p className={`text-xs mt-1 ${m[0]}`}>{m[1]}</p> : null
+}
+
+function Section({ title, children, num }) {
   return (
-    <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/60 h-full">
-      <p className="text-[11px] font-bold text-nwbus-primary uppercase tracking-wider mb-3 pb-2 border-b border-gray-200">{title}</p>
+    <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50/60 h-full" style={{ boxShadow: 'var(--shadow-xs)' }}>
+      <div className="flex items-center gap-2.5 mb-3 pb-2.5 border-b border-gray-200">
+        {num != null && <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-extrabold shrink-0" style={{ background: 'var(--accent)', color: '#fff' }}>{num}</span>}
+        <p className="text-[12px] font-extrabold text-nwbus-primary tracking-wide">{title}</p>
+      </div>
       <div className="space-y-3">{children}</div>
     </div>
   )
@@ -971,6 +1005,22 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
     return () => clearTimeout(t)
   }, [form.job_number, user])
 
+  // اسم المستخدم: تعديل حر (جديد أو موجود). لا يُستبدل تلقائياً من الرقم الوظيفي بعد أن يكتبه المسؤول بنفسه
+  const usernameEditedRef = useRef(false)
+  const [usernameCheck, setUsernameCheck] = useState(null) // { status: 'invalid'|'checking'|'taken'|'free'|'same', name? }
+  useEffect(() => {
+    const u = String(form.username || '').toLowerCase()
+    if (!u) { setUsernameCheck(null); return }
+    if (user && u === String(user.username || '').toLowerCase()) { setUsernameCheck({ status: 'same' }); return }
+    if (!USERNAME_RE.test(u)) { setUsernameCheck({ status: 'invalid' }); return }
+    setUsernameCheck({ status: 'checking' })
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('users').select('full_name_ar').eq('username', u).maybeSingle()
+      setUsernameCheck(data ? { status: 'taken', name: data.full_name_ar } : { status: 'free' })
+    }, 400)
+    return () => clearTimeout(t)
+  }, [form.username, user])
+
   // الحقول الحساسة (جوال، هوية، كلمة مرور) ما تعود من قائمة المستخدمين بعد الآن —
   // تُجلب فقط هنا عند فتح تعديل موظف موجود، عبر دالة تتحقق من صلاحية الأدمن بقاعدة البيانات
   // يحفظ أي حقل عدّله الأدمن يدوياً، عشان جلب البيانات الحساسة (أدناه) ما يطيح فوقه
@@ -1017,12 +1067,12 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   function handleJobNumberChange(val) {
     const n = toLatinDigits(val).replace(/\D/g, '')
     set('job_number', n)
-    if (!user) set('username', buildUsername(n))
+    if (!user && !usernameEditedRef.current) set('username', buildUsername(n))
   }
 
-  function handleNameEnChange(val) {
-    set('full_name_en', val)
-  }
+  // الاسم خانة واحدة (عربي أو إنجليزي): يُحفظ في full_name_ar، ويُنسخ لـ full_name_en إن كان لاتينياً
+  const isLatinName = n => /[A-Za-z]/.test(n) && !/[\u0600-\u06FF]/.test(n)
+  const nameEnOf = () => (isLatinName(form.full_name_ar.trim()) ? form.full_name_ar.trim() : (form.full_name_en || null))
 
   function handleNationalIdChange(val) {
     const n = toLatinDigits(val).replace(/\D/g, '')
@@ -1167,7 +1217,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
         const { data: inserted, error: insertErr } = await supabase.from('users').insert({
           username:     form.username.toLowerCase(),
           full_name_ar: form.full_name_ar,
-          full_name_en: form.full_name_en || null,
+          full_name_en: nameEnOf(),
           role:         form.role,
           station_id:   primaryStation(),
           language:     form.language,
@@ -1213,10 +1263,21 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
         await onSaved()
 
       } else {
+        // تغيير اسم المستخدم (أدمن): من الخادم أولاً لأنه يغيّر بريد الدخول في نظام المصادقة
+        const newUname = String(form.username || '').toLowerCase().trim()
+        if (isGeneralAdmin && newUname && newUname !== String(user.username || '').toLowerCase()) {
+          if (!USERNAME_RE.test(newUname)) throw new Error(isAr ? 'اسم المستخدم: حروف إنجليزية وأرقام و . _ - فقط (2–40)' : 'Username: latin letters, digits and . _ - only (2–40)')
+          if (!user.auth_id) throw new Error(isAr ? 'هذا الحساب غير مربوط بنظام الدخول' : 'This account is not linked to auth')
+          try { await changeUsernameViaEdge(user.auth_id, newUname) } catch (e) {
+            if (e.message === 'USERNAME_EXISTS') throw new Error(isAr ? 'اسم المستخدم مستخدم بالفعل — اختر اسماً آخر' : 'Username already exists')
+            if (e.message === 'FUNCTION_MISSING') throw new Error(isAr ? 'دالة تغيير اسم المستخدم غير منشورة على Supabase بعد (change-username)' : 'change-username function is not deployed yet')
+            throw e
+          }
+        }
         const { error: updErr } = await supabase.rpc('admin_update_user', {
           p_id:              user.id,
           p_full_name_ar:    form.full_name_ar,
-          p_full_name_en:    form.full_name_en || null,
+          p_full_name_en:    nameEnOf(),
           p_role:            form.role,
           p_station_id:      primaryStation(),
           p_language:        form.language,
@@ -1296,19 +1357,22 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
     <>
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col">
-        <div className="px-7 py-5 border-b flex items-center justify-between sticky top-0 z-10"
-          style={{ background: '#1C2B36' }}>
-          <div>
-            <h2 className="font-bold text-white text-lg">
-              {user ? (isAr ? 'تعديل موظف' : 'Edit Staff') : (isAr ? 'موظف جديد' : 'New Staff')}
+        <div className="px-7 py-5 flex items-center gap-4 sticky top-0 z-10"
+          style={{ background: 'linear-gradient(135deg, var(--solid-1), var(--solid-2))' }}>
+          <span className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-extrabold shrink-0" style={{ background: '#EE712D', color: '#fff' }} aria-hidden="true">
+            {(form.full_name_ar || '').trim().charAt(0) || (user ? '؟' : '+')}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-extrabold text-white text-lg leading-tight truncate">
+              {(form.full_name_ar || '').trim() || (user ? (isAr ? 'تعديل موظف' : 'Edit Staff') : (isAr ? 'موظف جديد' : 'New Staff'))}
             </h2>
-            <p className="text-white/50 text-xs mt-0.5">
-              {user
-                ? (isAr ? `تعديل بيانات ${user.full_name_ar}` : `Editing ${user.full_name_ar}`)
-                : (isAr ? 'أدخل بيانات الموظف الجديد' : 'Enter the new employee’s details')}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap mt-1.5">
+              <span className="text-white/60 text-xs">{user ? (isAr ? 'تعديل بيانات الموظف' : 'Editing employee') : (isAr ? 'إضافة موظف جديد للنظام' : 'Adding a new employee')}</span>
+              {effRoleLabel && <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}>{effRoleLabel}</span>}
+              {form.job_number && <span className="text-[11px] font-mono font-bold rounded-full px-2.5 py-0.5" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}>#{form.job_number}</span>}
+            </div>
           </div>
-          <button onClick={closeAndClearDraft} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
+          <button onClick={closeAndClearDraft} aria-label={isAr ? 'إغلاق' : 'Close'} className="text-white/60 hover:text-white text-2xl leading-none w-9 h-9 rounded-full hover:bg-white/10">×</button>
         </div>
 
         <form id="user-form" onSubmit={handleSave} autoComplete="off" className="px-7 py-6 space-y-5">
@@ -1319,7 +1383,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-          <Section title={isAr ? 'بيانات الموظف' : 'Employee Details'}>
+          <Section num={1} title={isAr ? 'بيانات الموظف' : 'Employee Details'}>
             <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
               <label className="block text-xs font-bold text-amber-800 mb-1.5">
                 {isAr ? 'الرقم الوظيفي' : 'Employee Number'}
@@ -1350,17 +1414,10 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم (عربي) *' : 'Name (Arabic) *'}</label>
-                <input required autoComplete="off" className={inputCls} value={form.full_name_ar}
-                  onChange={e => set('full_name_ar', e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم (إنجليزي)' : 'Name (English)'}</label>
-                <input autoComplete="off" className={inputCls} value={form.full_name_en}
-                  onChange={e => handleNameEnChange(e.target.value)} />
-              </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم الموظف (عربي أو إنجليزي) *' : 'Employee name (Arabic or English) *'}</label>
+              <input required autoComplete="off" className={inputCls} value={form.full_name_ar} dir="auto"
+                onChange={e => set('full_name_ar', e.target.value)} placeholder={isAr ? 'الاسم الكامل' : 'Full name'} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1439,16 +1496,22 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
           </Section>
 
           <div className="flex flex-col gap-5">
-          <Section title={isAr ? 'الدخول والحماية' : 'Login & Security'}>
+          <Section num={2} title={isAr ? 'الدخول والحماية' : 'Login & Security'}>
             {/* Username + Password — new user only */}
             {!user && (
               <>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المستخدم *' : 'Username *'}</label>
-                  <input required autoComplete="off" className={inputCls + ' font-mono font-bold uppercase'} value={form.username}
-                    onChange={e => set('username', e.target.value.toLowerCase().replace(/\s/g, ''))}
-                    placeholder="NW1030986" />
-                  <p className="text-xs text-gray-400 mt-0.5 font-mono">{form.username}@nwbus.sa</p>
+                  <div className="flex items-stretch gap-0" dir="ltr">
+                    <input required autoComplete="off" className={inputCls + ' font-mono font-bold flex-1 min-w-0'} style={{ borderStartEndRadius: 0, borderEndEndRadius: 0 }} value={form.username}
+                      onChange={e => { usernameEditedRef.current = true; set('username', e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '')) }}
+                      placeholder="nw1030986" />
+                    <span className="px-3 flex items-center text-xs font-mono text-gray-500 border border-s-0 rounded-e-lg bg-gray-100 shrink-0">@nwbus.sa</span>
+                  </div>
+                  <UsernameStatus check={usernameCheck} isAr={isAr} />
+                  {usernameEditedRef.current && form.job_number && (
+                    <button type="button" onClick={() => { usernameEditedRef.current = false; set('username', buildUsername(form.job_number)) }} className="text-[11px] text-nwbus-primary underline mt-1">{isAr ? 'إعادة التوليد من الرقم الوظيفي' : 'Regenerate from job number'}</button>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'كلمة المرور *' : 'Password *'}</label>
@@ -1478,6 +1541,11 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                       )}
                     </button>
                   </div>
+                  {(() => { const sc = passScore(form.password); const lab = ['—', isAr ? 'ضعيفة' : 'Weak', isAr ? 'مقبولة' : 'Fair', isAr ? 'جيدة' : 'Good', isAr ? 'قوية' : 'Strong'][sc]; const col = ['var(--border-2)', '#dc2626', '#d97706', '#2563eb', '#16a34a'][sc]; return (
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <div className="flex gap-1 flex-1">{[1, 2, 3, 4].map(i => <i key={i} style={{ flex: 1, height: 4, borderRadius: 99, background: i <= sc ? col : 'var(--border-2)' }} />)}</div>
+                      <span className="text-[11px] font-bold" style={{ color: col }}>{lab}</span>
+                    </div>) })()}
                   <div className="flex items-center justify-end mt-0.5">
                     <button type="button" onClick={() => set('password', generatePassword())}
                       className="text-xs text-nwbus-primary underline shrink-0">
@@ -1492,9 +1560,15 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             {user && isGeneralAdmin && (
               <>
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-0.5">{isAr ? 'اسم المستخدم' : 'Username'}</p>
-                    <p className="font-mono text-sm text-nwbus-primary font-bold">{user.username}</p>
+                  <div className="flex-1 min-w-0 me-3">
+                    <label className="text-xs text-gray-500 mb-0.5 block">{isAr ? 'اسم المستخدم (قابل للتعديل)' : 'Username (editable)'}</label>
+                    <div className="flex items-stretch gap-0" dir="ltr">
+                      <input autoComplete="off" className={inputCls + ' font-mono font-bold flex-1 min-w-0'} style={{ borderStartEndRadius: 0, borderEndEndRadius: 0 }} value={form.username}
+                        onChange={e => { usernameEditedRef.current = true; set('username', e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '')) }} />
+                      <span className="px-3 flex items-center text-xs font-mono text-gray-500 border border-s-0 rounded-e-lg bg-gray-100 shrink-0">@nwbus.sa</span>
+                    </div>
+                    <UsernameStatus check={usernameCheck} isAr={isAr} />
+                    {usernameCheck?.status === 'free' && <p className="text-[11px] text-amber-600 mt-1">{isAr ? 'سيستخدم الموظف الاسم الجديد لتسجيل الدخول بعد الحفظ.' : 'The employee will sign in with the new username after saving.'}</p>}
                   </div>
                   {user.password_changed ? (
                     <span className="text-[11px] text-green-600 font-medium shrink-0">
@@ -1557,7 +1631,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             )}
           </Section>
 
-          <Section title={isAr ? 'الصلاحية والدور' : 'Role & Permissions'}>
+          <Section num={3} title={isAr ? 'الصلاحية والدور' : 'Role & Permissions'}>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الصلاحية *' : 'Role *'}</label>
@@ -1651,7 +1725,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             )}
           </Section>
 
-          <Section title={isAr ? 'المحطة والإشراف' : 'Station & Supervision'}>
+          <Section num={4} title={isAr ? 'المحطة والإشراف' : 'Station & Supervision'}>
             {/* Station — single (لغير المشرف) */}
             {!(isGeneralAdmin && isMultiStationRole) && (
               <div>
@@ -1825,7 +1899,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
           </div>
           </div>
 
-          <Section title={isAr ? 'الأقسام المتاحة' : 'Allowed Sections'}>
+          <Section num={5} title={isAr ? 'الأقسام المتاحة' : 'Allowed Sections'}>
             <div className="flex items-center justify-between -mt-1">
               <span className="text-xs text-gray-400">
                 {form.allowed_modules === null
@@ -1888,7 +1962,21 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
           )}
         </form>
 
-        <div className="flex gap-3 px-7 py-4 border-t bg-white sticky bottom-0">
+        <div className="flex gap-3 items-center px-7 py-4 border-t bg-white sticky bottom-0">
+          {(() => {
+            const nameOk = !!form.full_name_ar.trim()
+            const unOk = USERNAME_RE.test(String(form.username || '').toLowerCase()) && usernameCheck?.status !== 'taken' && usernameCheck?.status !== 'invalid'
+            const req = user ? [nameOk, unOk] : [nameOk, !!form.job_number.trim(), unOk, form.password.length >= 6, form.is_agent || !!form.national_id.trim()]
+            const done = req.filter(Boolean).length, pctc = Math.round((done / req.length) * 100)
+            return (
+              <div className="hidden sm:flex flex-col gap-1 w-40 shrink-0" aria-label={isAr ? 'اكتمال الحقول المطلوبة' : 'Required fields progress'}>
+                <div className="flex justify-between text-[11px] font-bold" style={{ color: done === req.length ? 'var(--success)' : 'var(--text-3)' }}>
+                  <span>{isAr ? 'الحقول المطلوبة' : 'Required'}</span><span className="font-mono" dir="ltr">{done}/{req.length}</span>
+                </div>
+                <div style={{ height: 5, borderRadius: 99, background: 'var(--border-2)', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${pctc}%`, background: done === req.length ? 'var(--success)' : 'var(--accent)', borderRadius: 99, transition: 'width .3s' }} /></div>
+              </div>
+            )
+          })()}
           <button type="submit" form="user-form" disabled={saving}
             className="flex-1 bg-nwbus-primary text-white py-3 rounded-lg text-sm font-bold disabled:opacity-50 hover:bg-nwbus-dark transition-colors shadow-sm">
             {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}

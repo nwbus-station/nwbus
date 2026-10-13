@@ -10,15 +10,33 @@ let lastActivity = Date.now()
 // تحديث تلقائي بدون ما يضطر الموظف يضغط شي: لو رجع للتطبيق بعد ما كان بالخلفية، أو ما لمس الشاشة
 // دقيقتين — نطبّق النسخة الجديدة. (لو كان يكتب ويشتغل، يبقى الإشعار بالأعلى لين يضغط أو يهدأ)
 const IDLE_APPLY_MS = 2 * 60 * 1000
+// مشغول = نافذة/نموذج مفتوح أو حقل فيه كتابة — لا نعيد التحميل تلقائياً وقتها حتى لا يضيع إدخال الموظف (يبقى الإشعار ظاهراً)
+function isBusy() {
+  try {
+    const a = document.activeElement
+    if (a && ['INPUT', 'TEXTAREA'].includes(a.tagName) && String(a.value || '').trim() !== '') return true
+    return !!document.querySelector('[role="dialog"], .fixed.inset-0')
+  } catch { return false }
+}
 function autoApplyWatch() {
   ;['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
     window.addEventListener(ev, () => { lastActivity = Date.now() }, { passive: true }))
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && pending) applyPwaUpdate()
+    if (document.visibilityState === 'visible' && pending && !isBusy()) applyPwaUpdate()
   })
   setInterval(() => {
-    if (pending && document.visibilityState === 'visible' && Date.now() - lastActivity > IDLE_APPLY_MS) applyPwaUpdate()
+    if (pending && document.visibilityState === 'visible' && Date.now() - lastActivity > IDLE_APPLY_MS && !isBusy()) applyPwaUpdate()
   }, 30 * 1000)
+}
+
+// بعد إعادة التحميل بسبب تحديث: يظهر إشعار "تم التحديث إلى النسخة …" مرة واحدة
+export function consumeUpdatedFlag() {
+  try {
+    const from = localStorage.getItem('nw_updated_from')
+    if (!from) return null
+    localStorage.removeItem('nw_updated_from')
+    return typeof __APP_VERSION__ !== 'undefined' && from !== __APP_VERSION__ ? __APP_VERSION__ : null
+  } catch { return null }
 }
 
 export function initPwaUpdate() {
@@ -60,6 +78,7 @@ export function applyPwaUpdate() {
     if (Date.now() - last < 60 * 1000) return
     sessionStorage.setItem('nw_auto_reload', String(Date.now()))
   } catch { /* بدون sessionStorage */ }
+  try { localStorage.setItem('nw_updated_from', typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '') } catch { /* بدون تخزين */ }
   try { updateSWFn?.(true) } catch { /* بدون SW */ }
   // التحديث الفعلي = إعادة تحميل الصفحة (تطبيق الشاشة الرئيسية لا يعيد التحميل لوحده)
   setTimeout(() => window.location.reload(), 250)
@@ -67,6 +86,7 @@ export function applyPwaUpdate() {
 
 // تحديث يدوي فوري (زر التحديث / السحب للأسفل)
 export function hardRefresh() {
+  try { localStorage.setItem('nw_updated_from', typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '') } catch { /* بدون تخزين */ }
   try { updateSWFn?.(true) } catch { /* بدون SW */ }
   window.location.reload()
 }

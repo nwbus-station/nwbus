@@ -7,7 +7,7 @@ import { getThemeMode, setThemeMode, resolveDark } from '../../lib/theme'
 import { createClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
-import { onPwaUpdateAvailable, applyPwaUpdate, hardRefresh } from '../../lib/pwaUpdate'
+import { onPwaUpdateAvailable, applyPwaUpdate, hardRefresh, consumeUpdatedFlag } from '../../lib/pwaUpdate'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -547,6 +547,9 @@ export default function AppLayout() {
   // تنبيه "فيه تحديث جديد" — يظهر لأي موظف مفتوح عنده التطبيق لما ينزل نشر جديد، بدل ما
   // يحتاج يسوي تحديث كامل يدوي أو ننتظره يسأل الأدمن
   const [showUpdateNudge, setShowUpdateNudge] = useState(false)
+  // إشعار قصير بعد التحديث: "تم تحديث التطبيق إلى آخر نسخة" ليعرف الموظف أن الصفحة تحدّثت
+  const [updatedTo, setUpdatedTo] = useState(null)
+  useEffect(() => { const v = consumeUpdatedFlag(); if (v) { setUpdatedTo(v); const t = setTimeout(() => setUpdatedTo(null), 5000); return () => clearTimeout(t) } }, [])
   useEffect(() => onPwaUpdateAvailable(() => setShowUpdateNudge(true)), [])
 
   // السحب للأسفل للتحديث (تطبيق الشاشة الرئيسية فقط — لا يوجد زر تحديث بالمتصفح هناك)
@@ -817,6 +820,14 @@ export default function AppLayout() {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--card)', border: '1px solid var(--border-2)', color: pull > 100 ? 'var(--accent)' : 'var(--text-2)', borderRadius: 99, padding: '7px 16px', fontSize: '0.78rem', fontWeight: 800, boxShadow: 'var(--shadow-lg)' }}>
             <span style={{ display: 'inline-flex', transform: `rotate(${pull * 2.4}deg)` }}><Icon d={ICONS.refresh} size={15} /></span>
             {pull > 100 ? (isAr ? 'أفلت للتحديث' : 'Release to refresh') : (isAr ? 'اسحب للتحديث' : 'Pull to refresh')}
+          </span>
+        </div>
+      )}
+      {updatedTo && (
+        <div role="status" style={{ position: 'fixed', insetInline: 0, bottom: 'calc(env(safe-area-inset-bottom) + 76px)', display: 'flex', justifyContent: 'center', zIndex: 900, pointerEvents: 'none' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--card)', color: 'var(--text-1)', border: '1px solid var(--border-2)', borderRadius: 99, padding: '9px 18px', fontSize: '0.8rem', fontWeight: 800, boxShadow: 'var(--shadow-xl)' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+            {isAr ? 'تم تحديث التطبيق لآخر نسخة' : 'App updated to the latest version'} <span style={{ fontFamily: 'ui-monospace, monospace', color: 'var(--text-3)', fontWeight: 600 }}>v{updatedTo}</span>
           </span>
         </div>
       )}
