@@ -708,6 +708,9 @@ export default function TransportationPage() {
   const [filter, setFilter]   = useState('departure') // 'departure' | 'arrival' | 'all'
   const [viewMode, setViewMode] = useState('station') // 'station' | 'schedule'
   const [scheduleData, setScheduleData] = useState([])
+  const [schedStatus, setSchedStatus] = useState('all')   // all | departed | scheduled | late
+  const [schedShift, setSchedShift] = useState('all')    // all | A | B | C
+  const [schedQ, setSchedQ] = useState('')
   const [scheduleLoading, setScheduleLoading] = useState(false)
 
   const [stations, setStations]           = useState([])
@@ -974,8 +977,19 @@ export default function TransportationPage() {
   const fetchSchedule = useCallback(async () => {
     setScheduleLoading(true)
 
-    const [{ data: allTrips }, { data: allRecords }] = await Promise.all([
-      supabase.from('station_trips')
+    // الخادم يقصّ كل استجابة عند 1000 صف وهذا الجدول يضم رحلات كل المحطات — نقرأ على دفعات حتى نكمل
+    const pageAll = async make => {
+      const out = []
+      for (let f = 0; f < 20000; f += 1000) {
+        const { data, error } = await make().range(f, f + 999)
+        if (error) break
+        out.push(...(data ?? []))
+        if ((data ?? []).length < 1000) break
+      }
+      return out
+    }
+    const [allTrips, { data: allRecords }] = await Promise.all([
+      pageAll(() => supabase.from('station_trips')
         .select(`
           station_id,
           departure_time,
@@ -987,10 +1001,11 @@ export default function TransportationPage() {
             to_station:to_station_id(id, name_ar, name_en)
           )
         `)
-        .eq('dep_enabled', true),
+        .eq('dep_enabled', true)
+        .order('trip_schedule_id').order('station_id')),
 
       supabase.from('trip_records')
-        .select('trip_schedule_id, actual_departure, is_cancelled, station_id, bus_number, passenger_count')
+        .select('trip_schedule_id, actual_departure, is_cancelled, station_id, bus_number, passenger_count, missed_count')
         .eq('record_date', date)
         .eq('is_arrival', false),
     ])
@@ -1025,6 +1040,7 @@ export default function TransportationPage() {
         actual_departure: rec?.actual_departure ? new Date(rec.actual_departure).toISOString().slice(11, 16) : null,
         bus_number: rec?.bus_number,
         passenger_count: rec?.passenger_count,
+        missed: rec?.missed_count,
       })
     })
     entries.sort((a, b) => (a.schedTime || '').localeCompare(b.schedTime || ''))
@@ -1322,6 +1338,241 @@ export default function TransportationPage() {
   }
 
 
+  // ── الجدول الشامل: لوحة تحكم + تصفية + ورديات + مؤشر الآن (كمبيوتر) وبطاقات (جوال) ───────────
+  const renderSchedule = () => {
+    const isToday = date === todayStr()
+    const nowD = new Date(), nowMin = nowD.getHours() * 60 + nowD.getMinutes()
+    const toMin = t => (t ? Number(String(t).slice(0, 2)) * 60 + Number(String(t).slice(3, 5)) : null)
+    const en = st => st?.name_en || st?.name_ar || '—'
+    const rows = scheduleData.map(t => {
+      const sm = toMin(t.schedTime), am = toMin(t.actual_departure)
+      let dly = null
+      if (sm != null && am != null) { dly = am - sm; if (dly < -720) dly += 1440; else if (dly > 720) dly -= 1440 }
+      const departed = t.status === 'departed'
+      const overdue = isToday && !departed && sm != null && sm < nowMin - 5
+      return { ...t, sm: sm ?? 0, dly, departed, overdue, late: departed && dly != null && dly > 5 }
+    })
+    const total = rows.length
+    const departedN = rows.filter(r => r.departed).length
+    const lateN = rows.filter(r => r.late).length
+    const overdueN = rows.filter(r => r.overdue).length
+    const paxSum = rows.reduce((a, r) => a + (Number(r.passenger_count) || 0), 0)
+    const missSum = rows.reduce((a, r) => a + (Number(r.missed) || 0), 0)
+    const meas = rows.filter(r => r.dly != null)
+    const punct = meas.length ? Math.round((meas.filter(r => r.dly <= 5).length / meas.length) * 100) : null
+    const pct = total ? Math.round((departedN / total) * 100) : 0
+    const SH = [['A', 'الوردية أ', 'Shift A', 0, 480, '00:00 – 08:00'], ['B', 'الوردية ب', 'Shift B', 480, 960, '08:00 – 16:00'], ['C', 'الوردية ج', 'Shift C', 960, 1440, '16:00 – 24:00']]
+    const shiftOf = r => (r.sm < 480 ? 'A' : r.sm < 960 ? 'B' : 'C')
+    const q = schedQ.trim().toLowerCase()
+    const list = rows.filter(r => {
+      if (schedStatus === 'departed' && !r.departed) return false
+      if (schedStatus === 'scheduled' && r.departed) return false
+      if (schedStatus === 'late' && !(r.late || r.overdue)) return false
+      if (schedShift !== 'all' && shiftOf(r) !== schedShift) return false
+      if (q && !`${r.trip_number} ${r.trip_name || ''} ${r.from_station?.name_ar || ''} ${r.from_station?.name_en || ''} ${r.to_station?.name_ar || ''} ${r.to_station?.name_en || ''} ${r.bus_number || ''}`.toLowerCase().includes(q)) return false
+      return true
+    }).sort((a, b) => a.sm - b.sm)
+    const hours = Array.from({ length: 24 }, (_, h) => ({ dep: rows.filter(r => r.departed && Math.floor(r.sm / 60) === h).length, sch: rows.filter(r => !r.departed && Math.floor(r.sm / 60) === h).length }))
+    const hMax = Math.max(...hours.map(h => h.dep + h.sch), 1)
+    const next = isToday ? rows.filter(r => !r.departed && r.sm >= nowMin - 5).sort((a, b) => a.sm - b.sm)[0] : null
+    const nextIn = next ? next.sm - nowMin : null
+    const chipS = (bg, c) => ({ background: bg, color: c, borderRadius: 99, padding: '2px 10px', fontSize: '0.66rem', fontWeight: 800, whiteSpace: 'nowrap' })
+    const pill = on => ({ padding: '6px 14px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--accent)' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' })
+    const statusChip = r => r.departed
+      ? <span style={chipS(r.late ? 'var(--danger-bg)' : 'var(--success-bg)', r.late ? 'var(--danger)' : 'var(--success)')}>{isAr ? 'غادرت' : 'Departed'}{r.dly != null ? ` · ${r.dly > 0 ? '+' : ''}${r.dly}${isAr ? 'د' : 'm'}` : ''}</span>
+      : r.overdue
+        ? <span style={{ ...chipS('var(--warning-bg)', 'var(--warning)'), display: 'inline-flex', alignItems: 'center', gap: 5 }}><i className="tp-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warning)' }} />{isAr ? 'بانتظار التسجيل' : 'Awaiting entry'}</span>
+        : <span style={chipS('var(--surface-2)', 'var(--text-3)')}>{isAr ? 'مجدولة' : 'Scheduled'}</span>
+    const track = (from, to) => (
+      <div dir="ltr" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(36px, 70px) minmax(0,1fr)', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)', textAlign: 'end' }}>{en(from)}</span>
+        <span aria-hidden="true" style={{ display: 'flex', alignItems: 'center', color: 'var(--text-3)' }}>
+          <i style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--text-3)' }} />
+          <i style={{ flex: 1, height: 0, borderTop: '2px dashed var(--border-2)', margin: '0 3px' }} />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 6 15 12 9 18" /></svg>
+        </span>
+        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{en(to)}</span>
+      </div>
+    )
+    const exec = r => (
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 10px', fontSize: '0.76rem' }}>
+        {statusChip(r)}
+        {r.actual_departure && <span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }}>{r.actual_departure}</span>}
+        {r.bus_number && <span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)', background: 'var(--surface-2)', borderRadius: 6, padding: '1px 8px' }}>{r.bus_number}</span>}
+        {r.passenger_count > 0 && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{r.passenger_count} {isAr ? 'راكب' : 'pax'}</span>}
+        {r.missed > 0 && <span style={{ fontFamily: MONO, color: 'var(--danger)', fontWeight: 800 }}>−{r.missed}</span>}
+      </div>
+    )
+    const edgeOf = r => (r.late ? 'var(--danger)' : r.departed ? 'var(--success)' : r.overdue ? 'var(--warning)' : 'var(--border-2)')
+    const row = r => (
+      <div key={r.id} className="tp-row tp-row-sched" style={{ alignItems: 'center', padding: '12px 18px', background: 'var(--card)', border: '1px solid var(--border-2)', borderInlineStart: `5px solid ${edgeOf(r)}`, borderRadius: 14 }}>
+        <div className="tp-time" style={{ textAlign: 'center', fontFamily: MONO, fontWeight: 800, fontSize: '1.45rem', color: 'var(--text-1)', lineHeight: 1.1 }}>{r.schedTime}</div>
+        <div className="tp-trip" style={{ minWidth: 0 }}>
+          <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.02rem', color: 'var(--text-1)' }}>{r.trip_number}</span>
+          {r.trip_name && <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 2 }}>{r.trip_name}</div>}
+        </div>
+        <div className="tp-route">{track(r.from_station, r.to_station)}</div>
+        <div className="tp-exec">{exec(r)}</div>
+      </div>
+    )
+    const card = r => (
+      <div key={r.id} dir="ltr" style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${edgeOf(r)}`, borderRadius: 12, background: 'var(--card)', padding: '10px 12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <div>
+            <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{r.trip_number}</span>
+            {r.trip_name && <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{r.trip_name}</div>}
+            <div style={{ marginTop: 5 }}>{statusChip(r)}</div>
+          </div>
+          <div style={{ textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '6px 12px' }}>
+            <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-1)' }}>{r.schedTime}</div>
+            <div style={{ fontSize: '0.58rem', color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'المجدول' : 'Sched.'}</div>
+          </div>
+        </div>
+        <div style={{ margin: '9px 0' }}>{track(r.from_station, r.to_station)}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '8px 4px' }}>
+          {[[isAr ? 'الفعلي' : 'Actual', r.actual_departure || '—', r.departed ? 'var(--success)' : 'var(--text-3)'], [isAr ? 'الفرق' : 'Delta', r.dly != null ? `${r.dly > 0 ? '+' : ''}${r.dly}` : '—', r.late ? 'var(--danger)' : 'var(--text-1)'], [isAr ? 'الركاب' : 'Pax', r.passenger_count ?? '—', 'var(--text-1)'], [isAr ? 'الحافلة' : 'Bus', r.bus_number || '—', 'var(--text-1)']].map(([l, v, c]) => (
+            <div key={l}><div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.86rem', color: c }}>{v}</div><div style={{ fontSize: '0.6rem', color: 'var(--text-3)', fontWeight: 700, marginTop: 2 }}>{l}</div></div>
+          ))}
+        </div>
+      </div>
+    )
+    let nowPlaced = false
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* لوحة التحكم */}
+        <div className="tp-hero" style={{ background: 'linear-gradient(135deg, var(--solid-1), var(--solid-2))', color: '#fff', borderRadius: 18, padding: '18px 22px', boxShadow: 'var(--shadow-lg)' }}>
+          <div className="tp-ring" style={{ position: 'relative' }}>
+            <svg width="100%" height="100%" viewBox="0 0 112 112" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
+              <circle cx="56" cy="56" r="48" fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="10" />
+              <circle cx="56" cy="56" r="48" fill="none" stroke={pct === 100 ? '#34D399' : '#F5A623'} strokeWidth="10" strokeLinecap="round" strokeDasharray={`${(pct / 100) * 301.6} 301.6`} />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} dir="ltr">
+              <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.6rem', lineHeight: 1 }}>{pct}%</span>
+              <span style={{ fontSize: '0.6rem', opacity: 0.75, fontWeight: 700, marginTop: 3 }}>{isAr ? 'غادرت' : 'departed'}</span>
+            </div>
+          </div>
+          <div className="tp-head">
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 10px', flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{isAr ? 'الجدول الشامل — كل المحطات' : 'Global schedule — all stations'}</span>
+              <span style={{ fontSize: '0.72rem', opacity: 0.75 }} dir="ltr">{date}</span>
+            </div>
+          </div>
+          <div className="tp-kpis">
+            {[
+              [isAr ? 'إجمالي الرحلات' : 'Trips', total, '#fff'],
+              [isAr ? 'غادرت' : 'Departed', departedN, '#34D399'],
+              [isAr ? 'مجدولة' : 'Scheduled', total - departedN, '#fff'],
+              [isAr ? 'متأخرة / بانتظار' : 'Late / awaiting', `${lateN} / ${overdueN}`, lateN + overdueN > 0 ? '#F87171' : '#fff'],
+              [isAr ? 'التزام بالموعد' : 'On-time', punct != null ? `${punct}%` : '—', punct != null && punct >= 85 ? '#34D399' : punct != null && punct < 70 ? '#F87171' : '#fff'],
+              [isAr ? 'ركاب / متخلفون' : 'Pax / missed', `${paxSum} / ${missSum}`, '#fff'],
+            ].map(([l, v, c]) => (
+              <div key={l} style={{ background: 'rgba(255,255,255,0.10)', borderRadius: 12, padding: '8px 10px', textAlign: 'center' }}>
+                <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.15rem', lineHeight: 1.2, color: c }} dir="ltr">{v}</div>
+                <div style={{ fontSize: '0.62rem', opacity: 0.75, fontWeight: 700, marginTop: 2 }}>{l}</div>
+              </div>
+            ))}
+          </div>
+          {/* خط الوقت: توزيع الرحلات على ساعات اليوم */}
+          <div className="tp-shifts" dir="ltr">
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 58 }}>
+              {hours.map((h, i) => (
+                <div key={i} title={`${String(i).padStart(2, '0')}:00 — ${h.dep} / ${h.dep + h.sch}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', height: '100%' }}>
+                  <div style={{ width: '100%', height: `${((h.dep + h.sch) / hMax) * 40}px`, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', borderRadius: '3px 3px 0 0', overflow: 'hidden', outline: isToday && Math.floor(nowMin / 60) === i ? '2px solid #F87171' : 'none' }}>
+                    <i style={{ display: 'block', height: `${h.sch ? (h.sch / (h.dep + h.sch)) * 100 : 0}%`, background: 'rgba(255,255,255,0.28)' }} />
+                    <i style={{ display: 'block', height: `${h.dep ? (h.dep / (h.dep + h.sch)) * 100 : 0}%`, background: '#34D399' }} />
+                  </div>
+                  <span style={{ fontFamily: MONO, fontSize: '0.54rem', opacity: 0.7, height: 12 }}>{i % 3 === 0 ? i : ''}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 14, fontSize: '0.64rem', opacity: 0.85, fontWeight: 700, marginTop: 2 }}>
+              <span><i style={{ display: 'inline-block', width: 8, height: 8, background: '#34D399', borderRadius: 2, marginInlineEnd: 5 }} />{isAr ? 'غادرت' : 'Departed'}</span>
+              <span><i style={{ display: 'inline-block', width: 8, height: 8, background: 'rgba(255,255,255,0.28)', borderRadius: 2, marginInlineEnd: 5 }} />{isAr ? 'مجدولة' : 'Scheduled'}</span>
+              {isToday && <span><i style={{ display: 'inline-block', width: 8, height: 8, border: '2px solid #F87171', borderRadius: 2, marginInlineEnd: 5 }} />{isAr ? 'الساعة الحالية' : 'Current hour'}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* التصفية والبحث */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
+            {[['all', isAr ? 'الكل' : 'All'], ['departed', isAr ? 'غادرت' : 'Departed'], ['scheduled', isAr ? 'مجدولة' : 'Scheduled'], ['late', isAr ? 'متأخرة / بانتظار' : 'Late / awaiting']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedStatus === k), flexShrink: 0 }} onClick={() => setSchedStatus(k)}>{l}</button>)}
+            <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
+            {[['all', isAr ? 'كل الورديات' : 'All shifts'], ...SH.map(x => [x[0], isAr ? x[1] : x[2]])].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedShift === k), flexShrink: 0 }} onClick={() => setSchedShift(k)}>{l}</button>)}
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <input value={schedQ} onChange={e => setSchedQ(e.target.value)} placeholder={isAr ? 'بحث: رقم الرحلة / المحطة / الحافلة' : 'Search trip / station / bus'} aria-label={isAr ? 'بحث بالجدول' : 'Search schedule'}
+              style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-2)', borderRadius: 10, padding: '9px 12px', fontSize: '0.82rem', fontFamily: 'inherit', background: 'var(--card)' }} />
+            <span style={{ fontFamily: MONO, fontSize: '0.76rem', color: 'var(--text-3)', flexShrink: 0 }} dir="ltr">{list.length} / {total}</span>
+          </div>
+        </div>
+
+        {next && schedStatus === 'all' && schedShift === 'all' && !q && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--info-bg)', border: '1px solid var(--border-2)', borderRadius: 14, padding: '10px 16px', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.72rem', fontWeight: 800, color: 'var(--info)' }}><i className="tp-pulse" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)' }} />{isAr ? 'الرحلة القادمة' : 'Next up'}</span>
+            <span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }}>{next.trip_number}</span>
+            <span dir="ltr" style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-2)' }}>{en(next.from_station)} → {en(next.to_station)}</span>
+            <span style={{ marginInlineStart: 'auto', fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }} dir="ltr">{next.schedTime}</span>
+            <span style={chipS('var(--card)', 'var(--text-1)')}>{nextIn <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${nextIn >= 60 ? `${Math.floor(nextIn / 60)}س ${nextIn % 60}د` : `${nextIn} د`}` : `in ${nextIn} min`)}</span>
+          </div>
+        )}
+
+        {list.length === 0 ? (
+          <p className="text-center py-16 text-gray-400 text-sm">{isAr ? 'لا نتائج مطابقة' : 'No matching trips'}</p>
+        ) : (
+          <>
+            <div className="md:hidden"><div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{list.map(card)}</div></div>
+            <div className="hidden md:block">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {SH.map(([k, ar, enL, from, to, range]) => {
+                  const grp = list.filter(r => r.sm >= from && r.sm < to)
+                  if (!grp.length) return null
+                  const all = rows.filter(r => r.sm >= from && r.sm < to)
+                  const done = all.filter(r => r.departed).length
+                  const sp = all.length ? Math.round((done / all.length) * 100) : 0
+                  const nowHere = isToday && nowMin >= from && nowMin < to
+                  return (
+                    <section key={k}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+                        <span style={{ width: 4, height: 18, background: 'var(--accent)', borderRadius: 2 }} />
+                        <span style={{ fontWeight: 900, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? ar : enL}</span>
+                        <span dir="ltr" style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--text-3)' }}>{range}</span>
+                        {nowHere && <span style={chipS('var(--success-bg)', 'var(--success)')}>{isAr ? 'الحالية' : 'Current'}</span>}
+                        <span style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontFamily: MONO, fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)' }} dir="ltr">{done}/{all.length}</span>
+                          <span style={{ width: 120, height: 6, borderRadius: 99, background: 'var(--border-2)', overflow: 'hidden' }}><i style={{ display: 'block', width: `${sp}%`, height: '100%', background: sp === 100 ? 'var(--success)' : 'var(--accent)', borderRadius: 99 }} /></span>
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {grp.map(r => {
+                          if (nowHere && !nowPlaced && r.sm >= nowMin) {
+                            nowPlaced = true
+                            return (
+                              <div key={`now-${r.id}`} style={{ display: 'contents' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--danger)', fontFamily: MONO, fontSize: '0.7rem', fontWeight: 800 }}>
+                                  <i style={{ flex: 1, height: 0, borderTop: '2px solid var(--danger)', opacity: 0.6 }} />
+                                  <span dir="ltr" style={{ background: 'var(--danger-bg)', borderRadius: 99, padding: '1px 12px' }}>{isAr ? 'الآن' : 'NOW'} {String(nowD.getHours()).padStart(2, '0')}:{String(nowD.getMinutes()).padStart(2, '0')}</span>
+                                  <i style={{ flex: 1, height: 0, borderTop: '2px solid var(--danger)', opacity: 0.6 }} />
+                                </div>
+                                {row(r)}
+                              </div>
+                            )
+                          }
+                          return row(r)
+                        })}
+                      </div>
+                    </section>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+
   // Stats
   const total        = trips.length
   const departureCnt = trips.filter(t => t.role === 'departure' || t.role === 'both').length
@@ -1594,6 +1845,7 @@ export default function TransportationPage() {
 
 
       {/* لوحة الترحيل: حلقة الإنجاز + مؤشرات اليوم + تقدّم الورديات */}
+      {viewMode === 'station' && (
       <div className="tp-hero" style={{ background: 'linear-gradient(135deg, var(--solid-1), var(--solid-2))', color: '#fff', borderRadius: 18, padding: '18px 22px', marginBottom: 16, boxShadow: 'var(--shadow-lg)' }}>
         <div className="tp-ring" style={{ position: 'relative' }}>
           <svg width="100%" height="100%" viewBox="0 0 112 112" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
@@ -1643,6 +1895,7 @@ export default function TransportationPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* تبديل العرض: المحطة / الجدول الشامل */}
       <div className="flex border border-gray-300 rounded-md overflow-hidden shrink-0 mb-3 w-fit">
@@ -1717,99 +1970,9 @@ export default function TransportationPage() {
 
       {/* الجدول الشامل */}
       {viewMode === 'schedule' && (
-        <div>
-          {scheduleLoading ? (
-            <p className="text-center py-20 text-gray-400 text-sm">جارٍ تحميل الجدول…</p>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
-              {/* إحصائيات سريعة */}
-              <div className="flex border-b border-gray-100 text-center">
-                {[
-                  { label: 'إجمالي الرحلات', val: scheduleData.length },
-                  { label: 'غادرت', val: scheduleData.filter(t => t.status === 'departed').length, tone: 'text-green-600' },
-                  { label: 'مجدول', val: scheduleData.filter(t => t.status === 'scheduled').length, tone: 'text-gray-500' },
-                ].map((s, i) => (
-                  <div key={s.label} className={`flex-1 px-4 py-2.5 text-center ${i > 0 ? 'border-s border-gray-100' : ''}`}>
-                    <div className={`text-base font-bold font-mono ${s.tone || 'text-gray-800'}`}>{s.val}</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">{s.label}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="md:hidden"><div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10 }}>
-                {scheduleData.map(trip => {
-                  const dep = trip.status === 'departed'
-                  return (
-                    <div key={trip.id} dir="ltr" style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${dep ? 'var(--success)' : 'var(--border-2)'}`, borderRadius: 12, background: 'var(--card)', padding: '10px 12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                        <div>
-                          <span style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{trip.trip_number}</span>
-                          {trip.trip_name && <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{trip.trip_name}</div>}
-                        </div>
-                        <span style={{ background: dep ? 'var(--success-bg)' : 'var(--surface-2)', color: dep ? 'var(--success)' : 'var(--text-3)', borderRadius: 99, padding: '2px 11px', fontSize: '0.7rem', fontWeight: 800 }}>{dep ? 'غادرت' : 'مجدول'}</span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, margin: '9px 0' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45 }}>{trip.from_station?.name_en || trip.from_station?.name_ar}</span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45, textAlign: 'end' }}>{trip.to_station?.name_en || trip.to_station?.name_ar}</span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '8px 4px' }}>
-                        {[['المجدول', trip.schedTime || '—', 'var(--text-2)'], ['الفعلي', trip.actual_departure || '—', dep ? 'var(--success)' : 'var(--text-3)'], ['الركاب', trip.passenger_count ?? '—', 'var(--text-1)'], ['الحافلة', trip.bus_number || '—', 'var(--text-1)']].map(([l, v, c]) => (
-                          <div key={l}>
-                            <div style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontWeight: 800, fontSize: '0.86rem', color: c }}>{v}</div>
-                            <div style={{ fontSize: '0.6rem', color: 'var(--text-3)', fontWeight: 700, marginTop: 2 }}>{l}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div></div>
-              <table className="w-full text-sm hidden md:table">
-                <thead>
-                  <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-wider border-b border-gray-200">
-                    <th className="px-3 py-2 text-center w-16 font-semibold">الوقت</th>
-                    <th className="px-3 py-2 text-start font-semibold">الرحلة</th>
-                    <th className="px-3 py-2 text-start font-semibold">من</th>
-                    <th className="px-3 py-2 text-start font-semibold">إلى</th>
-                    <th className="px-3 py-2 text-center font-semibold">الحالة</th>
-                    <th className="px-3 py-2 text-center font-semibold">الفعلي</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scheduleData.map(trip => (
-                    <tr key={trip.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50"
-                      style={{ borderInlineStart: trip.status === 'departed' ? '3px solid #22c55e' : '3px solid #e5e7eb' }}>
-                      <td className="px-3 py-2.5 text-center">
-                        <span className="font-mono font-bold text-gray-800">{trip.schedTime}</span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className="font-mono font-bold text-gray-800">{trip.trip_number}</span>
-                        {trip.trip_name && <div className="text-[10px] text-gray-400">{trip.trip_name}</div>}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs text-gray-600">{trip.from_station?.name_ar}</td>
-                      <td className="px-3 py-2.5 text-xs text-gray-600">{trip.to_station?.name_ar}</td>
-                      <td className="px-3 py-2.5 text-center">
-                        {trip.status === 'departed' && (
-                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">غادرت</span>
-                        )}
-                        {trip.status === 'scheduled' && (
-                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-gray-50 text-gray-400 border border-gray-200">مجدول</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-center">
-                        {trip.actual_departure ? (
-                          <span className="font-mono text-xs font-bold text-green-600">{trip.actual_departure}</span>
-                        ) : (
-                          <span className="text-gray-300 text-xs">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        scheduleLoading
+          ? <p className="text-center py-20 text-gray-400 text-sm">{isAr ? 'جارٍ تحميل الجدول…' : 'Loading schedule…'}</p>
+          : renderSchedule()
       )}
 
       {modal && (

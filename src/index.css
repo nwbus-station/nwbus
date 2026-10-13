@@ -914,3 +914,8 @@ html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled
   .tp-ring { width: 88px; height: 88px; }
   .tp-kpis { grid-template-columns: repeat(3, 1fr); }
 }
+
+.tp-row.tp-row-sched { grid-template-columns: 104px minmax(150px, 0.9fr) minmax(280px, 1.8fr) minmax(220px, 1.2fr); }
+@media (max-width: 1180px) {
+  .tp-row.tp-row-sched { grid-template-columns: 96px 1fr; grid-template-areas: "time trip" "route route" "exec exec"; }
+}
