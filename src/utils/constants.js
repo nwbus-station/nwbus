@@ -125,6 +125,11 @@ export const TITLE_CAPABILITIES = [
   { group: 'الصفحات والنطاق', key: 'lostfound_manage', kind: 'allow', adminOnly: true, ar: 'حذف وإهداء الموجودات', en: 'Delete / donate lost & found items' },
 ]
 
+// بنود "منح" تضيّق النطاق بدل ما توسّعه (قصر على محطات مخصصة، تقييم فئة معينة…): تبقى مقفلة في المسمى الجديد المفتوح كالأدمن
+export const NARROWING_CAPS = ['restricted_mode', 'scope_assigned_stations', 'evaluation_dispatchers_only', 'stations_manage_assigned', 'leaves_supervisor_stage', 'evaluation_my_employees']
+// صلاحيات مسمى جديد: مفتوح بالكامل كالأدمن، والمستخدم يضيف القيود بنفسه
+export const openTitlePermissions = () => Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, !NARROWING_CAPS.includes(c.key)]))
+
 // الأدوار الأساسية القابلة لتعديل صلاحياتها من نافذة المسميات (الأدمن العام خارج القائمة — كل شي مفتوح له)
 export const EDITABLE_ROLES = ['station_employee', 'accountant', 'station_admin', 'shift_supervisor', 'area_supervisor']
 // البنود اللي تنطبق على الأدوار الأساسية: قيود فقط (allow) وما هي للأدمن وحده

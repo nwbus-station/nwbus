@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
-import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS } from '../utils/constants'
+import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS, NARROWING_CAPS, openTitlePermissions } from '../utils/constants'
 import { toLatinDigits, escapeHtml, matchesSearch } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -392,6 +392,18 @@ const JOB_TITLES = [
   { value: 'dispatcher_supervisor', ar: 'مشرف مرحّلين', en: 'Dispatchers Supervisor' },
   { value: 'cleaner',            ar: 'عامل نظافة',   en: 'Cleaner' },
 ]
+// المسمى الوظيفي = القائمة الثابتة + أسماء الصلاحيات المخصصة (من القاعدة) اللي ما لها مسمى ثابت
+const withCustomJobTitles = (customTitles = []) => {
+  const seen = new Set(JOB_TITLES.map(j => j.value))
+  const extra = []
+  for (const t of customTitles) {
+    const v = t.job_title || t.name_ar
+    if (!v || seen.has(v)) continue
+    seen.add(v)
+    extra.push({ value: v, ar: v, en: t.name_en || v })
+  }
+  return [...JOB_TITLES, ...extra]
+}
 
 const ROLE_COLORS = {
   general_admin:    'bg-red-100 text-red-700 border-red-200',
@@ -541,7 +553,9 @@ function PermSwitch({ checked, onChange, disabled = false }) {
 function TitlesManager({ titles, onClose, onChanged, isAr }) {
   useEscapeKey(onClose)
   useBodyScrollLock()
-  const blank = { kind: 'title', role: null, id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: { restricted_mode: true }, allowed_modules: null, job_title: '', can_rate_customers: false, eval_source: '' }
+  // صلاحية جديدة تبدأ مفتوحة بالكامل كالأدمن — أنت اللي تحدد القيود، ما يُفرض عليك شي
+  const allMods = MODULES.map(m => m.value).filter(m => roleModuleAllowed(m, 'general_admin', null, true))
+  const blank = { kind: 'title', role: null, id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: openTitlePermissions(), allowed_modules: allMods, job_title: '', can_rate_customers: false, eval_source: '' }
   const [form, setForm] = useState(blank)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -549,6 +563,10 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   const [saved, setSaved] = useState(false)
   const groupRefs = useRef({})
   const [rolePerms, setRolePerms] = useState({})
+  const [holders, setHolders] = useState({})
+  const loadHolders = () => supabase.from('users').select('id, full_name_ar, custom_title_id').not('custom_title_id', 'is', null)
+    .then(({ data }) => { const m = {}; for (const u of data ?? []) (m[u.custom_title_id] ??= []).push(u.full_name_ar); setHolders(m) })
+  useEffect(() => { loadHolders() }, [])
   useEffect(() => { supabase.from('role_permissions').select('role, permissions').then(({ data }) => setRolePerms(Object.fromEntries((data ?? []).map(r => [r.role, r.permissions ?? {}])))) }, [])
   const isRole = form.kind === 'role'
   const capListForRole = roleCapabilities()
@@ -599,11 +617,30 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   const setMany = (caps, v) => {
     setSaved(false)
     setForm(f => {
-      let n = { ...f, permissions: { ...f.permissions, ...Object.fromEntries(caps.filter(c => c.key !== 'restricted_mode' && !c.module).map(c => [c.key, v])) } }
+      // "فتح" ما يفعّل بنود تضيّق النطاق (قصر على محطات مخصصة…) — هذي قيود، تحددها بنفسك
+      let n = { ...f, permissions: { ...f.permissions, ...Object.fromEntries(caps.filter(c => c.key !== 'restricted_mode' && !c.module).map(c => [c.key, v && f.kind === 'title' && NARROWING_CAPS.includes(c.key) ? false : v])) } }
       for (const c of caps.filter(c => c.module)) n = withModule(n, c.module, v)
       return n
     })
   }
+
+  // القيود = أي فرق عن وضع الأدمن المفتوح: بند "تقييد" معطّل، أو بند يضيّق النطاق مفعّل، أو قسم مستبعد
+  const openDef = openTitlePermissions()
+  const isNarrow = c => NARROWING_CAPS.includes(c.key)
+  const isRestriction = c => c.module ? !modOn(form, c.module) : (c.kind === 'allow' ? !permValue(c) : (isNarrow(c) ? permValue(c) : false))
+  const restrictions = isRole ? [] : TITLE_CAPABILITIES.filter(isRestriction)
+  const hiddenMods = isRole ? [] : titleMods.filter(m => !titleSel.includes(m.value))
+  const restrictionCount = restrictions.length + hiddenMods.length
+  const totalDims = TITLE_CAPABILITIES.length + titleMods.length
+  const openPct = Math.round(((totalDims - restrictionCount) / Math.max(1, totalDims)) * 100)
+  const titleStat = t => {
+    const p = t.permissions ?? {}
+    const n = TITLE_CAPABILITIES.filter(c => !c.module && (c.kind === 'allow' ? p[c.key] === false : (NARROWING_CAPS.includes(c.key) && !!p[c.key]))).length
+      + (Array.isArray(t.allowed_modules) ? MODULES.filter(m => roleModuleAllowed(m.value, t.base_role, null, true) && m.value !== 'magazine' && !t.allowed_modules.includes(m.value)).length : 0)
+    return { restr: n, holders: (holders[t.id] ?? []).length }
+  }
+  const openAllTitle = () => { setSaved(false); setForm(f => ({ ...f, permissions: { ...openTitlePermissions(), restricted_mode: false }, allowed_modules: allMods.filter(m => roleModuleAllowed(m, f.base_role, null, true)) })) }
+  const closeAllTitle = () => { setSaved(false); setForm(f => ({ ...f, permissions: Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, false])), allowed_modules: [] })) }
 
   const groups = [...new Set(capList.map(c => c.group))]
   // بطاقات العرض: للدور = بطاقة لكل قسم (مفتاح وصول + إجراءاته)، وللمسمى = بطاقة لكل مجموعة (الأقسام تُحدد عند إضافة الموظف)
@@ -616,7 +653,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   const onCount = capList.filter(permValue).length
 
   const pickRole = r => { setForm({ ...blank, kind: 'role', role: r, permissions: rolePerms[r] ?? {} }); setErr(''); setSaved(false); setQ('') }
-  const pick = t => { setForm(t ? { kind: 'title', role: null, id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null, job_title: t.job_title ?? '', can_rate_customers: !!t.can_rate_customers, eval_source: t.eval_source ?? '' } : blank); setErr(''); setSaved(false); setQ('') }
+  const pick = t => { setForm(t ? { kind: 'title', role: null, id: t.id, name_ar: t.name_ar, name_en: t.name_en ?? '', base_role: t.base_role, permissions: t.permissions ?? {}, allowed_modules: t.allowed_modules ?? null, job_title: JOB_TITLES.some(j => j.value === t.job_title) ? t.job_title : '', can_rate_customers: !!t.can_rate_customers, eval_source: t.eval_source ?? '' } : blank); setErr(''); setSaved(false); setQ('') }
 
   async function save() {
     if (isRole) {
@@ -631,10 +668,9 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
       return
     }
     if (!form.name_ar.trim()) { setErr(isAr ? 'اسم المسمى بالعربي مطلوب' : 'Arabic name is required'); return }
-    if (!form.job_title) { setErr(isAr ? 'المسمى الوظيفي مطلوب لكل صلاحية' : 'Job title is required for every permission'); return }
     setBusy(true); setErr('')
     const permissions = Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, permValue(c)]))
-    const row = { name_ar: form.name_ar.trim(), name_en: form.name_en.trim() || null, base_role: form.base_role, permissions, allowed_modules: form.allowed_modules, job_title: form.job_title || null, can_rate_customers: !!form.can_rate_customers, eval_source: form.eval_source || null }
+    const row = { name_ar: form.name_ar.trim(), name_en: form.name_en.trim() || null, base_role: form.base_role, permissions, allowed_modules: Array.isArray(form.allowed_modules) ? form.allowed_modules.filter(titleModAllowed) : null, job_title: form.job_title || form.name_ar.trim(), can_rate_customers: !!form.can_rate_customers, eval_source: form.eval_source || null }
     const { data, error } = form.id
       ? await supabase.from('custom_titles').update(row).eq('id', form.id).select().single()
       : await supabase.from('custom_titles').insert(row).select().single()
@@ -642,7 +678,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
     if (error) { setErr(error.message); return }
     if (data) setForm(f => ({ ...f, id: data.id }))
     setSaved(true)
-    onChanged()
+    onChanged(); loadHolders()
     // المسمى الوظيفي/تقييم العميل: نعرض تطبيقها على الموظفين الحاليين اللي عليهم هذي الصلاحية
     if (data && form.id && Array.isArray(row.allowed_modules)) {
       const { data: hs } = await supabase.from('users').select('id').eq('custom_title_id', data.id)
@@ -715,12 +751,18 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
               <p className="text-[11px] font-bold text-gray-500 px-1 pt-3">{isAr ? 'المسميات المخصصة' : 'Custom titles'}</p>
               {titles.length === 0 && <p className="text-xs text-gray-400 text-center py-6">{isAr ? 'ما فيه مسميات مضافة' : 'No titles yet'}</p>}
               {titles.map(t => {
-                const on = TITLE_CAPABILITIES.filter(c => c.kind === 'allow' ? (t.permissions ?? {})[c.key] !== false : !!(t.permissions ?? {})[c.key]).length
+                const st = titleStat(t)
+                const active = form.id === t.id
                 return (
                   <button key={t.id} onClick={() => pick(t)}
-                    className={`w-full text-start rounded-lg px-3 py-2.5 border transition-colors ${form.id === t.id ? 'border-nwbus-primary bg-white shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
-                    <p className="text-sm font-semibold text-gray-900 truncate">{t.name_ar}</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{roleLabel(t.base_role)} · {on}/{TITLE_CAPABILITIES.length}{!t.job_title && <span className="text-red-500 font-semibold"> · {isAr ? 'بدون مسمى وظيفي' : 'no job title'}</span>}</p>
+                    className={`w-full text-start rounded-lg px-3 py-2.5 border transition-colors ${active ? 'border-nwbus-primary bg-white shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{t.name_ar}</p>
+                      <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0 ${st.restr === 0 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {st.restr === 0 ? (isAr ? 'مفتوح' : 'Open') : (isAr ? `${st.restr} قيد` : `${st.restr} limits`)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{roleLabel(t.base_role)} · {isAr ? `${st.holders} موظف` : `${st.holders} staff`}</p>
                   </button>
                 )
               })}
@@ -738,7 +780,48 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                 </div>
               ) : (
               <div>
-                <h3 className="text-sm font-bold text-gray-900 mb-3">{form.id ? (isAr ? 'تعديل الصلاحية' : 'Edit permission') : (isAr ? 'صلاحية جديدة' : 'New permission')}</h3>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-nwbus-primary tracking-wide">{form.id ? (isAr ? 'تعديل صلاحية' : 'EDIT PERMISSION') : (isAr ? 'صلاحية جديدة' : 'NEW PERMISSION')}</p>
+                      <h3 className="text-lg font-extrabold text-gray-900 mt-0.5 truncate">{form.name_ar.trim() || (isAr ? 'بدون اسم بعد' : 'Unnamed yet')}</h3>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        {isAr ? 'يظهر في «المسمى الوظيفي» وبقائمة الحسابات باسم: ' : 'Shown as job title as: '}
+                        <span className="font-semibold text-gray-800">{(form.job_title ? (JOB_TITLES.find(j => j.value === form.job_title)?.[isAr ? 'ar' : 'en']) : form.name_ar.trim()) || '—'}</span>
+                      </p>
+                    </div>
+                    <span className={`text-xs font-bold rounded-full px-3 py-1 border ${restrictionCount === 0 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                      {restrictionCount === 0 ? (isAr ? 'مفتوح بالكامل مثل الأدمن' : 'Fully open, like admin') : (isAr ? `${restrictionCount} قيد مطبّق` : `${restrictionCount} limits applied`)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                    {[
+                      { l: isAr ? 'الأقسام المتاحة' : 'Sections', v: `${titleSel.filter(titleModAllowed).length}/${titleMods.length}` },
+                      { l: isAr ? 'الإجراءات المفعّلة' : 'Actions on', v: `${onCount}/${capList.length}` },
+                      { l: isAr ? 'القيود' : 'Limits', v: restrictionCount },
+                      { l: isAr ? 'الحاملون لها' : 'Holders', v: form.id ? (holders[form.id] ?? []).length : 0 },
+                    ].map(k => (
+                      <div key={k.l} className="rounded-lg bg-white border border-gray-200 px-3 py-2">
+                        <p className="text-[10px] text-gray-500">{k.l}</p>
+                        <p className="text-base font-extrabold text-gray-900 tabular-nums">{k.v}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3">
+                    <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden"><div className="h-full rounded-full bg-nwbus-primary transition-all" style={{ width: `${openPct}%` }} /></div>
+                    <p className="text-[11px] text-gray-500 mt-1">{isAr ? `مستوى الانفتاح ${openPct}% — الصلاحية تبدأ مفتوحة، وكل شي تعطّله هنا يصير قيداً على حامل الاسم.` : `Openness ${openPct}% — starts fully open; whatever you switch off becomes a limit.`}</p>
+                  </div>
+                  {restrictionCount > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {hiddenMods.map(m => <span key={m.value} className="text-[11px] rounded-full bg-red-50 text-red-700 border border-red-200 px-2 py-0.5">{isAr ? 'قسم: ' : 'Section: '}{isAr ? m.ar : m.en}</span>)}
+                      {restrictions.filter(c => !c.module).slice(0, 12).map(c => <span key={c.key} className="text-[11px] rounded-full bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 max-w-[260px] truncate">{(isAr ? c.ar : c.en).split(/[—:(]/)[0].trim()}</span>)}
+                      {restrictions.filter(c => !c.module).length > 12 && <span className="text-[11px] text-gray-500 px-1 py-0.5">+{restrictions.filter(c => !c.module).length - 12}</span>}
+                    </div>
+                  )}
+                  {form.id && (holders[form.id] ?? []).length > 0 && (
+                    <p className="text-[11px] text-gray-500 mt-3 truncate">{isAr ? 'الحاملون: ' : 'Holders: '}{(holders[form.id] ?? []).slice(0, 6).join('، ')}{(holders[form.id] ?? []).length > 6 ? ` +${(holders[form.id] ?? []).length - 6}` : ''}</p>
+                  )}
+                </div>
                 <div className="grid sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'الاسم بالعربي *' : 'Arabic name *'}</label>
@@ -757,9 +840,9 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                 </div>
                 <div className="grid sm:grid-cols-3 gap-3 mt-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي *' : 'Job title *'}</label>
-                    <SelectField className={`${inputCls} ${!form.job_title ? 'border-red-300' : ''}`} value={form.job_title ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, job_title: e.target.value })) }}>
-                      <option value="">{isAr ? '— اختر المسمى الوظيفي —' : '— Select job title —'}</option>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي' : 'Job title'}</label>
+                    <SelectField className={inputCls} value={form.job_title ?? ''} onChange={e => { setSaved(false); setForm(f => ({ ...f, job_title: e.target.value })) }}>
+                      <option value="">{isAr ? 'نفس اسم الصلاحية (مسمى جديد)' : 'Same as permission name (new title)'}</option>
                       {JOB_TITLES.map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
                     </SelectField>
                   </div>
@@ -829,8 +912,8 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                     </SelectField>
                     {isRole && <button type="button" onClick={() => { if (window.confirm(isAr ? 'استعادة الإعدادات الافتراضية لهذا الدور؟' : 'Restore defaults for this role?')) { setSaved(false); setForm(f => ({ ...f, permissions: {} })) } }}
                       className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">{isAr ? 'الافتراضي' : 'Defaults'}</button>}
-                    <button type="button" onClick={() => setMany(capList, true)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-green-700 hover:bg-green-50">{isAr ? 'تفعيل الكل' : 'Enable all'}</button>
-                    <button type="button" onClick={() => setMany(capList, false)} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-red-600 hover:bg-red-50">{isAr ? 'تعطيل الكل' : 'Disable all'}</button>
+                    <button type="button" onClick={() => isRole ? setMany(capList, true) : openAllTitle()} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-green-700 hover:bg-green-50">{isRole ? (isAr ? 'تفعيل الكل' : 'Enable all') : (isAr ? 'فتح الكل (كالأدمن)' : 'Open all (admin)')}</button>
+                    <button type="button" onClick={() => isRole ? setMany(capList, false) : closeAllTitle()} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-red-600 hover:bg-red-50">{isRole ? (isAr ? 'تعطيل الكل' : 'Disable all') : (isAr ? 'تقييد الكل' : 'Restrict all')}</button>
                   </div>
                 </div>
 
@@ -884,8 +967,8 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                             <div className="flex items-center gap-4 shrink-0">
                               {card.caps.length > 0 && !bodyOff && (
                                 <div className="flex gap-3 text-[11px]">
-                                  <button type="button" onClick={() => setMany(card.caps, true)} className="text-green-700 hover:underline">{isAr ? 'تفعيل الكل' : 'All on'}</button>
-                                  <button type="button" onClick={() => setMany(card.caps, false)} className="text-red-600 hover:underline">{isAr ? 'تعطيل الكل' : 'All off'}</button>
+                                  <button type="button" onClick={() => setMany(card.caps, true)} className="text-green-700 hover:underline">{isAr ? 'فتح الكل' : 'All on'}</button>
+                                  <button type="button" onClick={() => setMany(card.caps, false)} className="text-red-600 hover:underline">{isAr ? 'تقييد الكل' : 'All off'}</button>
                                 </div>
                               )}
                               {m && (locked
@@ -900,7 +983,11 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
                                 return (
                                   <div key={c.key} className={`flex items-center justify-between gap-4 px-4 py-3 ${meaningful ? '' : 'opacity-50'}`}>
                                     <div className="min-w-0">
-                                      <p className="text-sm text-gray-800">{isAr ? c.ar : c.en}</p>
+                                      <p className="text-sm text-gray-800 flex items-center gap-2 flex-wrap">
+                                        <span>{isAr ? c.ar : c.en}</span>
+                                        {c.kind === 'allow' && !permValue(c) && <span className="text-[10px] font-bold rounded px-1.5 py-0.5 bg-red-100 text-red-700">{isAr ? 'قيد' : 'LIMIT'}</span>}
+                                        {!isRole && isNarrow(c) && permValue(c) && <span className="text-[10px] font-bold rounded px-1.5 py-0.5 bg-amber-100 text-amber-700">{isAr ? 'يحدّ النطاق' : 'SCOPES'}</span>}
+                                      </p>
                                       {!meaningful && <p className="text-[11px] text-gray-400 mt-0.5">{isAr ? 'تحتاج نوع حساب أساسي أدمن لتأثيرها' : 'Needs an admin base type to take effect'}</p>}
                                     </div>
                                     <PermSwitch checked={permValue(c)} disabled={bodyOff} onChange={v => setPerm(c.key, v)} />
@@ -1431,7 +1518,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي' : 'Job Title'}</label>
                 <SelectField className={inputCls} value={form.job_title} onChange={e => set('job_title', e.target.value)}>
                   <option value="">{isAr ? '— اختر —' : '— Select —'}</option>
-                  {JOB_TITLES.map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
+                  {withCustomJobTitles(customTitles).map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
                 </SelectField>
               </div>
             </div>
@@ -2314,7 +2401,7 @@ function UsersPageFull() {
     return { phoneById, emailById }
   }
 
-  const jobTitleLabelOf = jt => jt ? (JOB_TITLES.find(j => j.value === jt)?.[isAr ? 'ar' : 'en'] ?? jt) : '—'
+  const jobTitleLabelOf = jt => jt ? (withCustomJobTitles(customTitles).find(j => j.value === jt)?.[isAr ? 'ar' : 'en'] ?? jt) : '—'
 
   async function printRoster() {
     if (printTargets.length === 0 || printingRoster) return
@@ -2599,7 +2686,7 @@ function UsersPageFull() {
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
             style={{ fontFamily: 'inherit' }}>
             <option value="">{isAr ? 'كل المسميات' : 'All Titles'}</option>
-            {JOB_TITLES.map(j => (
+            {withCustomJobTitles(customTitles).map(j => (
               <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>
             ))}
           </SelectField>
