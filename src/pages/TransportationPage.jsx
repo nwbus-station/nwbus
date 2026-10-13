@@ -982,6 +982,7 @@ export default function TransportationPage() {
           dep_enabled,
           trip:trip_schedule_id(
             id, trip_number, trip_name, scheduled_departure, scheduled_arrival,
+            is_active, is_rf, rf_date, start_date, end_date, days_of_week,
             from_station:from_station_id(id, name_ar, name_en),
             to_station:to_station_id(id, name_ar, name_en)
           )
@@ -1002,6 +1003,12 @@ export default function TransportationPage() {
     ;(allTrips ?? []).forEach(st => {
       const tr = st.trip
       if (!tr || !tr.id) return
+      // نفس شروط عرض رحلات المحطة: الرحلة الإضافية (RF) تظهر في تاريخها فقط، والمتوقفة/المنتهية/خارج أيامها لا تظهر بالجدول الشامل
+      if (tr.is_active === false) return
+      if (tr.is_rf && tr.rf_date !== date) return
+      if (tr.start_date && date < tr.start_date) return
+      if (tr.end_date && date > tr.end_date) return
+      if (tr.days_of_week?.length && !tr.days_of_week.includes(new Date(date + 'T00:00:00').getDay())) return
       if (seen.has(tr.id)) return
       seen.add(tr.id)
       const rec = recMap[tr.id]
