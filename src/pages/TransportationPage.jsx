@@ -715,6 +715,8 @@ export default function TransportationPage() {
   const { settings: appSettings } = useAppSettings()
   const SHIFTS = parseShifts(appSettings?.[SHIFT_SETTING_KEY])   // نهاية كل وردية شاملة (من الإعدادات)
   const [schedQ, setSchedQ] = useState('')
+  const [boardMode, setBoardMode] = useState('now')   // now = الأحدث/القادمة فوق · shift = حسب الوردية
+  const [showPast, setShowPast] = useState(false)
   const [scheduleLoading, setScheduleLoading] = useState(false)
 
   const [stations, setStations]           = useState([])
@@ -1269,6 +1271,31 @@ export default function TransportationPage() {
     )
   }
 
+  // ترتيب الرحلات (اليوم فقط): "من الآن" = بانتظار الإدخال ثم القادمة ثم السابقة (الأحدث أولاً) · "حسب الوردية" = تجميع بالورديات
+  const orderToggle = () => {
+    if (date !== todayStr()) return null
+    const modePill = on => ({ padding: '6px 16px', fontSize: '0.76rem', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', border: 'none', background: on ? 'var(--accent)' : 'transparent', color: on ? '#fff' : 'var(--text-2)' })
+    return (
+      <div role="radiogroup" aria-label={isAr ? 'ترتيب الرحلات' : 'Trip order'} style={{ display: 'inline-flex', border: '1px solid var(--border-2)', borderRadius: 10, overflow: 'hidden', marginBottom: 12 }}>
+        <button type="button" role="radio" aria-checked={boardMode === 'now'} style={modePill(boardMode === 'now')} onClick={() => setBoardMode('now')}>{isAr ? 'من الآن' : 'From now'}</button>
+        <button type="button" role="radio" aria-checked={boardMode === 'shift'} style={modePill(boardMode === 'shift')} onClick={() => setBoardMode('shift')}>{isAr ? 'حسب الوردية' : 'By shift'}</button>
+      </div>
+    )
+  }
+  // قائمة الجوال بنفس الترتيب
+  const orderedForMobile = () => {
+    const base = [...filtered].sort((a, b) => tMinOf(a) - tMinOf(b))
+    if (date !== todayStr() || boardMode !== 'now') return base
+    const n = new Date(), nm = n.getHours() * 60 + n.getMinutes()
+    const isPast = t => tMinOf(t) < nm - 5
+    const pend = t => { const st = tripState(t); return isPast(t) && !st.isEntry && !st.isCancelled }
+    const cur = base.filter(t => !isPast(t) || (pend(t) && tMinOf(t) >= nm - 180))
+    const old = base.filter(t => pend(t) && tMinOf(t) < nm - 180)
+    const done = base.filter(t => isPast(t) && !pend(t)).reverse()
+    return [...cur, ...old, ...done]
+  }
+  const tMinOf = t => { const x = t.role === 'both' ? t.schedDep : t.schedTime; return x ? Number(String(x).slice(0, 2)) * 60 + Number(String(x).slice(3, 5)) : 0 }
+
   const renderBoard = () => {
     const isToday = date === todayStr()
     const now = new Date()
@@ -1280,6 +1307,21 @@ export default function TransportationPage() {
     // الرحلة القادمة: أول رحلة غير مُدخلة موعدها الآن أو بعده
     const next = isToday ? sorted.find(t => !entered(t) && !tripState(t).isCancelled && minsOf(t) >= nowMin - 5) : null
     const nextIn = next ? minsOf(next) - nowMin : null
+    const mode = isToday ? boardMode : 'shift'
+    // وضع "من الآن": بانتظار الإدخال أولاً، ثم القادمة، ثم السابقة (الأحدث أولاً) مطويّة افتراضياً
+    const isPast = t => minsOf(t) < nowMin - 5
+    const pending = t => isPast(t) && !entered(t) && !tripState(t).isCancelled
+    const current = sorted.filter(t => !isPast(t) || (pending(t) && minsOf(t) >= nowMin - 180))        // الحالية والقادمة (ومنها المتأخرة حديثاً عن الإدخال)
+    const overdue = sorted.filter(t => pending(t) && minsOf(t) < nowMin - 180)                          // أقدم من 3 ساعات ولم تُدخل
+    const past = sorted.filter(t => isPast(t) && !pending(t)).reverse()                                  // السابقة المدخلة (الأحدث أولاً)
+    const groupHead = (label, color, n, right) => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ width: 4, height: 18, background: color, borderRadius: 2 }} />
+        <span style={{ fontWeight: 900, fontSize: '0.92rem', color: 'var(--text-1)' }}>{label}</span>
+        <span style={{ fontFamily: MONO, fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)', background: 'var(--surface-2)', borderRadius: 99, padding: '0 10px' }} dir="ltr">{n}</span>
+        {right}
+      </div>
+    )
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         {next && (
@@ -1291,7 +1333,30 @@ export default function TransportationPage() {
             <span style={{ background: 'rgba(255,255,255,0.16)', borderRadius: 99, padding: '3px 14px', fontSize: '0.76rem', fontWeight: 800 }}>{nextIn <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${nextIn >= 60 ? `${Math.floor(nextIn / 60)}س ${nextIn % 60}د` : `${nextIn} د`}` : `in ${nextIn} min`)}</span>
           </div>
         )}
-        {shifts.map((sh, shI) => {
+        {mode === 'now' && (
+          <>
+            {current.length > 0 && (
+              <section>
+                {groupHead(isAr ? 'الحالية والقادمة' : 'Current & upcoming', 'var(--accent)', current.length)}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{current.map(t => renderTripRow(t, nowMin, isToday))}</div>
+              </section>
+            )}
+            {overdue.length > 0 && (
+              <section>
+                {groupHead(isAr ? 'بانتظار الإدخال (أقدم من 3 ساعات)' : 'Awaiting entry (older than 3h)', 'var(--warning)', overdue.length)}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{overdue.map(t => renderTripRow(t, nowMin, isToday))}</div>
+              </section>
+            )}
+            {past.length > 0 && (
+              <section>
+                {groupHead(isAr ? 'السابقة' : 'Earlier today', 'var(--text-3)', past.length,
+                  <button type="button" onClick={() => setShowPast(v => !v)} aria-expanded={showPast} style={{ marginInlineStart: 'auto', border: '1px solid var(--border-2)', background: 'var(--card)', color: 'var(--text-2)', borderRadius: 99, padding: '4px 14px', fontSize: '0.72rem', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' }}>{showPast ? (isAr ? 'إخفاء' : 'Hide') : (isAr ? 'عرض' : 'Show')}</button>)}
+                {showPast && <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{past.map(t => renderTripRow(t, nowMin, isToday))}</div>}
+              </section>
+            )}
+          </>
+        )}
+        {mode === 'shift' && shifts.map((sh, shI) => {
           const list = sorted.filter(t => shiftIdx(minsOf(t), shifts) === shI)
           if (!list.length) return null
           const done = list.filter(entered).length
@@ -1951,7 +2016,8 @@ export default function TransportationPage() {
         <p className="text-center py-16 text-gray-400 text-sm">{isAr ? 'لا نتائج للبحث' : 'No results found'}</p>
       ) : (
         <>
-        <div className="md:hidden"><div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{filtered.map(renderTripCard)}</div></div>
+        {orderToggle()}
+        <div className="md:hidden"><div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{orderedForMobile().map(renderTripCard)}</div></div>
         <div className="hidden md:block">{renderBoard()}</div>
         </>
       )}
