@@ -865,3 +865,26 @@ html.dark .bg-amber-100, html.dark .bg-yellow-100 { background-color: var(--warn
     max-height: calc(100dvh - 24px);
   }
 }
+
+
+/* ═══ الوضع الليلي: متغيّرات الشفافية (bg-gray-50/60 ...) + أزرار القوائم المنسدلة ═══ */
+[data-theme="dark"] .bg-gray-50\/60, [data-theme="dark"] .bg-gray-50\/80, [data-theme="dark"] .bg-slate-50\/70,
+html.dark .bg-gray-50\/60, html.dark .bg-gray-50\/80, html.dark .bg-slate-50\/70 { background-color: var(--surface) !important; }
+[data-theme="dark"] .bg-white\/95, [data-theme="dark"] .bg-white\/90, [data-theme="dark"] .bg-white\/80,
+html.dark .bg-white\/95, html.dark .bg-white\/90, html.dark .bg-white\/80 { background-color: var(--card) !important; }
+[data-theme="dark"] .hover\:bg-slate-50\/70:hover, [data-theme="dark"] .hover\:bg-gray-50\/80:hover,
+html.dark .hover\:bg-slate-50\/70:hover, html.dark .hover\:bg-gray-50\/80:hover { background-color: var(--card-hover) !important; }
+[data-theme="dark"] .bg-violet-50\/60, html.dark .bg-violet-50\/60 { background-color: var(--gold-dim) !important; }
+[data-theme="dark"] .bg-red-50\/30, html.dark .bg-red-50\/30 { background-color: var(--danger-bg) !important; }
+[data-theme="dark"] .bg-amber-50\/70, html.dark .bg-amber-50\/70 { background-color: var(--warning-bg) !important; }
+/* القائمة المنسدلة (SearchSelect/SelectField) زرّها <button> فلا تشمله قاعدة الحقول: كانت تظهر بيضاء ساطعة بالوضع الليلي */
+[data-theme="dark"] button[aria-haspopup="listbox"], html.dark button[aria-haspopup="listbox"] {
+  background-color: var(--surface) !important; color: var(--text-1); border-color: var(--border-2) !important;
+}
+[data-theme="dark"] button[aria-haspopup="listbox"].text-gray-400, html.dark button[aria-haspopup="listbox"].text-gray-400 { color: var(--text-3) !important; }
+/* لوحات تعديل/إدخال: عناوين الأقسام والحقول المعطلة */
+[data-theme="dark"] input:disabled, [data-theme="dark"] select:disabled, [data-theme="dark"] textarea:disabled,
+html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled { background-color: var(--surface-2) !important; color: var(--text-3) !important; }
+
+/* الحدود الافتراضية (بدون لون محدّد) كانت تظهر بيضاء ساطعة بالوضع الليلي — :where يجعلها بلا أولوية فلا تكسر أي لون حدود محدّد */
+:where([data-theme="dark"]) *, :where([data-theme="dark"]) ::before, :where([data-theme="dark"]) ::after { border-color: var(--border-2); }
