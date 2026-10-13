@@ -1337,6 +1337,19 @@ export default function TransportationPage() {
   const cancelled    = records.filter(r => r.is_cancelled).length
   const extra        = records.filter(r => r.is_extra_trip).length
   const enteredPct   = total > 0 ? Math.round((entered / total) * 100) : 0
+  const depRecs      = records.filter(r => !r.is_arrival)
+  const paxTotal     = depRecs.reduce((a, r) => a + (Number(r.passenger_count) || 0), 0)
+  const missedTotal  = depRecs.reduce((a, r) => a + (Number(r.missed_count) || 0), 0)
+  const measured     = depRecs.filter(r => r.departure_accuracy).length
+  const punctPct     = measured ? Math.round((depRecs.filter(r => r.departure_accuracy === 'On Time' || r.departure_accuracy === 'Early').length / measured) * 100) : null
+  const tMin = t => { const x = t.role === 'both' ? t.schedDep : t.schedTime; return x ? Number(String(x).slice(0, 2)) * 60 + Number(String(x).slice(3, 5)) : 0 }
+  const shiftProg = [['A', isAr ? 'أ' : 'A', 0, 480], ['B', isAr ? 'ب' : 'B', 480, 960], ['C', isAr ? 'ج' : 'C', 960, 1440]].map(([k, lbl, a, b]) => {
+    const list = trips.filter(t => { const m = tMin(t); return m >= a && m < b })
+    const done = list.filter(t => (t.role === 'both'
+      ? !!(recordMap[`${t.id}|departure`] || recordMap[`${t.id}|arrival`])
+      : !!recordMap[`${t.id}|${t.role === 'arrival' ? 'arrival' : 'departure'}`])).length
+    return { k, lbl, n: list.length, done }
+  })
 
   // المحاسب الصرف لا يُدخل ترحيلاً — لكن المشرف/الأدمن الذي يحمل صفة محاسب إضافية يُدخل عادي
   const canEdit = (isGeneralAdmin || isStationAdmin || !isAccountant) && allowCap('transport_record_edit')
@@ -1381,6 +1394,12 @@ export default function TransportationPage() {
     const typeChip = isBoth ? { t: isAr ? 'وصول + مغادرة' : 'ARR + DEP', bg: 'var(--surface-2)', c: 'var(--text-2)' }
       : isArrival ? { t: isAr ? 'وصول' : 'ARR', bg: 'var(--success-bg)', c: 'var(--success)' } : { t: isAr ? 'مغادرة' : 'DEP', bg: 'var(--info-bg)', c: 'var(--info)' }
     const chipStyle = (bg, c) => ({ background: bg, color: c, borderRadius: 99, padding: '1px 9px', fontSize: '0.64rem', fontWeight: 800, whiteSpace: 'nowrap' })
+    // العدّ التنازلي / التأخر عن الإدخال (لليوم فقط)
+    const nowD = new Date(), nowM = nowD.getHours() * 60 + nowD.getMinutes(), tMn = tMin(trip)
+    const cdn = date === todayStr() && !isEntry && !isCancelled ? tMn - nowM : null
+    const cdnChip = cdn == null ? null : cdn < -5
+      ? { t: isAr ? 'بانتظار الإدخال' : 'Awaiting entry', bg: 'var(--warning-bg)', c: 'var(--warning)' }
+      : { t: cdn <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${cdn >= 60 ? `${Math.floor(cdn / 60)}س ${cdn % 60}د` : `${cdn} د`}` : `in ${cdn} min`), bg: cdn <= 15 ? 'var(--success-bg)' : 'var(--surface-2)', c: cdn <= 15 ? 'var(--success)' : 'var(--text-2)' }
     const route = (from, to) => (
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45 }}>{stn(from)}</span>
@@ -1407,6 +1426,7 @@ export default function TransportationPage() {
               {tripShipments.map((sh, si) => <span key={si} style={chipStyle('var(--warning-bg)', 'var(--warning)')}><RouteText from={sh.from_st?.name_ar} to={sh.to_st?.name_ar} /></span>)}
             </div>
             {trip.trip_name && <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{trip.trip_name}</div>}
+            {cdnChip && <span style={{ ...chipStyle(cdnChip.bg, cdnChip.c), display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5, padding: '2px 10px' }}>{cdn < -5 && <i className="tp-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warning)' }} />}{cdnChip.t}</span>}
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             {isBoth ? <>{timeBox(isAr ? 'مغادرة' : 'Dep', trip.schedDep)}{timeBox(isAr ? 'وصول' : 'Arr', trip.schedArr)}</> : timeBox(isAr ? 'المجدول' : 'Sched.', trip.schedTime)}
@@ -1573,28 +1593,53 @@ export default function TransportationPage() {
       </div>
 
 
-      {/* شريط الحالة التشغيلية — سطر واحد مسطّح */}
-      <div className="bg-white border border-gray-200 rounded-lg mb-4 overflow-hidden">
-        <div className="flex flex-wrap">
-          {[
-            { label: isAr ? 'إجمالي الرحلات' : 'Total',   val: total },
-            { label: isAr ? 'مُدخلة' : 'Entered',          val: `${entered} / ${total}`, sub: `${enteredPct}%` },
-            { label: isAr ? 'في الوقت' : 'On Time',        val: onTime,   tone: onTime > 0 ? 'text-green-700' : '' },
-            { label: isAr ? 'متأخرة' : 'Delayed',          val: delayed,  tone: delayed > 0 ? 'text-red-600' : '' },
-            { label: isAr ? 'مغادرة' : 'Departures',       val: departureCnt },
-            { label: isAr ? 'وصول' : 'Arrivals',            val: arrivalCnt },
-          ].map((s, i) => (
-            <div key={s.label} className={`flex-1 min-w-[100px] px-4 py-2.5 text-center ${i > 0 ? 'border-s border-gray-200' : ''}`}>
-              <div className={`text-base font-bold font-mono leading-tight ${s.tone || 'text-gray-800'}`}>
-                {s.val}{s.sub && <span className="text-[10px] text-gray-400 font-normal ms-1">({s.sub})</span>}
+      {/* لوحة الترحيل: حلقة الإنجاز + مؤشرات اليوم + تقدّم الورديات */}
+      <div className="tp-hero" style={{ background: 'linear-gradient(135deg, var(--solid-1), var(--solid-2))', color: '#fff', borderRadius: 18, padding: '18px 22px', marginBottom: 16, boxShadow: 'var(--shadow-lg)' }}>
+        <div className="tp-ring" style={{ position: 'relative' }}>
+          <svg width="100%" height="100%" viewBox="0 0 112 112" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
+            <circle cx="56" cy="56" r="48" fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="10" />
+            <circle cx="56" cy="56" r="48" fill="none" stroke={enteredPct === 100 ? '#34D399' : '#F5A623'} strokeWidth="10" strokeLinecap="round" strokeDasharray={`${(enteredPct / 100) * 301.6} 301.6`} style={{ transition: 'stroke-dasharray .7s ease' }} />
+          </svg>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} dir="ltr">
+            <span style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontWeight: 800, fontSize: '1.7rem', lineHeight: 1 }}>{enteredPct}%</span>
+            <span style={{ fontSize: '0.62rem', opacity: 0.75, fontWeight: 700, marginTop: 3 }}>{isAr ? 'الإدخال' : 'entered'}</span>
+          </div>
+        </div>
+        <div className="tp-head">
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 10px', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{selectedStationName || (isAr ? 'الترحيل' : 'Transportation')}</span>
+            <span style={{ fontSize: '0.72rem', opacity: 0.75 }} dir="ltr">{date}</span>
+            <span style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontSize: '0.78rem', opacity: 0.85 }} dir="ltr">{entered} / {total} {isAr ? 'رحلة' : 'trips'}</span>
+          </div>
+        </div>
+        <div className="tp-kpis">
+            {[
+              [isAr ? 'إجمالي الرحلات' : 'Trips', total, '#fff'],
+              [isAr ? 'التزام بالموعد' : 'On-time', punctPct != null ? `${punctPct}%` : '—', punctPct != null && punctPct >= 85 ? '#34D399' : punctPct != null && punctPct < 70 ? '#F87171' : '#fff'],
+              [isAr ? 'متأخرة' : 'Delayed', delayed, delayed > 0 ? '#F87171' : '#fff'],
+              [isAr ? 'ركاب مرحَّلون' : 'Passengers', paxTotal, '#fff'],
+              [isAr ? 'متخلفون' : 'Missed', missedTotal, missedTotal > 0 ? '#FBBF24' : '#fff'],
+              [isAr ? 'مغادرة / وصول' : 'Dep / Arr', `${departureCnt} / ${arrivalCnt}`, '#fff'],
+            ].map(([l, v, c]) => (
+              <div key={l} style={{ background: 'rgba(255,255,255,0.10)', borderRadius: 12, padding: '8px 10px', textAlign: 'center' }}>
+                <div style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontWeight: 800, fontSize: '1.15rem', lineHeight: 1.2, color: c }} dir="ltr">{v}</div>
+                <div style={{ fontSize: '0.62rem', opacity: 0.75, fontWeight: 700, marginTop: 2 }}>{l}</div>
               </div>
-              <div className="text-[10px] text-gray-400 mt-0.5">{s.label}</div>
-            </div>
-          ))}
+            ))}
         </div>
         {total > 0 && (
-          <div className="h-1 bg-gray-100">
-            <div className="h-full transition-all duration-700" style={{ width: `${enteredPct}%`, background: 'var(--accent)' }} />
+          <div className="tp-shifts" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {shiftProg.map(sp => sp.n > 0 && (
+              <div key={sp.k} style={{ flex: '1 1 150px', minWidth: 130 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 800, opacity: 0.9, marginBottom: 4 }}>
+                  <span>{isAr ? `الوردية ${sp.lbl}` : `Shift ${sp.lbl}`}</span>
+                  <span style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }} dir="ltr">{sp.done}/{sp.n}</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 99, background: 'rgba(255,255,255,0.16)', overflow: 'hidden' }}>
+                  <i style={{ display: 'block', height: '100%', width: `${(sp.done / sp.n) * 100}%`, background: sp.done === sp.n ? '#34D399' : '#F5A623', borderRadius: 99, transition: 'width .6s ease' }} />
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

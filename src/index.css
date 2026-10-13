@@ -902,3 +902,15 @@ html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled
   .tp-row { grid-template-columns: 96px 1fr auto; grid-template-areas: "time trip act" "route route route" "exec exec exec"; }
   .tp-time { grid-area: time; } .tp-trip { grid-area: trip; } .tp-act { grid-area: act; } .tp-route { grid-area: route; } .tp-exec { grid-area: exec; background: var(--surface); border-radius: 10px; padding: 8px 12px; }
 }
+
+/* لوحة الترحيل العلوية */
+.tp-hero { display: grid; gap: 12px 24px; align-items: center; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ring head" "ring kpis" "shifts shifts"; }
+.tp-ring { grid-area: ring; width: 112px; height: 112px; }
+.tp-head { grid-area: head; }
+.tp-kpis { grid-area: kpis; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+.tp-shifts { grid-area: shifts; }
+@media (max-width: 640px) {
+  .tp-hero { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ring head" "kpis kpis" "shifts shifts"; padding: 16px !important; }
+  .tp-ring { width: 88px; height: 88px; }
+  .tp-kpis { grid-template-columns: repeat(3, 1fr); }
+}
