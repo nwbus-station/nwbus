@@ -7,7 +7,7 @@ import { getThemeMode, setThemeMode, resolveDark } from '../../lib/theme'
 import { createClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
-import { onPwaUpdateAvailable, applyPwaUpdate } from '../../lib/pwaUpdate'
+import { onPwaUpdateAvailable, applyPwaUpdate, hardRefresh } from '../../lib/pwaUpdate'
 
 const MONO = "'IBM Plex Mono', monospace"
 
@@ -549,6 +549,36 @@ export default function AppLayout() {
   const [showUpdateNudge, setShowUpdateNudge] = useState(false)
   useEffect(() => onPwaUpdateAvailable(() => setShowUpdateNudge(true)), [])
 
+  // السحب للأسفل للتحديث (تطبيق الشاشة الرئيسية فقط — لا يوجد زر تحديث بالمتصفح هناك)
+  const [pull, setPull] = useState(0)
+  const pullRef = useRef(0)
+  useEffect(() => {
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone
+    if (!standalone) return
+    let startY = 0, active = false
+    const top = () => (document.scrollingElement?.scrollTop ?? window.scrollY) <= 0
+    const onStart = e => {
+      active = e.touches.length === 1 && top() && !e.target.closest?.('input, textarea, select, .leaflet-container, .fixed, [role="dialog"], [data-no-ptr]')
+      if (active) startY = e.touches[0].clientY
+    }
+    const onMove = e => {
+      if (!active) return
+      const dy = e.touches[0].clientY - startY
+      if (dy <= 0 || !top()) { pullRef.current = 0; setPull(0); return }
+      pullRef.current = Math.min(dy, 150); setPull(pullRef.current)
+    }
+    const onEnd = () => {
+      const fire = active && pullRef.current > 100
+      active = false; pullRef.current = 0; setPull(0)
+      if (fire) hardRefresh()
+    }
+    window.addEventListener('touchstart', onStart, { passive: true })
+    window.addEventListener('touchmove', onMove, { passive: true })
+    window.addEventListener('touchend', onEnd, { passive: true })
+    window.addEventListener('touchcancel', onEnd, { passive: true })
+    return () => { window.removeEventListener('touchstart', onStart); window.removeEventListener('touchmove', onMove); window.removeEventListener('touchend', onEnd); window.removeEventListener('touchcancel', onEnd) }
+  }, [])
+
   const mods = profile?.allowed_modules
 
   // نجمة التميز — تبقى ثابتة طوال شهر التقييم
@@ -670,6 +700,12 @@ export default function AppLayout() {
           {isAr ? 'EN' : 'ع'}
         </button>
 
+        {/* تحديث الصفحة (يفحص النسخة الجديدة ويعيد التحميل) */}
+        <button onClick={() => hardRefresh()} title={isAr ? 'تحديث الصفحة' : 'Refresh'} aria-label={isAr ? 'تحديث الصفحة' : 'Refresh'}
+          style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: '50%', justifyContent: 'center' }}>
+          <Icon d={ICONS.refresh} size={15} />
+        </button>
+
         {/* المظهر: تلقائي / نهاري / ليلي */}
         <div data-theme-menu style={{ position: 'relative' }}>
           <button onClick={() => setThemeMenu(v => !v)} aria-haspopup="menu" aria-expanded={themeMenu}
@@ -776,6 +812,14 @@ export default function AppLayout() {
         </div>
       )}
 
+      {pull > 12 && (
+        <div aria-hidden="true" style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 8px)', insetInline: 0, display: 'flex', justifyContent: 'center', zIndex: 900, pointerEvents: 'none', transform: `translateY(${Math.min(pull, 110) - 40}px)`, transition: pull ? 'none' : 'transform .2s' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--card)', border: '1px solid var(--border-2)', color: pull > 100 ? 'var(--accent)' : 'var(--text-2)', borderRadius: 99, padding: '7px 16px', fontSize: '0.78rem', fontWeight: 800, boxShadow: 'var(--shadow-lg)' }}>
+            <span style={{ display: 'inline-flex', transform: `rotate(${pull * 2.4}deg)` }}><Icon d={ICONS.refresh} size={15} /></span>
+            {pull > 100 ? (isAr ? 'أفلت للتحديث' : 'Release to refresh') : (isAr ? 'اسحب للتحديث' : 'Pull to refresh')}
+          </span>
+        </div>
+      )}
       {showUpdateNudge && location.pathname !== '/' && (
         <div className="no-print" dir={isAr ? 'rtl' : 'ltr'} style={{
           position: 'fixed', bottom: 20, insetInlineEnd: showPwdNudge && !showChangePwd ? 356 : 20, zIndex: 60,

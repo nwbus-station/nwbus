@@ -8,13 +8,23 @@ function getCommitHash() {
   try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'dev' }
 }
 
+// يكتب /version.json عند كل بناء (رقم النسخة) — التطبيق يقارن به نسخته الحالية ليعرف أن فيه تحديث حتى لو ما تغيّر ملف الـ Service Worker
+const APP_VERSION = getCommitHash()
+const emitVersion = () => ({
+  name: 'emit-version-json',
+  generateBundle() {
+    this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ v: APP_VERSION, t: new Date().toISOString() }) })
+  },
+})
+
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(getCommitHash()),
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   plugins: [
     react(),
+    emitVersion(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false, // نسجّل الـ SW يدوياً بـ src/lib/pwaUpdate.js عشان نقدر نعرض تنبيه تحديث بدل تحديث صامت

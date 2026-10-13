@@ -23,6 +23,12 @@ function autoApplyWatch() {
 
 export function initPwaUpdate() {
   autoApplyWatch()
+  // فحص النسخة: بعد الفتح بثوانٍ، وعند كل رجوع للتطبيق، وعند عودة الشبكة، وكل 3 دقائق
+  setTimeout(() => checkAppVersion('open'), 4000)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkAppVersion('resume') })
+  window.addEventListener('pageshow', e => { if (e.persisted) checkAppVersion('resume') })
+  window.addEventListener('online', () => checkAppVersion('resume'))
+  setInterval(() => { if (document.visibilityState === 'visible') checkAppVersion('poll') }, 3 * 60 * 1000)
   updateSWFn = registerSW({
     onNeedRefresh() { pending = true; listeners.forEach(cb => cb()); if (document.visibilityState === 'hidden') applyPwaUpdate() },
     onRegisteredSW(_url, registration) {
@@ -48,5 +54,39 @@ export function onPwaUpdateAvailable(cb) {
 }
 
 export function applyPwaUpdate() {
-  updateSWFn?.(true)
+  // حماية من حلقة إعادة تحميل (مثلاً لو وصلت صفحة قديمة من كاش الحافة): لا أكثر من مرة كل دقيقة تلقائياً
+  try {
+    const last = Number(sessionStorage.getItem('nw_auto_reload') || 0)
+    if (Date.now() - last < 60 * 1000) return
+    sessionStorage.setItem('nw_auto_reload', String(Date.now()))
+  } catch { /* بدون sessionStorage */ }
+  try { updateSWFn?.(true) } catch { /* بدون SW */ }
+  // التحديث الفعلي = إعادة تحميل الصفحة (تطبيق الشاشة الرئيسية لا يعيد التحميل لوحده)
+  setTimeout(() => window.location.reload(), 250)
+}
+
+// تحديث يدوي فوري (زر التحديث / السحب للأسفل)
+export function hardRefresh() {
+  try { updateSWFn?.(true) } catch { /* بدون SW */ }
+  window.location.reload()
+}
+
+// فحص النسخة: يقارن رقم النسخة الحالية بما على الخادم (/version.json) — لا يعتمد على ملف الـ Service Worker
+let checking = false
+export async function checkAppVersion(cause = 'poll') {
+  if (checking || typeof __APP_VERSION__ === 'undefined' || __APP_VERSION__ === 'dev') return
+  checking = true
+  try {
+    const r = await fetch('/version.json?ts=' + Date.now(), { cache: 'no-store' })
+    if (!r.ok) return
+    const { v } = await r.json()
+    if (v && v !== __APP_VERSION__) {
+      pending = true
+      listeners.forEach(cb => cb())
+      // رجوع المستخدم للتطبيق من الخلفية: نطبّق فوراً ما لم يكن يكتب في حقل
+      const a = document.activeElement
+      const typing = a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName)
+      if (cause === 'resume' && !typing) applyPwaUpdate()
+    }
+  } catch { /* بدون شبكة */ } finally { checking = false }
 }
