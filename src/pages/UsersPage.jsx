@@ -400,7 +400,7 @@ function ToggleRow({ checked, onChange, children }) {
   return (
     <button type="button" onClick={() => onChange(!checked)}
       className={`w-full flex items-center gap-2.5 text-start text-xs px-3 py-2.5 rounded-lg border-2 transition-colors ${
-        checked ? 'border-nwbus-primary bg-nwbus-primary/5 text-nwbus-dark font-semibold' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+        checked ? 'border-nwbus-primary bg-nwbus-primary/5 text-gray-900 font-semibold' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
       }`}>
       <span className={`w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center ${checked ? 'bg-nwbus-primary border-nwbus-primary' : 'border-gray-300'}`}>
         {checked && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} className="w-2.5 h-2.5"><path d="M5 13l4 4L19 7"/></svg>}
