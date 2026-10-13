@@ -592,7 +592,7 @@ function ManagePanel({ posts, isAr, onChanged }) {
             )}
             <span style={{ fontSize: '1.1rem' }}>{TEMPLATES[p.template]?.badge ?? '📄'}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#111827' }}>{p.title_ar}</p>
+              <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-1)' }}>{p.title_ar}</p>
               <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#9CA3AF' }}>
                 {new Date(p.created_at).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-US')} · {
                   !p.is_published ? (isAr ? 'مسودة' : 'Draft')
@@ -668,12 +668,12 @@ function BulkEditForm({ posts, isAr, onCancel, onSaved }) {
   }
 
   const row = { display: 'flex', alignItems: 'center', gap: 10 }
-  const checkboxLabel = { display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', fontWeight: 700, color: '#374151', cursor: 'pointer', minWidth: 150 }
+  const checkboxLabel = { display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-2)', cursor: 'pointer', minWidth: 150 }
 
   return (
     <div style={{ background: '#fff', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
       <div>
-        <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#111827' }}>
+        <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>
           {isAr ? `تعديل جماعي — ${posts.length} منشورات` : `Bulk edit — ${posts.length} posts`}
         </p>
         <p style={{ margin: '4px 0 0', fontSize: '0.76rem', color: '#6B7280' }}>
@@ -988,7 +988,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 16, alignItems: 'start' }}>
       <div style={{ background: '#fff', borderRadius: 14, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#111827' }}>
+        <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>
           {post ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'جديد' : 'New')}
         </p>
 
@@ -1001,7 +1001,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                   border: `2px solid ${form.template === key ? '#5B5BD6' : 'transparent'}`, cursor: 'pointer', fontFamily: 'inherit',
                 }}>
                 <div style={{ width: '100%', height: 34, borderRadius: 7, background: TEMPLATES[key].bg }} />
-                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#374151' }}>{TEMPLATES[key].badge} {isAr ? TEMPLATES[key].ar : TEMPLATES[key].en}</span>
+                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-2)' }}>{TEMPLATES[key].badge} {isAr ? TEMPLATES[key].ar : TEMPLATES[key].en}</span>
               </button>
             ))}
           </div>
@@ -1030,7 +1030,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                           display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 999,
                           border: `1.5px solid ${on ? '#B45309' : '#E5E7EB'}`,
                           background: on ? '#FFFBEB' : '#fff',
-                          cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, color: '#374151',
+                          cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-2)',
                         }}>
                         {on ? '✓' : '⭐'} {c.name}
                         {c.station ? <span style={{ color: '#9CA3AF', fontWeight: 500 }}> · {c.station}</span> : null}
@@ -1084,7 +1084,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
                 const t = personTextFor(c)
                 return (
                   <div key={c.id} style={{ border: '1px solid #EEF0F3', borderRadius: 10, padding: 12, background: '#fff' }}>
-                    <p style={{ margin: '0 0 8px', fontSize: '0.76rem', fontWeight: 700, color: '#374151' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-2)' }}>
                       ⭐ {c.name}{c.station ? ` · ${c.station}` : ''}
                     </p>
                     <Field label={isAr ? 'العنوان' : 'Title'}>
@@ -1224,7 +1224,7 @@ function PostForm({ post, isAr, onCancel, onSaved }) {
           </div>
         </SectionCard>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: '#374151', cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: 'var(--text-2)', cursor: 'pointer' }}>
           <input type="checkbox" checked={form.is_published} onChange={e => set('is_published', e.target.checked)} />
           {isAr ? 'منشور (يظهر للجميع الآن)' : 'Published (visible to everyone now)'}
         </label>

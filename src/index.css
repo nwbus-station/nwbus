@@ -8,6 +8,10 @@
 /* ── Tokens ───────────────────────────────────────────── */
 :root {
   /* Black & White — النظام الأساسي */
+  /* ألوان تعبئة ثابتة للعناصر ذات النص الأبيض (لا تنقلب في الوضع الليلي مثل --brand-*) */
+  --solid-1:    #111111;
+  --solid-2:    #444444;
+  --solid-btn:  #111111;
   --brand-900:  #111111;
   --brand-800:  #222222;
   --brand-700:  #444444;
@@ -67,6 +71,9 @@
 
 /* ── Dark Mode Tokens ────────────────────────────────── */
 [data-theme="dark"], html.dark {
+  --solid-1:    #2E3050;
+  --solid-2:    #3B3E66;
+  --solid-btn:  #5B5BD6;
   --brand-900:  #F0F0F0;
   --brand-800:  #D0D0D0;
   --brand-700:  #A0A0A0;
@@ -159,10 +166,10 @@ body {
 }
 .btn:active { transform: scale(0.97); }
 .btn-primary {
-  background: var(--brand-900); color: #FFFFFF;
+  background: var(--solid-btn); color: #FFFFFF;
   box-shadow: var(--shadow-md);
 }
-.btn-primary:hover { background: #222; box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+.btn-primary:hover { background: var(--solid-2); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
 .btn-accent {
   background: var(--accent); color: #FFFFFF;
   font-weight: 600;
@@ -428,7 +435,8 @@ span.rounded-full                          { border-radius: 4px !important; }
 .bg-blue-600, .bg-blue-700,
 .bg-purple-600, .bg-purple-700,
 .bg-indigo-600, .bg-indigo-700 {
-  background-color: var(--brand-900) !important;
+  background-color: var(--solid-btn) !important;
+  color: #fff;
 }
 .hover\:bg-blue-50:hover, .hover\:bg-purple-50:hover, .hover\:bg-teal-50:hover {
   background-color: var(--surface-2) !important;
@@ -813,3 +821,36 @@ nav.bottom-nav {
 /* ملخص الإيرادات للأدمن: يبقى ظاهراً تحت الهيدر وشريط التبويبات أثناء التمرير */
 .stat-sticky-wrap { position: sticky; top: 99px; z-index: 30; padding: 8px 0 10px; margin-top: -8px; background: var(--bg, #f4f6f9); box-shadow: 0 8px 12px -10px rgba(15, 23, 42, 0.3); }
 @media (max-width: 767px) { .stat-sticky-wrap { top: 55px; } }
+
+/* ═══ الوضع الليلي: تغطية شاملة لفئات Tailwind المستخدمة (حتى لا تختفي الكتابة) ═══ */
+[data-theme="dark"] .text-black,
+[data-theme="dark"] .text-slate-900, [data-theme="dark"] .text-slate-800, [data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-nwbus-primary,
+html.dark .text-black, html.dark .text-slate-900, html.dark .text-slate-800, html.dark .text-slate-700, html.dark .text-nwbus-primary { color: var(--text-1) !important; }
+[data-theme="dark"] .text-slate-600, [data-theme="dark"] .text-slate-500, [data-theme="dark"] .text-slate-400,
+[data-theme="dark"] .text-gray-300, [data-theme="dark"] .text-gray-200,
+html.dark .text-slate-600, html.dark .text-slate-500, html.dark .text-slate-400, html.dark .text-gray-300, html.dark .text-gray-200 { color: var(--text-2) !important; }
+[data-theme="dark"] .bg-slate-50, [data-theme="dark"] .bg-slate-100, [data-theme="dark"] .bg-gray-200, [data-theme="dark"] .bg-slate-200,
+html.dark .bg-slate-50, html.dark .bg-slate-100, html.dark .bg-gray-200, html.dark .bg-slate-200 { background-color: var(--surface-2) !important; }
+[data-theme="dark"] .bg-gray-300, html.dark .bg-gray-300 { background-color: var(--border-2) !important; }
+[data-theme="dark"] .border-slate-100, [data-theme="dark"] .border-slate-200, [data-theme="dark"] .border-slate-300, [data-theme="dark"] .border-gray-400,
+[data-theme="dark"] .divide-slate-100 > * + *, [data-theme="dark"] .divide-gray-50 > * + *, [data-theme="dark"] .divide-gray-100 > * + *,
+html.dark .border-slate-100, html.dark .border-slate-200, html.dark .border-slate-300, html.dark .divide-slate-100 > * + *, html.dark .divide-gray-50 > * + * { border-color: var(--border-2) !important; }
+/* أزرار/عناصر سوداء صلبة: تتحول لبنفسجي واضح بدل الأسود الذي يذوب بالخلفية */
+[data-theme="dark"] .bg-slate-900, [data-theme="dark"] .bg-black, [data-theme="dark"] .bg-gray-900, [data-theme="dark"] .bg-gray-800,
+[data-theme="dark"] .bg-nwbus-primary, [data-theme="dark"] .bg-nwbus-dark, [data-theme="dark"] .hover\:bg-nwbus-dark:hover,
+html.dark .bg-slate-900, html.dark .bg-black, html.dark .bg-gray-900, html.dark .bg-gray-800, html.dark .bg-nwbus-primary, html.dark .bg-nwbus-dark { background-color: var(--solid-btn) !important; color: #fff; }
+[data-theme="dark"] .border-slate-900, [data-theme="dark"] .border-gray-900, [data-theme="dark"] .border-nwbus-primary,
+html.dark .border-slate-900, html.dark .border-gray-900, html.dark .border-nwbus-primary { border-color: var(--border-2) !important; }
+[data-theme="dark"] .hover\:bg-black:hover, [data-theme="dark"] .hover\:bg-slate-800:hover, html.dark .hover\:bg-black:hover, html.dark .hover\:bg-slate-800:hover { background-color: var(--accent) !important; }
+/* حالات ملوّنة */
+[data-theme="dark"] .bg-amber-100, [data-theme="dark"] .bg-yellow-100, [data-theme="dark"] .bg-amber-400,
+html.dark .bg-amber-100, html.dark .bg-yellow-100 { background-color: var(--warning-bg) !important; }
+[data-theme="dark"] .text-amber-900, [data-theme="dark"] .text-amber-500, html.dark .text-amber-900, html.dark .text-amber-500 { color: var(--warning) !important; }
+[data-theme="dark"] .text-red-800, [data-theme="dark"] .text-red-400, html.dark .text-red-800, html.dark .text-red-400 { color: var(--danger) !important; }
+[data-theme="dark"] .border-red-100, html.dark .border-red-100 { border-color: rgba(248,113,113,0.25) !important; }
+[data-theme="dark"] .border-amber-100, [data-theme="dark"] .border-amber-400, html.dark .border-amber-100 { border-color: rgba(251,191,36,0.3) !important; }
+[data-theme="dark"] .border-emerald-200, [data-theme="dark"] .border-green-200, html.dark .border-emerald-200, html.dark .border-green-200 { border-color: rgba(52,211,153,0.3) !important; }
+/* أي نص داخل نافذة/بطاقة داكنة يبقى مقروءاً: النص الافتراضي يتبع الرمز */
+[data-theme="dark"] body, html.dark body { color: var(--text-1); }
+[data-theme="dark"] .skeleton, html.dark .skeleton { background: linear-gradient(90deg, #232326 25%, #2C2C30 50%, #232326 75%); background-size: 200% 100%; }

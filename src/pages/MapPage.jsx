@@ -425,7 +425,7 @@ export default function MapPage() {
         <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #f1f5f9' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>{isAr ? 'خريطة المحطات' : 'Stations Map'}</h2>
+              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? 'خريطة المحطات' : 'Stations Map'}</h2>
               <p style={{ margin: '2px 0 0', fontSize: '0.7rem', color: '#94a3b8' }}>
                 {isAr ? `${counts.all} نقطة · ${located.length} بموقع · ${unlocated.length} بدون موقع` : `${counts.all} points · ${located.length} located · ${unlocated.length} unlocated`}
               </p>
@@ -473,7 +473,7 @@ export default function MapPage() {
             </div>
             {routeLoading && <div style={{ marginTop: 6, fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center' }}>{isAr ? 'جارٍ حساب المسافة…' : 'Calculating…'}</div>}
             {routeInfo && !routeLoading && (
-              <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#0f172a', fontWeight: 800, textAlign: 'center' }}>
+              <div style={{ marginTop: 6, fontSize: '0.8rem', color: 'var(--text-1)', fontWeight: 800, textAlign: 'center' }}>
                 {isAr ? `${routeInfo.straight ? 'المسافة المباشرة' : 'مسافة الطريق'}: ${routeInfo.km} كم` : `${routeInfo.straight ? 'Straight distance' : 'Road distance'}: ${routeInfo.km} km`}
               </div>
             )}
@@ -588,7 +588,7 @@ export default function MapPage() {
         <div style={{ position: 'absolute', top: 12, [isAr ? 'left' : 'right']: 12, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 2px 12px rgba(0,0,0,.15)', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
             {[{ l: '+', fn: () => mapRef.current?.zoomIn() }, { l: '−', fn: () => mapRef.current?.zoomOut() }].map((b, i) => (
-              <button key={i} onClick={b.fn} style={{ display: 'block', width: 36, height: 36, background: 'none', border: 'none', borderBottom: i === 0 ? '1px solid #f1f5f9' : 'none', cursor: 'pointer', fontSize: '1.15rem', fontWeight: 700, color: '#334155' }}>{b.l}</button>
+              <button key={i} onClick={b.fn} style={{ display: 'block', width: 36, height: 36, background: 'none', border: 'none', borderBottom: i === 0 ? '1px solid #f1f5f9' : 'none', cursor: 'pointer', fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-2)' }}>{b.l}</button>
             ))}
           </div>
           <button onClick={() => setBase(b => (b === 'map' ? 'sat' : 'map'))} title={isAr ? 'تبديل نوع الخريطة' : 'Toggle base map'}
@@ -638,7 +638,7 @@ export default function MapPage() {
                       <datalist id="map-regions">{regions.filter(r => r !== 'all').map(r => <option key={r} value={r} />)}</datalist>
                     </div>
                   </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: '#334155', cursor: 'pointer' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: 'var(--text-2)', cursor: 'pointer' }}>
                     <input type="checkbox" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} />{isAr ? 'نقطة نشطة' : 'Active'}
                   </label>
                 </>
@@ -712,7 +712,7 @@ export default function MapPage() {
             <div style={{ padding: '12px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>{nameOf(selected, isAr)}</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>{nameOf(selected, isAr)}</div>
                   {(isAr ? selected.name_en : selected.name_ar) && <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 1 }} dir={isAr ? 'ltr' : 'rtl'}>{isAr ? selected.name_en : selected.name_ar}</div>}
                 </div>
                 <button onClick={() => setSelectedId(null)} style={{ ...btn(), padding: 5 }}><Ico d={ICONS.x} size={12} sw={2.5} /></button>

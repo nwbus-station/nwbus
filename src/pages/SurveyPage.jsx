@@ -232,7 +232,7 @@ function CityFormModal({ city, isNew, isAr, busy, error, onCancel, onSave }) {
       onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
       <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,.3)' }}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
-          <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>{isNew ? (isAr ? 'إضافة مدينة' : 'Add city') : (isAr ? 'تعديل المدينة' : 'Edit city')}</h3>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>{isNew ? (isAr ? 'إضافة مدينة' : 'Add city') : (isAr ? 'تعديل المدينة' : 'Edit city')}</h3>
         </div>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
@@ -254,7 +254,7 @@ function CityFormModal({ city, isNew, isAr, busy, error, onCancel, onSave }) {
             <label style={lbl}>{isAr ? 'رابط الاستبيان (اختياري — فارغ = الرابط الافتراضي بالرمز أعلاه)' : 'Survey link (optional — blank = default link with the key above)'}</label>
             <input style={{ ...inputCls, direction: 'ltr' }} value={form.url} onChange={e => set('url', e.target.value)} placeholder={`${BASE}${form.city || 'CityKey'}`} />
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: '#334155', cursor: 'pointer' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: 'var(--text-2)', cursor: 'pointer' }}>
             <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} />{isAr ? 'مدينة نشطة' : 'Active'}
           </label>
 
@@ -274,7 +274,7 @@ function CityFormModal({ city, isNew, isAr, busy, error, onCancel, onSave }) {
               ) : shownStations.map(s => {
                 const otherCity = s.survey_city && s.survey_city !== city.city ? s.survey_city : null
                 return (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: '0.78rem', color: '#334155', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: '0.78rem', color: 'var(--text-2)', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
                     <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleStation(s.id)} />
                     <span style={{ flex: 1 }}>{isAr ? (s.name_ar || s.name_en) : (s.name_en || s.name_ar)}{s.is_active === false ? (isAr ? ' (معطّلة)' : ' (inactive)') : ''}</span>
                     {otherCity && <span style={{ fontSize: '0.65rem', color: '#b45309' }}>{isAr ? `مرتبطة بـ ${otherCity}` : `linked to ${otherCity}`}</span>}

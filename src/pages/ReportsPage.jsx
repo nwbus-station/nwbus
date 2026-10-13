@@ -1713,7 +1713,7 @@ export default function ReportsPage() {
               )}
 
               <button onClick={() => fetchAudit(0)} disabled={auditLoading}
-                style={{ fontSize: '0.78rem', padding: '4px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--brand-900)', color: '#fff', border: 'none', cursor: auditLoading ? 'not-allowed' : 'pointer', opacity: auditLoading ? 0.6 : 1 }}>
+                style={{ fontSize: '0.78rem', padding: '4px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--solid-1)', color: '#fff', border: 'none', cursor: auditLoading ? 'not-allowed' : 'pointer', opacity: auditLoading ? 0.6 : 1 }}>
                 {auditLoading ? '…' : (isAr ? 'عرض' : 'Show')}
               </button>
             </div>

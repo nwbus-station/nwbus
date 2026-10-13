@@ -346,7 +346,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
       <div style={{ background:'var(--card)', borderRadius:16, boxShadow:'var(--shadow-xl)', width:'100%', maxWidth:520, maxHeight:'calc(100vh - 112px)', overflowY:'auto', border:'1px solid var(--border)' }}>
 
         {/* Header */}
-        <div style={{ padding:'18px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', background: isArrival ? 'var(--brand-700)' : 'var(--brand-900)', borderRadius:'16px 16px 0 0' }}>
+        <div style={{ padding:'18px 20px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', background: isArrival ? 'var(--solid-2)' : 'var(--solid-1)', borderRadius:'16px 16px 0 0' }}>
           <div>
             <p style={{ margin:0, fontWeight:700, color:'#fff', fontSize:'0.875rem', letterSpacing:'0.02em' }}>{trip.trip_number}{trip.trip_name ? ` — ${trip.trip_name}` : ''}</p>
             <p style={{ margin:'3px 0 0', fontSize:'0.72rem', color:'rgba(255,255,255,0.6)' }}>
@@ -667,7 +667,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
           <div style={{ display:'flex', gap:8 }}>
             <button type="submit" disabled={saving}
-              style={{ flex:1, color:'#fff', padding:'11px 0', borderRadius:8, fontSize:'0.875rem', fontWeight:700, border:'none', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, transition:'all 0.14s', background: isArrival ? 'var(--brand-700)' : 'var(--brand-900)' }}>
+              style={{ flex:1, color:'#fff', padding:'11px 0', borderRadius:8, fontSize:'0.875rem', fontWeight:700, border:'none', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1, transition:'all 0.14s', background: isArrival ? 'var(--solid-2)' : 'var(--solid-1)' }}>
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
             </button>
             <button type="button" onClick={closeAndClear}
