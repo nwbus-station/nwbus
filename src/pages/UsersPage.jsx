@@ -306,7 +306,7 @@ async function changeUsernameViaEdge(authId, newUsername) {
   return body
 }
 
-const USERNAME_RE = /^[a-z0-9._-]{2,40}$/
+const USERNAME_RE = /^[a-z0-9._-]{2,40}$/i
 const passScore = p => { const s = String(p || ''); let n = 0; if (s.length >= 8) n++; if (/[a-z]/.test(s) && /[A-Z]/.test(s)) n++; if (/\d/.test(s)) n++; if (/[^A-Za-z0-9]/.test(s)) n++; return s.length < 6 ? 0 : Math.max(1, n) }
 
 async function sendCredentialEmail(employeeId) {
@@ -330,6 +330,34 @@ async function sendCredentialEmail(employeeId) {
 function buildUsername(jobNum) {
   return jobNum ? 'NW' + jobNum : ''
 }
+
+// توليد اسم المستخدم من الاسم: حروف عربية → لاتينية (قاموس للأسماء الشائعة + تحويل حرفي للباقي) وناتجه "الأول.الأخير"
+const AR_NAMES = { 'محمد': 'mohammed', 'احمد': 'ahmed', 'علي': 'ali', 'خالد': 'khaled', 'فهد': 'fahad', 'سعد': 'saad', 'سعود': 'saud', 'سلطان': 'sultan', 'ناصر': 'nasser', 'عمر': 'omar', 'يوسف': 'yousef', 'ابراهيم': 'ibrahim', 'اسماعيل': 'ismail', 'سالم': 'salem', 'سليمان': 'sulaiman', 'صالح': 'saleh', 'ماجد': 'majed', 'فيصل': 'faisal', 'تركي': 'turki', 'بندر': 'bandar', 'نايف': 'nayef', 'مشعل': 'mishal', 'منصور': 'mansour', 'حسن': 'hassan', 'حسين': 'hussain', 'عثمان': 'othman', 'طلال': 'talal', 'راشد': 'rashed', 'مبارك': 'mubarak', 'عادل': 'adel', 'ياسر': 'yasser', 'وليد': 'waleed', 'هاني': 'hani', 'زياد': 'ziyad', 'رائد': 'raed', 'ماهر': 'maher', 'سامي': 'sami', 'بدر': 'badr', 'نواف': 'nawaf', 'عبدالله': 'abdullah', 'عبدالرحمن': 'abdulrahman', 'عبدالعزيز': 'abdulaziz', 'عبدالمجيد': 'abdulmajeed', 'عبدالملك': 'abdulmalik', 'عبدالاله': 'abdulelah', 'عبدالكريم': 'abdulkarim', 'عبدالحكيم': 'abdulhakim', 'عبدالرحيم': 'abdulrahim', 'عبدالهادي': 'abdulhadi', 'عبدالمحسن': 'abdulmohsen', 'الحربي': 'alharbi', 'العنزي': 'alanazi', 'الشمري': 'alshammari', 'القحطاني': 'alqahtani', 'العتيبي': 'alotaibi', 'الغامدي': 'alghamdi', 'الزهراني': 'alzahrani', 'الدوسري': 'aldosari', 'المطيري': 'almutairi', 'الرشيدي': 'alrashidi', 'السبيعي': 'alsubaie', 'الجهني': 'aljuhani', 'البلوي': 'albalawi', 'الحازمي': 'alhazmi', 'الشهري': 'alshahri', 'العسيري': 'alasiri', 'اليامي': 'alyami' }
+const AR_CHARS = { 'ا': 'a', 'ب': 'b', 'ت': 't', 'ث': 'th', 'ج': 'j', 'ح': 'h', 'خ': 'kh', 'د': 'd', 'ذ': 'dh', 'ر': 'r', 'ز': 'z', 'س': 's', 'ش': 'sh', 'ص': 's', 'ض': 'd', 'ط': 't', 'ظ': 'z', 'ع': 'a', 'غ': 'gh', 'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n', 'ه': 'h', 'و': 'w', 'ي': 'y', 'ى': 'a', 'ة': 'a', 'ؤ': 'w', 'ئ': 'y' }
+const normAr = w => w.replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+const latinWord = w => {
+  const n = normAr(w)
+  if (AR_NAMES[n]) return AR_NAMES[n]
+  if (AR_NAMES[n.replace(/ة$/, 'ه')]) return AR_NAMES[n]
+  return [...n].map(c => AR_CHARS[c] ?? (/[A-Za-z0-9]/.test(c) ? c.toLowerCase() : '')).join('')
+}
+function nameUsername(fullName) {
+  let t = String(fullName || '').trim().replace(/\s+/g, ' ')
+  if (!t) return ''
+  t = t.replace(/(^| )(عبد|أبو|ابو|ابن|بن|آل|ال)(?= )/g, '$1$2~').replace(/~ /g, '')
+  const words = t.split(' ').map(latinWord).filter(Boolean)
+  if (!words.length) return ''
+  return (words.length === 1 ? words[0] : `${words[0]}.${words[words.length - 1]}`).slice(0, 40)
+}
+const applyUsernameCase = (u, mode) => {
+  const s = String(u || '')
+  if (mode === 'upper') return s.toUpperCase()
+  if (mode === 'cap') return s.toLowerCase().replace(/(^|[._-])([a-z])/g, (m, a, b) => a + b.toUpperCase())
+  return s.toLowerCase()
+}
+const genUsername = (source, mode, f) => applyUsernameCase(source === 'name' ? nameUsername(f.full_name_ar) : buildUsername(f.job_number), mode)
+// مقارنة غير حساسة لحالة الأحرف (الشرطة السفلية في ilike رمز بديل فنهرّبها)
+const sameUsernameIlike = u => String(u).replace(/[\\%_]/g, '\\$&')
 
 function UsernameStatus({ check, isAr }) {
   if (!check || check.status === 'same') return null
@@ -1086,7 +1114,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
     setJobNumberCheck({ status: 'checking' })
     const t = setTimeout(async () => {
       const { data } = await supabase.from('users').select('full_name_ar')
-        .eq('username', buildUsername(form.job_number).toLowerCase()).maybeSingle()
+        .ilike('username', buildUsername(form.job_number)).maybeSingle()
       setJobNumberCheck(data ? { status: 'taken', name: data.full_name_ar } : { status: 'free' })
     }, 400)
     return () => clearTimeout(t)
@@ -1094,6 +1122,14 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
 
   // اسم المستخدم: تعديل حر (جديد أو موجود). لا يُستبدل تلقائياً من الرقم الوظيفي بعد أن يكتبه المسؤول بنفسه
   const usernameEditedRef = useRef(false)
+  const [unSource, setUnSource] = useState('job')   // job | name
+  const [unCase, setUnCase] = useState('lower')     // lower | upper | cap
+  useEffect(() => {
+    if (user || usernameEditedRef.current) return
+    const g = genUsername(unSource, unCase, form)
+    setForm(f => (f.username === g ? f : { ...f, username: g }))
+  }, [unSource, unCase, form.full_name_ar, form.job_number, user])
+  const pickUnCase = m => { setUnCase(m); if (usernameEditedRef.current) setForm(f => ({ ...f, username: applyUsernameCase(f.username, m) })) }
   const [usernameCheck, setUsernameCheck] = useState(null) // { status: 'invalid'|'checking'|'taken'|'free'|'same', name? }
   useEffect(() => {
     const u = String(form.username || '').toLowerCase()
@@ -1102,7 +1138,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
     if (!USERNAME_RE.test(u)) { setUsernameCheck({ status: 'invalid' }); return }
     setUsernameCheck({ status: 'checking' })
     const t = setTimeout(async () => {
-      const { data } = await supabase.from('users').select('full_name_ar').eq('username', u).maybeSingle()
+      const { data } = await supabase.from('users').select('full_name_ar').ilike('username', sameUsernameIlike(u)).maybeSingle()
       setUsernameCheck(data ? { status: 'taken', name: data.full_name_ar } : { status: 'free' })
     }, 400)
     return () => clearTimeout(t)
@@ -1154,7 +1190,6 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   function handleJobNumberChange(val) {
     const n = toLatinDigits(val).replace(/\D/g, '')
     set('job_number', n)
-    if (!user && !usernameEditedRef.current) set('username', buildUsername(n))
   }
 
   // الاسم خانة واحدة (عربي أو إنجليزي): يُحفظ في full_name_ar، ويُنسخ لـ full_name_en إن كان لاتينياً
@@ -1286,7 +1321,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
         const email = `${form.username.toLowerCase()}@nwbus.sa`
         let authId
         // إنشاء حساب المصادقة من الخادم (التسجيل العام مقفول بـSupabase Auth)
-        const createRes = await createAuthUserViaEdge(form.username, form.password)
+        const createRes = await createAuthUserViaEdge(form.username.toLowerCase(), form.password)
         if (createRes.auth_id) {
           authId = createRes.auth_id
         } else if (createRes.exists) {
@@ -1302,7 +1337,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
         }
 
         const { data: inserted, error: insertErr } = await supabase.from('users').insert({
-          username:     form.username.toLowerCase(),
+          username:     form.username.trim(),
           full_name_ar: form.full_name_ar,
           full_name_en: nameEnOf(),
           role:         form.role,
@@ -1346,7 +1381,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
 
         // نجح الحفظ — امسح المسودة واعرض بطاقة بيانات الدخول
         clearNewUserDraft()
-        setCredential({ username: form.username.toLowerCase(), password: form.password, nameAr: form.full_name_ar, jobNumber: form.job_number, phone: form.phone, hireDate: form.hire_date, stationName: stations.find(s => s.id === form.station_id)?.name_ar ?? '' })
+        setCredential({ username: form.username.trim(), password: form.password, nameAr: form.full_name_ar, jobNumber: form.job_number, phone: form.phone, hireDate: form.hire_date, stationName: stations.find(s => s.id === form.station_id)?.name_ar ?? '' })
         await onSaved()
 
       } else {
@@ -1483,11 +1518,6 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                 onChange={e => handleJobNumberChange(e.target.value)}
                 placeholder={isAr ? 'مثال: 1030986' : 'e.g. 1030986'}
               />
-              {!user && form.job_number && (
-                <p className="text-xs text-amber-700 mt-1 font-mono font-bold">
-                  {buildUsername(form.job_number)}
-                </p>
-              )}
               {jobNumberCheck?.status === 'checking' && (
                 <p className="text-xs text-gray-400 mt-1">{isAr ? 'جارٍ التحقق...' : 'Checking...'}</p>
               )}
@@ -1589,16 +1619,40 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
               <>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المستخدم *' : 'Username *'}</label>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-gray-500">{isAr ? 'توليد من' : 'From'}</span>
+                      <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
+                        {[['job', isAr ? 'الرقم الوظيفي' : 'Job no.'], ['name', isAr ? 'الاسم' : 'Name']].map(([k, l]) => (
+                          <button key={k} type="button" onClick={() => { usernameEditedRef.current = false; setUnSource(k) }}
+                            className={`px-3 py-1.5 ${unSource === k && !usernameEditedRef.current ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{l}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-gray-500">{isAr ? 'الحروف' : 'Case'}</span>
+                      <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold font-mono" dir="ltr">
+                        {[['lower', 'abc'], ['upper', 'ABC'], ['cap', 'Abc']].map(([k, l]) => (
+                          <button key={k} type="button" onClick={() => pickUnCase(k)}
+                            className={`px-3 py-1.5 ${unCase === k ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{l}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                   <div className="flex items-stretch gap-0" dir="ltr">
                     <input required autoComplete="off" className={inputCls + ' font-mono font-bold flex-1 min-w-0'} style={{ borderStartEndRadius: 0, borderEndEndRadius: 0 }} value={form.username}
-                      onChange={e => { usernameEditedRef.current = true; set('username', e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '')) }}
-                      placeholder="nw1030986" />
+                      onChange={e => { usernameEditedRef.current = true; set('username', e.target.value.replace(/[^A-Za-z0-9._-]/g, '')) }}
+                      placeholder={unSource === 'name' ? applyUsernameCase('mohammed.alharbi', unCase) : applyUsernameCase('NW1030986', unCase)} />
                     <span className="px-3 flex items-center text-xs font-mono text-gray-500 border border-s-0 rounded-e-lg bg-gray-100 shrink-0">@nwbus.sa</span>
                   </div>
                   <UsernameStatus check={usernameCheck} isAr={isAr} />
-                  {usernameEditedRef.current && form.job_number && (
-                    <button type="button" onClick={() => { usernameEditedRef.current = false; set('username', buildUsername(form.job_number)) }} className="text-[11px] text-nwbus-primary underline mt-1">{isAr ? 'إعادة التوليد من الرقم الوظيفي' : 'Regenerate from job number'}</button>
+                  {unSource === 'name' && !usernameEditedRef.current && !form.full_name_ar.trim() && (
+                    <p className="text-[11px] text-gray-500 mt-1">{isAr ? 'اكتب اسم الموظف ويتولد الاسم تلقائياً (تقدر تعدّله بعدها).' : 'Type the name to generate it (editable).'}</p>
                   )}
+                  {usernameCheck?.status === 'taken' && unSource === 'name' && form.job_number && !usernameEditedRef.current && (
+                    <button type="button" onClick={() => { usernameEditedRef.current = true; set('username', form.username + String(form.job_number).slice(-3)) }} className="text-[11px] text-nwbus-primary underline mt-1">{isAr ? 'إضافة آخر 3 أرقام من الرقم الوظيفي' : 'Append last 3 digits of job number'}</button>
+                  )}
+                  <p className="text-[11px] text-gray-500 mt-1">{isAr ? 'شكل الحروف يُحفظ كما اخترته. الدخول لا يفرّق بين الكبير والصغير.' : 'Letter case is saved as chosen. Login is not case-sensitive.'}</p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'كلمة المرور *' : 'Password *'}</label>
