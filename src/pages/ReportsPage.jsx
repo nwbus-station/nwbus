@@ -275,55 +275,89 @@ function MoveTableComp({ list, color, label, isAr, storageKey }) {
   })
   const toggle = () => setOpen(v => { localStorage.setItem(storageKey, !v); return !v })
   if (!list || list.length === 0) return null
+  const MONO = "'IBM Plex Mono', ui-monospace, monospace"
+  const statusOf = m => m.unentered
+    ? { txt: isAr ? 'غير مدخلة' : 'Not entered', c: '#d97706', bg: 'rgba(217,119,6,0.14)' }
+    : m.acc ? { txt: m.acc.label, c: m.acc.color || 'var(--text-2)', bg: 'var(--surface-2)' } : null
+  const chip = (st) => st && (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 99, background: st.bg, color: st.c, fontSize: '0.7rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
+      <i style={{ width: 6, height: 6, borderRadius: '50%', background: st.c, display: 'inline-block' }} />{st.txt}
+    </span>
+  )
+  const th = (txt, center) => <th style={{ padding: '10px 12px', textAlign: center ? 'center' : 'start', fontWeight: 700, fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{txt}</th>
   return (
-    <div className="mb-4">
-      <button
-        onClick={toggle}
-        className="w-full flex items-center justify-between text-xs font-bold text-white px-3 py-2 rounded-t-xl"
-        style={{ background: color }}
-      >
-        <span>{label} ({list.length})</span>
-        <span style={{ fontSize: '0.85rem', opacity: 0.8 }}>{open ? '▲' : '▼'}</span>
+    <section className="mb-4" style={{ border: '1px solid var(--border-2)', borderRadius: 14, overflow: 'hidden', background: 'var(--card)' }}>
+      <button onClick={toggle} aria-expanded={open}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '11px 14px', background: color, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.84rem' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {label}
+          <span style={{ background: 'rgba(255,255,255,0.22)', borderRadius: 99, padding: '1px 10px', fontFamily: MONO, fontSize: '0.74rem' }}>{list.length}</span>
+        </span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
-        <div className="bg-white rounded-b-2xl shadow overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead style={{ background: color }} className="text-white">
-              <tr>
-                <th className="px-3 py-2 text-right font-semibold">{isAr ? 'التاريخ' : 'Date'}</th>
-                <th className="px-3 py-2 text-right font-semibold">{isAr ? 'الرحلة' : 'Trip'}</th>
-                <th className="px-3 py-2 text-right font-semibold">{isAr ? 'رقم الحافلة' : 'Bus'}</th>
-                <th className="px-3 py-2 text-right font-semibold">{isAr ? 'من' : 'From'}</th>
-                <th className="px-3 py-2 text-right font-semibold">{isAr ? 'إلى' : 'To'}</th>
-                <th className="px-3 py-2 text-center font-semibold">{isAr ? 'المجدول' : 'Sched.'}</th>
-                <th className="px-3 py-2 text-center font-semibold">{isAr ? 'الفعلي' : 'Actual'}</th>
-                <th className="px-3 py-2 text-center font-semibold">{isAr ? 'الحالة' : 'Status'}</th>
-                <th className="px-3 py-2 text-center font-semibold">{isAr ? 'الركاب' : 'Pax'}</th>
-                <th className="px-3 py-2 text-center font-semibold">{isAr ? 'المتخلفون' : 'Missed'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((m, i) => (
-                <tr key={i} style={m.unentered ? { background: '#fffbeb' } : { background: i % 2 ? '#f8fafc' : '#fff' }}>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{m.date}</td>
-                  <td className="px-3 py-2 font-mono font-bold" style={{ color: m.unentered ? '#92400e' : color }}>{m.trip}</td>
-                  <td className="px-3 py-2 font-mono font-bold text-gray-700">{m.bus}</td>
-                  <td className="px-3 py-2 text-gray-600 text-xs">{m.from}</td>
-                  <td className="px-3 py-2 text-gray-600 text-xs">{m.to}</td>
-                  <td className="px-3 py-2 text-center font-mono text-gray-500">{m.sched}</td>
-                  <td className="px-3 py-2 text-center font-mono text-gray-800">{m.actual}</td>
-                  <td className="px-3 py-2 text-center text-xs font-bold" style={{ color: m.unentered ? '#b45309' : m.acc?.color }}>
-                    {m.unentered ? (isAr ? '⚠ غير مدخلة' : '⚠ Not Entered') : m.acc?.label}
-                  </td>
-                  <td className="px-3 py-2 text-center font-mono text-gray-700">{m.pax || ''}</td>
-                  <td className="px-3 py-2 text-center font-mono text-red-600">{m.missed || ''}</td>
+        <>
+          {/* الكمبيوتر: جدول */}
+          <div className="hidden md:block" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead style={{ background: 'var(--surface-2)', color: 'var(--text-2)' }}>
+                <tr>
+                  {th(isAr ? 'التاريخ' : 'Date')}{th(isAr ? 'الرحلة' : 'Trip')}{th(isAr ? 'الحافلة' : 'Bus')}{th(isAr ? 'من' : 'From')}{th(isAr ? 'إلى' : 'To')}
+                  {th(isAr ? 'المجدول' : 'Sched.', true)}{th(isAr ? 'الفعلي' : 'Actual', true)}{th(isAr ? 'الحالة' : 'Status', true)}{th(isAr ? 'الركاب' : 'Pax', true)}{th(isAr ? 'المتخلفون' : 'Missed', true)}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {list.map((m, i) => (
+                  <tr key={i} style={{ background: m.unentered ? 'var(--warning-bg)' : i % 2 ? 'var(--surface)' : 'var(--card)', borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '9px 12px', color: 'var(--text-3)', fontFamily: MONO, fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{m.date}</td>
+                    <td style={{ padding: '9px 12px', fontFamily: MONO, fontWeight: 800, color: m.unentered ? '#d97706' : color === '#1C2B36' ? 'var(--text-1)' : color, whiteSpace: 'nowrap' }}>{m.trip}</td>
+                    <td style={{ padding: '9px 12px', fontFamily: MONO, fontWeight: 700, color: 'var(--text-1)' }}>{m.bus || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: 'var(--text-2)', fontSize: '0.76rem' }}>{m.from}</td>
+                    <td style={{ padding: '9px 12px', color: 'var(--text-2)', fontSize: '0.76rem' }}>{m.to}</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'center', fontFamily: MONO, color: 'var(--text-3)' }}>{m.sched}</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'center', fontFamily: MONO, fontWeight: 700, color: 'var(--text-1)' }}>{m.actual || '—'}</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'center' }}>{chip(statusOf(m))}</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'center', fontFamily: MONO, fontWeight: 700, color: 'var(--text-1)' }}>{m.pax || ''}</td>
+                    <td style={{ padding: '9px 12px', textAlign: 'center', fontFamily: MONO, fontWeight: 800, color: 'var(--danger)' }}>{m.missed || ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* الجوال: بطاقات */}
+          <div className="md:hidden"><div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10 }}>
+            {list.map((m, i) => {
+              const st = statusOf(m), edge = m.unentered ? '#d97706' : (m.acc?.color || color)
+              return (
+                <div key={i} style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${edge}`, borderRadius: 12, background: m.unentered ? 'var(--warning-bg)' : 'var(--card)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.92rem', color: m.unentered ? '#d97706' : 'var(--text-1)' }}>{m.trip}</span>
+                    {chip(st)}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8, margin: '9px 0 10px' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45 }}>{m.from}</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isAr ? 'scaleX(-1)' : 'none' }} aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.45, textAlign: 'end' }}>{m.to}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '8px 4px' }}>
+                    {[[isAr ? 'المجدول' : 'Sched.', m.sched || '—', 'var(--text-2)'], [isAr ? 'الفعلي' : 'Actual', m.actual || '—', 'var(--text-1)'], [isAr ? 'الركاب' : 'Pax', m.pax || '0', 'var(--text-1)'], [isAr ? 'متخلفون' : 'Missed', m.missed || '0', m.missed ? 'var(--danger)' : 'var(--text-3)']].map(([l, v, c]) => (
+                      <div key={l}>
+                        <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.88rem', color: c }}>{v}</div>
+                        <div style={{ fontSize: '0.6rem', color: 'var(--text-3)', fontWeight: 700, marginTop: 2 }}>{l}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '0.68rem', color: 'var(--text-3)', fontFamily: MONO }}>
+                    <span>{m.date}</span>
+                    <span>{isAr ? 'الحافلة' : 'Bus'} {m.bus || '—'}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div></div>
+        </>
       )}
-    </div>
+    </section>
   )
 }
 
