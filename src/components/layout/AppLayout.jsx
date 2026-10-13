@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import { useAppSettings } from '../../context/AppSettingsContext'
+import { getThemeMode, setThemeMode, resolveDark } from '../../lib/theme'
 import { createClient } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
@@ -32,6 +33,7 @@ function applyTheme(isDark) {
   const root = document.documentElement
   root.setAttribute('data-theme', isDark ? 'dark' : 'light')
   root.classList.toggle('dark', isDark)
+  try { document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#111111' : '#1C2B36') } catch { /* بدون meta */ }
   if (isDark) {
     Object.entries(DARK_VARS).forEach(([k, v]) => root.style.setProperty(k, v))
   } else {
@@ -497,16 +499,29 @@ export default function AppLayout() {
   const isAr = i18n.language === 'ar'
   const { settings } = useAppSettings()
 
-  // ── Theme toggle ─────────────────────────────────────
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('nwbus_theme') === 'dark'
-    applyTheme(saved)
-    return saved
+  // ── المظهر: تلقائي / نهاري / ليلي ─────────────────────
+  const [themeMode, setThemeModeState] = useState(() => {
+    const m = getThemeMode()
+    applyTheme(resolveDark(m))
+    return m
   })
+  const [dark, setDarkState] = useState(() => resolveDark(getThemeMode()))
+  const [themeMenu, setThemeMenu] = useState(false)
   useEffect(() => {
-    applyTheme(dark)
-    localStorage.setItem('nwbus_theme', dark ? 'dark' : 'light')
-  }, [dark])
+    const apply = () => { const d = resolveDark(themeMode); applyTheme(d); setDarkState(d) }
+    apply()
+    setThemeMode(themeMode)
+    if (themeMode !== 'auto' || !window.matchMedia) return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    mq.addEventListener?.('change', apply)
+    return () => mq.removeEventListener?.('change', apply)
+  }, [themeMode])
+  useEffect(() => {
+    if (!themeMenu) return
+    const close = e => { if (!e.target.closest?.('[data-theme-menu]')) setThemeMenu(false) }
+    document.addEventListener('mousedown', close); document.addEventListener('touchstart', close)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close) }
+  }, [themeMenu])
 
   const [showChangePwd, setShowChangePwd] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -647,14 +662,32 @@ export default function AppLayout() {
           {isAr ? 'EN' : 'ع'}
         </button>
 
-        {/* الوضع الداكن / الفاتح */}
-        <button onClick={() => setDark(d => !d)} title={dark ? 'وضع فاتح' : 'وضع داكن'}
-          style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: '50%', justifyContent: 'center' }}>
-          {dark
-            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-            : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-          }
-        </button>
+        {/* المظهر: تلقائي / نهاري / ليلي */}
+        <div data-theme-menu style={{ position: 'relative' }}>
+          <button onClick={() => setThemeMenu(v => !v)} aria-haspopup="menu" aria-expanded={themeMenu}
+            title={isAr ? 'المظهر' : 'Appearance'} aria-label={isAr ? 'المظهر' : 'Appearance'}
+            style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: '50%', justifyContent: 'center', position: 'relative' }}>
+            {dark
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>}
+            {themeMode === 'auto' && <span style={{ position: 'absolute', bottom: -2, insetInlineEnd: -2, background: 'var(--accent)', color: '#fff', borderRadius: 99, fontSize: '0.5rem', fontWeight: 800, padding: '1px 3px', lineHeight: 1 }}>A</span>}
+          </button>
+          {themeMenu && (
+            <div role="menu" style={{ position: 'absolute', top: 'calc(100% + 8px)', insetInlineEnd: 0, minWidth: 176, background: 'var(--card)', border: '1px solid var(--border-2)', borderRadius: 12, boxShadow: 'var(--shadow-xl)', padding: 6, zIndex: 800 }}>
+              {[['auto', isAr ? 'تلقائي (يتبع الجهاز)' : 'Auto (follow device)', <path key="a" d="M12 3v18M3 12h18" />], ['light', isAr ? 'نهاري' : 'Light', <circle key="l" cx="12" cy="12" r="5" />], ['dark', isAr ? 'ليلي' : 'Dark', <path key="d" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />]].map(([m, label, ico]) => {
+                const on = themeMode === m
+                return (
+                  <button key={m} role="menuitemradio" aria-checked={on} onClick={() => { setThemeModeState(m); setThemeMenu(false) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', minHeight: 40, border: 'none', borderRadius: 8, background: on ? 'var(--gold-dim)' : 'transparent', color: on ? 'var(--accent)' : 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: on ? 800 : 600, cursor: 'pointer', textAlign: 'start' }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ico}</svg>
+                    <span style={{ flex: 1 }}>{label}</span>
+                    {on && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         <NotificationBell profile={profile} />
 

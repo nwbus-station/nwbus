@@ -1,3 +1,4 @@
+import { getThemeMode, resolveDark } from '../lib/theme'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -31,8 +32,7 @@ export default function LoginPage() {
   }, [])
 
   // تطبيق الثيم المحفوظ قبل أول render لتجنب الوميض
-  const saved = localStorage.getItem('nwbus_theme') ?? 'light'
-  document.documentElement.setAttribute('data-theme', saved)
+  document.documentElement.setAttribute('data-theme', resolveDark(getThemeMode()) ? 'dark' : 'light')
 
   if (authLoading) return null
   if (profile) { navigate('/'); return null }
