@@ -511,10 +511,18 @@ export default function AppLayout() {
     const apply = () => { const d = resolveDark(themeMode); applyTheme(d); setDarkState(d) }
     apply()
     setThemeMode(themeMode)
-    if (themeMode !== 'auto' || !window.matchMedia) return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    mq.addEventListener?.('change', apply)
-    return () => mq.removeEventListener?.('change', apply)
+    if (themeMode === 'auto') {
+      // التلقائي بالوقت: نعيد الفحص كل دقيقة وعند عودة التطبيق للواجهة (فيتبدل عند 6 م / 6 ص)
+      const t = setInterval(apply, 60 * 1000)
+      const vis = () => { if (document.visibilityState === 'visible') apply() }
+      document.addEventListener('visibilitychange', vis)
+      return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis) }
+    }
+    if (themeMode === 'system' && window.matchMedia) {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)')
+      mq.addEventListener?.('change', apply)
+      return () => mq.removeEventListener?.('change', apply)
+    }
   }, [themeMode])
   useEffect(() => {
     if (!themeMenu) return
@@ -670,11 +678,11 @@ export default function AppLayout() {
             {dark
               ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
               : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>}
-            {themeMode === 'auto' && <span style={{ position: 'absolute', bottom: -2, insetInlineEnd: -2, background: 'var(--accent)', color: '#fff', borderRadius: 99, fontSize: '0.5rem', fontWeight: 800, padding: '1px 3px', lineHeight: 1 }}>A</span>}
+            {(themeMode === 'auto' || themeMode === 'system') && <span style={{ position: 'absolute', bottom: -2, insetInlineEnd: -2, background: 'var(--accent)', color: '#fff', borderRadius: 99, fontSize: '0.5rem', fontWeight: 800, padding: '1px 3px', lineHeight: 1 }}>{themeMode === 'auto' ? 'A' : 'S'}</span>}
           </button>
           {themeMenu && (
-            <div role="menu" style={{ position: 'absolute', top: 'calc(100% + 8px)', insetInlineEnd: 0, minWidth: 176, background: 'var(--card)', border: '1px solid var(--border-2)', borderRadius: 12, boxShadow: 'var(--shadow-xl)', padding: 6, zIndex: 800 }}>
-              {[['auto', isAr ? 'تلقائي (يتبع الجهاز)' : 'Auto (follow device)', <path key="a" d="M12 3v18M3 12h18" />], ['light', isAr ? 'نهاري' : 'Light', <circle key="l" cx="12" cy="12" r="5" />], ['dark', isAr ? 'ليلي' : 'Dark', <path key="d" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />]].map(([m, label, ico]) => {
+            <div role="menu" style={{ position: 'absolute', top: 'calc(100% + 8px)', insetInlineEnd: 0, minWidth: 214, background: 'var(--card)', border: '1px solid var(--border-2)', borderRadius: 12, boxShadow: 'var(--shadow-xl)', padding: 6, zIndex: 800 }}>
+              {[['auto', isAr ? 'تلقائي (ليلي من 6م إلى 6ص)' : 'Auto (night 6pm–6am)', <path key="a" d="M12 3v18M3 12h18" />], ['system', isAr ? 'حسب إعداد الجهاز' : 'Follow device setting', <rect key="s" x="3" y="4" width="18" height="12" rx="2" />], ['light', isAr ? 'نهاري' : 'Light', <circle key="l" cx="12" cy="12" r="5" />], ['dark', isAr ? 'ليلي' : 'Dark', <path key="d" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />]].map(([m, label, ico]) => {
                 const on = themeMode === m
                 return (
                   <button key={m} role="menuitemradio" aria-checked={on} onClick={() => { setThemeModeState(m); setThemeMenu(false) }}

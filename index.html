@@ -22,7 +22,7 @@
   </head>
   <body>
     <script>
-      (function(){try{var m=localStorage.getItem('nwbus_theme')||'auto';var d=m==='dark'||(m==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.setAttribute('data-theme',d?'dark':'light');}catch(e){}})();
+      (function(){try{var m=localStorage.getItem('nwbus_theme')||'auto';var h=new Date().getHours();var d=m==='dark'||(m==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)||(m==='auto'&&(h>=18||h<6));document.documentElement.setAttribute('data-theme',d?'dark':'light');}catch(e){}})();
     </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
