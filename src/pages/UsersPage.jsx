@@ -355,7 +355,16 @@ const applyUsernameCase = (u, mode) => {
   if (mode === 'cap') return s.toLowerCase().replace(/(^|[._-])([a-z])/g, (m, a, b) => a + b.toUpperCase())
   return s.toLowerCase()
 }
-const genUsername = (source, mode, f) => applyUsernameCase(source === 'name' ? nameUsername(f.full_name_ar) : buildUsername(f.job_number), mode)
+// رمز عشوائي من مولّد التشفير بالمتصفح (بدون الحروف المتشابهة) يُلصق بالاسم فيصير غير قابل للتخمين
+const randomUsernameSuffix = (len = 6) => {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789'
+  const buf = new Uint32Array(len); crypto.getRandomValues(buf)
+  return Array.from(buf, n => chars[n % chars.length]).join('')
+}
+const genUsername = (source, mode, f, suffix = '') => {
+  if (source === 'name') { const n = nameUsername(f.full_name_ar).slice(0, 32); return n ? applyUsernameCase(`${n}.${suffix}`, mode) : '' }
+  return applyUsernameCase(buildUsername(f.job_number), mode)
+}
 // مقارنة غير حساسة لحالة الأحرف (الشرطة السفلية في ilike رمز بديل فنهرّبها)
 const sameUsernameIlike = u => String(u).replace(/[\\%_]/g, '\\$&')
 
@@ -1124,11 +1133,12 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   const usernameEditedRef = useRef(false)
   const [unSource, setUnSource] = useState('job')   // job | name
   const [unCase, setUnCase] = useState('lower')     // lower | upper | cap
+  const [unSuffix, setUnSuffix] = useState(() => randomUsernameSuffix())
   useEffect(() => {
     if (user || usernameEditedRef.current) return
-    const g = genUsername(unSource, unCase, form)
+    const g = genUsername(unSource, unCase, form, unSuffix)
     setForm(f => (f.username === g ? f : { ...f, username: g }))
-  }, [unSource, unCase, form.full_name_ar, form.job_number, user])
+  }, [unSource, unCase, form.full_name_ar, form.job_number, unSuffix, user])
   const pickUnCase = m => { setUnCase(m); if (usernameEditedRef.current) setForm(f => ({ ...f, username: applyUsernameCase(f.username, m) })) }
   const [usernameCheck, setUsernameCheck] = useState(null) // { status: 'invalid'|'checking'|'taken'|'free'|'same', name? }
   useEffect(() => {
@@ -1642,15 +1652,18 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                   <div className="flex items-stretch gap-0" dir="ltr">
                     <input required autoComplete="off" className={inputCls + ' font-mono font-bold flex-1 min-w-0'} style={{ borderStartEndRadius: 0, borderEndEndRadius: 0 }} value={form.username}
                       onChange={e => { usernameEditedRef.current = true; set('username', e.target.value.replace(/[^A-Za-z0-9._-]/g, '')) }}
-                      placeholder={unSource === 'name' ? applyUsernameCase('mohammed.alharbi', unCase) : applyUsernameCase('NW1030986', unCase)} />
+                      placeholder={unSource === 'name' ? applyUsernameCase('mohammed.alharbi.k7x4q2', unCase) : applyUsernameCase('NW1030986', unCase)} />
                     <span className="px-3 flex items-center text-xs font-mono text-gray-500 border border-s-0 rounded-e-lg bg-gray-100 shrink-0">@nwbus.sa</span>
                   </div>
                   <UsernameStatus check={usernameCheck} isAr={isAr} />
                   {unSource === 'name' && !usernameEditedRef.current && !form.full_name_ar.trim() && (
                     <p className="text-[11px] text-gray-500 mt-1">{isAr ? 'اكتب اسم الموظف ويتولد الاسم تلقائياً (تقدر تعدّله بعدها).' : 'Type the name to generate it (editable).'}</p>
                   )}
-                  {usernameCheck?.status === 'taken' && unSource === 'name' && form.job_number && !usernameEditedRef.current && (
-                    <button type="button" onClick={() => { usernameEditedRef.current = true; set('username', form.username + String(form.job_number).slice(-3)) }} className="text-[11px] text-nwbus-primary underline mt-1">{isAr ? 'إضافة آخر 3 أرقام من الرقم الوظيفي' : 'Append last 3 digits of job number'}</button>
+                  {unSource === 'name' && (
+                    <div className="flex flex-wrap items-center gap-x-3 mt-1">
+                      <span className="text-[11px] text-green-700 font-semibold">{isAr ? 'الاسم + رمز عشوائي (6 خانات) — صعب التخمين' : 'Name + random code (6 chars) — hard to guess'}</span>
+                      <button type="button" onClick={() => { usernameEditedRef.current = false; setUnSuffix(randomUsernameSuffix()) }} className="text-[11px] text-nwbus-primary underline">{isAr ? 'رمز عشوائي جديد' : 'New random code'}</button>
+                    </div>
                   )}
                   <p className="text-[11px] text-gray-500 mt-1">{isAr ? 'شكل الحروف يُحفظ كما اخترته. الدخول لا يفرّق بين الكبير والصغير.' : 'Letter case is saved as chosen. Login is not case-sensitive.'}</p>
                 </div>
