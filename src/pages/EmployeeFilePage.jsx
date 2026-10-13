@@ -11,6 +11,8 @@ import { yearsOfService } from '../utils/leaveBalance'
 import { todayStr, toLocalDateStr } from '../utils/dates'
 import { USER_ROLES, MODULES } from '../utils/constants'
 import { esc, docHeader, docShell, openDocWindow } from '../utils/printDoc'
+import { useAppSettings } from '../context/AppSettingsContext'
+import { SHIFT_SETTING_KEY, parseShifts, shiftIdx } from '../utils/shifts'
 
 const MONO = 'ui-monospace, Menlo, Consolas, monospace'
 const LEAVE_AR = { annual: 'سنوية', casual: 'استئذان خروج', compensatory: 'تعويضية', unpaid: 'بدون راتب', emergency: 'اضطرارية', sick: 'مرضية', marriage: 'زواج', paternity: 'مولود', bereavement: 'وفاة' }
@@ -42,12 +44,21 @@ async function fetchAll(make, max = 20000) {
 // الأسبوع يبدأ السبت (نفس تقويم النظام). الوقت المخزَّن للرحلات هو توقيت المحطة نفسه (يُقرأ مباشرة من النص)
 const weekStart = day => { const t = new Date(day + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 1) % 7)); return t.toISOString().slice(0, 10) }
 const hourOf = ts => { if (!ts) return null; const h = Number(String(ts).slice(11, 13)); return Number.isFinite(h) && h >= 0 && h < 24 ? h : null }
-const shiftOfHour = h => (h == null ? null : h < 8 ? 'A' : h < 16 ? 'B' : 'C')
-const SHIFT_AR = { A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج' }
+// الورديات من إعدادات الأدمن (3 أو 4، نهاية كل وردية شاملة). نحدّثها كل عرض قبل التحليل
+let ACTIVE_SHIFTS = parseShifts(null)
+const SHIFT_AR = {}
+const SHIFT_RANGE = {}
+const applyShifts = list => {
+  ACTIVE_SHIFTS = list
+  Object.keys(SHIFT_AR).forEach(k => { delete SHIFT_AR[k]; delete SHIFT_RANGE[k] })
+  list.forEach(x => { SHIFT_AR[x.k] = x.ar; SHIFT_RANGE[x.k] = x.range.replace(' – ', '–') })
+}
+applyShifts(ACTIVE_SHIFTS)
+const minOf = ts => { if (!ts) return null; const h = Number(String(ts).slice(11, 13)), m = Number(String(ts).slice(14, 16)); return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null }
+const shiftKeyOf = min => (min == null ? null : ACTIVE_SHIFTS[shiftIdx(min, ACTIVE_SHIFTS)].k)
 const OPS_STATUS_AR = { 'Accident between other vehicles': 'حادث بين مركبات أخرى', 'Health (Driver/Passengers)': 'حالة صحية', 'Passenger Misbehavior': 'سلوك ركاب', 'Police Control': 'ضبط مروري', 'Traffic Jam': 'ازدحام مروري', Weather: 'أحوال جوية', 'Accident with NWB bus': 'حادث مع حافلة الشركة', 'Malfunction inside the station': 'عطل داخل المحطة', 'Out-of-station malfunction': 'عطل خارج المحطة', Normal: 'عادي' }
 const DOW_AR = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة']
 const dowIdx = day => (new Date(day + 'T00:00:00Z').getUTCDay() + 1) % 7
-const SHIFT_RANGE = { A: '00:00–08:00', B: '08:00–16:00', C: '16:00–24:00' }
 function analyze(raw, user, from, to) {
   const { leaves = [], sales = [], evals = [], ratings = [], logins = [], trips = [], cur = [], peers = [] } = raw
   // الإجازات
@@ -78,7 +89,7 @@ function analyze(raw, user, from, to) {
   // الأداء التشغيلي: رحلات مُدخلة + ركاب مرحَّلون + متخلفون، موزّعة على اليوم/الأسبوع/الشهر والوردية وساعة اليوم
   const mkC = () => ({ n: 0, dep: 0, pax: 0, missed: 0 })
   const mkS = () => ({ n: 0, dep: 0, pax: 0, missed: 0, punct: 0, accN: 0, delaySum: 0, delayN: 0 })
-  const O = { n: 0, dep: 0, arr: 0, extra: 0, pax: 0, missed: 0, byDay: {}, byWeek: {}, byMonth: {}, byStation: {}, byShift: { A: mkS(), B: mkS(), C: mkS() }, hours: Array(24).fill(0), acc: { early: 0, ontime: 0, late: 0, delayed: 0 }, delaySum: 0, delayN: 0 }
+  const O = { n: 0, dep: 0, arr: 0, extra: 0, pax: 0, missed: 0, byDay: {}, byWeek: {}, byMonth: {}, byStation: {}, byShift: Object.fromEntries(ACTIVE_SHIFTS.map(x => [x.k, mkS()])), shiftDefs: ACTIVE_SHIFTS, hours: Array(24).fill(0), acc: { early: 0, ontime: 0, late: 0, delayed: 0 }, delaySum: 0, delayN: 0 }
   O.byDow = Array.from({ length: 7 }, () => ({ n: 0, pax: 0, missed: 0, days: new Set() }))
   O.byRoute = {}; O.incidents = {}; O.list = []; O.timed = 0
   trips.forEach(r => {
@@ -88,7 +99,7 @@ function analyze(raw, user, from, to) {
     bd.n++; bw.n++; bm.n++
     const isArr = !!r.is_arrival
     const tsx = isArr ? r.actual_arrival : r.actual_departure
-    const h = hourOf(tsx), sk = shiftOfHour(h)
+    const h = hourOf(tsx), sk = shiftKeyOf(minOf(tsx))
     if (h != null) O.timed++
     const dw = O.byDow[dowIdx(day)]; dw.n++; dw.days.add(day)
     const tr = r.trip || {}
@@ -355,7 +366,7 @@ const fmtPeak = (scale, k) => (scale === 'week' ? `${k.slice(5)}` : scale === 'd
 
 // ── تحليل الأداء: الوردية + الوقت + الالتزام بالموعد ────────────────
 function OpsAnalysis({ O, isAr }) {
-  const shifts = ['A', 'B', 'C']
+  const shifts = (O.shiftDefs || []).map(x => x.k)
   const totN = shifts.reduce((a, k) => a + O.byShift[k].n, 0)
   const hrMax = Math.max(...O.hours, 1)
   const accDef = [['early', isAr ? 'مبكر' : 'Early', '#0369a1'], ['ontime', isAr ? 'في الموعد' : 'On time', '#16a34a'], ['late', isAr ? 'تأخر بسيط' : 'Slightly late', '#d97706'], ['delayed', isAr ? 'متأخر' : 'Delayed', '#dc2626']]
@@ -534,7 +545,7 @@ function TripLog({ O, isAr }) {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
         {[['all', isAr ? 'الكل' : 'All'], ['dep', isAr ? 'مغادرة' : 'Departures'], ['arr', isAr ? 'وصول' : 'Arrivals']].map(([v, l]) => <button key={v} type="button" style={pill(type === v)} onClick={() => { setType(v); setPage(0) }}>{l}</button>)}
         <span style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px' }} />
-        {[['all', isAr ? 'كل الورديات' : 'All shifts'], ['A', SHIFT_AR.A], ['B', SHIFT_AR.B], ['C', SHIFT_AR.C]].map(([v, l]) => <button key={v} type="button" style={pill(shift === v)} onClick={() => { setShift(v); setPage(0) }}>{l}</button>)}
+        {[['all', isAr ? 'كل الورديات' : 'All shifts'], ...ACTIVE_SHIFTS.map(x => [x.k, x.ar])].map(([v, l]) => <button key={v} type="button" style={pill(shift === v)} onClick={() => { setShift(v); setPage(0) }}>{l}</button>)}
         <input value={q} onChange={e => { setQ(e.target.value); setPage(0) }} placeholder={isAr ? 'بحث: رقم الرحلة / الحافلة / المحطة' : 'Search trip / bus / station'} aria-label={isAr ? 'بحث في سجل الرحلات' : 'Search trip log'}
           style={{ flex: 1, minWidth: 190, border: '1px solid var(--border)', borderRadius: 10, padding: '7px 12px', fontSize: '0.78rem', fontFamily: 'inherit', background: 'var(--card)' }} />
       </div>
@@ -755,7 +766,9 @@ export default function EmployeeFilePage() {
   }
   useEffect(() => { load() }, [empId, from, to]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const an = useMemo(() => (data ? analyze(data.raw, data.user, from, to) : null), [data, from, to])
+  const { settings: appSettings } = useAppSettings()
+  applyShifts(parseShifts(appSettings?.[SHIFT_SETTING_KEY]))
+  const an = useMemo(() => (data ? analyze(data.raw, data.user, from, to) : null), [data, from, to, appSettings?.[SHIFT_SETTING_KEY]]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!(isGeneralAdmin || isAdmin)) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'هذا القسم للأدمن فقط' : 'Admin only'}</div>
 
@@ -850,7 +863,7 @@ export default function EmployeeFilePage() {
       ${scaleTbl('الحصيلة الأسبوعية', O.byWeek, k => `${k} ← ${addDays(k, 6)}`, 26)}
       ${scaleTbl('الحصيلة الشهرية', O.byMonth, k => k, 24)}
       ${scaleTbl('الحصيلة اليومية (آخر 31 يوماً)', O.byDay, k => k, 31)}
-      <h4 class="sub">تحليل الأداء — الوردية</h4><table class="t"><thead><tr><th>الوردية</th><th>الرحلات</th><th>الحصة</th><th>ركاب مرحَّلون</th><th>نسبة التخلف</th><th>الالتزام بالموعد</th><th>متوسط الفرق (د)</th></tr></thead><tbody>${['A', 'B', 'C'].map(k => { const v = O.byShift[k], tot = O.byShift.A.n + O.byShift.B.n + O.byShift.C.n; return `<tr><td class="l"><b>${SHIFT_AR[k]}</b> <span class="muted">${SHIFT_RANGE[k]}</span></td><td>${v.n}</td><td>${tot ? Math.round(v.n / tot * 100) + '%' : '—'}</td><td>${n0(v.pax)}</td><td>${v.pax + v.missed ? pct1(v.missed / (v.pax + v.missed)) : '—'}</td><td>${v.accN ? Math.round(v.punct / v.accN * 100) + '%' : '—'}</td><td>${v.delayN ? (v.delaySum / v.delayN > 0 ? '+' : '') + (v.delaySum / v.delayN).toFixed(1) : '—'}</td></tr>` }).join('')}</tbody></table>
+      <h4 class="sub">تحليل الأداء — الوردية</h4><table class="t"><thead><tr><th>الوردية</th><th>الرحلات</th><th>الحصة</th><th>ركاب مرحَّلون</th><th>نسبة التخلف</th><th>الالتزام بالموعد</th><th>متوسط الفرق (د)</th></tr></thead><tbody>${O.shiftDefs.map(x => x.k).map(k => { const v = O.byShift[k], tot = Object.values(O.byShift).reduce((a, x) => a + x.n, 0); return `<tr><td class="l"><b>${SHIFT_AR[k]}</b> <span class="muted">${SHIFT_RANGE[k]}</span></td><td>${v.n}</td><td>${tot ? Math.round(v.n / tot * 100) + '%' : '—'}</td><td>${n0(v.pax)}</td><td>${v.pax + v.missed ? pct1(v.missed / (v.pax + v.missed)) : '—'}</td><td>${v.accN ? Math.round(v.punct / v.accN * 100) + '%' : '—'}</td><td>${v.delayN ? (v.delaySum / v.delayN > 0 ? '+' : '') + (v.delaySum / v.delayN).toFixed(1) : '—'}</td></tr>` }).join('')}</tbody></table>
       ${O.hours.some(x => x) ? `<div class="muted" style="margin:8px 0 3px">توزيع الرحلات على ساعات اليوم${O.peakHour != null ? ` — الذروة ${String(O.peakHour).padStart(2, '0')}:00` : ''}</div><div class="hist">${O.hours.map((h, i) => `<span><i style="height:${Math.max(h ? 3 : 1, h / hrMax * 34)}px;${i === O.peakHour ? 'background:#EE712D' : ''}"></i><em>${i % 3 === 0 ? i : ''}</em></span>`).join('')}</div>` : ''}
       ${O.accN ? `<div class="muted" style="margin:8px 0 3px">الالتزام بموعد المغادرة: ${Math.round(O.punctRate * 100)}% — مبكر ${O.acc.early} · في الموعد ${O.acc.ontime} · تأخر بسيط ${O.acc.late} · متأخر ${O.acc.delayed}</div><div class="stack">${[['early', '#0369a1'], ['ontime', '#16a34a'], ['late', '#d97706'], ['delayed', '#dc2626']].map(([k, c]) => `<i style="width:${O.acc[k] / O.accN * 100}%;background:${c}"></i>`).join('')}</div>` : ''}
       ${O.insights.length ? `<h4 class="sub">خلاصة التحليل</h4><div class="grid g2" style="align-items:start"><div class="ins ok"><h4>إيجابي</h4><ul>${O.insights.filter(x => x.t === 'good').map(x => `<li style="--c:#16a34a">${esc(x.text)}</li>`).join('') || '<li class="none">—</li>'}</ul></div><div class="ins no"><h4>متابعة</h4><ul>${O.insights.filter(x => x.t === 'watch').map(x => `<li style="--c:#d97706">${esc(x.text)}</li>`).join('') || '<li class="none">لا توجد</li>'}</ul></div></div><ul class="notes">${O.insights.filter(x => x.t === 'info').map(x => `<li>${esc(x.text)}</li>`).join('')}</ul>` : ''}

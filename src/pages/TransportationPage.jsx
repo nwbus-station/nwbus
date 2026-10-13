@@ -23,6 +23,8 @@ import { todayStr } from '../utils/dates'
 import RouteText from '../components/shared/RouteText'
 import { isRestStation } from '../utils/stations'
 import SelectField from '../components/shared/SelectField'
+import { useAppSettings } from '../context/AppSettingsContext'
+import { SHIFT_SETTING_KEY, parseShifts, shiftIdx } from '../utils/shifts'
 
 const accuracyColor = v => ({
   'On Time':    'text-green-600 font-semibold',
@@ -709,7 +711,9 @@ export default function TransportationPage() {
   const [viewMode, setViewMode] = useState('station') // 'station' | 'schedule'
   const [scheduleData, setScheduleData] = useState([])
   const [schedStatus, setSchedStatus] = useState('all')   // all | departed | scheduled | late
-  const [schedShift, setSchedShift] = useState('all')    // all | A | B | C
+  const [schedShift, setSchedShift] = useState('all')    // all | A | B | C | D
+  const { settings: appSettings } = useAppSettings()
+  const SHIFTS = parseShifts(appSettings?.[SHIFT_SETTING_KEY])   // نهاية كل وردية شاملة (من الإعدادات)
   const [schedQ, setSchedQ] = useState('')
   const [scheduleLoading, setScheduleLoading] = useState(false)
 
@@ -1271,11 +1275,7 @@ export default function TransportationPage() {
     const nowMin = now.getHours() * 60 + now.getMinutes()
     const minsOf = t => { const x = t.role === 'both' ? t.schedDep : t.schedTime; return x ? Number(String(x).slice(0, 2)) * 60 + Number(String(x).slice(3, 5)) : 0 }
     const sorted = [...filtered].sort((a, b) => minsOf(a) - minsOf(b))
-    const shifts = [
-      { k: 'A', ar: 'الوردية أ', en: 'Shift A', from: 0, to: 480, range: '00:00 – 08:00' },
-      { k: 'B', ar: 'الوردية ب', en: 'Shift B', from: 480, to: 960, range: '08:00 – 16:00' },
-      { k: 'C', ar: 'الوردية ج', en: 'Shift C', from: 960, to: 1440, range: '16:00 – 24:00' },
-    ]
+    const shifts = SHIFTS
     const entered = t => { const s = tripState(t); return s.isEntry }
     // الرحلة القادمة: أول رحلة غير مُدخلة موعدها الآن أو بعده
     const next = isToday ? sorted.find(t => !entered(t) && !tripState(t).isCancelled && minsOf(t) >= nowMin - 5) : null
@@ -1291,12 +1291,12 @@ export default function TransportationPage() {
             <span style={{ background: 'rgba(255,255,255,0.16)', borderRadius: 99, padding: '3px 14px', fontSize: '0.76rem', fontWeight: 800 }}>{nextIn <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${nextIn >= 60 ? `${Math.floor(nextIn / 60)}س ${nextIn % 60}د` : `${nextIn} د`}` : `in ${nextIn} min`)}</span>
           </div>
         )}
-        {shifts.map(sh => {
-          const list = sorted.filter(t => { const m = minsOf(t); return m >= sh.from && m < sh.to })
+        {shifts.map((sh, shI) => {
+          const list = sorted.filter(t => shiftIdx(minsOf(t), shifts) === shI)
           if (!list.length) return null
           const done = list.filter(entered).length
           const pct = Math.round((done / list.length) * 100)
-          const nowHere = isToday && nowMin >= sh.from && nowMin < sh.to
+          const nowHere = isToday && shiftIdx(nowMin, shifts) === shI
           let nowPlaced = false
           return (
             <section key={sh.k}>
@@ -1361,8 +1361,8 @@ export default function TransportationPage() {
     const meas = rows.filter(r => r.dly != null)
     const punct = meas.length ? Math.round((meas.filter(r => r.dly <= 5).length / meas.length) * 100) : null
     const pct = total ? Math.round((departedN / total) * 100) : 0
-    const SH = [['A', 'الوردية أ', 'Shift A', 0, 480, '00:00 – 08:00'], ['B', 'الوردية ب', 'Shift B', 480, 960, '08:00 – 16:00'], ['C', 'الوردية ج', 'Shift C', 960, 1440, '16:00 – 24:00']]
-    const shiftOf = r => (r.sm < 480 ? 'A' : r.sm < 960 ? 'B' : 'C')
+    const SH = SHIFTS.map(x => [x.k, x.ar, x.en, x.from, x.to, x.range])
+    const shiftOf = r => SHIFTS[shiftIdx(r.sm, SHIFTS)].k
     const q = schedQ.trim().toLowerCase()
     const list = rows.filter(r => {
       if (schedStatus === 'departed' && !r.departed) return false
@@ -1524,13 +1524,13 @@ export default function TransportationPage() {
             <div className="md:hidden"><div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{list.map(card)}</div></div>
             <div className="hidden md:block">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                {SH.map(([k, ar, enL, from, to, range]) => {
-                  const grp = list.filter(r => r.sm >= from && r.sm < to)
+                {SH.map(([k, ar, enL, from, to, range], shI) => {
+                  const grp = list.filter(r => shiftIdx(r.sm, SHIFTS) === shI)
                   if (!grp.length) return null
-                  const all = rows.filter(r => r.sm >= from && r.sm < to)
+                  const all = rows.filter(r => shiftIdx(r.sm, SHIFTS) === shI)
                   const done = all.filter(r => r.departed).length
                   const sp = all.length ? Math.round((done / all.length) * 100) : 0
-                  const nowHere = isToday && nowMin >= from && nowMin < to
+                  const nowHere = isToday && shiftIdx(nowMin, SHIFTS) === shI
                   return (
                     <section key={k}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -1594,12 +1594,13 @@ export default function TransportationPage() {
   const measured     = depRecs.filter(r => r.departure_accuracy).length
   const punctPct     = measured ? Math.round((depRecs.filter(r => r.departure_accuracy === 'On Time' || r.departure_accuracy === 'Early').length / measured) * 100) : null
   const tMin = t => { const x = t.role === 'both' ? t.schedDep : t.schedTime; return x ? Number(String(x).slice(0, 2)) * 60 + Number(String(x).slice(3, 5)) : 0 }
-  const shiftProg = [['A', isAr ? 'أ' : 'A', 0, 480], ['B', isAr ? 'ب' : 'B', 480, 960], ['C', isAr ? 'ج' : 'C', 960, 1440]].map(([k, lbl, a, b]) => {
-    const list = trips.filter(t => { const m = tMin(t); return m >= a && m < b })
+  const shiftProg = SHIFTS.map((sh, shI) => {
+    const lbl = isAr ? sh.ar.replace('الوردية ', '') : sh.k
+    const list = trips.filter(t => shiftIdx(tMin(t), SHIFTS) === shI)
     const done = list.filter(t => (t.role === 'both'
       ? !!(recordMap[`${t.id}|departure`] || recordMap[`${t.id}|arrival`])
       : !!recordMap[`${t.id}|${t.role === 'arrival' ? 'arrival' : 'departure'}`])).length
-    return { k, lbl, n: list.length, done }
+    return { k: sh.k, lbl, n: list.length, done }
   })
 
   // المحاسب الصرف لا يُدخل ترحيلاً — لكن المشرف/الأدمن الذي يحمل صفة محاسب إضافية يُدخل عادي

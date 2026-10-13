@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useAppSettings } from '../context/AppSettingsContext'
 import BackupSettings from '../components/settings/BackupSettings'
 import OperationsReportDownload from '../components/settings/OperationsReportDownload'
+import ShiftSettings from '../components/settings/ShiftSettings'
 
 const THEMES = [
   { id:'bw',     labelAr:'أسود وأبيض',    labelEn:'Black & White',   preview:['#0a0a0a','#ffffff','#f0f0f0'] },
@@ -92,6 +93,9 @@ const Section = ({ titleAr, titleEn, children }) => (
           {isAr ? 'يُطبَّق فوراً على جميع المستخدمين المتصلين' : 'Applies instantly to all connected users'}
         </p>
       </Section>
+
+      {/* ── الورديات ── */}
+      <ShiftSettings isAr={isAr} />
 
       {/* ── النسخ الاحتياطي والتقرير اليومي ── */}
       <OperationsReportDownload isAr={isAr} />
