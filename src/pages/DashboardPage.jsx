@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { getCached, setCached } from '../lib/pageCache'
 import { onPwaUpdateAvailable, isPwaUpdatePending, applyPwaUpdate } from '../lib/pwaUpdate'
+import { shiftsFromEnds } from '../utils/stationShifts'
+import { shiftIdx } from '../utils/shifts'
 import { SurveyOverlay, detectSurveyCity, SURVEY_STATIONS } from './SurveyPage'
 import { TEMPLATES as MAGAZINE_TEMPLATES, TEMPLATE_ORDER as MAGAZINE_TEMPLATE_ORDER, bgFor as magazineBgFor, isPostLive, templateLabel as magazineTemplateLabel } from './MagazinePage'
 
@@ -295,6 +297,19 @@ export default function DashboardPage() {
   const stationName = profile?.station ? (isAr ? profile.station.name_ar : profile.station.name_en) : null
   const userName    = profile?.full_name_ar ?? ''
 
+  // الوردية الحالية حسب ورديات محطة المستخدم (3 أو 4) — مع الوقت المتبقي
+  const [stEnds, setStEnds] = useState(null)
+  useEffect(() => {
+    if (!profile?.station_id) return
+    supabase.from('stations').select('shift_ends').eq('id', profile.station_id).maybeSingle().then(({ data }) => setStEnds(data?.shift_ends ?? null))
+  }, [profile?.station_id])
+  const shiftList = shiftsFromEnds(stEnds)
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  const curShift = shiftList[shiftIdx(nowMin, shiftList)]
+  const shiftPct = Math.min(100, Math.max(0, ((nowMin - curShift.from) / Math.max(1, curShift.to - curShift.from)) * 100))
+  const remMin = Math.max(0, curShift.to - nowMin)
+  const remText = isAr ? `متبقي ${Math.floor(remMin / 60)}س ${remMin % 60}د` : `${Math.floor(remMin / 60)}h ${remMin % 60}m left`
+
   const [hasStar, setHasStar] = useState(false)
   useEffect(() => {
     if (!profile?.id) return
@@ -491,13 +506,19 @@ export default function DashboardPage() {
         {/* ── شريط الحالة ── */}
         <div style={{ ...card, display: 'flex', flexWrap: 'wrap', marginBottom: 18, overflow: 'hidden' }}>
           {[
+            { label: remText, val: isAr ? curShift.ar : curShift.en, sub: `${curShift.range}`, bar: shiftPct, tone: 'var(--text-1)', small: true, wide: true },
             { label: isAr ? 'إشعارات غير مقروءة' : 'Unread notifications', val: unread, tone: unread ? 'var(--accent)' : 'var(--text-1)' },
             { label: isAr ? 'حالة النظام' : 'System', val: updatePending ? (isAr ? 'تحديث متوفر' : 'Update ready') : (isAr ? 'متصل' : 'Online'), tone: updatePending ? 'var(--warning)' : 'var(--success)', small: true, onClick: updatePending ? applyPwaUpdate : undefined },
             { label: isAr ? 'نسخة البرنامج' : 'Version', val: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev', tone: 'var(--text-2)', mono: true, small: true },
           ].map((c, i) => (
-            <div key={c.label} onClick={c.onClick} style={{ flex: '1 1 150px', padding: '12px 18px', borderInlineStart: i ? '1px solid var(--border)' : 'none', cursor: c.onClick ? 'pointer' : 'default' }}>
-              <div style={{ fontSize: c.small ? '0.95rem' : '1.35rem', fontWeight: 800, color: c.tone, fontFamily: c.small && !c.mono ? 'inherit' : MONO, lineHeight: 1.25 }} dir={c.mono ? 'ltr' : undefined}>{c.val}</div>
-              <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', marginTop: 2, fontWeight: 600 }}>{c.label}</div>
+            <div key={c.label} onClick={c.onClick} style={{ flex: c.wide ? '2 1 220px' : '1 1 150px', padding: '12px 18px', borderInlineStart: i ? '1px solid var(--border)' : 'none', cursor: c.onClick ? 'pointer' : 'default' }}>
+              {c.wide && <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.08em', marginBottom: 2 }}>{isAr ? 'الوردية الحالية' : 'CURRENT SHIFT'}</div>}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: c.small ? '0.98rem' : '1.35rem', fontWeight: 800, color: c.tone, fontFamily: c.small && !c.mono ? 'inherit' : MONO, lineHeight: 1.25 }} dir={c.mono ? 'ltr' : undefined}>{c.val}</span>
+                {c.sub && <span dir="ltr" style={{ fontFamily: MONO, fontSize: '0.7rem', color: 'var(--text-3)', fontWeight: 600 }}>{c.sub}</span>}
+              </div>
+              {c.bar != null && <div style={{ height: 4, borderRadius: 2, background: 'var(--surface-2)', margin: '6px 0 3px', overflow: 'hidden' }}><div style={{ width: `${c.bar}%`, height: '100%', background: 'var(--accent)' }} /></div>}
+              <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', marginTop: c.bar != null ? 0 : 2, fontWeight: 600 }}>{c.label}</div>
             </div>
           ))}
         </div>

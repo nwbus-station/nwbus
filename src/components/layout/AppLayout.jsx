@@ -328,7 +328,13 @@ const ICONS = {
   call:    ['M11 5L6 9H2v6h4l5 4V5z','M19.07 4.93a10 10 0 010 14.14','M15.54 8.46a5 5 0 010 7.07'],
   menu:    ['M4 7h16','M4 12h16','M4 17h16'],
   x:       ['M18 6L6 18','M6 6l12 12'],
+  moon:    ['M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z'],
+  sun:     ['M12 17a5 5 0 100-10 5 5 0 000 10z','M12 1v2','M12 21v2','M4.22 4.22l1.42 1.42','M18.36 18.36l1.42 1.42','M1 12h2','M21 12h2','M4.22 19.78l1.42-1.42','M18.36 5.64l1.42-1.42'],
+  chevron: ['M9 18l6-6-6-6'],
 }
+
+// لون مميز لكل قسم بقائمة الجوال
+const NAV_HUE = { '/': '#6366f1', '/transportation': '#0ea5e9', '/lost-found': '#f59e0b', '/sales': '#10b981', '/reports': '#6366f1', '/leaves': '#8b5cf6', '/survey': '#f59e0b', '/evaluation': '#ec4899', '/my-rating': '#f59e0b', '/users': '#0ea5e9', '/stations': '#14b8a6', '/settings': '#64748b', '/map': '#22c55e', '/customer-ratings': '#ec4899', '/employee-file': '#6366f1', '/calls': '#ef4444', '/magazine': '#ef4444' }
 
 const NAV_GROUPS = [
   {
@@ -379,41 +385,39 @@ const JOB_TITLES = {
   cleaner:            { ar: 'عامل نظافة',   en: 'Cleaner' },
 }
 
-// ── تبويب تنقّل علوي — نصي صافٍ بخط سفلي للنشط ─────────
+// ── تبويب تنقّل علوي — أيقونة + نص، والنشط بخط سفلي سميك وخلفية خفيفة ─────────
 function NavTab({ item, isAr }) {
+  const ico = ICONS[item.icon]
   if (item.disabled) return (
-    <span style={{
-      display: 'flex', alignItems: 'center', whiteSpace: 'nowrap',
-      padding: '13px 14px 11px', fontSize: '0.84rem', fontWeight: 500,
-      color: 'var(--border-2)', cursor: 'not-allowed',
-      borderBottom: '2px solid transparent', marginBottom: -2,
-    }}>
+    <span style={{ display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap', padding: '0 14px', fontSize: '0.84rem', fontWeight: 500, color: 'var(--border-2)', cursor: 'not-allowed' }}>
       {isAr ? item.labelAr : item.labelEn}
     </span>
   )
-
   return (
-    <NavLink to={item.to} end={item.to === '/'} className="navtab"
-      style={({ isActive }) => ({
-        display: 'flex', alignItems: 'center', whiteSpace: 'nowrap',
-        padding: '11px 16px 9px', fontSize: '0.83rem',
-        fontWeight: isActive ? 700 : 400,
-        color: isActive ? 'var(--text-1)' : 'var(--text-3)',
-        textDecoration: 'none',
-        borderBottom: isActive ? '2px solid #5B5BD6' : '2px solid transparent',
-        marginBottom: -1,
-        background: 'transparent',
-        transition: 'color 0.12s',
-        letterSpacing: isActive ? '-0.01em' : '0',
-      })}>
-      {isAr ? item.labelAr : item.labelEn}
+    <NavLink to={item.to} end={item.to === '/'} className={({ isActive }) => `navtab${isActive ? ' navtab-on' : ''}`}>
+      {ico && <Icon d={ico} size={15} />}
+      <span>{isAr ? item.labelAr : item.labelEn}</span>
+    </NavLink>
+  )
+}
+
+// شعار نورث وست باص: علامة NW + الاسم (عربي وإنجليزي) — يعمل بالوضعين
+function BrandMark({ isAr }) {
+  return (
+    <NavLink to="/" className="brand-mark" aria-label="North West Bus">
+      <NWLogo height={26} />
+      <span className="brand-sep" />
+      <span className="brand-text">
+        <b>{isAr ? <><i>نورث</i> وست باص</> : <><i>North</i> West Bus</>}</b>
+        <small dir="ltr">NORTH WEST BUS</small>
+      </span>
     </NavLink>
   )
 }
 
 // قائمة الجوال (الدرج الجانبي) — تعرض كل الأقسام المتاحة دفعة وحدة، بدل الاكتفاء بأول 5
 // بالشريط السفلي أو الاضطرار لتدوير الشاشة لعرض الشريط العلوي (نفس محتوى top-nav بالضبط)
-function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, stationName }) {
+function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, stationName, dark, onToggleTheme, onToggleLang, onRefresh, onChangePwd, onLogout }) {
   useEffect(() => {
     if (!open) return
     const onKey = e => { if (e.key === 'Escape') onClose() }
@@ -422,35 +426,68 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
   }, [open, onClose])
 
+  const initials = String(profile?.full_name_ar || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  const groups = visibleGroups.filter(g => g.items.length)
+  const titles = isAr ? ['الأقسام', 'الإدارة'] : ['Sections', 'Administration']
+  const actions = [
+    { key: 'theme', label: dark ? (isAr ? 'نهاري' : 'Light') : (isAr ? 'ليلي' : 'Dark'), icon: dark ? ICONS.sun : ICONS.moon, onClick: onToggleTheme },
+    { key: 'lang', label: isAr ? 'English' : 'عربي', text: isAr ? 'EN' : 'ع', onClick: onToggleLang },
+    { key: 'refresh', label: isAr ? 'تحديث' : 'Refresh', icon: ICONS.refresh, onClick: onRefresh },
+    { key: 'pwd', label: isAr ? 'الأمان' : 'Security', icon: ICONS.key, onClick: () => { onClose(); onChangePwd() } },
+  ]
+
   return (
     <>
       <div className={`mobile-menu-overlay${open ? ' open' : ''}`} onClick={onClose} />
       <aside className={`mobile-menu-drawer${open ? ' open' : ''}`} dir={isAr ? 'rtl' : 'ltr'} role="dialog" aria-modal="true">
-        <div className="mobile-menu-head">
-          <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name_ar}</p>
-            <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {roleLabel}{stationName && <span> · {stationName}</span>}
-            </p>
+        <div className="mm-hero">
+          <div className="mm-hero-top">
+            <div className="mm-avatar" aria-hidden="true">{initials}</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p className="mm-name">{profile?.full_name_ar}</p>
+              <div className="mm-meta">
+                {roleLabel && <span className="mm-chip">{roleLabel}</span>}
+                {stationName && <span className="mm-station">{stationName}</span>}
+              </div>
+            </div>
+            <button onClick={onClose} aria-label={isAr ? 'إغلاق القائمة' : 'Close menu'} className="mm-close">
+              <Icon d={ICONS.x} size={14} />
+            </button>
           </div>
-          <button onClick={onClose} aria-label={isAr ? 'إغلاق القائمة' : 'Close menu'}
-            style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--surface)', color: 'var(--text-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}>
-            <Icon d={ICONS.x} size={14} />
-          </button>
+          <div className="mm-actions">
+            {actions.map(a => (
+              <button key={a.key} type="button" onClick={a.onClick} className="mm-action">
+                <span className="mm-action-ico">{a.icon ? <Icon d={a.icon} size={17} /> : <b>{a.text}</b>}</span>
+                <span>{a.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
         <nav className="mobile-menu-body">
-          {visibleGroups.map((group, gi) => (
+          {groups.map((group, gi) => (
             <div key={gi} className="mobile-menu-group">
-              {group.items.map(item => (
-                <NavLink key={item.to} to={item.to} end={item.to === '/'} onClick={onClose}
-                  className={({ isActive }) => `mobile-menu-item${isActive ? ' active' : ''}`}>
-                  <span className="mobile-menu-item-ico"><Icon d={ICONS[item.icon]} size={17} /></span>
-                  <span>{isAr ? item.labelAr : item.labelEn}</span>
-                </NavLink>
-              ))}
+              {groups.length > 1 && <p className="mm-group-title">{titles[gi] ?? titles[1]}</p>}
+              {group.items.map(item => {
+                const hue = NAV_HUE[item.to] || '#64748b'
+                return (
+                  <NavLink key={item.to} to={item.to} end={item.to === '/'} onClick={onClose}
+                    className={({ isActive }) => `mobile-menu-item${isActive ? ' active' : ''}`} style={{ '--hue': hue }}>
+                    <span className="mobile-menu-item-ico"><Icon d={ICONS[item.icon]} size={18} /></span>
+                    <span className="mm-label">{isAr ? item.labelAr : item.labelEn}</span>
+                    <span className="mm-chev"><Icon d={ICONS.chevron} size={14} /></span>
+                  </NavLink>
+                )
+              })}
             </div>
           ))}
         </nav>
+        <div className="mm-foot">
+          <button type="button" onClick={onLogout} className="mm-logout">
+            <Icon d={ICONS.logout} size={16} />
+            <span>{isAr ? 'تسجيل الخروج' : 'Sign out'}</span>
+          </button>
+          <p className="mm-ver" dir="ltr">NW Station · v{__APP_VERSION__}</p>
+        </div>
       </aside>
     </>
   )
@@ -651,11 +688,10 @@ export default function AppLayout() {
 
   const ghostBtn = {
     display: 'flex', alignItems: 'center', gap: 6,
-    height: 32, padding: '0 12px', borderRadius: 6,
-    background: 'var(--card)', border: 'none',
-    color: 'var(--text-2)', fontSize: '0.72rem', fontWeight: 500,
+    height: 34, padding: '0 12px', borderRadius: 8,
+    background: 'var(--surface)', border: '1px solid var(--border)',
+    color: 'var(--text-2)', fontSize: '0.74rem', fontWeight: 600,
     cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)',
     transition: 'all 0.13s',
   }
 
@@ -663,13 +699,12 @@ export default function AppLayout() {
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
 
       {/* ══ شريط العلامة العلوي ══════════════════════════ */}
-      <header className="no-print" style={{
+      <header className="no-print app-header" style={{
         background: 'var(--card)',
         borderBottom: '1px solid var(--border)',
-        height: 54, flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px',
+        height: 60, flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: 10, padding: '0 18px',
         position: 'sticky', top: 0, zIndex: 40,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
       }}>
         {/* زر القائمة — جوال فقط */}
         <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)} aria-label={isAr ? 'فتح القائمة' : 'Open menu'}
@@ -677,19 +712,15 @@ export default function AppLayout() {
           <Icon d={ICONS.menu} size={17} />
         </button>
 
-        {/* Wordmark */}
-        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, color: 'var(--text-1)' }}>
-          <NWLogo height={26} />
-        </div>
+        {/* الشعار */}
+        <BrandMark isAr={isAr} />
 
         <div style={{ flex: 1 }} />
 
         {/* شاشة العرض */}
         {canSeeModule('live_board') && (
         <span className="header-live-board" style={{ display: 'contents' }}>
-        <button onClick={() => navigate('/board')} style={ghostBtn}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = 'var(--text-1)' }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.color = 'var(--text-2)' }}>
+        <button onClick={() => navigate('/board')} className="hbtn" style={ghostBtn}>
           <Icon d={ICONS.monitor} size={13} />
           <span className="hidden md:inline">{isAr ? 'شاشة العرض' : 'Live Board'}</span>
         </button>
@@ -697,15 +728,13 @@ export default function AppLayout() {
         )}
 
         {/* اللغة */}
-        <button onClick={toggleLang} style={ghostBtn}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = 'var(--text-1)' }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.color = 'var(--text-2)' }}>
+        <button onClick={toggleLang} className="hbtn" style={ghostBtn}>
           {isAr ? 'EN' : 'ع'}
         </button>
 
         {/* تحديث الصفحة (يفحص النسخة الجديدة ويعيد التحميل) */}
         <button onClick={() => hardRefresh()} title={isAr ? 'تحديث الصفحة' : 'Refresh'} aria-label={isAr ? 'تحديث الصفحة' : 'Refresh'}
-          style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: '50%', justifyContent: 'center' }}>
+          className="hbtn" style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: 8, justifyContent: 'center' }}>
           <Icon d={ICONS.refresh} size={15} />
         </button>
 
@@ -713,7 +742,7 @@ export default function AppLayout() {
         <div data-theme-menu style={{ position: 'relative' }}>
           <button onClick={() => setThemeMenu(v => !v)} aria-haspopup="menu" aria-expanded={themeMenu}
             title={isAr ? 'المظهر' : 'Appearance'} aria-label={isAr ? 'المظهر' : 'Appearance'}
-            style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: '50%', justifyContent: 'center', position: 'relative' }}>
+            className="hbtn" style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: 8, justifyContent: 'center', position: 'relative' }}>
             {dark
               ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
               : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>}
@@ -739,48 +768,42 @@ export default function AppLayout() {
         <NotificationBell profile={profile} />
 
         {/* المستخدم */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 12, borderInlineStart: '1px solid var(--border)' }}>
-          <div style={{ textAlign: isAr ? 'right' : 'left', lineHeight: 1.2 }} className="hidden sm:block">
-            <p style={{ margin: 0, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-1)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 12, marginInlineStart: 2, borderInlineStart: '1px solid var(--border)' }}>
+          <div className="hidden sm:flex" style={{ alignItems: 'center', gap: 10, padding: '3px 14px 3px 4px', border: '1px solid var(--border)', borderRadius: 999, background: 'var(--surface)' }}>
+            <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, #5B5BD6, #8b5cf6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.74rem', fontWeight: 800, flexShrink: 0 }}>
+              {String(profile?.full_name_ar || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}
+            </span>
+            <div style={{ textAlign: isAr ? 'right' : 'left', lineHeight: 1.2, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-1)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
                 {profile?.full_name_ar}
                 {hasStar && (
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 1px 3px rgba(245,158,11,0.5))', flexShrink: 0 }}>
                     <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/><path d="M9 8h.01M12 8h.01M15 8h.01"/>
                   </svg>
                 )}
-              </span>
-            </p>
-            <p style={{
-              margin: '2px 0 0', display: 'flex', alignItems: 'center', gap: 5,
-              justifyContent: isAr ? 'flex-end' : 'flex-start',
-              fontSize: '0.62rem', fontWeight: 600, color: 'var(--accent)',
-              letterSpacing: '0.03em', maxWidth: 150,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: '0.62rem', fontWeight: 600, color: 'var(--accent)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {roleLabel}{stationName && <span style={{ color: 'var(--text-3)', fontWeight: 500 }}> · {stationName}</span>}
-              </span>
-            </p>
+              </p>
+            </div>
           </div>
           <button onClick={() => setShowChangePwd(true)} title={isAr ? 'تغيير كلمة المرور' : 'Change Password'}
-            style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: '50%', justifyContent: 'center', flexShrink: 0 }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'; e.currentTarget.style.color = 'var(--text-1)' }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08),0 1px 8px rgba(0,0,0,0.04)'; e.currentTarget.style.color = 'var(--text-2)' }}>
+            className="hbtn" style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: 8, justifyContent: 'center', flexShrink: 0 }}>
             <Icon d={ICONS.key} size={13} />
           </button>
           <button onClick={handleLogout} title={isAr ? 'تسجيل الخروج' : 'Sign Out'}
-            style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: '50%', justifyContent: 'center', flexShrink: 0 }}
+            className="hbtn" style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: 8, justifyContent: 'center', flexShrink: 0 }}
             onMouseEnter={e => { e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.color = '#DC2626' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--card)'; e.currentTarget.style.color = 'var(--text-2)' }}>
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--text-2)' }}>
             <Icon d={ICONS.logout} size={13} />
           </button>
         </div>
       </header>
 
       <MobileMenu open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}
-        visibleGroups={visibleGroups} isAr={isAr} profile={profile} roleLabel={roleLabel} stationName={stationName} />
+        visibleGroups={visibleGroups} isAr={isAr} profile={profile} roleLabel={roleLabel} stationName={stationName}
+        dark={dark} onToggleTheme={() => setThemeModeState(dark ? 'light' : 'dark')} onToggleLang={toggleLang}
+        onRefresh={() => hardRefresh()} onChangePwd={() => setShowChangePwd(true)} onLogout={handleLogout} />
 
       {showChangePwd && (
         <ChangePasswordModal isAr={isAr} onClose={() => setShowChangePwd(false)} />
@@ -864,15 +887,15 @@ export default function AppLayout() {
       <nav className="no-print top-nav" style={{
         background: 'var(--card)', flexShrink: 0,
         borderBottom: '1px solid var(--border)',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        boxShadow: '0 4px 14px -10px rgba(0,0,0,0.25)',
         display: 'flex', alignItems: 'stretch', gap: 0,
-        padding: '0 12px', overflowX: 'auto',
-        position: 'sticky', top: 54, zIndex: 39,
+        padding: '0 14px', overflowX: 'auto', height: 46,
+        position: 'sticky', top: 60, zIndex: 39,
         scrollbarWidth: 'none',
       }}>
         {visibleGroups.map((group, gi) => (
           <div key={gi} style={{ display: 'flex', alignItems: 'stretch', gap: 2 }}>
-            {gi > 0 && <div style={{ width: 1, background: 'var(--border-2)', margin: '12px 8px' }} />}
+            {gi > 0 && <div style={{ width: 1, background: 'var(--border-2)', margin: '13px 10px', opacity: 0.7 }} />}
             {group.items.map(item => <NavTab key={item.to} item={item} isAr={isAr} />)}
           </div>
         ))}
