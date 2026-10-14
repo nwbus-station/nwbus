@@ -351,6 +351,14 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       setError(isAr ? 'أدخل إجمالي المبيعات قبل الحفظ' : 'Enter the total sales before saving')
       return
     }
+    // اليوم الجديد ما يُفتح قبل 1:30 صباحاً: قبلها تُدخل الوردية الأخيرة بتاريخ أمس فقط
+    if (!sale) {
+      const n = new Date()
+      if (n.getHours() + n.getMinutes() / 60 < 1.5 && form.sale_date === todayStr()) {
+        setError(isAr ? 'اليوم الجديد يُفتح بعد الساعة 1:30 صباحاً. قبلها تُدخل الوردية ج بتاريخ أمس.' : 'The new day opens after 01:30. Before that, enter shift C with yesterday\'s date.')
+        return
+      }
+    }
     if (!sale && (form.shift !== suggested.shift || form.sale_date !== suggested.date) && !shiftConfirmed) {
       setError(isAr ? 'الوردية أو التاريخ يختلف عن المتوقع حسب الوقت الحالي — أكّد صحتهما بالتأشير على خانة التأكيد' : 'The shift or date differs from the one expected for the current time — tick the confirmation box')
       return
