@@ -698,7 +698,7 @@ export default function AppLayout() {
         background: 'var(--card)',
         borderBottom: '1px solid var(--border)',
         height: 60, flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: 10, padding: '0 18px',
+        display: 'flex', alignItems: 'center', gap: 10, padding: '0 max(16px, calc((100% - 1272px) / 2))',
         position: 'sticky', top: 0, zIndex: 40,
       }}>
         {/* زر القائمة — جوال فقط */}
@@ -884,7 +884,7 @@ export default function AppLayout() {
         borderBottom: '1px solid var(--border)',
         boxShadow: '0 4px 14px -10px rgba(0,0,0,0.25)',
         display: 'flex', alignItems: 'stretch', gap: 0,
-        padding: '0 14px', overflowX: 'auto', height: 46,
+        padding: '0 max(6px, calc((100% - 1272px) / 2 - 14px))', overflowX: 'auto', height: 46,
         position: 'sticky', top: 60, zIndex: 39,
         scrollbarWidth: 'none',
       }}>
