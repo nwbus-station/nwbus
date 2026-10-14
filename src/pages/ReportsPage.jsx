@@ -254,7 +254,7 @@ function CollapseSection({ label, sub, color, storageKey, children }) {
     <div className="mb-4">
       <button
         onClick={toggle}
-        className="w-full flex items-center justify-between text-xs font-bold text-white px-3 py-2 rounded-t-xl"
+        className="w-full flex items-center justify-between text-sm font-extrabold text-white px-4 py-2.5 rounded-t-xl"
         style={{ background: color, borderRadius: open ? undefined : 4 }}
       >
         <span>
@@ -1430,7 +1430,7 @@ export default function ReportsPage() {
             </div>
           </div>
         </section>
-        <section className="rp-actions px-4 py-3 bg-gray-50 border-t border-gray-100 rounded-b-xl flex flex-wrap items-center gap-2">
+        {data && <section className="rp-actions px-4 py-3 bg-gray-50 border-t border-gray-100 rounded-b-xl flex flex-wrap items-center gap-2">
         {data && allowCap('reports_print') && (
           <button onClick={printReport}
             className="bg-nwbus-primary text-white px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90">
@@ -1537,7 +1537,7 @@ export default function ReportsPage() {
           </div>
           </div>
         )}
-        </section>
+        </section>}
       </div>
 
       {data && (
@@ -1748,7 +1748,7 @@ export default function ReportsPage() {
           {show('missed') && (
           <section>
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h2 className="text-sm font-bold text-gray-600 flex items-center gap-2">
+              <h2 className="rp-h2">
                 {isAr ? 'المتخلفون عن الرحلات' : 'Missed Passengers'}
                 <span className="text-xs font-normal text-gray-400">({data.missed.length})</span>
               </h2>
@@ -1795,7 +1795,7 @@ export default function ReportsPage() {
           {show('facilities') && (
           <section>
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h2 className="text-sm font-bold text-gray-600 flex items-center gap-2">
+              <h2 className="rp-h2">
                 {isAr ? 'الحالة التشغيلية' : 'Faulty Facilities'}
                 <span className="text-xs font-normal text-gray-400">({data.facilities.length})</span>
               </h2>
@@ -1879,6 +1879,59 @@ export default function ReportsPage() {
         const totalPages = Math.ceil(auditTotal / PAGE_SIZE)
         // نخفي حركات التحديث اللي ما فيها أي تغيير بحقل ذي معنى (مثل last_login عند كل تسجيل دخول)
         const visibleAuditRows = auditRows.filter(row => row.action !== 'UPDATE' || computeAuditDiff(row).length > 0)
+        const diffBlock = (row, actionMeta, diff) => (
+diff.length === 0 ? (
+                                <div style={{ fontSize: '0.76rem', color: 'var(--text-3)', padding: '10px 4px' }}>
+                                  {isAr ? 'لا تفاصيل إضافية لهذا السجل' : 'No further details for this record'}
+                                </div>
+                              ) : (
+                                <div style={{
+                                  background: 'var(--card)', border: '1px solid var(--border)',
+                                  borderInlineStart: `3px solid ${actionMeta.color}`, borderRadius: 10, overflow: 'hidden',
+                                }}>
+                                  {/* عنوان مصغّر: قبل / بعد — يوضّح اتجاه القيم تحته */}
+                                  {row.action === 'UPDATE' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '7px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+                                      <span style={{ minWidth: 130 }} />
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--danger)', minWidth: 62, textAlign: 'center' }}>{isAr ? 'قبل' : 'Before'}</span>
+                                        <span style={{ width: 14 }} />
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--success)', minWidth: 62, textAlign: 'center' }}>{isAr ? 'بعد' : 'After'}</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {diff.map((d, di) => (
+                                    <div key={d.key} style={{
+                                      display: 'flex', alignItems: 'center', gap: 16, padding: '10px 16px',
+                                      borderBottom: di < diff.length - 1 ? '1px solid var(--border)' : 'none',
+                                      flexWrap: 'wrap',
+                                    }}>
+                                      <span style={{ minWidth: 130, fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)' }}>
+                                        {auditFieldLabel(d.key)}
+                                      </span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        {row.action !== 'INSERT' && (
+                                          <span style={{ fontSize: '0.76rem', padding: '3px 10px', borderRadius: 6, background: 'var(--danger-bg)', color: 'var(--danger)', fontWeight: 600 }}>
+                                            {auditFormatValue(d.key, d.from, stations)}
+                                          </span>
+                                        )}
+                                        {row.action === 'UPDATE' && (
+                                          <span style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>{isAr ? '←' : '→'}</span>
+                                        )}
+                                        {row.action !== 'DELETE' && (
+                                          <span style={{ fontSize: '0.76rem', padding: '3px 10px', borderRadius: 6, background: 'var(--success-bg)', color: 'var(--success)', fontWeight: 600 }}>
+                                            {auditFormatValue(d.key, d.to, stations)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )
+        )
+        const actionMetaOf = row => (row.action === 'INSERT' ? { color: 'var(--success)', bg: 'var(--success-bg)', label: isAr ? 'أضاف' : 'Added' }
+          : row.action === 'DELETE' ? { color: 'var(--danger)', bg: 'var(--danger-bg)', label: isAr ? 'حذف' : 'Deleted' }
+          : { color: 'var(--warning)', bg: 'var(--warning-bg, #fef3c7)', label: isAr ? 'عدّل' : 'Updated' })
         return (
           <div style={{ marginTop: 32, background: 'var(--card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
 
@@ -1905,9 +1958,9 @@ export default function ReportsPage() {
                   <path d="M21 2v6h-6"/><path d="M3 22v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L21 8"/><path d="M21 16l-2.64 2.36A9 9 0 013.51 15"/>
                 </svg>
               </button>
-              <DatePicker value={auditFrom} onChange={v => { setAuditFrom(v); if (v) setAuditTo(v) }} isAr={isAr} className="px-2 py-1 rounded-lg border border-gray-200 text-xs bg-white text-right" />
+              <div style={{ width: 150 }}><DatePicker value={auditFrom} onChange={v => { setAuditFrom(v); if (v) setAuditTo(v) }} isAr={isAr} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs bg-white" /></div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>—</span>
-              <DatePicker value={auditTo} onChange={setAuditTo} isAr={isAr} className="px-2 py-1 rounded-lg border border-gray-200 text-xs bg-white text-right" />
+              <div style={{ width: 150 }}><DatePicker value={auditTo} onChange={setAuditTo} isAr={isAr} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs bg-white" /></div>
 
               <SelectField value={auditTable} onChange={e => setAuditTable(e.target.value)}
                 style={{ fontSize: '0.78rem', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--card)', color: 'var(--text-1)' }}>
@@ -1943,8 +1996,38 @@ export default function ReportsPage() {
               </button>
             </div>
 
-            {/* الجدول */}
-            <div style={{ overflowX: 'auto' }}>
+            {/* بطاقات (جوال) */}
+            <div className="md:hidden">
+              {visibleAuditRows.length === 0 && !auditLoading && (
+                <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>{isAr ? 'لا توجد سجلات في هذه الفترة' : 'No records for this period'}</div>
+              )}
+              {visibleAuditRows.map(row => {
+                const am = actionMetaOf(row)
+                const section = auditTableMeta(row.table_name)
+                const dt = new Date(row.created_at)
+                const isOpen = auditExpanded === row.id
+                const summary = auditSummary(row, stations, tripLookup, userLookup)
+                return (
+                  <div key={row.id} onClick={() => setAuditExpanded(isOpen ? null : row.id)}
+                    style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', borderInlineStart: `3px solid ${am.color}`, cursor: 'pointer', background: isOpen ? 'var(--surface)' : 'transparent' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '2px 8px', borderRadius: 6, background: am.bg, color: am.color }}>{am.label}</span>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 9px', borderRadius: 99, background: `${section.color}18`, color: section.color, border: `1px solid ${section.color}30` }}>{section.label}</span>
+                      <span style={{ marginInlineStart: 'auto', fontSize: '0.68rem', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>
+                        {dt.toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { month: 'short', day: 'numeric' })} · {dt.toLocaleTimeString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p style={{ margin: '7px 0 0', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-1)' }}>{row.actor_name ?? '—'}</p>
+                    <p style={{ margin: '3px 0 0', fontSize: '0.78rem', color: 'var(--text-2)', lineHeight: 1.5, overflowWrap: 'anywhere' }}>{summary}</p>
+                    <p style={{ margin: '6px 0 0', fontSize: '0.68rem', fontWeight: 700, color: isOpen ? 'var(--accent)' : 'var(--text-3)' }}>{isOpen ? (isAr ? '▲ إخفاء' : '▲ Hide') : (isAr ? '▼ تفاصيل' : '▼ Details')}</p>
+                    {isOpen && <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>{diffBlock(row, am, computeAuditDiff(row))}</div>}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* الجدول (كمبيوتر) */}
+            <div className="hidden md:block" style={{ overflowX: 'auto' }}>
               {visibleAuditRows.length === 0 && !auditLoading ? (
                 <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>
                   {isAr ? 'لا توجد سجلات في هذه الفترة' : 'No records for this period'}
@@ -2007,54 +2090,7 @@ export default function ReportsPage() {
                         {isOpen && (
                           <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
                             <td colSpan={5} style={{ padding: '0 14px 16px' }}>
-                              {diff.length === 0 ? (
-                                <div style={{ fontSize: '0.76rem', color: 'var(--text-3)', padding: '10px 4px' }}>
-                                  {isAr ? 'لا تفاصيل إضافية لهذا السجل' : 'No further details for this record'}
-                                </div>
-                              ) : (
-                                <div style={{
-                                  background: 'var(--card)', border: '1px solid var(--border)',
-                                  borderInlineStart: `3px solid ${actionMeta.color}`, borderRadius: 10, overflow: 'hidden',
-                                }}>
-                                  {/* عنوان مصغّر: قبل / بعد — يوضّح اتجاه القيم تحته */}
-                                  {row.action === 'UPDATE' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '7px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
-                                      <span style={{ minWidth: 130 }} />
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--danger)', minWidth: 62, textAlign: 'center' }}>{isAr ? 'قبل' : 'Before'}</span>
-                                        <span style={{ width: 14 }} />
-                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--success)', minWidth: 62, textAlign: 'center' }}>{isAr ? 'بعد' : 'After'}</span>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {diff.map((d, di) => (
-                                    <div key={d.key} style={{
-                                      display: 'flex', alignItems: 'center', gap: 16, padding: '10px 16px',
-                                      borderBottom: di < diff.length - 1 ? '1px solid var(--border)' : 'none',
-                                      flexWrap: 'wrap',
-                                    }}>
-                                      <span style={{ minWidth: 130, fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)' }}>
-                                        {auditFieldLabel(d.key)}
-                                      </span>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        {row.action !== 'INSERT' && (
-                                          <span style={{ fontSize: '0.76rem', padding: '3px 10px', borderRadius: 6, background: 'var(--danger-bg)', color: 'var(--danger)', fontWeight: 600 }}>
-                                            {auditFormatValue(d.key, d.from, stations)}
-                                          </span>
-                                        )}
-                                        {row.action === 'UPDATE' && (
-                                          <span style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>{isAr ? '←' : '→'}</span>
-                                        )}
-                                        {row.action !== 'DELETE' && (
-                                          <span style={{ fontSize: '0.76rem', padding: '3px 10px', borderRadius: 6, background: 'var(--success-bg)', color: 'var(--success)', fontWeight: 600 }}>
-                                            {auditFormatValue(d.key, d.to, stations)}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                              {diffBlock(row, actionMeta, diff)}
                             </td>
                           </tr>
                         )}
