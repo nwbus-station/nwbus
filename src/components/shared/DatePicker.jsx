@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom'
  *   onChange  : (value: string) => void   — تُستدعى بالقيمة مباشرة
  *   className : تنسيق حقل الإدخال (نفس class الحقول الأخرى)
  *   isAr      : عربي/إنجليزي (افتراضي true)
+ *   max       : أكبر تاريخ مسموح 'YYYY-MM-DD' — الأيام بعده تظهر مشطوبة ولا تُختار
  *   placeholder
  */
 
@@ -27,7 +28,7 @@ function parse(v) {
   return { y, m: m - 1, d }
 }
 
-export default function DatePicker({ value, onChange, className = '', isAr = true, placeholder, inline = false }) {
+export default function DatePicker({ value, onChange, className = '', isAr = true, placeholder, inline = false, max }) {
   const [open, setOpen] = useState(false)
   const today = new Date()
   const sel = parse(value)
@@ -101,7 +102,9 @@ export default function DatePicker({ value, onChange, className = '', isAr = tru
     })
   }
 
+  const blocked = (y, m, d) => !!max && toStr(y, m, d) > max
   function pick(y, m, d) {
+    if (blocked(y, m, d)) return
     onChange(toStr(y, m, d))
     setOpen(false)
   }
@@ -169,6 +172,9 @@ export default function DatePicker({ value, onChange, className = '', isAr = tru
                 {cells.map((c, i) => {
                   if (c.out) return <div key={i} className={`text-center ${cellCls} text-gray-300`}>{c.d}</div>
                   const seld = isSel(c.d), tod = isToday(c.d)
+                  if (blocked(view.y, view.m, c.d)) {
+                    return <div key={i} title={isAr ? 'غير متاح' : 'Not available'} className={`text-center ${cellCls} rounded-lg text-red-300 line-through cursor-not-allowed select-none`}>✕</div>
+                  }
                   return (
                     <button key={i} type="button" onClick={() => pick(view.y, view.m, c.d)}
                       className={`text-center ${cellCls} rounded-lg transition
@@ -189,7 +195,10 @@ export default function DatePicker({ value, onChange, className = '', isAr = tru
               className="text-sm text-gray-400 hover:text-red-500 font-medium px-2 py-1">
               {isAr ? 'محو' : 'Clear'}
             </button>
-            <button type="button" onClick={() => { setView({ y: today.getFullYear(), m: today.getMonth() }); pick(today.getFullYear(), today.getMonth(), today.getDate()) }}
+            <button type="button" onClick={() => {
+              const t = max && toStr(today.getFullYear(), today.getMonth(), today.getDate()) > max ? parse(max) : { y: today.getFullYear(), m: today.getMonth(), d: today.getDate() }
+              setView({ y: t.y, m: t.m }); pick(t.y, t.m, t.d)
+            }}
               className="text-sm text-nwbus-primary hover:underline font-semibold px-2 py-1">
               {isAr ? 'اليوم' : 'Today'}
             </button>

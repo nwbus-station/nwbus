@@ -582,7 +582,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'التاريخ' : 'Date'}</label>
-                    <DatePicker className={inputCls} isAr={isAr} value={form.sale_date} onChange={v => set('sale_date', v)} />
+                    <DatePicker className={inputCls} isAr={isAr} value={form.sale_date} onChange={v => set('sale_date', v)} max={sale ? undefined : businessDate(new Date(), cutoffMin)} />
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'الوردية' : 'Shift'}</label>
