@@ -6,7 +6,7 @@ import { escapeHtml, matchesSearch } from '../utils/digits'
 import { ADMIN_ROLE_VALUES, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS, DISPATCHER_SOURCE } from '../utils/constants'
 import { createNotification } from '../utils/notifications'
 import SelectField from '../components/shared/SelectField'
-import { brandLogo } from '../utils/printDoc'
+import { brandLogo, previewBar } from '../utils/printDoc'
 
 // ── تقييم الموظفين متعدد المصادر: مشرف الوردية + مشرف المحطة + المدير التنفيذي للمحطات ──
 // كل مصدر له وزنه، والنتيجة النهائية تُحسب فقط بعد اكتمال الثلاثة
@@ -2274,26 +2274,29 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
 function reportCss() {
   return `
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',Arial,sans-serif;background:#F4F5F8;color:#1a1a1a;direction:rtl;font-size:13px}
-  .wrap{max-width:960px;margin:0 auto;padding:28px 32px}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#e6eaef;color:#1a1a1a;direction:rtl;font-size:14.9px}
+  .wrap{max-width:1000px;margin:16px auto 28px;padding:28px 32px;background:#fbfaf6;border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.12)}
+  body.bw .wrap{filter:grayscale(1) contrast(1.35)}
+  body.bw .wrap *{color:#000!important}
+  body.bw th{background:#fff!important;border-bottom:2px solid #000!important}
 
   /* ── شريط الطباعة (لا يظهر بالطباعة) ── */
   .print-bar{display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 32px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,0.05)}
-  .print-bar-brand{font-size:12.5px;font-weight:700;color:#1C2B4A;letter-spacing:0.04em}
-  .print-btn{display:inline-flex;align-items:center;gap:7px;background:#1C2B4A;color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(28,43,74,0.25)}
+  .print-bar-brand{font-size:14.4px;font-weight:700;color:#1C2B4A;letter-spacing:0.04em}
+  .print-btn{display:inline-flex;align-items:center;gap:7px;background:#1C2B4A;color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:14.9px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(28,43,74,0.25)}
   .print-btn:hover{background:#101B2E}
 
   /* ── رأس الصفحة ── */
-  .cover{background:#fff;border-bottom:3px solid #EE712D;padding:14px 8px 12px;margin:14px 0 18px;border-radius:0;display:flex;align-items:center;justify-content:space-between;position:relative}
+  .cover{background:transparent;border-bottom:3px solid #EE712D;padding:14px 8px 12px;margin:14px 0 18px;border-radius:0;display:flex;align-items:center;justify-content:space-between;position:relative}
   .cover::before{display:none}
   .cover-right{position:relative}
   .logo-mark{display:none}
   .cover-title{font-size:23px;font-weight:900;color:#264673;line-height:1.25;margin-bottom:5px}
-  .cover-sub{font-size:12.5px;color:#64748b;font-weight:500}
+  .cover-sub{font-size:14.4px;color:#64748b;font-weight:500}
   .cover-left{display:flex;flex-direction:column;align-items:flex-end;gap:4px;position:relative}
-  .nw-logo{font-size:13px;font-weight:800;color:rgba(255,255,255,0.9);letter-spacing:0.02em}
+  .nw-logo{font-size:14.9px;font-weight:800;color:rgba(255,255,255,0.9);letter-spacing:0.02em}
   .nw-logo-line{width:36px;height:2px;background:rgba(255,255,255,0.3);margin:6px 0;border-radius:2px}
-  .cover-date{font-size:10.5px;color:#64748b;letter-spacing:0.05em;margin-top:8px}
+  .cover-date{font-size:12.1px;color:#64748b;letter-spacing:0.05em;margin-top:8px}
 
   /* ── إحصاءات ── */
   .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
@@ -2302,16 +2305,16 @@ function reportCss() {
   .stat.green{border-inline-start-color:#059669}
   .stat.gold{border-inline-start-color:#B45309}
   .stat-val{font-size:32px;font-weight:800;line-height:1;margin-bottom:6px;color:#1C2B4A}
-  .stat-lbl{font-size:11px;color:#9ca3af;font-weight:600;letter-spacing:0.03em}
+  .stat-lbl{font-size:12.6px;color:#9ca3af;font-weight:600;letter-spacing:0.03em}
 
   /* ── الجدول ── */
   .table-wrap{border:1px solid #eceef2;margin-bottom:20px;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(17,24,39,0.04)}
   .table-head{background:#F9FAFB;border-bottom:1px solid #e5e7eb;padding:12px 18px;display:flex;align-items:center;gap:8px}
   .table-head-dot{width:8px;height:8px;border-radius:50%;background:#5B5BD6}
-  .table-head-title{font-size:11px;font-weight:700;color:#4B5563;letter-spacing:0.06em;text-transform:uppercase}
+  .table-head-title{font-size:12.6px;font-weight:700;color:#4B5563;letter-spacing:0.06em;text-transform:uppercase}
   table{width:100%;border-collapse:collapse;background:#fff}
-  th{background:#F9FAFB;color:#6b7280;padding:11px 16px;font-size:10px;font-weight:700;text-align:right;border-bottom:1px solid #e5e7eb;letter-spacing:0.06em;text-transform:uppercase}
-  td{padding:12px 16px;font-size:12.5px;border-bottom:1px solid #f3f4f6;vertical-align:middle;color:#374151}
+  th{background:#F9FAFB;color:#6b7280;padding:11px 16px;font-size:11.5px;font-weight:700;text-align:right;border-bottom:1px solid #e5e7eb;letter-spacing:0.06em;text-transform:uppercase}
+  td{padding:12px 16px;font-size:14.4px;border-bottom:1px solid #f3f4f6;vertical-align:middle;color:#374151}
   tbody tr:nth-child(even){background:#FAFBFC}
   tr:last-child td{border-bottom:none}
 
@@ -2319,34 +2322,34 @@ function reportCss() {
   .bar-wrap{display:flex;align-items:center;gap:8px;min-width:110px}
   .bar{height:5px;border-radius:2px;flex:1;background:#f3f4f6;overflow:hidden}
   .bar-fill{height:100%;border-radius:2px}
-  .score-num{font-weight:700;font-size:12px;min-width:40px;text-align:left;color:#1C2B4A}
+  .score-num{font-weight:700;font-size:13.8px;min-width:40px;text-align:left;color:#1C2B4A}
 
   /* ── بادجات ── */
-  .badge{display:inline-block;padding:2px 9px;border-radius:3px;font-size:10.5px;font-weight:600;white-space:nowrap}
+  .badge{display:inline-block;padding:2px 9px;border-radius:3px;font-size:12.1px;font-weight:600;white-space:nowrap}
   .badge-great{background:#EEF2FF;color:#4338CA}
   .badge-good{background:#F0FDF4;color:#166534}
   .badge-ok{background:#EFF6FF;color:#1D4ED8}
   .badge-avg{background:#FFFBEB;color:#92400E}
   .badge-low{background:#FEF2F2;color:#991B1B}
   .badge-none{background:#F9FAFB;color:#9CA3AF}
-  .job-tag{display:inline-block;padding:2px 7px;border-radius:3px;font-family:monospace;font-size:11px;font-weight:600;background:#F5F3FF;color:#5B21B6}
-  .emp-name{font-weight:600;font-size:13px;color:#111827;line-height:1.3}
-  .emp-sub{font-size:10.5px;color:#9CA3AF;font-family:monospace;margin-top:2px}
-  .row-num{font-size:11px;color:#d1d5db;font-weight:600}
-  .station-text{font-size:12px;color:#6B7280}
-  .eval-list{display:block;white-space:pre-line;line-height:1.7;font-size:11px;color:#6B7280}
-  .role-text{font-size:11px;color:#9CA3AF}
+  .job-tag{display:inline-block;padding:2px 7px;border-radius:3px;font-family:monospace;font-size:12.6px;font-weight:600;background:#F5F3FF;color:#5B21B6}
+  .emp-name{font-weight:600;font-size:14.9px;color:#111827;line-height:1.3}
+  .emp-sub{font-size:12.1px;color:#9CA3AF;font-family:monospace;margin-top:2px}
+  .row-num{font-size:12.6px;color:#d1d5db;font-weight:600}
+  .station-text{font-size:13.8px;color:#6B7280}
+  .eval-list{display:block;white-space:pre-line;line-height:1.7;font-size:12.6px;color:#6B7280}
+  .role-text{font-size:12.6px;color:#9CA3AF}
 
   /* ── تذييل ── */
   .footer{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid #e5e7eb;margin-top:4px}
-  .footer-brand{font-size:10px;font-weight:600;color:#9ca3af;letter-spacing:0.1em;text-transform:uppercase}
-  .footer-meta{font-size:10px;color:#d1d5db;letter-spacing:0.04em}
+  .footer-brand{font-size:11.5px;font-weight:600;color:#9ca3af;letter-spacing:0.1em;text-transform:uppercase}
+  .footer-meta{font-size:11.5px;color:#d1d5db;letter-spacing:0.04em}
 
   @media print{
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-    body{background:#fff;font-size:13px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+    body{background:#fff;font-size:14.9px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
     .no-print,.print-bar{display:none!important}
-    .wrap{padding:16px;max-width:100%}
+    .wrap{padding:16px;max-width:100%;margin:0;background:#fff;box-shadow:none;border-radius:0}
     .cover,.stat,.table-wrap{box-shadow:none}
     .cover{page-break-inside:avoid}
     table{page-break-inside:auto}
@@ -2355,13 +2358,7 @@ function reportCss() {
 }
 
 function printBarHtml() {
-  return `<div class="print-bar no-print">
-    <span class="print-bar-brand">NORTH WEST BUS — معاينة قبل الطباعة</span>
-    <button class="print-btn" onclick="window.print()">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
-      طباعة / حفظ PDF
-    </button>
-  </div>`
+  return previewBar('NORTH WEST BUS — معاينة قبل الطباعة')
 }
 
 function footerHtml(printedBy) {

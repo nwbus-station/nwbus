@@ -7,7 +7,7 @@ import DatePicker from '../components/shared/DatePicker'
 import { useAuth } from '../context/AuthContext'
 import FeedbackReport from '../components/feedback/FeedbackReport'
 import SelectField from '../components/shared/SelectField'
-import { brandHeader } from '../utils/printDoc'
+import { brandHeader, previewBar, PAPER_CSS } from '../utils/printDoc'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ', en: 'Shift A' },
@@ -210,16 +210,12 @@ function RatingsTab() {
         body{margin:0;font-family:Arial,sans-serif;background:#fff;color:#1a1a1a}
         @page{size:A4 landscape;margin:10mm}
         @media print{.no-print{display:none!important}}
+        ${PAPER_CSS}
         table{width:100%;border-collapse:collapse}
         th{background:#F9FAFB;color:#6B7280;padding:8px 12px;font-size:11px;font-weight:700;text-align:${isAr ? 'right' : 'left'};border-bottom:1.5px solid #E5E7EB}
       </style></head><body>
-      <div class="no-print" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 20px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
-        <span style="font-size:12.5px;font-weight:700;color:#1C2B4A;letter-spacing:0.04em">NORTH WEST BUS — ${isAr ? 'معاينة قبل الطباعة' : 'Print preview'}</span>
-        <button onclick="window.print()" style="display:inline-flex;align-items:center;gap:7px;background:#1C2B4A;color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(28,43,74,0.25)">
-          🖨 ${isAr ? 'طباعة / حفظ PDF' : 'Print / Save PDF'}
-        </button>
-      </div>
-      <div style="padding:24px 28px">
+      ${previewBar(`NORTH WEST BUS — ${isAr ? 'معاينة قبل الطباعة' : 'Print preview'}`)}
+      <div class="paper" style="padding:24px 28px">
         ${contextBoxHtml}
         <table>
           <thead><tr>
