@@ -7,6 +7,7 @@ import { toLatinDigits } from '../utils/digits'
 import { syncStationTripsByNumbers } from '../utils/importSchedule'
 import { mergeStations, checkMergeReady } from '../utils/mergeStations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import SearchSelect from '../components/shared/SearchSelect'
 import StatStrip from '../components/shared/StatStrip'
 import SelectField from '../components/shared/SelectField'
@@ -139,6 +140,7 @@ function MergeModal({ stations, onClose, onSaved }) {
 
 function StationModal({ station, onClose, onSaved }) {
   useEscapeKey(onClose)
+  useBodyScrollLock()
   const { profile } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -209,15 +211,15 @@ function StationModal({ station, onClose, onSaved }) {
   const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none"
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="px-6 py-4 border-b flex items-center justify-between">
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center sm:p-4 overflow-y-auto overscroll-contain" dir={isAr ? 'rtl' : 'ltr'}>
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[92dvh] sm:max-h-[90dvh] flex flex-col overflow-hidden">
+        <div className="px-5 sm:px-6 py-4 border-b flex items-center justify-between shrink-0">
           <h2 className="font-bold text-nwbus-primary text-lg">
             {station ? (isAr ? 'تعديل محطة' : 'Edit Station') : (isAr ? 'إضافة محطة' : 'Add Station')}
           </h2>
           <button onClick={onClose} className="text-gray-400 text-2xl leading-none">×</button>
         </div>
-        <form onSubmit={handleSave} className="px-6 py-4 space-y-4">
+        <form onSubmit={handleSave} className="px-5 sm:px-6 pt-4 space-y-4 flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اسم المحطة (إنجليزي) *' : 'Station Name (English) *'}</label>
             <input required dir="ltr" className={inputCls} value={form.name_en} onChange={e => set('name_en', e.target.value)} />
@@ -362,13 +364,13 @@ function StationModal({ station, onClose, onSaved }) {
             )}
           </div>
           {error && <p className="text-red-600 text-xs bg-red-50 rounded p-2">{error}</p>}
-          <div className="flex gap-3">
+          <div className="flex gap-3 sticky bottom-0 bg-white border-t -mx-5 sm:-mx-6 px-5 sm:px-6 py-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             <button type="submit" disabled={saving}
-              className="flex-1 bg-nwbus-primary text-white py-2 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-nwbus-dark transition-colors">
+              className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-nwbus-dark transition-colors">
               {saving ? '...' : (isAr ? 'حفظ' : 'Save')}
             </button>
             <button type="button" onClick={onClose}
-              className="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+              className="px-4 py-2.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
               {isAr ? 'إلغاء' : 'Cancel'}
             </button>
           </div>
