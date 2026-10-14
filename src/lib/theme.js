@@ -7,18 +7,20 @@ export const THEME_MODES = ['auto', 'system', 'light', 'dark']
 export const NIGHT_FROM = 18   // 6 م
 export const NIGHT_TO = 6      // 6 ص
 
-// ترحيل لمرة واحدة: كل الحسابات تنتقل للوضع التلقائي (حسب الوقت) عند أول فتح بعد هذا التحديث، ثم يغيّر من يشاء اختياره بحرية
-export const THEME_RESET_KEY = 'nwbus_theme_reset_v1'
+// الافتراضي ليلي لكل الحسابات (الجديدة والقديمة): ترحيل لمرة واحدة ينقل الجميع للوضع الليلي عند أول فتح بعد هذا التحديث،
+// ثم من يبغى النهاري يغيّره من قائمة المظهر ويُحفظ اختياره.
+export const THEME_RESET_KEY = 'nwbus_theme_reset_v2'
+export const DEFAULT_THEME = 'dark'
 export function getThemeMode() {
   try {
     if (!localStorage.getItem(THEME_RESET_KEY)) {
       localStorage.setItem(THEME_RESET_KEY, '1')
-      localStorage.setItem(THEME_KEY, 'auto')
-      return 'auto'
+      localStorage.setItem(THEME_KEY, DEFAULT_THEME)
+      return DEFAULT_THEME
     }
     const v = localStorage.getItem(THEME_KEY)
-    return THEME_MODES.includes(v) ? v : 'auto'
-  } catch { return 'auto' }
+    return THEME_MODES.includes(v) ? v : DEFAULT_THEME
+  } catch { return DEFAULT_THEME }
 }
 export function setThemeMode(mode) { try { localStorage.setItem(THEME_KEY, mode) } catch { /* بدون تخزين */ } }
 export const systemPrefersDark = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches
