@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext'
 import { useAppSettings } from '../../context/AppSettingsContext'
 import { getThemeMode, setThemeMode, resolveDark } from '../../lib/theme'
 import { createClient } from '@supabase/supabase-js'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
 import { onPwaUpdateAvailable, applyPwaUpdate, hardRefresh, consumeUpdatedFlag } from '../../lib/pwaUpdate'
@@ -223,14 +225,72 @@ async function changeOwnPassword(currentPassword, newPassword) {
   }
 }
 
+// قوة كلمة المرور: 4 معايير (طول 8+، حرف كبير وصغير، رقم، رمز)
+const pwChecks = p => [
+  { k: 'len', ok: p.length >= 8, ar: '8 أحرف أو أكثر', en: '8+ characters' },
+  { k: 'case', ok: /[a-z]/.test(p) && /[A-Z]/.test(p), ar: 'حرف كبير وصغير', en: 'Upper & lower case' },
+  { k: 'num', ok: /\d/.test(p), ar: 'رقم', en: 'A number' },
+  { k: 'sym', ok: /[^A-Za-z0-9]/.test(p), ar: 'رمز مثل @ # -', en: 'A symbol' },
+]
+function suggestPassword() {
+  const sets = ['ABCDEFGHJKMNPQRSTUVWXYZ', 'abcdefghjkmnpqrstuvwxyz', '23456789', '.-@#!']
+  const all = sets.join('')
+  const buf = new Uint32Array(12); crypto.getRandomValues(buf)
+  const chars = [...sets.map((set, i) => set[buf[i] % set.length]), ...Array.from(buf.slice(4), n => all[n % all.length])]
+  for (let i = chars.length - 1; i > 0; i--) { const j = buf[i] % (i + 1); [chars[i], chars[j]] = [chars[j], chars[i]] }
+  return chars.join('')
+}
+
+function PwField({ label, value, onChange, show, onToggle, autoComplete, status, children, mono = true }) {
+  return (
+    <div>
+      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 6 }}>
+        <span>{label}</span>{status}
+      </label>
+      <div style={{ position: 'relative' }}>
+        <input type={show ? 'text' : 'password'} required autoComplete={autoComplete} value={value} onChange={e => onChange(e.target.value)}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '11px 42px 11px 14px', borderRadius: 10, border: '1px solid var(--border-2)', background: 'var(--surface)', color: 'var(--text-1)', fontSize: '0.92rem', fontFamily: mono ? "'IBM Plex Mono', monospace" : 'inherit', outline: 'none', letterSpacing: show ? '0.02em' : '0.12em' }}
+          onFocus={e => { e.target.style.borderColor = '#5B5BD6'; e.target.style.boxShadow = '0 0 0 3px rgba(91,91,214,0.18)' }}
+          onBlur={e => { e.target.style.borderColor = 'var(--border-2)'; e.target.style.boxShadow = 'none' }} />
+        <button type="button" onClick={onToggle} tabIndex={-1} aria-label="toggle"
+          style={{ position: 'absolute', top: 0, bottom: 0, insetInlineEnd: 0, width: 42, border: 'none', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {show
+            ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+        </button>
+      </div>
+      {children}
+    </div>
+  )
+}
+
 function ChangePasswordModal({ isAr, onClose }) {
+  useEscapeKey(onClose)
+  useBodyScrollLock()
   const [current,  setCurrent]  = useState('')
   const [next,     setNext]     = useState('')
   const [confirm,  setConfirm]  = useState('')
-  const [show,     setShow]     = useState(false)
+  const [showCur,  setShowCur]  = useState(false)
+  const [showNew,  setShowNew]  = useState(false)
+  const [copied,   setCopied]   = useState(false)
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState('')
   const [done,     setDone]     = useState(false)
+
+  const checks = pwChecks(next)
+  const score = checks.filter(c => c.ok).length
+  const level = !next ? null : next.length < 6 ? 0 : Math.max(1, score)   // 0 ضعيفة جداً · 1-4
+  const LEVELS = [
+    { ar: 'قصيرة', en: 'Too short', c: '#dc2626' },
+    { ar: 'ضعيفة', en: 'Weak', c: '#ea580c' },
+    { ar: 'مقبولة', en: 'Fair', c: '#d97706' },
+    { ar: 'جيدة', en: 'Good', c: '#65a30d' },
+    { ar: 'قوية', en: 'Strong', c: '#16a34a' },
+  ]
+  const lv = level == null ? null : LEVELS[level]
+  const matches = confirm.length > 0 && next === confirm
+  const mismatch = confirm.length > 0 && next !== confirm
+  const canSubmit = current.length > 0 && next.length >= 6 && matches && !saving
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -241,7 +301,7 @@ function ChangePasswordModal({ isAr, onClose }) {
     try {
       await changeOwnPassword(current, next)
       setDone(true)
-      setTimeout(onClose, 1500)
+      setTimeout(onClose, 1800)
     } catch (err) {
       setError(err.message === 'Current password is incorrect'
         ? (isAr ? 'كلمة المرور الحالية غير صحيحة' : 'Current password is incorrect')
@@ -250,54 +310,84 @@ function ChangePasswordModal({ isAr, onClose }) {
     setSaving(false)
   }
 
-  const inputCls = "w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none font-mono"
+  function suggest() {
+    const p = suggestPassword()
+    setNext(p); setConfirm(p); setShowNew(true); setCopied(false)
+  }
+  async function copyIt() {
+    try { await navigator.clipboard.writeText(next); setCopied(true); setTimeout(() => setCopied(false), 1800) } catch { /* بدون حافظة */ }
+  }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-        <div className="px-6 py-4 border-b flex items-center justify-between" style={{ background: '#1C2B36' }}>
-          <h2 className="font-bold text-white text-base">{isAr ? 'تغيير كلمة المرور' : 'Change Password'}</h2>
-          <button onClick={onClose} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 overflow-y-auto overscroll-contain" dir={isAr ? 'rtl' : 'ltr'}
+      style={{ background: 'rgba(8,12,18,0.62)', backdropFilter: 'blur(3px)' }}>
+      <div style={{ width: '100%', maxWidth: 440, maxHeight: '94dvh', display: 'flex', flexDirection: 'column', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 18, boxShadow: '0 24px 60px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+        {/* الرأس */}
+        <div style={{ position: 'relative', padding: '20px 22px 18px', background: 'linear-gradient(135deg, #1C2B36 0%, #26405a 100%)', color: '#fff', flexShrink: 0 }}>
+          <div style={{ position: 'absolute', top: 0, insetInline: 0, height: 3, background: 'linear-gradient(90deg, #5B5BD6, #0ea5e9, transparent)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span style={{ width: 46, height: 46, borderRadius: 14, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16.5" r="1.2" fill="#fff"/></svg>
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>{isAr ? 'تغيير كلمة المرور' : 'Change Password'}</h2>
+              <p style={{ margin: '3px 0 0', fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)' }}>{isAr ? 'اختر كلمة قوية ولا تستخدمها في مكان آخر' : 'Pick a strong one you do not use elsewhere'}</p>
+            </div>
+            <button onClick={onClose} aria-label={isAr ? 'إغلاق' : 'Close'} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.12)', color: '#fff', cursor: 'pointer', alignSelf: 'flex-start', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
         </div>
 
         {done ? (
-          <p className="px-6 py-10 text-center text-green-600 text-sm font-semibold">
-            {isAr ? '✓ تم تغيير كلمة المرور' : '✓ Password changed'}
-          </p>
+          <div style={{ padding: '38px 24px 42px', textAlign: 'center' }}>
+            <span style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(22,163,74,0.14)', border: '2px solid #16a34a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <p style={{ margin: '14px 0 4px', fontSize: '1rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? 'تم تغيير كلمة المرور' : 'Password changed'}</p>
+            <p style={{ margin: 0, fontSize: '0.76rem', color: 'var(--text-3)' }}>{isAr ? 'استخدمها في دخولك القادم' : 'Use it the next time you sign in'}</p>
+          </div>
         ) : (
-          <form onSubmit={handleSubmit} autoComplete="off" className="px-6 py-5 space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'كلمة المرور الحالية' : 'Current Password'}</label>
-              <input type="password" required autoComplete="off" className={inputCls}
-                value={current} onChange={e => setCurrent(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'كلمة المرور الجديدة' : 'New Password'}</label>
-              <div className="relative">
-                <input type={show ? 'text' : 'password'} required minLength={6} autoComplete="new-password" className={inputCls + ' pe-10'}
-                  value={next} onChange={e => setNext(e.target.value)} />
-                <button type="button" onClick={() => setShow(v => !v)}
-                  className="absolute inset-y-0 end-0 px-3 flex items-center text-gray-400 hover:text-gray-700">
-                  {show ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  )}
-                </button>
+          <form onSubmit={handleSubmit} autoComplete="off" style={{ padding: '20px 22px 22px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+            <PwField label={isAr ? 'كلمة المرور الحالية' : 'Current password'} value={current} onChange={setCurrent} show={showCur} onToggle={() => setShowCur(v => !v)} autoComplete="off" />
+
+            <div style={{ height: 1, background: 'var(--border)' }} />
+
+            <PwField label={isAr ? 'كلمة المرور الجديدة' : 'New password'} value={next} onChange={v => { setNext(v); setCopied(false) }} show={showNew} onToggle={() => setShowNew(v => !v)} autoComplete="new-password"
+              status={lv && <span style={{ fontSize: '0.7rem', fontWeight: 800, color: lv.c }}>{isAr ? lv.ar : lv.en}</span>}>
+              {/* مقياس القوة */}
+              <div style={{ display: 'flex', gap: 4, marginTop: 9 }}>
+                {[1, 2, 3, 4].map(i => <span key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: level != null && level >= i ? lv.c : 'var(--surface-2)', transition: 'background .2s' }} />)}
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'تأكيد كلمة المرور الجديدة' : 'Confirm New Password'}</label>
-              <input type={show ? 'text' : 'password'} required autoComplete="new-password" className={inputCls}
-                value={confirm} onChange={e => setConfirm(e.target.value)} />
-            </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px', marginTop: 10 }}>
+                {checks.map(c => (
+                  <span key={c.k} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.7rem', fontWeight: 600, color: c.ok ? '#16a34a' : 'var(--text-3)' }}>
+                    <span style={{ width: 15, height: 15, borderRadius: '50%', border: `1.5px solid ${c.ok ? '#16a34a' : 'var(--border-2)'}`, background: c.ok ? '#16a34a' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {c.ok && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </span>
+                    {isAr ? c.ar : c.en}
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 11 }}>
+                <button type="button" onClick={suggest} style={{ flex: 1, padding: '8px 10px', borderRadius: 9, border: '1px dashed #5B5BD6', background: 'rgba(91,91,214,0.08)', color: '#5B5BD6', fontFamily: 'inherit', fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer' }}>
+                  {isAr ? 'اقترح كلمة قوية' : 'Suggest a strong one'}
+                </button>
+                {next && <button type="button" onClick={copyIt} style={{ padding: '8px 14px', borderRadius: 9, border: '1px solid var(--border-2)', background: 'var(--surface)', color: copied ? '#16a34a' : 'var(--text-2)', fontFamily: 'inherit', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer' }}>
+                  {copied ? (isAr ? 'تم النسخ' : 'Copied') : (isAr ? 'نسخ' : 'Copy')}
+                </button>}
+              </div>
+            </PwField>
+
+            <PwField label={isAr ? 'تأكيد كلمة المرور الجديدة' : 'Confirm new password'} value={confirm} onChange={setConfirm} show={showNew} onToggle={() => setShowNew(v => !v)} autoComplete="new-password"
+              status={(matches || mismatch) && <span style={{ fontSize: '0.7rem', fontWeight: 800, color: matches ? '#16a34a' : '#dc2626' }}>{matches ? (isAr ? 'متطابقة' : 'Match') : (isAr ? 'غير متطابقة' : 'Does not match')}</span>} />
 
             {error && (
-              <div className="text-xs rounded-lg p-3 bg-red-50 text-red-600 border border-red-100">⚠ {error}</div>
+              <div role="alert" style={{ fontSize: '0.76rem', fontWeight: 600, borderRadius: 10, padding: '10px 12px', background: 'rgba(220,38,38,0.1)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.3)' }}>{error}</div>
             )}
 
-            <button type="submit" disabled={saving}
-              className="w-full bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-nwbus-dark transition-colors">
+            <button type="submit" disabled={!canSubmit}
+              style={{ width: '100%', padding: '13px', borderRadius: 12, border: 'none', background: canSubmit ? 'linear-gradient(135deg, #5B5BD6, #7c5cf0)' : 'var(--surface-2)', color: canSubmit ? '#fff' : 'var(--text-3)', fontFamily: 'inherit', fontSize: '0.9rem', fontWeight: 800, cursor: canSubmit ? 'pointer' : 'not-allowed', boxShadow: canSubmit ? '0 6px 18px rgba(91,91,214,0.4)' : 'none', transition: 'all .15s' }}>
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'تغيير كلمة المرور' : 'Change Password')}
             </button>
           </form>
