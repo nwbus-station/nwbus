@@ -990,18 +990,22 @@ export default function ReportsPage() {
 
   // شريط معاينة قبل الطباعة — نفس أسلوب صفحة التقييم الوظيفي: يفتح تبويب من نفس
   // التطبيق يقدر المستخدم يراجعه، ثم يطبع بزر صريح أو يقفل التبويب بدون طباعة
-  function reportPrintBarHtml() {
+  const bwToggleHtml = `<span style="display:inline-flex;border:1px solid #cbd5e1;border-radius:9px;overflow:hidden;margin-inline-end:10px;font-family:'IBM Plex Sans Arabic',Arial,sans-serif">
+      <button id="m-color" onclick="document.body.classList.remove('bw');this.style.background='#1C2B4A';this.style.color='#fff';document.getElementById('m-bw').style.background='#fff';document.getElementById('m-bw').style.color='#1C2B4A'" style="border:none;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;background:#1C2B4A;color:#fff">ألوان</button>
+      <button id="m-bw" onclick="document.body.classList.add('bw');this.style.background='#1C2B4A';this.style.color='#fff';document.getElementById('m-color').style.background='#fff';document.getElementById('m-color').style.color='#1C2B4A'" style="border:none;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;background:#fff;color:#1C2B4A">أبيض وأسود</button>
+    </span>`
+  function reportPrintBarHtml(withBw = false) {
     return `<div class="no-print" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 20px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,0.05)">
       <span style="font-size:12.5px;font-weight:700;color:#1C2B4A;letter-spacing:0.04em;font-family:'IBM Plex Sans Arabic',Arial,sans-serif">NORTH WEST BUS — معاينة قبل الطباعة</span>
-      <button onclick="window.print()" style="display:inline-flex;align-items:center;gap:7px;background:#1C2B4A;color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'IBM Plex Sans Arabic',Arial,sans-serif;box-shadow:0 2px 8px rgba(28,43,74,0.25)">
+      <span style="display:inline-flex;align-items:center">${withBw ? bwToggleHtml : ''}<button onclick="window.print()" style="display:inline-flex;align-items:center;gap:7px;background:#1C2B4A;color:#fff;border:none;border-radius:9px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'IBM Plex Sans Arabic',Arial,sans-serif;box-shadow:0 2px 8px rgba(28,43,74,0.25)">
         🖨 طباعة / حفظ PDF
-      </button>
+      </button></span>
     </div>`
   }
 
-  function openPrintPreview(bodyHtml, pageCss) {
+  function openPrintPreview(bodyHtml, pageCss, withBw = false) {
     const w = window.open('', '_blank')
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${pageCss}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}@media print{.no-print{display:none!important}}</style></head><body>${reportPrintBarHtml()}${bodyHtml}</body></html>`)
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${pageCss}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}@media print{.no-print{display:none!important}}</style></head><body>${reportPrintBarHtml(withBw)}${bodyHtml}</body></html>`)
     w.document.close()
   }
 
@@ -1012,7 +1016,8 @@ export default function ReportsPage() {
     const targetIds = cleanIds.length ? cleanIds : stations.map(s => s.id)
     const targetStations = stations.filter(s => targetIds.includes(s.id))
 
-    const fmtDelay = d => d === null ? '—' : (d === 0 ? '±0' : (d > 0 ? '+' : '') + d + (isAr ? ' د' : ' m'))
+    const fmtDelay = d => d === null ? '—' : (d === 0 ? '±0' : (d > 0 ? '▲ +' : '▼ ') + d + (isAr ? ' د' : ' m'))
+    const fmtDelayPlain = d => d === null ? '—' : (d === 0 ? '±0' : (d > 0 ? '+' : '') + d + (isAr ? ' د' : ' m'))
     const delayColor = d => d === null ? '#94a3b8' : d > 5 ? '#dc2626' : d < -2 ? '#2563eb' : '#16a34a'
     const ACC = {
       ontime:  { c: '#15803d', bg: '#dcfce7', bd: '#86efac' },
@@ -1031,7 +1036,7 @@ export default function ReportsPage() {
       if (!list.length) return `<div style="margin-top:12px;padding:10px 14px;border:1px dashed #cbd5e1;border-radius:8px;font-size:12px;color:#94a3b8">${title}: ${isAr ? 'لا توجد رحلات' : 'no trips'}</div>`
       const heads = [['#', 3], [isAr ? 'رقم الرحلة' : 'Trip', 9], [isAr ? 'الحافلة' : 'Bus', 6], [isAr ? 'من' : 'From', 16], [isAr ? 'إلى' : 'To', 16], [isAr ? 'المجدول' : 'Sched.', 7], [isAr ? 'الفعلي' : 'Actual', 7], [isAr ? 'التأخير' : 'Delay', 8], [isAr ? 'الحالة' : 'Status', 11], [isAr ? 'الركاب' : 'Pax', 6], [isAr ? 'المتخلفون' : 'Missed', 7]]
       return `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding:9px 14px;background:${color};color:#fff;border-radius:8px 8px 0 0">
+        <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding:9px 14px;background:${color};color:#fff;border-radius:8px 8px 0 0">
           <span style="font-size:15px;font-weight:800">${icon} ${title}</span>
           <span style="font-size:12px;font-weight:800;background:rgba(255,255,255,.18);border-radius:999px;padding:3px 12px">${list.length} ${isAr ? 'رحلة' : 'trips'}</span>
         </div>
@@ -1071,7 +1076,7 @@ export default function ReportsPage() {
           <span style="font-size:13px;font-weight:800;color:#334155">${title}</span>
           <span style="font-size:30px;font-weight:900;line-height:1;color:${rate === null ? '#cbd5e1' : rateColor(rate)}">${rate === null ? '—' : rate + '%'}</span>
         </div>
-        <div style="height:9px;border-radius:999px;background:#e2e8f0;margin-top:9px;overflow:hidden"><div style="height:100%;width:${rate ?? 0}%;background:${rate === null ? '#cbd5e1' : rateColor(rate)};border-radius:999px"></div></div>
+        <div style="height:9px;border-radius:999px;background:#e2e8f0;margin-top:9px;overflow:hidden"><div class="rate-fill" style="height:100%;width:${rate ?? 0}%;background:${rate === null ? '#cbd5e1' : rateColor(rate)};border-radius:999px"></div></div>
         <div style="font-size:11px;color:#64748b;margin-top:6px">${sub}</div>
       </div>`
 
@@ -1106,8 +1111,8 @@ export default function ReportsPage() {
         { val: depPax, lbl: isAr ? 'ركاب المغادرة' : 'Dep. passengers', accent: '#6366f1' },
         { val: arrPax, lbl: isAr ? 'ركاب الوصول' : 'Arr. passengers', accent: '#06b6d4' },
         { val: missed, lbl: isAr ? 'المتخلفون' : 'Missed', accent: '#ef4444' },
-        { val: avgDelay === null ? '—' : fmtDelay(avgDelay), lbl: isAr ? 'متوسط التأخير' : 'Avg. delay', accent: '#f59e0b' },
-        { val: maxDelay === null ? '—' : fmtDelay(maxDelay), lbl: isAr ? 'أكبر تأخير' : 'Max delay', accent: '#f97316' },
+        { val: avgDelay === null ? '—' : fmtDelayPlain(avgDelay), lbl: isAr ? 'متوسط التأخير' : 'Avg. delay', accent: '#f59e0b' },
+        { val: maxDelay === null ? '—' : fmtDelayPlain(maxDelay), lbl: isAr ? 'أكبر تأخير' : 'Max delay', accent: '#f97316' },
       ]
       const kpiBar = `
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:4px">
@@ -1124,10 +1129,10 @@ export default function ReportsPage() {
           <div style="flex:1.3;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;background:#fff">
             <div style="font-size:13px;font-weight:800;color:#334155;margin-bottom:9px">${isAr ? 'توزيع حالات الرحلات' : 'Trip status breakdown'}</div>
             <div style="display:flex;height:13px;border-radius:999px;overflow:hidden;background:#e2e8f0">
-              ${dist.map(d => `<div style="width:${(d.n / total) * 100}%;background:${d.c}"></div>`).join('')}
+              ${dist.map(d => `<div class="seg-${d.k}" style="width:${(d.n / total) * 100}%;background:${d.c};color:#fff;font-size:10px;font-weight:800;text-align:center;line-height:13px">${d.n}</div>`).join('')}
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:9px">
-              ${dist.map(d => `<span style="font-size:11.5px;font-weight:700;color:#334155"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${d.c};margin-inline-end:5px;vertical-align:-1px"></span>${d.l} <b style="color:#0f172a">${d.n}</b></span>`).join('')}
+              ${dist.map(d => `<span style="font-size:11.5px;font-weight:700;color:#334155"><span class="seg-${d.k}" style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${d.c};margin-inline-end:5px;vertical-align:-2px;border:1px solid rgba(0,0,0,.25)"></span>${d.l} <b style="color:#0f172a">${d.n}</b></span>`).join('')}
             </div>
           </div>
         </div>`
@@ -1144,13 +1149,32 @@ export default function ReportsPage() {
           <div style="margin-top:12px;padding:8px 14px;border-top:2px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b">
             <span>${escapeHtml(profile?.full_name_ar) ?? '—'} · ${new Date().toLocaleString('en-GB')}</span>
             <span style="font-weight:700">${isAr ? 'التخلف' : 'Missed'}: <b style="color:#dc2626">${missed}</b> &nbsp;|&nbsp; ${isAr ? 'ركاب المغادرة' : 'Dep. pax'}: <b style="color:#0f172a">${depPax}</b> &nbsp;|&nbsp; ${isAr ? 'ركاب الوصول' : 'Arr. pax'}: <b style="color:#0f172a">${arrPax}</b></span>
-            <span style="background:#1C2B36;color:#fff;font-size:10px;font-weight:800;padding:3px 12px;border-radius:999px;letter-spacing:.6px">NORTH WEST BUS</span>
+            <span class="pill-dark" style="background:#1C2B36;color:#fff;font-size:10px;font-weight:800;padding:3px 12px;border-radius:999px;letter-spacing:.6px">NORTH WEST BUS</span>
           </div>
         </div>`
     }).join('')
 
-    const html = `<div style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;background:#fff;font-size:12.5px">${pages}</div>`
-    openPrintPreview(html, `@page{size:A4 landscape;margin:8mm}body{margin:0;padding:0 6px}`)
+    const html = `<div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">${pages}</div>`
+    // الشاشة: خلفية رمادية مزرقة هادئة وورقة بلون عاجي مريح للعين. الطباعة: أبيض نقي. وضع أبيض وأسود: تدرج رمادي بتباين أعلى وأنماط بدل الألوان
+    const css = `@page{size:A4 landscape;margin:8mm}body{margin:0;padding:0;background:#e6eaef}
+      .sheet{background:#fbfaf6;max-width:1180px;margin:16px auto 28px;padding:14px 16px;border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.12)}
+      @media print{body{background:#fff}.sheet{background:#fff;box-shadow:none;margin:0;padding:0;border-radius:0;max-width:none}}
+      body.bw .sheet{filter:grayscale(1) contrast(1.35)}
+      body.bw .sheet *:not(.sec-head):not(.sec-head *):not([class^="seg-"]){color:#000!important}
+      body.bw [class^="seg-"]{font-size:0!important}
+      body.bw td span{background:#fff!important;border:1.5px solid #000!important}
+      body.bw .sec-head{background:#fff!important;color:#000!important;border:2px solid #000!important}
+      body.bw .sec-head span:last-child{background:#000!important;color:#fff!important}
+      body.bw .seg-ontime{background:#3a3a3a!important}body.bw .seg-early{background:#9a9a9a!important}
+      body.bw .seg-noton{background:repeating-linear-gradient(45deg,#222 0 3px,#d0d0d0 3px 6px)!important}
+      body.bw .seg-delayed{background:#000!important}
+      body.bw .seg-unentered{background:repeating-linear-gradient(90deg,#555 0 2px,#e4e4e4 2px 5px)!important}
+      body.bw .seg-none{background:#c4c4c4!important}
+      body.bw .pill-dark{background:#fff!important;border:1.5px solid #000!important}
+      body.bw .rate-fill{background:#111!important}
+      body.bw td,body.bw th{border-color:#777!important}
+      body.bw table{border-color:#000!important}`
+    openPrintPreview(html, css, true)
   }
 
   function printReport() {
