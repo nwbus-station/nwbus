@@ -416,16 +416,22 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         }),
       }).eq('id', sale.id)
     } else {
-      res = await supabase.from('sales_records').upsert(payload, {
-        onConflict: 'station_id,sale_date,shift,created_by',
-        ignoreDuplicates: false,
-      })
+      // التكرار = نفس الموظف بنفس المحطة والتاريخ والوردية (أكثر من موظف بنفس الوردية مسموح، والأدمن يدخل لعدة موظفين)
+      const normName = v => String(v || '').trim().toLowerCase()
+      const { data: same } = await supabase.from('sales_records').select('id, employee_name')
+        .eq('station_id', stationId).eq('sale_date', form.sale_date).eq('shift', form.shift).eq('created_by', profile.id)
+      if ((same ?? []).some(r => normName(r.employee_name) === normName(payload.employee_name))) {
+        setError(isAr ? `الموظف ${payload.employee_name || ''} عنده يومية مسجلة لنفس المحطة والتاريخ والوردية. افتحها وعدّلها من القائمة بدل إضافة يومية ثانية.` : 'This employee already has a record for this station, date and shift. Edit it from the list.')
+        setSaving(false)
+        return
+      }
+      res = await supabase.from('sales_records').insert(payload)
     }
 
     if (res.error) {
       const dup = /duplicate key|unique constraint/i.test(res.error.message || '')
       setError(dup
-        ? (isAr ? 'يوجد سجل لنفس المحطة والتاريخ والوردية من نفس الحساب. افتحه وعدّله من القائمة بدل إضافة سجل جديد، أو غيّر الوردية/التاريخ.' : 'A record already exists for this station, date and shift from this account. Edit it from the list, or change the shift/date.')
+        ? (isAr ? 'يوجد سجل مطابق لنفس الموظف والمحطة والتاريخ والوردية. افتحه وعدّله من القائمة، أو غيّر الوردية/التاريخ.' : 'A matching record already exists for this employee, station, date and shift. Edit it from the list, or change the shift/date.')
         : res.error.message)
     }
     else { localStorage.removeItem(DRAFT_KEY); onSaved(); onClose() }
