@@ -392,6 +392,10 @@ export default function StationsPage() {
   const [modal, setModal]       = useState(null)
   const [showMerge, setShowMerge] = useState(false)
   const [search, setSearch]     = useState('')
+  const [filter, setFilter]     = useState('all')
+  const [sort, setSort]         = useState('name')
+  const [view, setView]         = useState(() => { try { return localStorage.getItem('stations_view') || 'table' } catch { return 'table' } })
+  const [staff, setStaff]       = useState({})   // عدد الموظفين النشطين لكل محطة
 
   const fetch = useCallback(async () => {
     const cached = getCached('stations_all')
@@ -402,95 +406,221 @@ export default function StationsPage() {
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
+  useEffect(() => {
+    supabase.from('users').select('station_id').eq('is_active', true).not('station_id', 'is', null).limit(5000)
+      .then(({ data }) => { const m = {}; for (const u of data ?? []) m[u.station_id] = (m[u.station_id] || 0) + 1; setStaff(m) })
+  }, [])
 
-  const filtered = stations.filter(s => (!isRestricted || (supervisedStationIds ?? []).includes(s.id))).filter(s =>
-    (s.name_ar || '').includes(search) || (s.name_en || '').toLowerCase().includes(search.toLowerCase())
-  )
+  const staffOf = id => staff[id] ?? 0
+  const tripsOf = s => (Array.isArray(s.trip_numbers) ? s.trip_numbers.length : 0)
+  const fourShifts = s => Array.isArray(s.shift_ends) && s.shift_ends.length === 4
+  const visible = stations.filter(s => !isRestricted || (supervisedStationIds ?? []).includes(s.id))
+  const q = search.trim().toLowerCase()
+  const FILTERS = [
+    ['all', isAr ? 'الكل' : 'All', () => true],
+    ['main', isAr ? 'رئيسية' : 'Main', s => s.type === 'main'],
+    ['transit', isAr ? 'مرور' : 'Transit', s => s.type === 'transit'],
+    ['active', isAr ? 'نشطة' : 'Active', s => s.is_active && !s.merged_into],
+    ['inactive', isAr ? 'معطلة' : 'Inactive', s => !s.is_active || !!s.merged_into],
+    ['agent', isAr ? 'وكيل' : 'Agent', s => !!s.is_agent],
+    ['four', isAr ? '4 ورديات' : '4 shifts', fourShifts],
+  ]
+  const filterFn = FILTERS.find(f => f[0] === filter)?.[2] ?? (() => true)
+  const filtered = visible
+    .filter(filterFn)
+    .filter(s => !q || (s.name_ar || '').toLowerCase().includes(q) || (s.name_en || '').toLowerCase().includes(q) || (s.region || '').toLowerCase().includes(q) || (s.city_group || '').toLowerCase().includes(q))
+    .sort((a, b) => sort === 'trips' ? tripsOf(b) - tripsOf(a) : sort === 'staff' ? staffOf(b.id) - staffOf(a.id) : (a.name_ar || a.name_en || '').localeCompare(b.name_ar || b.name_en || '', isAr ? 'ar' : 'en'))
 
-  const mainCount    = stations.filter(s => s.type === 'main').length
-  const transitCount = stations.filter(s => s.type === 'transit').length
-  const activeCount  = stations.filter(s => s.is_active).length
+  const mainCount    = visible.filter(s => s.type === 'main').length
+  const transitCount = visible.filter(s => s.type === 'transit').length
+  const activeCount  = visible.filter(s => s.is_active && !s.merged_into).length
+  const inactiveCount = visible.length - activeCount
+  const agentCount   = visible.filter(s => s.is_agent).length
+  const fourCount    = visible.filter(fourShifts).length
 
   if (!allowCap('stations_page') || (isRestricted && !restrictedManager)) {
     return <div className="flex items-center justify-center text-sm text-gray-400" style={{ minHeight: 'calc(100vh - 58px)' }}>{isAr ? 'غير مصرح' : 'Access denied'}</div>
   }
 
+  const statusOf = s => s.merged_into ? { t: isAr ? 'مدمجة' : 'Merged', dot: 'bg-amber-500', txt: 'text-amber-700' }
+    : s.is_active ? { t: isAr ? 'نشطة' : 'Active', dot: 'bg-green-500', txt: 'text-green-700' }
+    : { t: isAr ? 'معطلة' : 'Inactive', dot: 'bg-gray-400', txt: 'text-gray-500' }
+  const typeChip = s => (
+    <span className={`inline-block text-[11px] font-bold rounded px-2 py-0.5 border ${s.type === 'main' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-purple-200 bg-purple-50 text-purple-700'}`}>
+      {s.type === 'main' ? (isAr ? 'رئيسية' : 'Main') : (isAr ? 'مرور' : 'Transit')}
+    </span>
+  )
+  const badges = s => (
+    <>
+      {s.is_agent && <span className="text-[10px] bg-violet-100 text-violet-700 rounded px-1.5 py-0.5 font-bold">{isAr ? 'وكيل' : 'Agent'}</span>}
+      {s.combined_arr_dep && <span className="text-[10px] bg-sky-100 text-sky-700 rounded px-1.5 py-0.5 font-bold">{isAr ? 'وصول + مغادرة' : 'Arr + Dep'}</span>}
+    </>
+  )
+  // شريط اليوم (24 ساعة) مقسوم حسب ورديات المحطة: 3 أو 4
+  const ShiftBar = ({ s }) => {
+    const ends = Array.isArray(s.shift_ends) && validEnds(s.shift_ends) ? s.shift_ends : [480, 960, 1440]
+    const custom = Array.isArray(s.shift_ends) && validEnds(s.shift_ends)
+    return (
+      <div className="min-w-[120px]">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-bold text-gray-700">{ends.length} {isAr ? 'ورديات' : 'shifts'}</span>
+          {custom && <span className="text-[9px] font-bold text-nwbus-primary border border-nwbus-primary rounded px-1">{isAr ? 'مخصصة' : 'custom'}</span>}
+        </div>
+        <div className="flex h-2 rounded-sm overflow-hidden gap-px" dir="ltr" title={ends.map((e, i) => `${['A', 'B', 'C', 'D'][i]} ${fmtMin(i ? ends[i - 1] : 0)}–${fmtMin(e)}`).join('  ')}>
+          {ends.map((e, i) => (
+            <i key={i} style={{ flex: e - (i ? ends[i - 1] : 0), background: 'var(--accent, #4f46e5)', opacity: [1, 0.7, 0.45, 0.25][i] }} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+  const editBtn = s => canEditStation(s) && (
+    <button onClick={() => setModal(s)}
+      className="text-xs font-semibold border border-gray-300 text-gray-700 rounded-md px-3 py-1.5 hover:border-nwbus-primary hover:text-nwbus-primary transition-colors">
+      {isAr ? 'تعديل' : 'Edit'}
+    </button>
+  )
+
   return (
-    <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        <h1 className="text-xl font-bold text-nwbus-primary">{isAr ? 'المحطات' : 'Stations'}</h1>
+    <div className="p-4 md:p-6 max-w-[1400px] mx-auto" dir={isAr ? 'rtl' : 'ltr'}>
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
+        <div>
+          <h1 className="text-2xl font-extrabold text-gray-900 leading-tight">{isAr ? 'المحطات' : 'Stations'}</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {isAr ? `${visible.length} محطة — المعروض ${filtered.length}` : `${visible.length} stations — showing ${filtered.length}`}
+          </p>
+        </div>
         <div className="flex gap-2">
-          <input placeholder={isAr ? 'بحث...' : 'Search...'}
-            value={search} onChange={e => setSearch(e.target.value)}
-            className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none" />
-          {isGeneralAdmin && (
-          <button onClick={() => setModal('new')}
-            className="bg-nwbus-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-nwbus-dark transition-colors">
-            + {isAr ? 'محطة جديدة' : 'New Station'}
-          </button>
-          )}
           {isGeneralAdmin && (
             <button onClick={() => setShowMerge(true)}
-              className="bg-white border border-amber-600 text-amber-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-50 transition-colors">
+              className="border border-amber-600 text-amber-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-50 transition-colors">
               {isAr ? 'دمج محطات' : 'Merge'}
+            </button>
+          )}
+          {isGeneralAdmin && (
+            <button onClick={() => setModal('new')}
+              className="bg-nwbus-primary text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-nwbus-dark transition-colors">
+              + {isAr ? 'محطة جديدة' : 'New Station'}
             </button>
           )}
         </div>
       </div>
 
-      {/* Stats */}
-      <StatStrip className="mb-5" items={[
-        { label: isAr ? 'رئيسية' : 'Main',   val: mainCount },
-        { label: isAr ? 'مرور' : 'Transit',   val: transitCount },
-        { label: isAr ? 'نشطة' : 'Active',    val: activeCount, tone: 'text-green-700' },
+      <StatStrip className="mb-4" items={[
+        { label: isAr ? 'الإجمالي' : 'Total', val: visible.length },
+        { label: isAr ? 'رئيسية' : 'Main', val: mainCount },
+        { label: isAr ? 'مرور' : 'Transit', val: transitCount },
+        { label: isAr ? 'نشطة' : 'Active', val: activeCount, tone: 'text-green-700' },
+        { label: isAr ? 'معطلة / مدمجة' : 'Inactive', val: inactiveCount, tone: inactiveCount ? 'text-amber-700' : undefined },
+        { label: isAr ? 'وكلاء' : 'Agents', val: agentCount },
+        { label: isAr ? '4 ورديات' : '4 shifts', val: fourCount },
       ]} />
 
-      {loading ? (
-        <div className="text-center py-20 text-gray-400">…</div>
-      ) : (
-        <div className="bg-white rounded-2xl shadow overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-nwbus-primary text-white text-xs">
-              <tr>
-                {[isAr ? 'الاسم' : 'Name', isAr ? 'النوع' : 'Type',
-                  isAr ? 'المنطقة' : 'Region', isAr ? 'الحالة' : 'Status', ''].map((h, i) => (
-                  <th key={i} className="px-4 py-3 text-right font-medium">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map(s => (
-                <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <p className="font-semibold text-gray-800 flex items-center gap-1.5">{s.name_ar}{s.is_agent && <span className="text-[10px] bg-violet-100 text-violet-700 rounded px-1.5 py-0.5 font-bold">{isAr ? 'وكيل' : 'Agent'}</span>}</p>
-                    <p className="text-xs text-gray-400">{s.name_en}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs rounded-full px-2 py-0.5 ${s.type === 'main' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                      {s.type === 'main' ? (isAr ? 'رئيسية' : 'Main') : (isAr ? 'مرور' : 'Transit')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{s.region ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs rounded-full px-2 py-0.5 ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {s.merged_into
-                        ? (isAr ? 'مدمجة' : 'Merged')
-                        : s.is_active ? (isAr ? 'نشطة' : 'Active') : (isAr ? 'معطلة' : 'Inactive')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {canEditStation(s) && (
-                    <button onClick={() => setModal(s)}
-                      className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1 hover:bg-nwbus-primary hover:text-white transition-colors">
-                      {isAr ? 'تعديل' : 'Edit'}
-                    </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* أدوات: بحث + تصفية + ترتيب + عرض */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <svg className="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 start-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="M21 21l-4.3-4.3" /></svg>
+          <input placeholder={isAr ? 'ابحث بالاسم أو المنطقة…' : 'Search name or region…'}
+            value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg ps-9 pe-3 py-2 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary/40 focus:border-nwbus-primary focus:outline-none" />
         </div>
+        <SelectField value={sort} onChange={e => setSort(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-700">
+          <option value="name">{isAr ? 'ترتيب: الاسم' : 'Sort: name'}</option>
+          <option value="trips">{isAr ? 'ترتيب: الرحلات' : 'Sort: trips'}</option>
+          <option value="staff">{isAr ? 'ترتيب: الموظفون' : 'Sort: staff'}</option>
+        </SelectField>
+        <div className="hidden md:inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
+          {[['table', isAr ? 'جدول' : 'Table'], ['cards', isAr ? 'بطاقات' : 'Cards']].map(([k, l]) => (
+            <button key={k} type="button" onClick={() => { setView(k); try { localStorage.setItem('stations_view', k) } catch { /* بدون تخزين */ } }}
+              className={`px-3.5 py-2 ${view === k ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-4 -mx-1 px-1">
+        {FILTERS.map(([k, l, fn]) => {
+          const n = visible.filter(fn).length
+          const on = filter === k
+          return (
+            <button key={k} type="button" onClick={() => setFilter(k)}
+              className={`shrink-0 text-xs font-semibold rounded-full px-3.5 py-1.5 border transition-colors ${on ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+              {l} <span className={`font-mono ms-1 ${on ? 'opacity-80' : 'text-gray-400'}`}>{n}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">{[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="h-16 rounded-lg bg-gray-100 animate-pulse" />)}</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 border border-dashed border-gray-300 rounded-xl">
+          <p className="text-gray-500 text-sm">{isAr ? 'لا توجد محطات مطابقة' : 'No matching stations'}</p>
+          {(search || filter !== 'all') && <button type="button" onClick={() => { setSearch(''); setFilter('all') }} className="mt-2 text-xs font-semibold text-nwbus-primary underline">{isAr ? 'مسح التصفية' : 'Clear filters'}</button>}
+        </div>
+      ) : (
+        <>
+          {/* جدول (كمبيوتر) */}
+          <div className={`${view === 'table' ? 'hidden md:block' : 'hidden'} bg-white border border-gray-200 rounded-xl overflow-hidden`}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500 uppercase tracking-wide">
+                  {[isAr ? 'المحطة' : 'Station', isAr ? 'النوع' : 'Type', isAr ? 'المنطقة' : 'Region', isAr ? 'الرحلات' : 'Trips', isAr ? 'الموظفون' : 'Staff', isAr ? 'الورديات' : 'Shifts', isAr ? 'الحالة' : 'Status', ''].map((h, i) => (
+                    <th key={i} className="px-4 py-3 text-start font-bold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map(s => {
+                  const st = statusOf(s)
+                  return (
+                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-gray-900 flex items-center gap-1.5 flex-wrap">{s.name_ar}{badges(s)}</p>
+                        <p className="text-xs text-gray-400 mt-0.5" dir="ltr" style={{ textAlign: isAr ? 'right' : 'left' }}>{s.name_en}</p>
+                      </td>
+                      <td className="px-4 py-3">{typeChip(s)}</td>
+                      <td className="px-4 py-3 text-gray-600 text-xs">{s.region || '—'}{s.city_group && <span className="block text-[10px] text-gray-400">{s.city_group}</span>}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-gray-800">{tripsOf(s) || <span className="text-gray-300">0</span>}</td>
+                      <td className="px-4 py-3 font-mono font-bold text-gray-800">{staffOf(s.id) || <span className="text-gray-300">0</span>}</td>
+                      <td className="px-4 py-3"><ShiftBar s={s} /></td>
+                      <td className="px-4 py-3"><span className={`inline-flex items-center gap-1.5 text-xs font-bold ${st.txt}`}><i className={`w-2 h-2 rounded-full ${st.dot}`} />{st.t}</span></td>
+                      <td className="px-4 py-3 text-end">{editBtn(s)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* بطاقات (جوال، أو اختيار العرض) */}
+          <div className={`${view === 'table' ? 'md:hidden' : ''} grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`}>
+            {filtered.map(s => {
+              const st = statusOf(s)
+              return (
+                <div key={s.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 hover:border-gray-400 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-900 leading-snug flex items-center gap-1.5 flex-wrap">{s.name_ar}{badges(s)}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate" dir="ltr" style={{ textAlign: isAr ? 'right' : 'left' }}>{s.name_en}</p>
+                    </div>
+                    {typeChip(s)}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    {[[isAr ? 'الرحلات' : 'Trips', tripsOf(s)], [isAr ? 'الموظفون' : 'Staff', staffOf(s.id)], [isAr ? 'المنطقة' : 'Region', s.region || '—']].map(([l, v]) => (
+                      <div key={l} className="rounded-lg bg-gray-50 border border-gray-100 py-1.5">
+                        <div className="text-sm font-bold font-mono text-gray-800 truncate px-1">{v}</div>
+                        <div className="text-[10px] text-gray-400">{l}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <ShiftBar s={s} />
+                  <div className="flex items-center justify-between mt-auto pt-1">
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${st.txt}`}><i className={`w-2 h-2 rounded-full ${st.dot}`} />{st.t}</span>
+                    {editBtn(s)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       {modal && (
