@@ -994,7 +994,7 @@ export default function TransportationPage() {
       }
       return out
     }
-    const [allTrips, { data: allRecords }] = await Promise.all([
+    const [allTrips, allRecords] = await Promise.all([
       pageAll(() => supabase.from('station_trips')
         .select(`
           station_id,
@@ -1010,10 +1010,11 @@ export default function TransportationPage() {
         .eq('dep_enabled', true)
         .order('trip_schedule_id').order('station_id')),
 
-      supabase.from('trip_records')
+      pageAll(() => supabase.from('trip_records')
         .select('trip_schedule_id, actual_departure, is_cancelled, station_id, bus_number, passenger_count, missed_count')
         .eq('record_date', date)
-        .eq('is_arrival', false),
+        .eq('is_arrival', false)
+        .order('id')),
     ])
 
     const recMap = {}

@@ -526,26 +526,38 @@ export default function ReportsPage() {
       if (!seesAll && myStationIds.length) return q.in('station_id', myStationIds)
       return q
     }
+    // حد PostgREST 1000 صف: بدون تقسيم الصفحات تُقطع نتائج المحطات الكثيرة فتصير أعداد الرحلات ناقصة — نجلب كل الصفحات بترتيب ثابت
+    const pageAll = async make => {
+      const out = []
+      let error = null
+      for (let f = 0; f < 60000; f += 1000) {
+        const { data: rows, error: e } = await make().range(f, f + 999)
+        if (e) { error = e; break }
+        out.push(...(rows ?? []))
+        if ((rows ?? []).length < 1000) break
+      }
+      return { data: out, error }
+    }
     const [tripsRes, salesRes, lostRes, stationTripsRes, stopsRes] = await Promise.all([
-      scope(supabase.from('trip_records').select(`
+      pageAll(() => scope(supabase.from('trip_records').select(`
         id, trip_schedule_id, record_date, station_id, departure_accuracy, operational_status,
         passenger_count, missed_count, missed_tickets, is_cancelled, is_extra_trip,
         bus_number, screen_works, wheelchair_works, toilet_works,
         actual_departure, actual_arrival, is_arrival,
         station:station_id(name_ar, name_en),
         trip:trip_schedule_id(trip_number, from_station_id, to_station_id, scheduled_departure, scheduled_arrival, from_station:from_station_id(id,name_ar,name_en), to_station:to_station_id(id,name_ar,name_en))
-      `).gte('record_date', dateFrom).lte('record_date', dateTo)),
+      `).gte('record_date', dateFrom).lte('record_date', dateTo)).order('id')),
 
-      scope(supabase.from('sales_records').select(`
+      pageAll(() => scope(supabase.from('sales_records').select(`
         id, sale_date, shift, total_actual, total_expected,
         surplus_deficit, is_confirmed, station:station_id(name_ar, name_en)
-      `).gte('sale_date', dateFrom).lte('sale_date', dateTo)),
+      `).gte('sale_date', dateFrom).lte('sale_date', dateTo)).order('id')),
 
-      scope(supabase.from('lost_found_items').select(`
+      pageAll(() => scope(supabase.from('lost_found_items').select(`
         id, status, found_date, item_type
-      `).gte('found_date', dateFrom).lte('found_date', dateTo)),
+      `).gte('found_date', dateFrom).lte('found_date', dateTo)).order('id')),
 
-      (() => {
+      pageAll(() => {
         let q = supabase.from('station_trips').select(`
           trip_schedule_id, station_id, departure_time, arrival_time,
           dep_enabled, arr_enabled,
@@ -557,9 +569,9 @@ export default function ReportsPage() {
         `)
         if (station !== 'all') q = q.eq('station_id', station)
         else if (!seesAll && myStationIds.length) q = q.in('station_id', myStationIds)
-        return q
-      })(),
-      supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time'),
+        return q.order('trip_schedule_id').order('station_id')
+      }),
+      pageAll(() => supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time').order('trip_schedule_id').order('station_id')),
     ])
 
     const trips = tripsRes.data ?? []
@@ -694,7 +706,14 @@ export default function ReportsPage() {
       }
     })
     // اكتشاف الرحلات المجدولة غير المدخلة
-    const enteredKeys = new Set(trips.map(t => `${t.trip_schedule_id}|${t.record_date}|${t.station_id}`))
+    // مفتاح لكل اتجاه: محطة العبور فيها إدخالان (وصول + مغادرة)، فإذا أُدخل أحدهما فقط يبقى الآخر «غير مدخل»
+    const dirIsArr = t => {
+      const isDest = t.trip?.to_station?.id === t.station_id || t.trip?.to_station_id === t.station_id
+      const isOrig = t.trip?.from_station?.id === t.station_id || t.trip?.from_station_id === t.station_id
+      if (isDest || isOrig) return isDest
+      return t.is_arrival != null ? t.is_arrival === true : (t.actual_arrival != null && t.actual_departure == null)
+    }
+    const enteredKeys = new Set(trips.map(t => `${t.trip_schedule_id}|${t.record_date}|${t.station_id}|${dirIsArr(t) ? 'a' : 'd'}`))
     const stationNameMap = Object.fromEntries(stations.map(s => [s.id, s]))
     const dates = []
     let cur = new Date(dateFrom + 'T12:00:00Z')
@@ -742,8 +761,7 @@ export default function ReportsPage() {
         if (trip.end_date && date > trip.end_date) return
         if (trip.days_of_week?.length && !trip.days_of_week.includes(new Date(date + 'T00:00:00').getDay())) return
         const key = `${st.trip_schedule_id}|${date}|${st.station_id}`
-        if (enteredKeys.has(key)) return
-        const add = (isArr, time) => { if (!time) return; unenteredCount++; movements.push(makeUnentered(date, isArr, time)) }
+        const add = (isArr, time) => { if (!time || enteredKeys.has(`${key}|${isArr ? 'a' : 'd'}`)) return; unenteredCount++; movements.push(makeUnentered(date, isArr, time)) }
         if (isDest) {
           if (arrOn) add(true, st.arrival_time || trip.scheduled_arrival)
         } else if (isOrigin) {
