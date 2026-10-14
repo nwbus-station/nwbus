@@ -1013,32 +1013,48 @@ export default function ReportsPage() {
     const targetStations = stations.filter(s => targetIds.includes(s.id))
 
     const fmtDelay = d => d === null ? '—' : (d === 0 ? '±0' : (d > 0 ? '+' : '') + d + (isAr ? ' د' : ' m'))
-    const delayColor = d => d === null ? '#9ca3af' : d > 5 ? '#dc2626' : d < -2 ? '#2563eb' : '#16a34a'
-    const accBadge = acc => {
-      const styles = { ontime:'background:#f0fdf4;color:#16a34a;border:0.5px solid #86efac', early:'background:#eff6ff;color:#2563eb;border:0.5px solid #93c5fd', noton:'background:#fffbeb;color:#d97706;border:0.5px solid #fde68a', delayed:'background:#fef2f2;color:#dc2626;border:0.5px solid #fca5a5', none:'background:#f1f5f9;color:#94a3b8;border:0.5px solid #e2e8f0' }
-      return `<span style="border-radius:3px;padding:1px 5px;font-size:8px;font-weight:700;${styles[acc?.key]||styles.none}">${acc?.label||'—'}</span>`
+    const delayColor = d => d === null ? '#94a3b8' : d > 5 ? '#dc2626' : d < -2 ? '#2563eb' : '#16a34a'
+    const ACC = {
+      ontime:  { c: '#15803d', bg: '#dcfce7', bd: '#86efac' },
+      early:   { c: '#1d4ed8', bg: '#dbeafe', bd: '#93c5fd' },
+      noton:   { c: '#b45309', bg: '#fef3c7', bd: '#fcd34d' },
+      delayed: { c: '#b91c1c', bg: '#fee2e2', bd: '#fca5a5' },
+      none:    { c: '#64748b', bg: '#f1f5f9', bd: '#cbd5e1' },
     }
-    const moveTable = (list, headColor, title) => {
-      if (!list.length) return `<div style="font-size:9px;color:#94a3b8;padding:4px 0">${title}: —</div>`
+    const accKey = m => m.unentered ? 'unentered' : (m.acc?.key || 'none')
+    const accBadge = acc => {
+      const st = ACC[acc?.key] || ACC.none
+      return `<span style="display:inline-block;min-width:62px;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800;background:${st.bg};color:${st.c};border:1px solid ${st.bd}">${acc?.label || '—'}</span>`
+    }
+    const TH = (h, w) => `<th style="width:${w}%;padding:8px 8px;font-size:11px;font-weight:800;color:#475569;background:#eef2f6;border-bottom:2px solid #cbd5e1;text-align:center;white-space:nowrap">${h}</th>`
+    const moveTable = (list, color, title, icon) => {
+      if (!list.length) return `<div style="margin-top:12px;padding:10px 14px;border:1px dashed #cbd5e1;border-radius:8px;font-size:12px;color:#94a3b8">${title}: ${isAr ? 'لا توجد رحلات' : 'no trips'}</div>`
+      const heads = [['#', 3], [isAr ? 'رقم الرحلة' : 'Trip', 9], [isAr ? 'الحافلة' : 'Bus', 6], [isAr ? 'من' : 'From', 16], [isAr ? 'إلى' : 'To', 16], [isAr ? 'المجدول' : 'Sched.', 7], [isAr ? 'الفعلي' : 'Actual', 7], [isAr ? 'التأخير' : 'Delay', 8], [isAr ? 'الحالة' : 'Status', 11], [isAr ? 'الركاب' : 'Pax', 6], [isAr ? 'المتخلفون' : 'Missed', 7]]
       return `
-        <div style="background:${headColor};color:#fff;padding:4px 8px;font-size:9px;font-weight:700;margin-top:6px">${title} (${list.length})</div>
-        <table style="width:100%;border-collapse:collapse;font-size:8px">
-          <thead><tr style="background:#f8fafc">
-            ${['#', isAr?'رقم الرحلة':'Trip', isAr?'الحافلة':'Bus', isAr?'من':'From', isAr?'إلى':'To', isAr?'المجدول':'Sched.', isAr?'الفعلي':'Actual', isAr?'التأخير':'Delay', isAr?'الحالة':'Status', isAr?'الركاب':'Pax', isAr?'المتخلفون':'Missed'].map(h=>`<th style="padding:3px 5px;text-align:${h==='#'?'center':'right'};color:#475569;border-bottom:1.5px solid #e2e8f0;font-weight:700">${h}</th>`).join('')}
-          </tr></thead>
-          <tbody>${list.map((m,i)=>`<tr style="background:${m.unentered?'#fffbeb':i%2?'#f8fafc':'#fff'}">
-            <td style="padding:3px 5px;text-align:center;color:#cbd5e1;font-size:7px">${i+1}</td>
-            <td style="padding:3px 5px;font-family:monospace;font-weight:700;color:${m.unentered?'#92400e':headColor};font-size:8px">${escapeHtml(m.trip)}</td>
-            <td style="padding:3px 5px;font-family:monospace;font-weight:600;color:#475569">${escapeHtml(m.bus)}</td>
-            <td style="padding:3px 5px;font-size:7px">${escapeHtml(m.from)}</td>
-            <td style="padding:3px 5px;font-size:7px">${escapeHtml(m.to)}</td>
-            <td style="padding:3px 5px;text-align:center;font-family:monospace">${m.sched}</td>
-            <td style="padding:3px 5px;text-align:center;font-family:monospace;color:${delayColor(m.delay)}">${m.actual}</td>
-            <td style="padding:3px 5px;text-align:center;color:${delayColor(m.delay)};font-weight:700">${fmtDelay(m.delay)}</td>
-            <td style="padding:3px 5px;text-align:center">${m.unentered?'<span style="font-size:7px;color:#b45309">⚠ غير مدخلة</span>':accBadge(m.acc)}</td>
-            <td style="padding:3px 5px;text-align:center;font-family:monospace">${m.pax||''}</td>
-            <td style="padding:3px 5px;text-align:center;font-family:monospace;color:#dc2626;font-weight:700">${m.missed||''}</td>
-          </tr>`).join('')}</tbody>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding:9px 14px;background:${color};color:#fff;border-radius:8px 8px 0 0">
+          <span style="font-size:15px;font-weight:800">${icon} ${title}</span>
+          <span style="font-size:12px;font-weight:800;background:rgba(255,255,255,.18);border-radius:999px;padding:3px 12px">${list.length} ${isAr ? 'رحلة' : 'trips'}</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;border:1px solid #e2e8f0;border-top:none">
+          <thead style="display:table-header-group"><tr>${heads.map(([h, w]) => TH(h, w)).join('')}</tr></thead>
+          <tbody>${list.map((m, i) => {
+            const k = accKey(m)
+            const bar = k === 'unentered' ? '#f59e0b' : (ACC[k] || ACC.none).c
+            const td = 'padding:8px 8px;border-bottom:1px solid #eef2f6;text-align:center;vertical-align:middle'
+            return `<tr style="page-break-inside:avoid;background:${m.unentered ? '#fffbeb' : i % 2 ? '#f8fafc' : '#fff'}">
+            <td style="${td};color:#94a3b8;font-size:11px;border-inline-start:4px solid ${bar}">${i + 1}</td>
+            <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:13px;color:${m.unentered ? '#92400e' : color}" dir="ltr">${escapeHtml(m.trip)}</td>
+            <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:700;color:#334155;font-size:13px">${escapeHtml(m.bus)}</td>
+            <td style="${td};font-weight:700;color:#1e293b;text-align:start">${escapeHtml(m.from)}</td>
+            <td style="${td};font-weight:700;color:#1e293b;text-align:start">${escapeHtml(m.to)}</td>
+            <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:700;font-size:14px;color:#334155">${m.sched}</td>
+            <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:14px;color:${m.unentered ? '#cbd5e1' : delayColor(m.delay)}">${m.unentered ? '—' : m.actual}</td>
+            <td style="${td};color:${delayColor(m.delay)};font-weight:800;font-size:14px">${m.unentered ? '' : fmtDelay(m.delay)}</td>
+            <td style="${td}">${m.unentered ? `<span style="display:inline-block;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800;background:#fef3c7;color:#92400e;border:1px solid #fcd34d">${isAr ? 'غير مدخلة' : 'Not entered'}</span>` : accBadge(m.acc)}</td>
+            <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:14px;color:#0f172a">${m.pax || ''}</td>
+            <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:14px;color:#dc2626">${m.missed || ''}</td>
+          </tr>`
+          }).join('')}</tbody>
         </table>`
     }
 
@@ -1048,53 +1064,93 @@ export default function ReportsPage() {
       const onTime = withSched.filter(m => m.acc?.key === 'ontime' || m.acc?.key === 'early').length
       return Math.round(onTime / withSched.length * 100)
     }
+    const rateColor = r => r >= 80 ? '#16a34a' : r >= 60 ? '#d97706' : '#dc2626'
+    const rateCard = (title, rate, sub) => `
+      <div style="flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;background:#fff">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <span style="font-size:13px;font-weight:800;color:#334155">${title}</span>
+          <span style="font-size:30px;font-weight:900;line-height:1;color:${rate === null ? '#cbd5e1' : rateColor(rate)}">${rate === null ? '—' : rate + '%'}</span>
+        </div>
+        <div style="height:9px;border-radius:999px;background:#e2e8f0;margin-top:9px;overflow:hidden"><div style="height:100%;width:${rate ?? 0}%;background:${rate === null ? '#cbd5e1' : rateColor(rate)};border-radius:999px"></div></div>
+        <div style="font-size:11px;color:#64748b;margin-top:6px">${sub}</div>
+      </div>`
 
     const pages = targetStations.map((stn, idx) => {
       const stMoves = data.movements.filter(m => m.station_id === stn.id)
       const deps = stMoves.filter(m => m.type === 'departure')
       const arrs = stMoves.filter(m => m.type === 'arrival')
       const stnName = isAr ? stn.name_ar : stn.name_en
-      const depPax = deps.reduce((s,m)=>s+(m.pax||0),0)
-      const arrPax = arrs.reduce((s,m)=>s+(m.pax||0),0)
-      const missed = stMoves.reduce((s,m)=>s+(m.missed||0),0)
+      const depPax = deps.reduce((s, m) => s + (m.pax || 0), 0)
+      const arrPax = arrs.reduce((s, m) => s + (m.pax || 0), 0)
+      const missed = stMoves.reduce((s, m) => s + (m.missed || 0), 0)
       const depRate = calcRate(deps)
       const arrRate = calcRate(arrs)
-      const rateCell = (rate, color) => rate === null ? '—' : `<span style="font-weight:700;color:${rate>=80?'#16a34a':rate>=60?'#d97706':'#dc2626'}">${rate}%</span>`
+      const entered = stMoves.filter(m => !m.unentered)
+      const delays = entered.filter(m => m.delay !== null).map(m => m.delay)
+      const avgDelay = delays.length ? Math.round(delays.reduce((s, d) => s + d, 0) / delays.length) : null
+      const maxDelay = delays.length ? Math.max(...delays) : null
+      const cnt = k => stMoves.filter(m => accKey(m) === k).length
+      const dist = [
+        { k: 'ontime', l: isAr ? 'في الوقت' : 'On time', c: '#16a34a' },
+        { k: 'early', l: isAr ? 'مبكر' : 'Early', c: '#2563eb' },
+        { k: 'noton', l: isAr ? 'غير منتظم' : 'Irregular', c: '#d97706' },
+        { k: 'delayed', l: isAr ? 'متأخر' : 'Delayed', c: '#dc2626' },
+        { k: 'unentered', l: isAr ? 'غير مدخلة' : 'Not entered', c: '#f59e0b' },
+        { k: 'none', l: isAr ? 'بلا جدول' : 'No schedule', c: '#94a3b8' },
+      ].map(d => ({ ...d, n: cnt(d.k) })).filter(d => d.n > 0)
+      const total = Math.max(1, stMoves.length)
 
+      const kpis = [
+        { val: deps.length, lbl: isAr ? 'رحلات المغادرة' : 'Departures', accent: '#0ea5e9' },
+        { val: arrs.length, lbl: isAr ? 'رحلات الوصول' : 'Arrivals', accent: '#10b981' },
+        { val: depPax, lbl: isAr ? 'ركاب المغادرة' : 'Dep. passengers', accent: '#6366f1' },
+        { val: arrPax, lbl: isAr ? 'ركاب الوصول' : 'Arr. passengers', accent: '#06b6d4' },
+        { val: missed, lbl: isAr ? 'المتخلفون' : 'Missed', accent: '#ef4444' },
+        { val: avgDelay === null ? '—' : fmtDelay(avgDelay), lbl: isAr ? 'متوسط التأخير' : 'Avg. delay', accent: '#f59e0b' },
+        { val: maxDelay === null ? '—' : fmtDelay(maxDelay), lbl: isAr ? 'أكبر تأخير' : 'Max delay', accent: '#f97316' },
+      ]
       const kpiBar = `
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);background:#1C2B36;color:#fff;text-align:center">
-          ${[
-            { val: deps.length, lbl: isAr?'رحلات المغادرة':'Departures', accent:'#38bdf8' },
-            { val: arrs.length, lbl: isAr?'رحلات الوصول':'Arrivals', accent:'#34d399' },
-            { val: depPax,      lbl: isAr?'ركاب المغادرة':'Dep. Pax', accent:'#818cf8' },
-            { val: arrPax,      lbl: isAr?'ركاب الوصول':'Arr. Pax', accent:'#22d3ee' },
-            { val: missed,      lbl: isAr?'المتخلفون':'Missed', accent:'#f87171' },
-            { val: rateCell(depRate), lbl: isAr?'التزام المغادرة':'Dep. On-Time', accent:'#38bdf8' },
-            { val: rateCell(arrRate), lbl: isAr?'التزام الوصول':'Arr. On-Time', accent:'#34d399' },
-          ].map((k,i)=>`<div style="padding:7px 4px;border-left:${i>0?'1px solid rgba(255,255,255,.1)':'none'};position:relative">
-            <div style="font-size:15px;font-weight:700;color:#fff;line-height:1">${k.val}</div>
-            <div style="font-size:7px;color:rgba(255,255,255,.6);margin-top:2px">${k.lbl}</div>
-            <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:${k.accent}"></div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:4px">
+          ${kpis.map(k => `<div style="border:1px solid #e2e8f0;border-top:4px solid ${k.accent};border-radius:10px;padding:10px 6px 9px;text-align:center;background:#fff">
+            <div style="font-size:26px;font-weight:900;color:#0f172a;line-height:1.05">${k.val}</div>
+            <div style="font-size:11px;font-weight:700;color:#64748b;margin-top:5px">${k.lbl}</div>
           </div>`).join('')}
         </div>`
 
-      return `
-        <div style="page-break-after:${idx < targetStations.length-1 ? 'always' : 'avoid'}">
-          ${brandHeader({ title: isAr?'تقرير الوصول والمغادرة':'Arrivals & Departures', subtitle: escapeHtml(stnName), lines: [`${dateFrom} → ${dateTo}`], dir: isAr?'rtl':'ltr', logoW: 105, margin: '0 0 6px' })}
-          ${kpiBar}
-          <div style="padding:0 4px">
-            ${moveTable(deps, '#1C2B36', isAr?'رحلات المغادرة':'Departures')}
-            ${moveTable(arrs, '#23695A', isAr?'رحلات الوصول':'Arrivals')}
+      const perf = `
+        <div style="display:flex;gap:10px;margin-top:10px">
+          ${rateCard(isAr ? 'الالتزام بالمغادرة' : 'Departure punctuality', depRate, isAr ? `${deps.length} رحلة مغادرة` : `${deps.length} departures`)}
+          ${rateCard(isAr ? 'الالتزام بالوصول' : 'Arrival punctuality', arrRate, isAr ? `${arrs.length} رحلة وصول` : `${arrs.length} arrivals`)}
+          <div style="flex:1.3;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;background:#fff">
+            <div style="font-size:13px;font-weight:800;color:#334155;margin-bottom:9px">${isAr ? 'توزيع حالات الرحلات' : 'Trip status breakdown'}</div>
+            <div style="display:flex;height:13px;border-radius:999px;overflow:hidden;background:#e2e8f0">
+              ${dist.map(d => `<div style="width:${(d.n / total) * 100}%;background:${d.c}"></div>`).join('')}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:9px">
+              ${dist.map(d => `<span style="font-size:11.5px;font-weight:700;color:#334155"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${d.c};margin-inline-end:5px;vertical-align:-1px"></span>${d.l} <b style="color:#0f172a">${d.n}</b></span>`).join('')}
+            </div>
           </div>
-          <div style="margin-top:6px;padding:4px 10px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8">
-            <span>${escapeHtml(profile?.full_name_ar)??'—'} · ${new Date().toLocaleString('en-GB')}</span>
-            <span>${isAr?'التخلف:':'Missed:'} ${missed} &nbsp;|&nbsp; ${isAr?'ركاب المغادرة:':'Dep. Pax:'} ${depPax} &nbsp;|&nbsp; ${isAr?'ركاب الوصول:':'Arr. Pax:'} ${arrPax}</span>
+        </div>`
+
+      return `
+        <div style="page-break-after:${idx < targetStations.length - 1 ? 'always' : 'avoid'}">
+          ${brandHeader({ title: isAr ? 'تقرير الوصول والمغادرة' : 'Arrivals & Departures', subtitle: escapeHtml(stnName), lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
+          <div style="padding:0 4px">
+            ${kpiBar}
+            ${perf}
+            ${moveTable(deps, '#1C2B36', isAr ? 'رحلات المغادرة' : 'Departures', '↗')}
+            ${moveTable(arrs, '#23695A', isAr ? 'رحلات الوصول' : 'Arrivals', '↙')}
+          </div>
+          <div style="margin-top:12px;padding:8px 14px;border-top:2px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b">
+            <span>${escapeHtml(profile?.full_name_ar) ?? '—'} · ${new Date().toLocaleString('en-GB')}</span>
+            <span style="font-weight:700">${isAr ? 'التخلف' : 'Missed'}: <b style="color:#dc2626">${missed}</b> &nbsp;|&nbsp; ${isAr ? 'ركاب المغادرة' : 'Dep. pax'}: <b style="color:#0f172a">${depPax}</b> &nbsp;|&nbsp; ${isAr ? 'ركاب الوصول' : 'Arr. pax'}: <b style="color:#0f172a">${arrPax}</b></span>
+            <span style="background:#1C2B36;color:#fff;font-size:10px;font-weight:800;padding:3px 12px;border-radius:999px;letter-spacing:.6px">NORTH WEST BUS</span>
           </div>
         </div>`
     }).join('')
 
-    const html = `<div style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:rtl;color:#1a2233;background:#fff">${pages}</div>`
-    openPrintPreview(html, `@page{size:A4 landscape;margin:5mm}body{margin:0;padding:0}`)
+    const html = `<div style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;background:#fff;font-size:12.5px">${pages}</div>`
+    openPrintPreview(html, `@page{size:A4 landscape;margin:8mm}body{margin:0;padding:0 6px}`)
   }
 
   function printReport() {
