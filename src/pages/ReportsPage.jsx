@@ -1345,16 +1345,20 @@ export default function ReportsPage() {
 
 
   return (
-    <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>
-      <h1 className="text-xl font-bold text-nwbus-primary mb-5">
-        {isAr ? 'التقارير' : 'Reports'}
-      </h1>
-
-      {/* Report type + date range */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 mb-5 flex flex-wrap gap-3 items-end">
+    <div className="p-4 md:p-6 max-w-[1400px] mx-auto" dir={isAr ? 'rtl' : 'ltr'}>
+      <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">{isAr ? 'نوع التقرير' : 'Report Type'}</label>
-          <div className="flex flex-wrap gap-1">
+          <h1 className="text-2xl font-extrabold text-gray-900 leading-tight">{isAr ? 'التقارير' : 'Reports'}</h1>
+          <p className="text-sm text-gray-500 mt-1">{dateFrom === dateTo ? dateFrom : `${dateFrom} → ${dateTo}`} · {stationLabel}</p>
+        </div>
+        {loading && <span className="text-xs font-bold text-nwbus-primary animate-pulse">{isAr ? 'جارٍ التحميل…' : 'Loading…'}</span>}
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl mb-6 relative">
+        {loading && <div className="absolute top-0 inset-x-0 h-0.5 bg-nwbus-primary animate-pulse rounded-t-xl" />}
+        <section className="p-4 border-b border-gray-100">
+          <p className="rp-label mb-2.5">{isAr ? 'نوع التقرير' : 'Report type'}</p>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 md:flex-wrap md:overflow-visible">
             {[
               { id: 'all',        label: isAr ? 'الكل' : 'All' },
               { id: 'movements',  label: isAr ? 'الوصول والمغادرة' : 'Arrivals' },
@@ -1369,7 +1373,7 @@ export default function ReportsPage() {
               const active = isAll ? reportTypes.length === 0 : reportTypes.includes(id)
               return (
                 <button key={id} onClick={() => isAll ? setReportTypes([]) : toggleReportType(id)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${active ? 'bg-nwbus-primary text-white border-nwbus-primary shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
+                  className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${active ? 'bg-nwbus-primary text-white border-nwbus-primary shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
                   <span style={{ width: 14, height: 14, borderRadius: 3, border: active ? '1.5px solid rgba(255,255,255,0.7)' : '1.5px solid #9ca3af', background: active ? 'rgba(255,255,255,0.2)' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {active && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                   </span>
@@ -1378,48 +1382,55 @@ export default function ReportsPage() {
               )
             })}
           </div>
-        </div>
+        </section>
+        <section className="p-4 grid gap-3 grid-cols-2 lg:grid-cols-[minmax(0,1.3fr)_1fr_1fr_auto] items-end">
+          <div className="col-span-2 lg:col-span-1">
         {/* Station selector */}
         {stations.length > 0 && (
           <div>
-            <label className="block text-xs text-gray-500 mb-1">{isAr ? 'المحطة' : 'Station'}</label>
+            <label className="rp-label mb-1.5">{isAr ? 'المحطة' : 'Station'}</label>
             <SearchSelect isAr={isAr} value={station} onChange={setStation}
-              className="border rounded-lg px-3 py-2 text-sm bg-white min-w-[170px]"
+              className="border rounded-lg px-3 py-2 text-sm bg-white w-full"
               options={[
                 { value: 'all', label: seesAll ? (isAr ? 'جميع المحطات' : 'All stations') : (isAr ? 'كل محطاتي' : 'My stations') },
                 ...stations.map(s => ({ value: s.id, label: isAr ? s.name_ar : s.name_en })),
               ]} />
           </div>
         )}
+          </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">{isAr ? 'من' : 'From'}</label>
+          <label className="rp-label mb-1.5">{isAr ? 'من' : 'From'}</label>
           <DatePicker value={dateFrom} onChange={v => { setDateFrom(v); if (v) setDateTo(v) }} isAr={isAr}
             className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">{isAr ? 'إلى' : 'To'}</label>
+          <label className="rp-label mb-1.5">{isAr ? 'إلى' : 'To'}</label>
           <DatePicker value={dateTo} onChange={setDateTo} isAr={isAr}
             className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
         </div>
-        {/* اختصارات سريعة: اليوم / أمس */}
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">{isAr ? 'اختصار' : 'Quick'}</label>
-          <div className="flex gap-1">
-            {[
-              [isAr ? 'اليوم' : 'Today', 0],
-              [isAr ? 'أمس' : 'Yesterday', -1],
-            ].map(([label, off]) => {
-              const d = new Date(); d.setDate(d.getDate() + off)
-              const v = toLocalDateStr(d), on = dateFrom === v && dateTo === v
-              return (
-                <button key={off} type="button" onClick={() => { setDateFrom(v); setDateTo(v) }}
-                  className={`px-3.5 py-2 rounded-lg text-sm font-semibold border transition ${on ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-700 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
-                  {label}
-                </button>
-              )
-            })}
+          <div className="col-span-2 lg:col-span-1">
+            <p className="rp-label mb-1.5">{isAr ? 'اختصار' : 'Quick'}</p>
+            <div className="flex gap-1.5 overflow-x-auto">
+              {[
+                [isAr ? 'اليوم' : 'Today', 0, 0],
+                [isAr ? 'أمس' : 'Yesterday', -1, -1],
+                [isAr ? '7 أيام' : '7 days', -6, 0],
+                [isAr ? '30 يوماً' : '30 days', -29, 0],
+              ].map(([label, fromOff, toOff]) => {
+                const f = new Date(); f.setDate(f.getDate() + fromOff)
+                const t = new Date(); t.setDate(t.getDate() + toOff)
+                const fv = toLocalDateStr(f), tv = toLocalDateStr(t), on = dateFrom === fv && dateTo === tv
+                return (
+                  <button key={label} type="button" onClick={() => { setDateFrom(fv); setDateTo(tv) }}
+                    className={`shrink-0 whitespace-nowrap px-3.5 py-2 rounded-lg text-sm font-semibold border transition ${on ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-700 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        </section>
+        <section className="rp-actions px-4 py-3 bg-gray-50 border-t border-gray-100 rounded-b-xl flex flex-wrap items-center gap-2">
         {data && allowCap('reports_print') && (
           <button onClick={printReport}
             className="bg-nwbus-primary text-white px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90">
@@ -1427,7 +1438,7 @@ export default function ReportsPage() {
           </button>
         )}
         {data && stations.length > 1 && (
-          <div className="flex gap-2 items-start">
+          <div className="flex flex-wrap gap-2 items-start">
           <div className="flex flex-col gap-1 relative">
             <button onClick={() => setShowStationPicker(v => !v)}
               className="bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 flex items-center gap-2">
@@ -1437,7 +1448,7 @@ export default function ReportsPage() {
               </span>
             </button>
             {showStationPicker && (
-              <div className="absolute z-50 mt-10 bg-white rounded-xl shadow-xl border p-3 min-w-[240px] max-h-72 overflow-y-auto">
+              <div className="absolute z-50 top-full mt-2 end-0 w-[min(92vw,300px)] bg-white rounded-xl shadow-xl border p-3 max-h-72 overflow-y-auto">
                 <div className="flex items-center justify-between mb-2 border-b pb-2">
                   <span className="text-xs font-bold text-gray-600">{isAr ? 'اختر المحطات للطباعة' : 'Select stations to print'}</span>
                   <div className="flex gap-1.5">
@@ -1487,7 +1498,7 @@ export default function ReportsPage() {
               </span>
             </button>
             {showAgentPicker && (
-              <div className="absolute z-50 mt-10 bg-white rounded-xl shadow-xl border p-3 min-w-[240px] max-h-72 overflow-y-auto">
+              <div className="absolute z-50 top-full mt-2 end-0 w-[min(92vw,300px)] bg-white rounded-xl shadow-xl border p-3 max-h-72 overflow-y-auto">
                 <div className="flex items-center justify-between mb-2 border-b pb-2">
                   <span className="text-xs font-bold text-gray-600">{isAr ? 'محطات الوكلاء' : 'Agent Stations'}</span>
                   <div className="flex gap-1.5">
@@ -1526,7 +1537,7 @@ export default function ReportsPage() {
           </div>
           </div>
         )}
-        {loading && <span className="text-sm text-gray-400 pb-2">… {isAr ? 'جارٍ التحميل…' : 'Loading…'}</span>}
+        </section>
       </div>
 
       {data && (
@@ -1535,7 +1546,7 @@ export default function ReportsPage() {
           {/* Transportation summary */}
           {show('transport') && (
           <section>
-            <h2 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
+            <h2 className="rp-h2">
               {isAr ? 'ملخص الترحيل' : 'Transportation Summary'}
             </h2>
             <StatStrip items={[
@@ -1553,7 +1564,7 @@ export default function ReportsPage() {
           {/* Arrivals & Departures */}
           {show('movements') && (
           <section>
-            <h2 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
+            <h2 className="rp-h2">
               {isAr ? 'تقرير الوصول والمغادرة' : 'Arrivals & Departures'}
             </h2>
             <StatStrip className="mb-3" items={[
@@ -1825,7 +1836,7 @@ export default function ReportsPage() {
           {/* Sales summary — للأدمن العام فقط */}
           {(isGeneralAdmin || isAccountant || isStationAdmin) && show('sales') && (
           <section>
-            <h2 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
+            <h2 className="rp-h2">
               {isAr ? 'ملخص المبيعات' : 'Sales Summary'}
             </h2>
             <StatStrip items={[
@@ -1843,7 +1854,7 @@ export default function ReportsPage() {
           {/* Lost & Found summary */}
           {show('lost') && (
           <section>
-            <h2 className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
+            <h2 className="rp-h2">
               {isAr ? 'ملخص الموجودات' : 'Lost & Found Summary'}
             </h2>
             <StatStrip items={[

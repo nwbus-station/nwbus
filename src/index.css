@@ -940,3 +940,9 @@ html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled
 @media (max-width: 1180px) {
   .tp-row.tp-row-sched { grid-template-columns: 96px 1fr; grid-template-areas: "time trip" "route route" "exec exec"; }
 }
+
+/* التقارير: عناوين الأقسام والتسميات */
+.rp-label { margin: 0; font-size: 0.7rem; font-weight: 800; color: var(--text-3); letter-spacing: 0.08em; text-transform: uppercase; }
+.rp-h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-size: 1.05rem; font-weight: 800; color: var(--text-1); }
+.rp-h2::before { content: ''; width: 4px; height: 18px; border-radius: 2px; background: #5B5BD6; }
+@media (max-width: 640px) { .rp-actions > button, .rp-actions > div, .rp-actions > div > div { width: 100%; } .rp-actions button { justify-content: center; width: 100%; } }
