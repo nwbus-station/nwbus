@@ -2,11 +2,18 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import QRCode from 'qrcode'
-import { SHIFTS, currentShift, allowedShiftsNow, computeActiveUntil, formatTime } from '../utils/ratingShifts'
+import { ratingShiftsFor, currentShift, allowedShiftsNow, computeActiveUntil, formatTime } from '../utils/ratingShifts'
 
 export default function EmployeeRatingPage() {
   const { profile } = useAuth()
   const [windowNumber, setWindowNumber] = useState(profile?.rating_window_number || '')
+  // ورديات محطة الموظف (3 أو 4)
+  const [stEnds, setStEnds] = useState(null)
+  useEffect(() => {
+    if (!profile?.station_id) return
+    supabase.from('stations').select('shift_ends').eq('id', profile.station_id).maybeSingle().then(({ data }) => setStEnds(data?.shift_ends ?? null))
+  }, [profile?.station_id])
+  const SHIFTS = ratingShiftsFor(stEnds)
   const [shift, setShift] = useState(profile?.rating_shift || currentShift())
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -20,7 +27,7 @@ export default function EmployeeRatingPage() {
     return () => clearInterval(id)
   }, [])
 
-  const allowed = allowedShiftsNow(now)
+  const allowed = allowedShiftsNow(now, SHIFTS)
   useEffect(() => {
     if (!allowed.includes(shift)) setShift(allowed[0])
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -44,7 +51,7 @@ export default function EmployeeRatingPage() {
     if (usedToday && !effectivelyActive) { setErrMsg('استخدمت تفعيلك لهذا اليوم — تواصل مع الإدمن لإعادة التفعيل'); return }
     setErrMsg('')
     setSaving(true)
-    const until = computeActiveUntil(shift, new Date())
+    const until = computeActiveUntil(shift, new Date(), SHIFTS)
     const { error } = await supabase.from('users').update({
       rating_window_number: windowNumber.trim(),
       rating_shift: shift,
@@ -109,7 +116,7 @@ export default function EmployeeRatingPage() {
         </div>
         <div>
           <label className="block text-xs text-gray-500 mb-1">الوردية</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${SHIFTS.length}, minmax(0, 1fr))` }}>
             {SHIFTS.map(s => {
               const isAllowed = allowed.includes(s.value)
               return (

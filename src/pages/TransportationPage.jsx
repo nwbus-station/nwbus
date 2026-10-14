@@ -23,8 +23,8 @@ import { todayStr } from '../utils/dates'
 import RouteText from '../components/shared/RouteText'
 import { isRestStation } from '../utils/stations'
 import SelectField from '../components/shared/SelectField'
-import { useAppSettings } from '../context/AppSettingsContext'
-import { SHIFT_SETTING_KEY, parseShifts, shiftIdx } from '../utils/shifts'
+import { shiftIdx, SHIFT_AR, SHIFT_EN } from '../utils/shifts'
+import { shiftsOfStation } from '../utils/stationShifts'
 
 const accuracyColor = v => ({
   'On Time':    'text-green-600 font-semibold',
@@ -712,8 +712,6 @@ export default function TransportationPage() {
   const [scheduleData, setScheduleData] = useState([])
   const [schedStatus, setSchedStatus] = useState('all')   // all | departed | scheduled | late
   const [schedShift, setSchedShift] = useState('all')    // all | A | B | C | D
-  const { settings: appSettings } = useAppSettings()
-  const SHIFTS = parseShifts(appSettings?.[SHIFT_SETTING_KEY])   // نهاية كل وردية شاملة (من الإعدادات)
   const [schedQ, setSchedQ] = useState('')
   const [boardMode, setBoardMode] = useState('now')   // now = الأحدث/القادمة فوق · shift = حسب الوردية
   const [showPast, setShowPast] = useState(false)
@@ -753,17 +751,19 @@ export default function TransportationPage() {
 
   // الأدمن/المحاسب يتنقّلون بين كل المحطات؛ المشرف بين محطاته المعيّنة فقط
   const stationId = selectedStation || null
+  // ورديات المحطة المختارة (3 أو 4 من صفحة المحطات)
+  const SHIFTS = shiftsOfStation(stations.find(s => s.id === stationId) ?? profile?.station)
 
   // جلب المحطات: الأدمن يرى الكل؛ مشرف المنطقة محطاته؛ المشرف والمحاسب محطاتهم فقط
   useEffect(() => {
     if (isGeneralAdmin && !scopedIds) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (scopedIds) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').in('id', scopedIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').in('id', scopedIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (isAreaSupervisor && allowedStationIds?.length) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (workStations?.length > 1) {
       // موظف/محاسب يعمل بأكثر من محطة (محطته الأساسية أولاً ثم الإضافية التي حدّدها الأدمن) — يتنقّل بينها مثل المشرف
@@ -773,14 +773,14 @@ export default function TransportationPage() {
         .then(async ({ data }) => {
           let sts = (data ?? []).map(r => r.station).filter(Boolean).filter(s => !isRestStation(s))
           if (sts.length === 0 && profile?.station_id) {
-            const { data: st } = await supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').eq('id', profile.station_id).maybeSingle()
+            const { data: st } = await supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').eq('id', profile.station_id).maybeSingle()
             sts = st ? [st] : (profile?.station ? [profile.station] : [])
           }
           setStations(sts)
         })
     } else if (profile?.station_id) {
       // الموظف: محطته فقط — نجيبها كاملة (بما فيها إعداد دمج الوصول والمغادرة) عشان تظهر له نفس بطاقة الأدمن
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep').eq('id', profile.station_id).maybeSingle()
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').eq('id', profile.station_id).maybeSingle()
         .then(({ data }) => { if (data) setStations([data]) })
     }
   }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id, profile?.station_id, scopedIds?.join(','), workStations])
@@ -1426,8 +1426,13 @@ export default function TransportationPage() {
     const meas = rows.filter(r => r.dly != null)
     const punct = meas.length ? Math.round((meas.filter(r => r.dly <= 5).length / meas.length) * 100) : null
     const pct = total ? Math.round((departedN / total) * 100) : 0
-    const SH = SHIFTS.map(x => [x.k, x.ar, x.en, x.from, x.to, x.range])
-    const shiftOf = r => SHIFTS[shiftIdx(r.sm, SHIFTS)].k
+    // الجدول الشامل لكل المحطات: وردية الرحلة حسب محطة انطلاقها (3 أو 4 ورديات لكل محطة)
+    const stById = Object.fromEntries(stations.map(s => [s.id, s]))
+    const rowShift = r => { const sh = shiftsOfStation(stById[r.from_station?.id] ?? r.from_station); return sh[shiftIdx(r.sm, sh)] }
+    const shiftOf = r => rowShift(r).k
+    const shKeys = ['A', 'B', 'C', 'D'].filter(k => rows.some(r => shiftOf(r) === k))
+    const rangeOf = k => { const set = new Set(rows.filter(r => shiftOf(r) === k).map(r => rowShift(r).range)); return set.size === 1 ? [...set][0] : '' }
+    const SH = (shKeys.length ? shKeys : SHIFTS.map(x => x.k)).map(k => [k, SHIFT_AR[k], SHIFT_EN[k], 0, 0, rangeOf(k)])
     const q = schedQ.trim().toLowerCase()
     const list = rows.filter(r => {
       if (schedStatus === 'departed' && !r.departed) return false
@@ -1589,13 +1594,13 @@ export default function TransportationPage() {
             <div className="md:hidden"><div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{list.map(card)}</div></div>
             <div className="hidden md:block">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                {SH.map(([k, ar, enL, from, to, range], shI) => {
-                  const grp = list.filter(r => shiftIdx(r.sm, SHIFTS) === shI)
+                {SH.map(([k, ar, enL, from, to, range]) => {
+                  const grp = list.filter(r => shiftOf(r) === k)
                   if (!grp.length) return null
-                  const all = rows.filter(r => shiftIdx(r.sm, SHIFTS) === shI)
+                  const all = rows.filter(r => shiftOf(r) === k)
                   const done = all.filter(r => r.departed).length
                   const sp = all.length ? Math.round((done / all.length) * 100) : 0
-                  const nowHere = isToday && shiftIdx(nowMin, SHIFTS) === shI
+                  const nowHere = isToday && all.some(r => { const sh = rowShift(r); return sh.from <= nowMin && nowMin <= sh.to })
                   return (
                     <section key={k}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>

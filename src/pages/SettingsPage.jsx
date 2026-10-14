@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext'
 import { useAppSettings } from '../context/AppSettingsContext'
 import BackupSettings from '../components/settings/BackupSettings'
 import OperationsReportDownload from '../components/settings/OperationsReportDownload'
-import ShiftSettings from '../components/settings/ShiftSettings'
 import SalesDaySettings from '../components/settings/SalesDaySettings'
 
 const THEMES = [
@@ -95,8 +94,6 @@ const Section = ({ titleAr, titleEn, children }) => (
         </p>
       </Section>
 
-      {/* ── الورديات ── */}
-      <ShiftSettings isAr={isAr} />
       <SalesDaySettings isAr={isAr} />
 
       {/* ── النسخ الاحتياطي والتقرير اليومي ── */}

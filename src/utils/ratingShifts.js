@@ -1,11 +1,11 @@
-// ورديات تقييم العميل: أوقات ثابتة يومياً — أ ٠٠:٠٠-٠٨:٠٠، ب ٠٨:٠٠-١٦:٠٠، ج ١٦:٠٠-٢٤:٠٠،
+// ورديات تقييم العميل: تتبع ورديات المحطة (الافتراضي أ ٠٠:٠٠-٠٨:٠٠، ب ٠٨:٠٠-١٦:٠٠، ج ١٦:٠٠-٢٤:٠٠)،
 // مع فترة سماح ساعتين قبل/بعد حدود كل وردية (يسمح بالتفعيل المبكر أو التأخر بالخروج)
 // بدون السماح باختيار ورديات غير المرتبطة بالوقت الحالي فعلياً.
-export const SHIFTS = [
-  { value: 'A', ar: 'الوردية أ', range: '00:00 - 08:00', start: 0, end: 8 },
-  { value: 'B', ar: 'الوردية ب', range: '08:00 - 16:00', start: 8, end: 16 },
-  { value: 'C', ar: 'الوردية ج', range: '16:00 - 23:59', start: 16, end: 24 },
-]
+import { shiftsFromEnds } from './stationShifts'
+
+// ورديات المحطة (3 أو 4 من صفحة المحطات)؛ بدون تخصيص: القياسية الثلاث
+export const ratingShiftsFor = ends => shiftsFromEnds(ends).map(x => ({ value: x.k, ar: x.ar, range: x.range.replace(' – ', ' - '), start: x.from / 60, end: x.to / 60 }))
+export const SHIFTS = ratingShiftsFor(null)
 
 const GRACE_MS = 2 * 60 * 60 * 1000
 
@@ -20,8 +20,8 @@ function occurrence(shift, dayOffset, ref) {
 }
 
 // نبحث في وردية أمس/اليوم/غداً لأن فترة السماح قد تمد الوردية عبر منتصف الليل
-function windowFor(shiftValue, now = new Date()) {
-  const shift = SHIFTS.find(s => s.value === shiftValue)
+function windowFor(shiftValue, now = new Date(), list = SHIFTS) {
+  const shift = list.find(s => s.value === shiftValue)
   if (!shift) return null
   for (const offset of [-1, 0, 1]) {
     const { start, end } = occurrence(shift, offset, now)
@@ -32,25 +32,23 @@ function windowFor(shiftValue, now = new Date()) {
   return null
 }
 
-export function currentShift(now = new Date()) {
-  const h = now.getHours()
-  if (h < 8) return 'A'
-  if (h < 16) return 'B'
-  return 'C'
+export function currentShift(now = new Date(), list = SHIFTS) {
+  const h = now.getHours() + now.getMinutes() / 60
+  return (list.find(x => h < x.end) ?? list[list.length - 1]).value
 }
 
-export function isShiftAllowedNow(shiftValue, now = new Date()) {
-  return !!windowFor(shiftValue, now)
+export function isShiftAllowedNow(shiftValue, now = new Date(), list = SHIFTS) {
+  return !!windowFor(shiftValue, now, list)
 }
 
-export function allowedShiftsNow(now = new Date()) {
-  return SHIFTS.filter(s => isShiftAllowedNow(s.value, now)).map(s => s.value)
+export function allowedShiftsNow(now = new Date(), list = SHIFTS) {
+  return list.filter(s => isShiftAllowedNow(s.value, now, list)).map(s => s.value)
 }
 
 // وقت انتهاء التفعيل التلقائي: نهاية الوردية الفعلية، أو بعد ساعتين لو فُعّلت
 // أصلاً ضمن فترة سماح الخروج (يعني الوردية خلصت أصلاً) — حتى ما يبقى شغال بلا داعي
-export function computeActiveUntil(shiftValue, now = new Date()) {
-  const win = windowFor(shiftValue, now)
+export function computeActiveUntil(shiftValue, now = new Date(), list = SHIFTS) {
+  const win = windowFor(shiftValue, now, list)
   if (!win) return null
   return win.end.getTime() > now.getTime() ? win.end : new Date(now.getTime() + GRACE_MS)
 }

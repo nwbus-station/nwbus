@@ -11,8 +11,8 @@ import { yearsOfService } from '../utils/leaveBalance'
 import { todayStr, toLocalDateStr } from '../utils/dates'
 import { USER_ROLES, MODULES } from '../utils/constants'
 import { esc, docHeader, docShell, openDocWindow } from '../utils/printDoc'
-import { useAppSettings } from '../context/AppSettingsContext'
-import { SHIFT_SETTING_KEY, parseShifts, shiftIdx } from '../utils/shifts'
+import { parseShifts, shiftIdx } from '../utils/shifts'
+import { shiftsOfStation } from '../utils/stationShifts'
 
 const MONO = 'ui-monospace, Menlo, Consolas, monospace'
 const LEAVE_AR = { annual: 'سنوية', casual: 'استئذان خروج', compensatory: 'تعويضية', unpaid: 'بدون راتب', emergency: 'اضطرارية', sick: 'مرضية', marriage: 'زواج', paternity: 'مولود', bereavement: 'وفاة' }
@@ -562,7 +562,7 @@ function TripLog({ O, isAr }) {
                 <Td>{r.sched || '—'}</Td>
                 <Td>{r.actual || '—'}</Td>
                 <Td>{r.delay != null ? (ac ? <span style={{ background: ac[1], color: ac[0], borderRadius: 99, padding: '1px 9px', fontWeight: 800 }} title={ac[2]}>{r.delay > 0 ? '+' : ''}{r.delay}</span> : `${r.delay > 0 ? '+' : ''}${r.delay}`) : '—'}</Td>
-                <Td>{r.shift ? SHIFT_AR[r.shift].replace('الوردية ', '') : '—'}</Td>
+                <Td>{r.shift ? (SHIFT_AR[r.shift] ?? r.shift).replace('الوردية ', '') : '—'}</Td>
                 <Td b>{r.type === 'arr' ? '—' : r.pax}</Td>
                 <Td c={r.missed ? '#dc2626' : undefined}>{r.type === 'arr' ? '—' : r.missed}</Td>
                 <Td>{r.bus || '—'}</Td>
@@ -721,7 +721,7 @@ export default function EmployeeFilePage() {
       const today = todayStr(), curFrom = [weekStart(today), today.slice(0, 7) + '-01'].sort()[0]
       const tripCols = 'record_date, is_arrival, is_extra_trip, passenger_count, missed_count, actual_departure, actual_arrival, trip_schedule_id, bus_number, operational_status, station_id, trip:trip_schedule_id(trip_number, trip_name, route, from_station_id, to_station_id, scheduled_departure, scheduled_arrival), station:station_id(name_ar, name_en)'
       const [u, sens, leaves, sales, evals, ratings, trips, cur, logins] = await Promise.all([
-        supabase.from('users').select('*, station:station_id(name_ar, name_en), supervisor:supervisor_id(full_name_ar)').eq('id', empId).maybeSingle(),
+        supabase.from('users').select('*, station:station_id(name_ar, name_en, shift_ends), supervisor:supervisor_id(full_name_ar)').eq('id', empId).maybeSingle(),
         supabase.rpc('get_user_sensitive', { p_id: empId }),
         supabase.from('leaves').select('id, leave_type, status, start_date, end_date, days_count, notes, created_at').eq('employee_id', empId).gte('start_date', from).lte('start_date', to).order('start_date', { ascending: false }),
         fetchAll(() => supabase.from('sales_records').select('id, sale_date, shift, total_actual, total_expected, is_confirmed, station:station_id(name_ar, name_en)').eq('created_by', empId).gte('sale_date', from).lte('sale_date', to).order('sale_date', { ascending: false }).order('id')),
@@ -766,9 +766,10 @@ export default function EmployeeFilePage() {
   }
   useEffect(() => { load() }, [empId, from, to]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { settings: appSettings } = useAppSettings()
-  applyShifts(parseShifts(appSettings?.[SHIFT_SETTING_KEY]))
-  const an = useMemo(() => (data ? analyze(data.raw, data.user, from, to) : null), [data, from, to, appSettings?.[SHIFT_SETTING_KEY]]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ورديات محطة الموظف (3 أو 4 من صفحة المحطات)
+  const empShiftsKey = JSON.stringify(data?.user?.station?.shift_ends ?? null)
+  applyShifts(shiftsOfStation(data?.user?.station))
+  const an = useMemo(() => (data ? analyze(data.raw, data.user, from, to) : null), [data, from, to, empShiftsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!(isGeneralAdmin || isAdmin)) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'هذا القسم للأدمن فقط' : 'Admin only'}</div>
 
@@ -870,7 +871,7 @@ export default function EmployeeFilePage() {
       ${O.byDow.some(v => v.days.size) ? `<h4 class="sub">حسب يوم الأسبوع</h4><table class="t"><thead><tr><th>اليوم</th><th>أيام عمل</th><th>متوسط الرحلات</th><th>متوسط الركاب</th><th>نسبة التخلف</th></tr></thead><tbody>${O.byDow.map((v, i) => v.days.size ? `<tr><td class="l">${DOW_AR[i]}</td><td>${v.days.size}</td><td>${(v.n / v.days.size).toFixed(1)}</td><td><b>${Math.round(v.pax / v.days.size)}</b></td><td>${v.pax + v.missed ? pct1(v.missed / (v.pax + v.missed)) : '—'}</td></tr>` : '').join('')}</tbody></table>` : ''}
       ${Object.keys(O.byRoute).length ? `<h4 class="sub">أداء الرحلات (الأكثر ركاباً)</h4><table class="t"><thead><tr><th>الرحلة</th><th>المسار</th><th>السجلات</th><th>ركاب مرحَّلون</th><th>متخلفون</th><th>متوسط الفرق (د)</th></tr></thead><tbody>${Object.entries(O.byRoute).sort((a, b) => b[1].pax - a[1].pax).slice(0, 12).map(([k, v]) => `<tr><td class="l"><b>${esc(k)}</b></td><td class="l">${esc(v.name || '—')}</td><td>${v.n}</td><td><b>${n0(v.pax)}</b></td><td>${n0(v.missed)}</td><td>${v.delayN ? (v.delaySum / v.delayN > 0 ? '+' : '') + (v.delaySum / v.delayN).toFixed(1) : '—'}</td></tr>`).join('')}</tbody></table>` : ''}
       ${Object.keys(O.incidents).length ? `<h4 class="sub">الظروف التشغيلية المسجَّلة</h4><table class="t"><thead><tr><th>الظرف</th><th>عدد الرحلات</th></tr></thead><tbody>${Object.entries(O.incidents).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<tr><td class="l">${esc(OPS_STATUS_AR[k] || k)}</td><td>${v}</td></tr>`).join('')}</tbody></table>` : ''}
-      ${O.list.length ? `<h4 class="sub">سجل الرحلات التفصيلي (آخر ${Math.min(60, O.list.length)} من ${O.list.length})</h4><table class="t"><thead><tr><th>التاريخ</th><th>الرحلة</th><th>النوع</th><th>المحطة</th><th>المجدول</th><th>الفعلي</th><th>الفرق</th><th>الوردية</th><th>الركاب</th><th>متخلفون</th><th>الحافلة</th></tr></thead><tbody>${O.list.slice(0, 60).map(r => `<tr><td>${r.date}</td><td class="l"><b>${esc(r.trip)}</b></td><td>${r.type === 'arr' ? 'وصول' : r.type === 'extra' ? 'إضافية' : 'مغادرة'}</td><td class="l">${esc(r.station)}</td><td>${r.sched || '—'}</td><td>${r.actual || '—'}</td><td style="direction:ltr">${r.delay != null ? (r.delay > 0 ? '+' : '') + r.delay : '—'}</td><td>${r.shift ? SHIFT_AR[r.shift].replace('الوردية ', '') : '—'}</td><td>${r.type === 'arr' ? '—' : r.pax}</td><td style="color:${r.missed ? '#b91c1c' : '#0f172a'}">${r.type === 'arr' ? '—' : r.missed}</td><td>${esc(r.bus || '—')}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${O.list.length ? `<h4 class="sub">سجل الرحلات التفصيلي (آخر ${Math.min(60, O.list.length)} من ${O.list.length})</h4><table class="t"><thead><tr><th>التاريخ</th><th>الرحلة</th><th>النوع</th><th>المحطة</th><th>المجدول</th><th>الفعلي</th><th>الفرق</th><th>الوردية</th><th>الركاب</th><th>متخلفون</th><th>الحافلة</th></tr></thead><tbody>${O.list.slice(0, 60).map(r => `<tr><td>${r.date}</td><td class="l"><b>${esc(r.trip)}</b></td><td>${r.type === 'arr' ? 'وصول' : r.type === 'extra' ? 'إضافية' : 'مغادرة'}</td><td class="l">${esc(r.station)}</td><td>${r.sched || '—'}</td><td>${r.actual || '—'}</td><td style="direction:ltr">${r.delay != null ? (r.delay > 0 ? '+' : '') + r.delay : '—'}</td><td>${r.shift ? (SHIFT_AR[r.shift] ?? r.shift).replace('الوردية ', '') : '—'}</td><td>${r.type === 'arr' ? '—' : r.pax}</td><td style="color:${r.missed ? '#b91c1c' : '#0f172a'}">${r.type === 'arr' ? '—' : r.missed}</td><td>${esc(r.bus || '—')}</td></tr>`).join('')}</tbody></table>` : ''}
       ${sts.length > 1 ? `<h4 class="sub">حسب المحطة</h4><table class="t"><thead><tr><th>المحطة</th><th>الرحلات</th><th>المرحَّلون</th><th>المتخلفون</th><th>نسبة التخلف</th></tr></thead><tbody>${sts.map(([n, b]) => `<tr><td class="l">${esc(n)}</td><td>${b.n}</td><td><b>${n0(b.pax)}</b></td><td>${n0(b.missed)}</td><td>${rate(b)}</td></tr>`).join('')}</tbody></table>` : ''}` : '<p class="muted">لا توجد رحلات مُدخلة من الموظف ضمن الفترة.</p>'}</div>`)
     }
     // 6) الإيرادات

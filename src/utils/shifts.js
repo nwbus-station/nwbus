@@ -3,8 +3,8 @@
 // المعروض أرقام ثابتة (00:00 – 08:00 / 08:00 – 16:00 ...) بدون إضافة دقيقة.
 export const SHIFT_SETTING_KEY = 'transport_shifts'
 const KEYS = ['A', 'B', 'C', 'D']
-const AR = { A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج', D: 'الوردية د' }
-const EN = { A: 'Shift A', B: 'Shift B', C: 'Shift C', D: 'Shift D' }
+export const SHIFT_AR = { A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج', D: 'الوردية د' }
+export const SHIFT_EN = { A: 'Shift A', B: 'Shift B', C: 'Shift C', D: 'Shift D' }
 export const DEFAULT_ENDS = [480, 960, 1440]
 
 export const fmtMin = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
@@ -24,7 +24,7 @@ export function parseShifts(raw) {
   } catch { /* الافتراضي */ }
   return ends.map((to, i) => {
     const from = i === 0 ? 0 : ends[i - 1], k = KEYS[i]
-    return { k, ar: AR[k], en: EN[k], from, to, range: `${fmtMin(from)} – ${fmtMin(to)}` }
+    return { k, ar: SHIFT_AR[k], en: SHIFT_EN[k], from, to, range: `${fmtMin(from)} – ${fmtMin(to)}` }
   })
 }
 

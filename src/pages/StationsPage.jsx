@@ -331,10 +331,10 @@ function StationModal({ station, onClose, onSaved }) {
             </p>
           </div>
           <div className="rounded-lg border border-gray-200 p-3">
-            <p className="text-sm font-bold text-gray-800">{isAr ? 'ورديات الإيرادات لهذي المحطة' : 'Sales shifts for this station'}</p>
-            <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? 'كل محطة لها ورديات حسب دوامها: 3 أو 4. الافتراضي يتبع الإعداد العام.' : 'Each station can run 3 or 4 shifts. Default follows the global setting.'}</p>
+            <p className="text-sm font-bold text-gray-800">{isAr ? 'ورديات هذي المحطة' : 'Station shifts'}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? 'تُستخدم في الإيرادات والترحيل والتقييم والسجل الوظيفي لهذي المحطة. الافتراضي 3 ورديات (08:00 / 16:00 / 24:00).' : 'Used for sales, transportation, ratings and employee file of this station. Default: 3 shifts (08:00 / 16:00 / 24:00).'}</p>
             <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold mt-2">
-              {[['default', isAr ? 'افتراضي' : 'Default'], ['custom', isAr ? 'مخصصة' : 'Custom']].map(([k, l]) => (
+              {[['default', isAr ? 'قياسية (3)' : 'Standard (3)'], ['custom', isAr ? 'مخصصة' : 'Custom']].map(([k, l]) => (
                 <button key={k} type="button" onClick={() => setShiftMode(k)} className={`px-4 py-1.5 ${shiftMode === k ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{l}</button>
               ))}
             </div>

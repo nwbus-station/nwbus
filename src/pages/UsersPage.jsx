@@ -12,7 +12,7 @@ import { useEscapeKey } from '../hooks/useEscapeKey'
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import DatePicker from '../components/shared/DatePicker'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
-import { SHIFTS, computeActiveUntil } from '../utils/ratingShifts'
+import { ratingShiftsFor, computeActiveUntil } from '../utils/ratingShifts'
 import { leaveRemaining } from '../utils/leaveBalance'
 import SelectField from '../components/shared/SelectField'
 import { brandHeader, brandLogo } from '../utils/printDoc'
@@ -24,14 +24,17 @@ function RatingActivationAdmin({ userId, isAr }) {
   const [shift, setShift] = useState('A')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [stEnds, setStEnds] = useState(null)
+  const SHIFTS = ratingShiftsFor(stEnds)
 
   const load = useCallback(() => {
     supabase.from('users')
-      .select('rating_window_number, rating_shift, rating_active, rating_active_until')
+      .select('rating_window_number, rating_shift, rating_active, rating_active_until, station:station_id(shift_ends)')
       .eq('id', userId).single()
       .then(({ data }) => {
         if (!data) return
         setRow(data)
+        setStEnds(data.station?.shift_ends ?? null)
         setWindowNumber(data.rating_window_number || '')
         setShift(data.rating_shift || 'A')
       })
@@ -41,7 +44,7 @@ function RatingActivationAdmin({ userId, isAr }) {
 
   async function toggle(nextActive) {
     setBusy(true); setMsg('')
-    const until = nextActive ? computeActiveUntil(shift, new Date()) : null
+    const until = nextActive ? computeActiveUntil(shift, new Date(), SHIFTS) : null
     const { error } = await supabase.from('users').update({
       rating_window_number: windowNumber.trim() || null,
       rating_shift: shift,
@@ -1876,7 +1879,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                   <input value={form.rating_window_number ?? ''} onChange={e => set('rating_window_number', e.target.value)} dir="ltr"
                     placeholder={isAr ? 'رقم الشباك' : 'Window #'} className="border rounded-lg px-2 py-1.5 text-xs" />
                   <SelectField value={form.rating_shift ?? 'A'} onChange={e => set('rating_shift', e.target.value)} className="border rounded-lg px-2 py-1.5 text-xs">
-                    {SHIFTS.map(s => <option key={s.value} value={s.value}>{s.ar} ({s.range})</option>)}
+                    {ratingShiftsFor(stations.find(x => x.id === (primaryStationId || form.station_id))?.shift_ends).map(s => <option key={s.value} value={s.value}>{s.ar} ({s.range})</option>)}
                   </SelectField>
                 </div>
                 <p className="text-[10px] text-gray-400">{isAr ? 'التفعيل الفوري يظهر بعد الحفظ عند تعديل الموظف — الموظف نفسه يفعّل تقييمه من صفحة "تقييم العميل"' : 'Instant activation is available after saving, when editing the employee'}</p>
@@ -2284,7 +2287,7 @@ function UsersPageFull() {
 
     // مشرف المحطة ومشرف المنطقة نفس المعاملة — كل محطاتهم المخصصة بـ user_stations
     // (المسمى يختلف فقط، مو نطاق الصلاحية). عودة لمحطته الأساسية فقط لو ما فيه محطات مخصصة أصلاً
-    let stationsQuery = supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
+    let stationsQuery = supabase.from('stations').select('id, name_ar, name_en, shift_ends').eq('is_active', true).order('name_ar')
     if ((isAreaSupervisor || isStationAdmin) && !isGeneralAdmin && allowedStationIds?.length) {
       usersQuery = usersQuery.in('station_id', allowedStationIds)
       // نفس التقييد على قائمة المحطات نفسها — القائمة/الفلتر يعرضون محطاته المخصصة بس، مو كل محطات الشبكة

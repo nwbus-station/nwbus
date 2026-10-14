@@ -11,7 +11,7 @@ import PrintAccessModal from '../components/sales/PrintAccessModal'
 import { useAppSettings } from '../context/AppSettingsContext'
 import { PRINT_ACCESS_KEY, parseAccess, accountState } from '../utils/printAccess'
 import { todayStr, toLocalDateStr } from '../utils/dates'
-import { parseShifts, validEnds, SHIFT_SETTING_KEY } from '../utils/shifts'
+import { parseShifts, validEnds } from '../utils/shifts'
 import { DAY_CUTOFF_KEY, parseCutoff, fmtCutoff, businessDate } from '../utils/businessDay'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -324,7 +324,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   useEscapeKey(onClose)
   const { profile, isAccountant, isGeneralAdmin, allowCap, workStations } = useAuth()
   const { settings } = useAppSettings()
-  SHIFTS = salesShiftsFrom(settings?.[SHIFT_SETTING_KEY])
+  SHIFTS = salesShiftsFrom(null)
   // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
   const multi = !isGeneralAdmin && workStations?.length > 1
   const { i18n } = useTranslation()
@@ -379,7 +379,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       .then(({ data, error }) => setStEnds(m => ({ ...m, [curStationId]: !error && Array.isArray(data?.shift_ends) && validEnds(data.shift_ends) ? data.shift_ends : null })))
   }, [curStationId])
   const stationEnds = stEnds[curStationId] ?? null
-  SHIFTS = salesShiftsFrom(stationEnds ? JSON.stringify({ ends: stationEnds }) : settings?.[SHIFT_SETTING_KEY])
+  SHIFTS = salesShiftsFrom(stationEnds ? JSON.stringify({ ends: stationEnds }) : null)
   const shiftsKey = SHIFTS.map(sh => sh.value + sh.end).join()
   const suggested = useMemo(() => suggestShift(new Date(), cutoffMin), [shiftsKey, cutoffMin])
   const shiftTouched = useRef(false)
@@ -970,7 +970,7 @@ export default function SalesPage() {
   const canPrintDaily = isGeneralAdmin
   // صلاحية طباعة يوميات الموظفين: إعداد عام يديره الأدمن (وضع عام + استثناءات حسابات، مستمر أو مؤقت)
   const { settings, saveSetting } = useAppSettings()
-  SHIFTS = salesShiftsFrom(settings?.[SHIFT_SETTING_KEY])
+  SHIFTS = salesShiftsFrom(null)
   const printAccess = parseAccess(settings?.[PRINT_ACCESS_KEY])
   const [printAccessOpen, setPrintAccessOpen] = useState(false)
   const canPrintRecord = r => isGeneralAdmin || (r.created_by === profile?.id && allowCap('sales_print') && accountState(printAccess, profile?.id, todayStr()).allowed)
