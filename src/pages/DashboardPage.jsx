@@ -57,6 +57,8 @@ const ICONS = {
   bell:    ['M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9','M13.73 21a2 2 0 01-3.46 0'],
   leave:   ['M8 2v4','M16 2v4','M3 10h18','M21 8H3a1 1 0 00-1 1v11a1 1 0 001 1h18a1 1 0 001-1V9a1 1 0 00-1-1z'],
   arrow:   'M5 12h14M12 5l7 7-7 7',
+  sales:   ['M12 1v22','M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6'],
+  check:   ['M9 11l3 3L22 4','M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11'],
   magazine: ['M4 19.5A2.5 2.5 0 016.5 17H20','M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z','M9 7h7','M9 11h7','M9 15h4'],
 }
 
@@ -425,22 +427,19 @@ export default function DashboardPage() {
 
   /* ── وصلات سريعة ── */
   const quickLinks = [
-    ...(canSeeModule('transportation') ? [{ to: '/transportation', ar: 'الترحيل',    en: 'Transportation', icon: 'bus',     desc_ar: 'تتبع الرحلات والمغادرات', desc_en: 'Trips & departures' }] : []),
-    ...(canSeeModule('reports') ? [{ to: '/reports',       ar: 'التقارير',    en: 'Reports',        icon: 'report',  desc_ar: 'تقارير تشغيلية شاملة',    desc_en: 'Operational reports' }] : []),
-    ...(canSeeModule('event') || canSeeModule('magazine') ? [{ to: '/magazine', ar: 'Event', en: 'Event', icon: 'magazine', desc_ar: 'إعلانات وموظفون متميزون', desc_en: 'Announcements & spotlights' }] : []),
+    ...(canSeeModule('transportation') ? [{ to: '/transportation', ar: 'الترحيل',    en: 'Transportation', icon: 'bus',     desc_ar: 'تتبع الرحلات والمغادرات', desc_en: 'Trips & departures', hue: '#0ea5e9' }] : []),
+    ...(canSeeModule('sales') ? [{ to: '/sales', ar: 'الإيرادات', en: 'Sales', icon: 'sales', desc_ar: 'يوميات المبيعات والتحصيل', desc_en: 'Daily sales & collection', hue: '#10b981' }] : []),
+    ...(canSeeModule('lost_found') ? [{ to: '/lost-found', ar: 'الموجودات', en: 'Lost & Found', icon: 'bag', desc_ar: 'بلاغات المفقودات والتسليم', desc_en: 'Lost items & handover', hue: '#f59e0b' }] : []),
+    ...(canSeeModule('leaves') ? [{ to: '/leaves', ar: 'الإجازات', en: 'Leaves', icon: 'leave', desc_ar: 'طلبات الإجازة والاستئذان', desc_en: 'Leave & permission requests', hue: '#8b5cf6', badge: pendingLeaves.length }] : []),
+    ...(canSeeModule('reports') ? [{ to: '/reports',       ar: 'التقارير',    en: 'Reports',        icon: 'report',  desc_ar: 'تقارير تشغيلية شاملة',    desc_en: 'Operational reports', hue: '#6366f1' }] : []),
+    ...(canSeeModule('evaluation') ? [{ to: '/evaluation', ar: 'التقييم الوظيفي', en: 'Evaluations', icon: 'check', desc_ar: 'تقييم الموظفين والمحطات', desc_en: 'Staff & station evaluation', hue: '#ec4899' }] : []),
+    ...(canSeeModule('event') || canSeeModule('magazine') ? [{ to: '/magazine', ar: 'Event', en: 'Event', icon: 'magazine', desc_ar: 'إعلانات وموظفون متميزون', desc_en: 'Announcements & spotlights', hue: '#ef4444' }] : []),
   ]
 
   /* ── المعلومات ── */
   const [updatePending, setUpdatePending] = useState(isPwaUpdatePending())
   useEffect(() => onPwaUpdateAvailable(() => setUpdatePending(true)), [])
-  const buildStamp = new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' })
 
-  const infoRows = [
-    { label: isAr ? 'المستخدم' : 'User',    value: userName || '—' },
-    { label: isAr ? 'الدور'    : 'Role',    value: roleLabel || '—' },
-    { label: isAr ? 'المحطة'  : 'Station', value: stationName || (isAr ? 'جميع المحطات' : 'All Stations') },
-    { label: isAr ? 'التاريخ' : 'Date',    value: now.toLocaleDateString('en-GB') },
-  ]
 
   const [surveyOpen, setSurveyOpen] = useState(false)
 
@@ -453,47 +452,55 @@ export default function DashboardPage() {
       <style>{MAGAZINE_DASH_CSS}</style>
       {surveyOpen && surveyCity && <SurveyOverlay city={surveyCity} onClose={() => setSurveyOpen(false)} />}
 
-      {/* ── شريط الترحيب ── */}
-      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '16px 28px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+      {/* ── المحتوى الرئيسي ── */}
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 32px' }}>
 
-          {/* الترحيب */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-1)' }}>
-                {greet()}{userName ? `، ${userName}` : ''}
-              </p>
-              {hasStar && (
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  background: 'linear-gradient(135deg, #F59E0B, #D97706)',
-                  borderRadius: 20, padding: '3px 10px',
-                  boxShadow: '0 2px 8px rgba(245,158,11,0.4)',
-                }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>
-                  </svg>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#fff', letterSpacing: '0.04em' }}>متميز</span>
-                </div>
-              )}
+        {/* ── البطاقة الرئيسية: الترحيب + الوقت ── */}
+        <div style={{ ...card, borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
+          <div style={{ height: 4, background: 'linear-gradient(90deg, var(--accent), transparent)' }} />
+          <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: '0.66rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.14em', fontFamily: MONO, textTransform: 'uppercase' }}>{greet()}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+                <h1 style={{ margin: 0, fontSize: '1.7rem', fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.2 }}>{userName || '—'}</h1>
+                {hasStar && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'linear-gradient(135deg, #F59E0B, #D97706)', borderRadius: 20, padding: '3px 11px', boxShadow: '0 2px 8px rgba(245,158,11,0.4)' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#fff', letterSpacing: '0.04em' }}>{isAr ? 'متميز' : 'Star'}</span>
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                {[roleLabel, stationName || (isAr ? 'جميع المحطات' : 'All Stations')].filter(Boolean).map((t, i) => (
+                  <span key={i} style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 10px' }}>{t}</span>
+                ))}
+              </div>
             </div>
-            <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>
-              {dateStr}
-            </p>
-          </div>
-
-          <div dir="ltr" style={{
-            fontFamily: MONO, fontWeight: 700, fontSize: '1.5rem',
-            color: 'var(--text-1)', letterSpacing: '0.04em',
-            fontVariantNumeric: 'tabular-nums',
-          }}>
-            {timeStr}
+            <div style={{ textAlign: isAr ? 'left' : 'right' }}>
+              <div dir="ltr" style={{ fontFamily: MONO, fontWeight: 700, fontSize: '2.4rem', color: 'var(--text-1)', letterSpacing: '0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {timeStr.slice(0, 5)}<span style={{ fontSize: '1.15rem', color: 'var(--text-3)' }}>:{timeStr.slice(6)}</span>
+              </div>
+              <p style={{ margin: '6px 0 0', fontSize: '0.74rem', color: 'var(--text-3)', fontWeight: 600 }}>{dateStr}</p>
+              <div style={{ height: 3, borderRadius: 2, background: 'var(--surface-2)', marginTop: 8, overflow: 'hidden' }}>
+                <div style={{ width: `${((now.getHours() * 60 + now.getMinutes()) / 1440) * 100}%`, height: '100%', background: 'var(--accent)' }} />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* ── المحتوى الرئيسي ── */}
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 28px' }}>
+        {/* ── شريط الحالة ── */}
+        <div style={{ ...card, display: 'flex', flexWrap: 'wrap', marginBottom: 18, overflow: 'hidden' }}>
+          {[
+            { label: isAr ? 'إشعارات غير مقروءة' : 'Unread notifications', val: unread, tone: unread ? 'var(--accent)' : 'var(--text-1)' },
+            { label: isAr ? 'حالة النظام' : 'System', val: updatePending ? (isAr ? 'تحديث متوفر' : 'Update ready') : (isAr ? 'متصل' : 'Online'), tone: updatePending ? 'var(--warning)' : 'var(--success)', small: true, onClick: updatePending ? applyPwaUpdate : undefined },
+            { label: isAr ? 'نسخة البرنامج' : 'Version', val: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev', tone: 'var(--text-2)', mono: true, small: true },
+          ].map((c, i) => (
+            <div key={c.label} onClick={c.onClick} style={{ flex: '1 1 150px', padding: '12px 18px', borderInlineStart: i ? '1px solid var(--border)' : 'none', cursor: c.onClick ? 'pointer' : 'default' }}>
+              <div style={{ fontSize: c.small ? '0.95rem' : '1.35rem', fontWeight: 800, color: c.tone, fontFamily: c.small && !c.mono ? 'inherit' : MONO, lineHeight: 1.25 }} dir={c.mono ? 'ltr' : undefined}>{c.val}</div>
+              <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', marginTop: 2, fontWeight: 600 }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
 
         {/* تنبيه إجازات معلقة */}
         {(isAdmin || profile?.role === 'station_admin') && pendingLeaves.length > 0 && (
@@ -549,31 +556,35 @@ export default function DashboardPage() {
                   <p style={{ margin: '0 0 10px', fontSize: '0.63rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.1em', fontFamily: MONO, textTransform: 'uppercase' }}>
                     {isAr ? 'وصول سريع' : 'QUICK ACCESS'}
                   </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(quickLinks.length, 3)}, 1fr)`, gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 12 }}>
                     {quickLinks.map(l => (
                       <button key={l.to} onClick={() => navigate(l.to)}
                         style={{
-                          ...card, padding: '18px 16px',
+                          ...card, borderRadius: 10, padding: '16px 16px 14px', position: 'relative', overflow: 'hidden',
                           cursor: 'pointer', fontFamily: 'inherit',
                           textAlign: isAr ? 'right' : 'left',
-                          display: 'flex', flexDirection: 'column', gap: 12,
-                          transition: 'box-shadow 0.14s',
-                          border: '1px solid var(--border)',
+                          display: 'flex', flexDirection: 'column', gap: 14,
+                          transition: 'box-shadow 0.14s, transform 0.14s, border-color 0.14s',
                         }}
-                        onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
-                        onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
+                        onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = l.hue }}
+                        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = 'var(--border)' }}
                       >
-                        <div style={{
-                          width: 38, height: 38, borderRadius: 8,
-                          background: 'var(--surface)', color: 'var(--text-1)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          boxShadow: 'var(--shadow-icon)',
-                        }}>
-                          <Svg paths={ICONS[l.icon]} size={16} />
+                        <span style={{ position: 'absolute', top: 0, insetInlineStart: 0, width: 36, height: 3, background: l.hue }} />
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{
+                            width: 42, height: 42, borderRadius: 10,
+                            background: `${l.hue}1f`, color: l.hue,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <Svg paths={ICONS[l.icon]} size={19} />
+                          </div>
+                          {l.badge > 0
+                            ? <span style={{ fontFamily: MONO, fontSize: '0.7rem', fontWeight: 800, background: l.hue, color: '#fff', borderRadius: 999, padding: '2px 9px' }}>{l.badge}</span>
+                            : <span style={{ color: 'var(--text-3)', transform: isAr ? 'scaleX(-1)' : 'none', display: 'inline-flex' }}><Svg paths={ICONS.arrow} size={15} /></span>}
                         </div>
                         <div>
-                          <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)' }}>{isAr ? l.ar : l.en}</p>
-                          <p style={{ margin: '3px 0 0', fontSize: '0.68rem', color: 'var(--text-3)' }}>{isAr ? l.desc_ar : l.desc_en}</p>
+                          <p style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? l.ar : l.en}</p>
+                          <p style={{ margin: '4px 0 0', fontSize: '0.7rem', color: 'var(--text-3)', lineHeight: 1.45 }}>{isAr ? l.desc_ar : l.desc_en}</p>
                         </div>
                       </button>
                     ))}
@@ -593,40 +604,6 @@ export default function DashboardPage() {
                 onNavigate={() => navigate('/survey')}
               />
 
-              {/* معلومات الجلسة */}
-              <div style={card}>
-                <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 3, height: 14, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
-                  <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.09em', fontFamily: MONO, textTransform: 'uppercase' }}>
-                    {isAr ? 'معلومات الجلسة' : 'Session Info'}
-                  </span>
-                </div>
-                <div style={{ padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
-                  {infoRows.map(r => (
-                    <div key={r.label}>
-                      <p style={{ margin: 0, fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{r.label}</p>
-                      <p style={{ margin: '3px 0 0', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-1)' }}>{r.value}</p>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ padding: '11px 16px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{isAr ? 'آخر تحديث للبرنامج' : 'Last update'}</p>
-                    <p style={{ margin: '3px 0 0', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-1)' }}>{buildStamp} <span style={{ fontFamily: MONO, color: 'var(--text-3)', fontSize: '0.68rem' }} dir="ltr">· v{__APP_VERSION__}</span></p>
-                  </div>
-                  {updatePending && (
-                    <button onClick={applyPwaUpdate} style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      {isAr ? 'تحديث جديد متوفر — حدّث الآن' : 'New update — update now'}
-                    </button>
-                  )}
-                </div>
-                <div style={{ padding: '11px 16px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
-                  <span style={{ fontSize: '0.65rem', color: 'var(--success)', fontWeight: 600, fontFamily: MONO }}>
-                    {isAr ? 'متصل بالنظام' : 'CONNECTED'}
-                  </span>
-                </div>
-              </div>
             </div>
 
             {/* لوحة الإشعارات */}
