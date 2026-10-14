@@ -380,6 +380,11 @@ export default function ReportsPage() {
   const [tab, _setTab] = useState(() => localStorage.getItem('rpt_tab') || 'overview')
   const setTab = v => { localStorage.setItem('rpt_tab', v); _setTab(v); try { window.scrollTo({ top: 0 }) } catch { /* بدون تمرير */ } }
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // أقسام الطباعة: اختيار متعدد (يُحفظ بالمتصفح) — الافتراضي كل الأقسام
+  const PRINTABLE = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost']
+  const [printTypes, _setPrintTypes] = useState(() => { try { const v = JSON.parse(localStorage.getItem('rpt_print_types') ?? 'null'); return Array.isArray(v) ? v : PRINTABLE } catch { return PRINTABLE } })
+  const setPrintTypes = v => { const next = typeof v === 'function' ? v(printTypes) : v; localStorage.setItem('rpt_print_types', JSON.stringify(next)); _setPrintTypes(next) }
+  const [showPrintPicker, setShowPrintPicker] = useState(false)
   const [stations, setStations]     = useState([])
   const myStationIds = stations.map(s => s.id)   // محطاته المخصصة (لو غير أدمن) — منقولة هنا عشان fetchAudit يستخدمها
   const [station,  _setStation]      = useState(() => localStorage.getItem('rpt_station') || 'all')
@@ -1278,11 +1283,12 @@ export default function ReportsPage() {
 
   function printReport() {
     const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost'].filter(typeAllowed)
-    // يطبع التقرير المفتوح؛ ومن «نظرة عامة» يطبع التقرير الشامل
-    const types = ALL_TYPES.includes(tab) ? [tab] : ALL_TYPES
+    // الأقسام المحددة من نافذة الطباعة (اختيار متعدد)
+    const types = ALL_TYPES.filter(t => printTypes.includes(t))
+    if (!types.length) return
     // header احترافي موحّد لجميع الأقسام
     const printHeader = brandHeader({
-      title: !ALL_TYPES.includes(tab) ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', '),
+      title: types.length === ALL_TYPES.length ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', '),
       subtitle: `${isAr ? 'المحطة' : 'Station'}: ${stationLabel}`,
       lines: [`${isAr ? 'الفترة' : 'Period'}: <b>${dateFrom}</b> → <b>${dateTo}</b>`, `${isAr ? 'أعدّه' : 'By'}: ${escapeHtml(profile?.full_name_ar ?? '—')}`],
       dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 8px',
@@ -1392,10 +1398,48 @@ export default function ReportsPage() {
             {isAr ? 'تصفية' : 'Filters'}
           </button>
           {data && allowCap('reports_print') && (
-            <button type="button" onClick={printReport} className="rp-btn rp-btn-primary">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-              {isAr ? 'طباعة' : 'Print'}
-            </button>
+            <div className="relative">
+              <button type="button" onClick={() => setShowPrintPicker(v => !v)} className="rp-btn rp-btn-primary" aria-expanded={showPrintPicker}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                {isAr ? 'طباعة' : 'Print'}
+                <span className="opacity-70 text-xs">({printTypes.filter(t => PRINTABLE.includes(t) && typeAllowed(t)).length})</span>
+              </button>
+              {showPrintPicker && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowPrintPicker(false)} />
+                  <div className="absolute z-50 top-full mt-2 end-0 w-[min(92vw,310px)] bg-white rounded-xl shadow-xl border border-gray-200 p-3">
+                    <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+                      <span className="text-sm font-extrabold text-gray-800">{isAr ? 'اختر أقسام الطباعة' : 'Choose sections to print'}</span>
+                      <div className="flex gap-3 text-xs font-bold">
+                        <button type="button" onClick={() => setPrintTypes(PRINTABLE.filter(typeAllowed))} className="text-nwbus-primary hover:underline">{isAr ? 'الكل' : 'All'}</button>
+                        <button type="button" onClick={() => setPrintTypes([])} className="text-red-600 hover:underline">{isAr ? 'لا شيء' : 'None'}</button>
+                      </div>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto">
+                      {TAB_DEFS.filter(t => PRINTABLE.includes(t.id)).map(t => {
+                        const on = printTypes.includes(t.id)
+                        return (
+                          <label key={t.id} className={`flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer text-sm ${on ? 'bg-gray-50 font-bold text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}>
+                            <input type="checkbox" className="accent-nwbus-primary w-4 h-4" checked={on}
+                              onChange={() => setPrintTypes(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])} />
+                            <span className="text-gray-400"><RpIcon id={t.id} size={15} /></span>
+                            <span className="flex-1">{isAr ? t.ar : t.en}</span>
+                            {t.id === activeTab && <span className="text-[10px] font-bold text-nwbus-primary border border-nwbus-primary rounded px-1">{isAr ? 'المفتوح' : 'open'}</span>}
+                          </label>
+                        )
+                      })}
+                    </div>
+                    <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
+                      <button type="button" onClick={() => setPrintTypes(PRINTABLE.includes(activeTab) ? [activeTab] : PRINTABLE.filter(typeAllowed))}
+                        className="px-3 py-2 rounded-lg border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50">{isAr ? 'المفتوح فقط' : 'Open only'}</button>
+                      <button type="button" disabled={!printTypes.some(t => PRINTABLE.includes(t) && typeAllowed(t))}
+                        onClick={() => { setShowPrintPicker(false); printReport() }}
+                        className="flex-1 bg-nwbus-primary text-white py-2 rounded-lg text-sm font-bold disabled:opacity-40">{isAr ? 'طباعة الآن' : 'Print now'}</button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
