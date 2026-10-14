@@ -1017,7 +1017,6 @@ export default function ReportsPage() {
     const targetStations = stations.filter(s => targetIds.includes(s.id))
 
     const fmtDelay = d => d === null ? '—' : (d === 0 ? '±0' : (d > 0 ? '▲ +' : '▼ ') + d + (isAr ? ' د' : ' m'))
-    const fmtDelayPlain = d => d === null ? '—' : (d === 0 ? '±0' : (d > 0 ? '+' : '') + d + (isAr ? ' د' : ' m'))
     const delayColor = d => d === null ? '#94a3b8' : d > 5 ? '#dc2626' : d < -2 ? '#2563eb' : '#16a34a'
     const ACC = {
       ontime:  { c: '#15803d', bg: '#dcfce7', bd: '#86efac' },
@@ -1034,7 +1033,7 @@ export default function ReportsPage() {
     const TH = (h, w) => `<th style="width:${w}%;padding:8px 8px;font-size:11px;font-weight:800;color:#475569;background:#eef2f6;border-bottom:2px solid #cbd5e1;text-align:center;white-space:nowrap">${h}</th>`
     const moveTable = (list, color, title, icon) => {
       if (!list.length) return `<div style="margin-top:12px;padding:10px 14px;border:1px dashed #cbd5e1;border-radius:8px;font-size:12px;color:#94a3b8">${title}: ${isAr ? 'لا توجد رحلات' : 'no trips'}</div>`
-      const heads = [['#', 3], [isAr ? 'رقم الرحلة' : 'Trip', 9], [isAr ? 'الحافلة' : 'Bus', 6], [isAr ? 'من' : 'From', 16], [isAr ? 'إلى' : 'To', 16], [isAr ? 'المجدول' : 'Sched.', 7], [isAr ? 'الفعلي' : 'Actual', 7], [isAr ? 'التأخير' : 'Delay', 8], [isAr ? 'الحالة' : 'Status', 11], [isAr ? 'الركاب' : 'Pax', 6], [isAr ? 'المتخلفون' : 'Missed', 7]]
+      const heads = [['#', 3], [isAr ? 'رقم الرحلة' : 'Trip', 9], [isAr ? 'الحافلة' : 'Bus', 6], [isAr ? 'إلى' : 'To', 16], [isAr ? 'من' : 'From', 16], [isAr ? 'المجدول' : 'Sched.', 7], [isAr ? 'الفعلي' : 'Actual', 7], [isAr ? 'التأخير' : 'Delay', 8], [isAr ? 'الحالة' : 'Status', 11], [isAr ? 'الركاب' : 'Pax', 6], [isAr ? 'المتخلفون' : 'Missed', 7]]
       return `
         <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding:9px 14px;background:${color};color:#fff;border-radius:8px 8px 0 0">
           <span style="font-size:15px;font-weight:800">${icon} ${title}</span>
@@ -1050,8 +1049,8 @@ export default function ReportsPage() {
             <td style="${td};color:#94a3b8;font-size:11px;border-inline-start:4px solid ${bar}">${i + 1}</td>
             <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:13px;color:${m.unentered ? '#92400e' : color}" dir="ltr">${escapeHtml(m.trip)}</td>
             <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:700;color:#334155;font-size:13px">${escapeHtml(m.bus)}</td>
-            <td style="${td};font-weight:700;color:#1e293b;text-align:start">${escapeHtml(m.from)}</td>
             <td style="${td};font-weight:700;color:#1e293b;text-align:start">${escapeHtml(m.to)}</td>
+            <td style="${td};font-weight:700;color:#1e293b;text-align:start">${escapeHtml(m.from)}</td>
             <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:700;font-size:14px;color:#334155">${m.sched}</td>
             <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:14px;color:${m.unentered ? '#cbd5e1' : delayColor(m.delay)}">${m.unentered ? '—' : m.actual}</td>
             <td style="${td};color:${delayColor(m.delay)};font-weight:800;font-size:14px">${m.unentered ? '' : fmtDelay(m.delay)}</td>
@@ -1090,10 +1089,6 @@ export default function ReportsPage() {
       const missed = stMoves.reduce((s, m) => s + (m.missed || 0), 0)
       const depRate = calcRate(deps)
       const arrRate = calcRate(arrs)
-      const entered = stMoves.filter(m => !m.unentered)
-      const delays = entered.filter(m => m.delay !== null).map(m => m.delay)
-      const avgDelay = delays.length ? Math.round(delays.reduce((s, d) => s + d, 0) / delays.length) : null
-      const maxDelay = delays.length ? Math.max(...delays) : null
       const cnt = k => stMoves.filter(m => accKey(m) === k).length
       const dist = [
         { k: 'ontime', l: isAr ? 'في الوقت' : 'On time', c: '#16a34a' },
@@ -1111,11 +1106,9 @@ export default function ReportsPage() {
         { val: depPax, lbl: isAr ? 'ركاب المغادرة' : 'Dep. passengers', accent: '#6366f1' },
         { val: arrPax, lbl: isAr ? 'ركاب الوصول' : 'Arr. passengers', accent: '#06b6d4' },
         { val: missed, lbl: isAr ? 'المتخلفون' : 'Missed', accent: '#ef4444' },
-        { val: avgDelay === null ? '—' : fmtDelayPlain(avgDelay), lbl: isAr ? 'متوسط التأخير' : 'Avg. delay', accent: '#f59e0b' },
-        { val: maxDelay === null ? '—' : fmtDelayPlain(maxDelay), lbl: isAr ? 'أكبر تأخير' : 'Max delay', accent: '#f97316' },
       ]
       const kpiBar = `
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:4px">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:4px">
           ${kpis.map(k => `<div style="border:1px solid #e2e8f0;border-top:4px solid ${k.accent};border-radius:10px;padding:10px 6px 9px;text-align:center;background:#fff">
             <div style="font-size:26px;font-weight:900;color:#0f172a;line-height:1.05">${k.val}</div>
             <div style="font-size:11px;font-weight:700;color:#64748b;margin-top:5px">${k.lbl}</div>
