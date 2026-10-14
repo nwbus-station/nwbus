@@ -11,6 +11,7 @@ import PrintAccessModal from '../components/sales/PrintAccessModal'
 import { useAppSettings } from '../context/AppSettingsContext'
 import { PRINT_ACCESS_KEY, parseAccess, accountState } from '../utils/printAccess'
 import { todayStr, toLocalDateStr } from '../utils/dates'
+import { DAY_CUTOFF_KEY, parseCutoff, fmtCutoff, businessDate } from '../utils/businessDay'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { safeImport } from '../lib/chunkReload'
@@ -25,14 +26,14 @@ const SHIFTS = [
 
 // الوردية المتوقعة من الوقت الحالي: وقت الإقفال (قبل نهاية الوردية بساعة وحتى ساعة ونصف بعدها) يعني الوردية المنتهية،
 // وإلا فالوردية الجارية. بعد منتصف الليل مباشرة (حتى 1:30) تكون ورديّة ج ليوم أمس — الوردية الأخيرة فقط، وباقي الأوقات تتبع الوردية الجارية.
-function suggestShift(now = new Date()) {
+function suggestShift(now = new Date(), cutoffMin = 90) {
   const h = now.getHours() + now.getMinutes() / 60
   const today = todayStr()
   for (const sh of SHIFTS) {
     if (h >= sh.end - 1 && h < sh.end + 1.5 && sh.end < 24) return { shift: sh.value, date: today, closing: true }
   }
   if (h >= 23) return { shift: 'C', date: today, closing: true }
-  if (h < 1.5) { const d = new Date(now); d.setDate(d.getDate() - 1); return { shift: 'C', date: toLocalDateStr(d), closing: true, yesterday: true } }
+  if (h < cutoffMin / 60) { const d = new Date(now); d.setDate(d.getDate() - 1); return { shift: 'C', date: toLocalDateStr(d), closing: true, yesterday: true } }
   return { shift: h < 8 ? 'A' : h < 16 ? 'B' : 'C', date: today, closing: false }
 }
 
@@ -50,6 +51,49 @@ const parseRefs = raw => {
 const parseRefsArr = raw => {
   if (!raw) return []
   try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : [raw] } catch { return [raw] }
+}
+
+// لوحة الورديات: ما سُجّل لهذي المحطة بهذا التاريخ ومن سجّله، وتنبيه فوري لو الموظف مكرر قبل الحفظ
+function ShiftBoard({ stationId, date, shift, onPick, saleId, employeeName, profileId, isAr }) {
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    if (!stationId || !date) { setRows(null); return }
+    let alive = true
+    supabase.from('sales_records').select('id, shift, employee_name, created_by_name, created_by')
+      .eq('station_id', stationId).eq('sale_date', date)
+      .then(({ data }) => { if (alive) setRows((data ?? []).filter(r => r.id !== saleId)) })
+    return () => { alive = false }
+  }, [stationId, date, saleId])
+  if (!stationId || !rows) return null
+  const norm = v => String(v || '').trim().toLowerCase()
+  const nameOf = r => r.employee_name || r.created_by_name || '—'
+  const dupe = rows.find(r => r.shift === shift && r.created_by === profileId && norm(r.employee_name) === norm(employeeName))
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+      <p className="text-[11px] font-bold text-gray-500 mb-2">{isAr ? `يوميات هذي المحطة بتاريخ ${date}` : `Records for this station on ${date}`}</p>
+      <div className="grid grid-cols-3 gap-2">
+        {SHIFTS.map(sh => {
+          const list = rows.filter(r => r.shift === sh.value)
+          const active = shift === sh.value
+          return (
+            <button key={sh.value} type="button" onClick={() => onPick(sh.value)}
+              className={`text-start rounded-lg border px-2.5 py-2 transition-colors ${active ? 'border-emerald-500 bg-white shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-bold text-gray-800">{isAr ? sh.ar : sh.en}</span>
+                <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${list.length ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{list.length || (isAr ? 'فارغة' : 'empty')}</span>
+              </div>
+              <p className="text-[10.5px] text-gray-500 mt-1 truncate">{list.length ? list.map(nameOf).join('، ') : sh.range}</p>
+            </button>
+          )
+        })}
+      </div>
+      {dupe && (
+        <p className="mt-2 text-[12px] font-bold text-red-600">
+          {isAr ? 'تنبيه: هذا الموظف عنده يومية مسجلة لهذي الوردية. افتحها وعدّلها من القائمة، أو غيّر الوردية/التاريخ.' : 'Warning: this employee already has a record for this shift. Edit it from the list or change shift/date.'}
+        </p>
+      )}
+    </div>
+  )
 }
 
 // بطاقة قسم داخل نموذج الإيراد (خارج المكوّن عشان ما تُعاد تهيئة الحقول مع كل ضغطة مفتاح)
@@ -296,7 +340,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   const handlePrint = () => printSaleRecord({ sale, isAr, profile })
 
   // الوردية المتوقعة تُحسب مرة واحدة عند فتح السجل الجديد
-  const [suggested] = useState(() => suggestShift())
+  const cutoffMin = parseCutoff(settings?.[DAY_CUTOFF_KEY])
+  const [suggested] = useState(() => suggestShift(new Date(), cutoffMin))
   const [shiftConfirmed, setShiftConfirmed] = useState(false)
 
   const parseInitialRefs = raw => {
@@ -351,13 +396,11 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       setError(isAr ? 'أدخل إجمالي المبيعات قبل الحفظ' : 'Enter the total sales before saving')
       return
     }
-    // اليوم الجديد ما يُفتح قبل 1:30 صباحاً: قبلها تُدخل الوردية الأخيرة بتاريخ أمس فقط
-    if (!sale) {
-      const n = new Date()
-      if (n.getHours() + n.getMinutes() / 60 < 1.5 && form.sale_date === todayStr()) {
-        setError(isAr ? 'اليوم الجديد يُفتح بعد الساعة 1:30 صباحاً. قبلها تُدخل الوردية ج بتاريخ أمس.' : 'The new day opens after 01:30. Before that, enter shift C with yesterday\'s date.')
-        return
-      }
+    // اليوم الجديد ما يُفتح قبل وقت الفتح (إعداد، افتراضي 01:30): قبله تُدخل الوردية الأخيرة بتاريخ أمس فقط
+    if (!sale && form.sale_date > businessDate(new Date(), cutoffMin)) {
+      const t = fmtCutoff(cutoffMin)
+      setError(isAr ? `اليوم الجديد يُفتح بعد الساعة ${t}. قبلها تُدخل الوردية ج بتاريخ أمس.` : `The new day opens after ${t}. Before that, enter shift C with yesterday's date.`)
+      return
     }
     if (!sale && (form.shift !== suggested.shift || form.sale_date !== suggested.date) && !shiftConfirmed) {
       setError(isAr ? 'الوردية أو التاريخ يختلف عن المتوقع حسب الوقت الحالي — أكّد صحتهما بالتأشير على خانة التأكيد' : 'The shift or date differs from the one expected for the current time — tick the confirmation box')
@@ -438,7 +481,9 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
 
     if (res.error) {
       const dup = /duplicate key|unique constraint/i.test(res.error.message || '')
-      setError(dup
+      const future = /sales_future_day/.test(res.error.message || '')
+      setError(future ? (isAr ? `اليوم الجديد لم يُفتح بعد (يُفتح ${fmtCutoff(cutoffMin)}). أدخل الوردية بتاريخ أمس.` : 'The new day is not open yet. Use yesterday\'s date.')
+        : dup
         ? (isAr ? 'يوجد سجل مطابق لنفس الموظف والمحطة والتاريخ والوردية. افتحه وعدّله من القائمة، أو غيّر الوردية/التاريخ.' : 'A matching record already exists for this employee, station, date and shift. Edit it from the list, or change the shift/date.')
         : res.error.message)
     }
@@ -546,6 +591,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                     </SelectField>
                   </div>
                 </div>
+                <ShiftBoard stationId={(isGeneralAdmin || multi) ? form.station_id : profile.station_id} date={form.sale_date} shift={form.shift}
+                  onPick={v => set('shift', v)} saleId={sale?.id} employeeName={form.employee_name} profileId={sale?.created_by ?? profile?.id} isAr={isAr} />
                 {!sale && (() => {
                   const sug = SHIFTS.find(x => x.value === suggested.shift)
                   const mismatch = form.shift !== suggested.shift || form.sale_date !== suggested.date
