@@ -1238,8 +1238,8 @@ export default function TransportationPage() {
                 : rec.departure_accuracy ? <span className={accuracyColor(rec.departure_accuracy)}>{isAr ? accuracyAr(rec.departure_accuracy) : rec.departure_accuracy}</span> : null)}
               {rec?.actual_departure && !isArrival && <span style={{ fontFamily: MONO, fontWeight: 700, color: 'var(--text-1)' }}>{String(rec.actual_departure).slice(11, 16)}</span>}
               {dRec?.bus_number && <span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)', background: 'var(--surface-2)', borderRadius: 6, padding: '1px 8px' }}>{dRec.bus_number}</span>}
-              {isBoth && arrRec?.passenger_count > 0 && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>↓ {arrRec.passenger_count}</span>}
-              {rec?.passenger_count > 0 && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{isBoth ? '↑ ' : ''}{rec.passenger_count} {isAr ? 'راكب' : 'pax'}</span>}
+              {isBoth && hasPax(arrRec?.passenger_count) && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>↓ {arrRec.passenger_count}</span>}
+              {hasPax(rec?.passenger_count) && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{isBoth ? '↑ ' : ''}{rec.passenger_count} {isAr ? 'راكب' : 'pax'}</span>}
               {dRec?.operational_status && dRec.operational_status !== 'Normal' && <span style={{ color: 'var(--danger)', fontWeight: 800 }}>{isAr ? TRIP_STATUSES.find(x => x.value === dRec.operational_status)?.ar : dRec.operational_status}</span>}
             </>
           ) : trip.upstream || (isArrival && trip.crossActualDep) ? (
@@ -1464,7 +1464,7 @@ export default function TransportationPage() {
         {statusChip(r)}
         {r.actual_departure && <span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }}>{r.actual_departure}</span>}
         {r.bus_number && <span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)', background: 'var(--surface-2)', borderRadius: 6, padding: '1px 8px' }}>{r.bus_number}</span>}
-        {r.passenger_count > 0 && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{r.passenger_count} {isAr ? 'راكب' : 'pax'}</span>}
+        {hasPax(r.passenger_count) && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{r.passenger_count} {isAr ? 'راكب' : 'pax'}</span>}
         {r.missed > 0 && <span style={{ fontFamily: MONO, color: 'var(--danger)', fontWeight: 800 }}>−{r.missed}</span>}
       </div>
     )
@@ -1678,7 +1678,9 @@ export default function TransportationPage() {
     : (isAr ? 'اختر محطة' : 'Select station')
 
   // ── بطاقات الجوال (نفس تصميم بطاقات التقارير) ─────────────────────────
-  const MONO = "'IBM Plex Mono', ui-monospace, monospace"
+  // عدد الركاب المُدخل (يشمل الصفر): يظهر ٠ على البطاقة بدل ما يختفي
+const hasPax = v => v !== null && v !== undefined && v !== ''
+const MONO = "'IBM Plex Mono', ui-monospace, monospace"
   // حالة الرحلة المشتركة بين البطاقة (جوال) واللوحة (كمبيوتر)
   const tripState = trip => {
     const isBoth      = trip.role === 'both'
@@ -1769,8 +1771,8 @@ export default function TransportationPage() {
                 : rec.departure_accuracy ? <span className={accuracyColor(rec.departure_accuracy)}>{isAr ? accuracyAr(rec.departure_accuracy) : rec.departure_accuracy}</span> : null)}
               {rec?.actual_departure && !isArrival && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{isAr ? 'فعلي' : 'act.'} {String(rec.actual_departure).slice(11, 16)}</span>}
               {dRec?.bus_number && <span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? 'حافلة' : 'bus'} {dRec.bus_number}</span>}
-              {isBoth && arrRec?.passenger_count > 0 && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>↓ {arrRec.passenger_count}</span>}
-              {rec?.passenger_count > 0 && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{isBoth ? '↑ ' : ''}{rec.passenger_count} {isAr ? 'راكب' : 'pax'}</span>}
+              {isBoth && hasPax(arrRec?.passenger_count) && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>↓ {arrRec.passenger_count}</span>}
+              {hasPax(rec?.passenger_count) && <span style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{isBoth ? '↑ ' : ''}{rec.passenger_count} {isAr ? 'راكب' : 'pax'}</span>}
               {dRec?.operational_status && dRec.operational_status !== 'Normal' && <span style={{ color: 'var(--danger)', fontWeight: 800 }}>{isAr ? TRIP_STATUSES.find(x => x.value === dRec.operational_status)?.ar : dRec.operational_status}</span>}
             </>
           ) : trip.upstream || (isArrival && trip.crossActualDep) ? (
