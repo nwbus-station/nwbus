@@ -376,8 +376,10 @@ export default function ReportsPage() {
   const setDateTo = v => { localStorage.setItem('rpt_dateTo', v); _setDateTo(v) }
   const [loading,  setLoading]  = useState(false)
   const [data,     setData]     = useState(null)
-  const [reportTypes, _setReportTypes] = useState(() => { try { return JSON.parse(localStorage.getItem('rpt_types') ?? '[]') } catch { return [] } })
-  const setReportTypes = v => { const next = typeof v === 'function' ? v(reportTypes) : v; localStorage.setItem('rpt_types', JSON.stringify(next)); _setReportTypes(next) }
+  // التبويب الحالي: نظرة عامة أو أحد التقارير أو سجل النشاط (يُحفظ بالمتصفح)
+  const [tab, _setTab] = useState(() => localStorage.getItem('rpt_tab') || 'overview')
+  const setTab = v => { localStorage.setItem('rpt_tab', v); _setTab(v); try { window.scrollTo({ top: 0 }) } catch { /* بدون تمرير */ } }
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [stations, setStations]     = useState([])
   const myStationIds = stations.map(s => s.id)   // محطاته المخصصة (لو غير أدمن) — منقولة هنا عشان fetchAudit يستخدمها
   const [station,  _setStation]      = useState(() => localStorage.getItem('rpt_station') || 'all')
@@ -796,10 +798,7 @@ export default function ReportsPage() {
 
   const onTimeRate = data ? Math.round((data.trips.onTime / (data.trips.total || 1)) * 100) : 0
   const normalRate = data ? Math.round((data.trips.normal / (data.trips.total || 1)) * 100) : 0
-  const show = type => typeAllowed(type) && (reportTypes.length === 0 || reportTypes.includes(type))
-  function toggleReportType(id) {
-    setReportTypes(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
-  }
+  const show = type => typeAllowed(type) && tab === type
 
   const stationLabel = station === 'all'
     ? (seesAll ? (isAr ? 'جميع المحطات' : 'All stations') : (isAr ? 'محطاتي' : 'My stations'))
@@ -1279,10 +1278,11 @@ export default function ReportsPage() {
 
   function printReport() {
     const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost'].filter(typeAllowed)
-    const types = reportTypes.length === 0 ? ALL_TYPES : ALL_TYPES.filter(t => reportTypes.includes(t))
+    // يطبع التقرير المفتوح؛ ومن «نظرة عامة» يطبع التقرير الشامل
+    const types = ALL_TYPES.includes(tab) ? [tab] : ALL_TYPES
     // header احترافي موحّد لجميع الأقسام
     const printHeader = brandHeader({
-      title: reportTypes.length === 0 ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', '),
+      title: !ALL_TYPES.includes(tab) ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', '),
       subtitle: `${isAr ? 'المحطة' : 'Station'}: ${stationLabel}`,
       lines: [`${isAr ? 'الفترة' : 'Period'}: <b>${dateFrom}</b> → <b>${dateTo}</b>`, `${isAr ? 'أعدّه' : 'By'}: ${escapeHtml(profile?.full_name_ar ?? '—')}`],
       dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 8px',
@@ -1344,47 +1344,66 @@ export default function ReportsPage() {
   }
 
 
+  // ── تبويبات مركز التقارير ──
+  const RP_ICONS = {
+    overview: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
+    movements: ['M8 6v6', 'M15 6v6', 'M2 12h19.6', 'M18 18h2l1-3H3l1 3h2', 'M2 6h20v12H2z'],
+    compliance: ['M12 22a10 10 0 100-20 10 10 0 000 20z', 'M12 6v6l4 2'],
+    transport: ['M18 20V10', 'M12 20V4', 'M6 20v-6'],
+    missed: ['M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2', 'M9 11a4 4 0 100-8 4 4 0 000 8z', 'M17 8l5 5', 'M22 8l-5 5'],
+    facilities: ['M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z'],
+    sales: ['M12 1v22', 'M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6'],
+    lost: ['M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z', 'M3 6h18', 'M16 10a4 4 0 01-8 0'],
+    audit: ['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z', 'M14 2v6h6', 'M16 13H8', 'M16 17H8'],
+  }
+  const RpIcon = ({ id, size = 15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{(RP_ICONS[id] || []).map((d, i) => <path key={i} d={d} />)}</svg>
+  const canSales = isGeneralAdmin || isAccountant || isStationAdmin
+  const TAB_DEFS = [
+    { id: 'overview', ar: 'نظرة عامة', en: 'Overview', desc_ar: 'ملخص الفترة وما يحتاج انتباهك', desc_en: 'Period summary & attention items' },
+    ...[
+      { id: 'movements', ar: 'الوصول والمغادرة', en: 'Arrivals & Departures', desc_ar: 'جداول رحلات المغادرة والوصول التفصيلية', desc_en: 'Detailed departure & arrival tables', n: data ? null : null },
+      { id: 'compliance', ar: 'الالتزام بالمواعيد', en: 'Punctuality', desc_ar: 'الالتزام بمواعيد الوصول لكل محطة', desc_en: 'Arrival punctuality per station' },
+      { id: 'transport', ar: 'ملخص الترحيل', en: 'Transport', desc_ar: 'أرقام الترحيل في سطور', desc_en: 'Transportation figures' },
+      { id: 'missed', ar: 'المتخلفون', en: 'Missed', desc_ar: 'الركاب المتخلفون عن الرحلات', desc_en: 'Passengers who missed trips', n: data?.missed?.length },
+      { id: 'facilities', ar: 'الحالة التشغيلية', en: 'Facilities', desc_ar: 'أعطال تجهيزات الحافلات', desc_en: 'Bus facility faults', n: data?.facilities?.length },
+      ...(canSales ? [{ id: 'sales', ar: 'المبيعات', en: 'Sales', desc_ar: 'الإيرادات والفروقات', desc_en: 'Revenue & differences' }] : []),
+      { id: 'lost', ar: 'الموجودات', en: 'Lost & Found', desc_ar: 'الأغراض المفقودة والمستلمة', desc_en: 'Lost & claimed items', n: data?.lost?.unclaimed },
+    ].filter(t => typeAllowed(t.id)),
+    ...(canSeeAudit ? [{ id: 'audit', ar: 'سجل النشاط', en: 'Activity log', desc_ar: 'كل ما أُضيف أو عُدّل أو حُذف', desc_en: 'Everything added, edited or deleted' }] : []),
+  ]
+  const activeTab = TAB_DEFS.some(t => t.id === tab) ? tab : 'overview'
+  const periodText = dateFrom === dateTo ? dateFrom : `${dateFrom} → ${dateTo}`
+
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
-        <div>
+      {/* ═ الرأس ═ */}
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
           <h1 className="text-2xl font-extrabold text-gray-900 leading-tight">{isAr ? 'التقارير' : 'Reports'}</h1>
-          <p className="text-sm text-gray-500 mt-1">{dateFrom === dateTo ? dateFrom : `${dateFrom} → ${dateTo}`} · {stationLabel}</p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <span className="rp-chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span dir="ltr">{periodText}</span></span>
+            <span className="rp-chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>{stationLabel}</span>
+            {loading && <span className="rp-chip animate-pulse" style={{ color: '#5B5BD6' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</span>}
+          </div>
         </div>
-        {loading && <span className="text-xs font-bold text-nwbus-primary animate-pulse">{isAr ? 'جارٍ التحميل…' : 'Loading…'}</span>}
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setFiltersOpen(v => !v)} className="md:hidden rp-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+            {isAr ? 'تصفية' : 'Filters'}
+          </button>
+          {data && allowCap('reports_print') && (
+            <button type="button" onClick={printReport} className="rp-btn rp-btn-primary">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              {isAr ? 'طباعة' : 'Print'}
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl mb-6 relative">
+      {/* ═ المرشحات (على الجوال تُفتح بزر تصفية) ═ */}
+      <div className={`${filtersOpen ? 'grid' : 'hidden'} md:grid relative bg-white border border-gray-200 rounded-xl p-4 mb-4 gap-3 grid-cols-2 lg:grid-cols-[minmax(0,1.3fr)_1fr_1fr_auto] items-end`}>
         {loading && <div className="absolute top-0 inset-x-0 h-0.5 bg-nwbus-primary animate-pulse rounded-t-xl" />}
-        <section className="p-4 border-b border-gray-100">
-          <p className="rp-label mb-2.5">{isAr ? 'نوع التقرير' : 'Report type'}</p>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 md:flex-wrap md:overflow-visible">
-            {[
-              { id: 'all',        label: isAr ? 'الكل' : 'All' },
-              { id: 'movements',  label: isAr ? 'الوصول والمغادرة' : 'Arrivals' },
-              { id: 'compliance', label: isAr ? 'الالتزام بالمواعيد' : 'Punctuality' },
-              { id: 'transport',  label: isAr ? 'ملخص الترحيل' : 'Transport' },
-              { id: 'missed',     label: isAr ? 'المتخلفون' : 'Missed' },
-              { id: 'facilities', label: isAr ? 'الحالة التشغيلية' : 'Facilities' },
-              { id: 'sales',      label: isAr ? 'ملخص المبيعات' : 'Sales' },
-              { id: 'lost',       label: isAr ? 'الموجودات' : 'Lost & Found' },
-            ].filter(t => t.id === 'all' || typeAllowed(t.id)).map(({ id, label }) => {
-              const isAll = id === 'all'
-              const active = isAll ? reportTypes.length === 0 : reportTypes.includes(id)
-              return (
-                <button key={id} onClick={() => isAll ? setReportTypes([]) : toggleReportType(id)}
-                  className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${active ? 'bg-nwbus-primary text-white border-nwbus-primary shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
-                  <span style={{ width: 14, height: 14, borderRadius: 3, border: active ? '1.5px solid rgba(255,255,255,0.7)' : '1.5px solid #9ca3af', background: active ? 'rgba(255,255,255,0.2)' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {active && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                  </span>
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-        </section>
-        <section className="p-4 grid gap-3 grid-cols-2 lg:grid-cols-[minmax(0,1.3fr)_1fr_1fr_auto] items-end">
-          <div className="col-span-2 lg:col-span-1">
+        <div className="col-span-2 lg:col-span-1">
         {/* Station selector */}
         {stations.length > 0 && (
           <div>
@@ -1397,7 +1416,7 @@ export default function ReportsPage() {
               ]} />
           </div>
         )}
-          </div>
+        </div>
         <div>
           <label className="rp-label mb-1.5">{isAr ? 'من' : 'From'}</label>
           <DatePicker value={dateFrom} onChange={v => { setDateFrom(v); if (v) setDateTo(v) }} isAr={isAr}
@@ -1408,8 +1427,8 @@ export default function ReportsPage() {
           <DatePicker value={dateTo} onChange={setDateTo} isAr={isAr}
             className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
         </div>
-          <div className="col-span-2 lg:col-span-1">
-            <p className="rp-label mb-1.5">{isAr ? 'اختصار' : 'Quick'}</p>
+        <div className="col-span-2 lg:col-span-1">
+          <p className="rp-label mb-1.5">{isAr ? 'اختصار' : 'Quick'}</p>
             <div className="flex gap-1.5 overflow-x-auto">
               {[
                 [isAr ? 'اليوم' : 'Today', 0, 0],
@@ -1428,16 +1447,10 @@ export default function ReportsPage() {
                 )
               })}
             </div>
-          </div>
-        </section>
-        {data && <section className="rp-actions px-4 py-3 bg-gray-50 border-t border-gray-100 rounded-b-xl flex flex-wrap items-center gap-2">
-        {data && allowCap('reports_print') && (
-          <button onClick={printReport}
-            className="bg-nwbus-primary text-white px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90">
-            {isAr ? 'طباعة التقرير' : 'Print Report'}
-          </button>
-        )}
+        </div>
         {data && stations.length > 1 && (
+          <div className="rp-actions col-span-2 lg:col-span-4 flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
+            <span className="rp-label me-1">{isAr ? 'طباعة متعددة' : 'Bulk print'}</span>
           <div className="flex flex-wrap gap-2 items-start">
           <div className="flex flex-col gap-1 relative">
             <button onClick={() => setShowStationPicker(v => !v)}
@@ -1536,9 +1549,83 @@ export default function ReportsPage() {
             )}
           </div>
           </div>
+        
+          </div>
         )}
-        </section>}
       </div>
+
+      {/* ═ التبويبات ═ */}
+      <div className="rp-tabs" role="tablist">
+        {TAB_DEFS.map(t => (
+          <button key={t.id} role="tab" aria-selected={activeTab === t.id} onClick={() => setTab(t.id)} className={`rp-tab${activeTab === t.id ? ' on' : ''}`}>
+            <RpIcon id={t.id} size={15} />
+            <span>{isAr ? t.ar : t.en}</span>
+            {t.n > 0 && <b className="rp-tab-n">{t.n}</b>}
+          </button>
+        ))}
+      </div>
+
+      {/* ═ نظرة عامة ═ */}
+      {activeTab === 'overview' && (!data ? (
+        <div className="space-y-3">{[0, 1, 2].map(i => <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />)}</div>
+      ) : (
+        <div className="space-y-6">
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+            {[
+              { id: 'movements', label: isAr ? 'رحلات المغادرة' : 'Departures', val: fmtN(data.moveTotals.dep), sub: `${fmtN(data.moveTotals.depPax)} ${isAr ? 'راكب' : 'pax'}`, rate: data.moveTotals.depOnTimeRate, hue: '#0ea5e9' },
+              { id: 'movements', label: isAr ? 'رحلات الوصول' : 'Arrivals', val: fmtN(data.moveTotals.arr), sub: `${fmtN(data.moveTotals.arrPax)} ${isAr ? 'راكب' : 'pax'}`, rate: data.moveTotals.arrOnTimeRate, hue: '#10b981' },
+              { id: 'missed', label: isAr ? 'المتخلفون' : 'Missed', val: fmtN(data.trips.totalMissed), sub: isAr ? 'راكب' : 'passengers', hue: '#ef4444' },
+              { id: 'movements', label: isAr ? 'رحلات غير مدخلة' : 'Not entered', val: fmtN(data.moveTotals.unentered), sub: isAr ? 'تحتاج إدخال' : 'need entry', hue: '#f59e0b' },
+            ].map((k, i) => (
+              <button key={i} type="button" onClick={() => typeAllowed(k.id) && setTab(k.id)} className="rp-kpi" style={{ '--hue': k.hue }}>
+                <span className="rp-kpi-l">{k.label}</span>
+                <span className="rp-kpi-v">{k.val}</span>
+                <span className="rp-kpi-s">{k.sub}</span>
+                {k.rate != null && <span className="rp-kpi-r" style={{ color: k.rate >= 80 ? '#16a34a' : k.rate >= 60 ? '#d97706' : '#dc2626' }}>{isAr ? 'الالتزام' : 'On-time'} {k.rate}%</span>}
+              </button>
+            ))}
+          </div>
+
+          {(() => {
+            const items = [
+              { n: data.moveTotals.unentered, ar: 'رحلة غير مدخلة', en: 'trips not entered', id: 'movements', c: '#f59e0b' },
+              { n: data.missed.length, ar: 'متخلف عن الرحلات', en: 'missed passengers records', id: 'missed', c: '#ef4444' },
+              { n: data.facilities.length, ar: 'عطل في تجهيزات الحافلات', en: 'facility faults', id: 'facilities', c: '#f97316' },
+              { n: data.lost.unclaimed, ar: 'غرض غير مستلم', en: 'unclaimed items', id: 'lost', c: '#8b5cf6' },
+            ].filter(x => x.n > 0 && typeAllowed(x.id))
+            return (
+              <section>
+                <h2 className="rp-h2">{isAr ? 'تحتاج انتباهك' : 'Needs attention'}</h2>
+                {items.length === 0 ? (
+                  <div className="rounded-xl border border-green-200 bg-green-50 text-green-800 text-sm font-semibold px-4 py-3">{isAr ? 'كل شيء على ما يرام في هذه الفترة' : 'Everything looks fine for this period'}</div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {items.map(x => (
+                      <button key={x.id + x.ar} type="button" onClick={() => setTab(x.id)} className="rp-alert" style={{ '--hue': x.c }}>
+                        <b>{fmtN(x.n)}</b><span>{isAr ? x.ar : x.en}</span>
+                        <i>{isAr ? 'عرض' : 'View'}</i>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )
+          })()}
+
+          <section>
+            <h2 className="rp-h2">{isAr ? 'التقارير' : 'Reports'}</h2>
+            <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+              {TAB_DEFS.filter(t => t.id !== 'overview').map(t => (
+                <button key={t.id} type="button" onClick={() => setTab(t.id)} className="rp-card">
+                  <span className="rp-card-ico"><RpIcon id={t.id} size={18} /></span>
+                  <span className="rp-card-t">{isAr ? t.ar : t.en}</span>
+                  <span className="rp-card-d">{isAr ? t.desc_ar : t.desc_en}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      ))}
 
       {data && (
         <div className="space-y-6">
@@ -1869,7 +1956,7 @@ export default function ReportsPage() {
       )}
 
       {/* ─── سجل التدقيق ─── */}
-      {canSeeAudit && (() => {
+      {canSeeAudit && activeTab === 'audit' && (() => {
         // فلتر القسم — من نفس شارة القسم (AUDIT_TABLE_META) حتى تبقى القائمة والشارات متطابقة
         const AUDIT_FILTER_TABLES = [
           'trip_records', 'sales_records', 'lost_found_items', 'users',

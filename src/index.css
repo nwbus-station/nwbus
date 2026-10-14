@@ -946,3 +946,30 @@ html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled
 .rp-h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-size: 1.05rem; font-weight: 800; color: var(--text-1); }
 .rp-h2::before { content: ''; width: 4px; height: 18px; border-radius: 2px; background: #5B5BD6; }
 @media (max-width: 640px) { .rp-actions > button, .rp-actions > div, .rp-actions > div > div { width: 100%; } .rp-actions button { justify-content: center; width: 100%; } }
+
+/* ── مركز التقارير: شارات، أزرار، تبويبات، بطاقات النظرة العامة ── */
+.rp-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.74rem; font-weight: 700; color: var(--text-2); background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; }
+.rp-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border-2); background: var(--card); color: var(--text-1); font-family: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
+.rp-btn-primary { background: var(--solid-btn); border-color: transparent; color: #fff; }
+.rp-tabs { position: sticky; top: 106px; z-index: 30; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 8px 0 10px; margin: 0 0 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.rp-tabs::-webkit-scrollbar { display: none; }
+.rp-tab { flex: none; display: flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text-2); font-family: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background .12s, color .12s, border-color .12s; }
+.rp-tab:hover { border-color: var(--border-2); color: var(--text-1); }
+.rp-tab.on { background: var(--solid-btn); color: #fff; border-color: transparent; }
+.rp-tab-n { font-size: 0.66rem; background: #ef4444; color: #fff; border-radius: 999px; padding: 1px 7px; font-weight: 800; }
+.rp-kpi { text-align: start; display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); border-top: 4px solid var(--hue); cursor: pointer; font-family: inherit; transition: transform .14s, box-shadow .14s; }
+.rp-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.rp-kpi-l { font-size: 0.74rem; font-weight: 800; color: var(--text-2); }
+.rp-kpi-v { font-size: 2rem; font-weight: 900; color: var(--text-1); line-height: 1.1; font-family: 'IBM Plex Mono', monospace; }
+.rp-kpi-s { font-size: 0.72rem; color: var(--text-3); font-weight: 600; }
+.rp-kpi-r { font-size: 0.72rem; font-weight: 800; margin-top: 4px; }
+.rp-alert { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); border-inline-start: 5px solid var(--hue); background: var(--card); font-family: inherit; cursor: pointer; text-align: start; }
+.rp-alert b { font-size: 1.3rem; font-weight: 900; color: var(--hue); font-family: 'IBM Plex Mono', monospace; min-width: 38px; }
+.rp-alert span { flex: 1; font-size: 0.86rem; font-weight: 700; color: var(--text-1); }
+.rp-alert i { font-style: normal; font-size: 0.72rem; font-weight: 800; color: var(--text-3); }
+.rp-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); font-family: inherit; cursor: pointer; text-align: start; transition: transform .14s, box-shadow .14s, border-color .14s; }
+.rp-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: #5B5BD6; }
+.rp-card-ico { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #5B5BD6; background: rgba(91,91,214,0.12); }
+.rp-card-t { font-size: 0.95rem; font-weight: 800; color: var(--text-1); margin-top: 4px; }
+.rp-card-d { font-size: 0.74rem; color: var(--text-3); line-height: 1.5; }
+@media (max-width: 767px) { .rp-tabs { top: 60px; } }
