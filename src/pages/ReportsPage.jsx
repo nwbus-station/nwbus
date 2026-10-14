@@ -1055,7 +1055,7 @@ export default function ReportsPage() {
             <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:14px;color:${m.unentered ? '#cbd5e1' : delayColor(m.delay)}">${m.unentered ? '—' : m.actual}</td>
             <td style="${td};color:${delayColor(m.delay)};font-weight:800;font-size:14px">${m.unentered ? '' : fmtDelay(m.delay)}</td>
             <td style="${td}">${m.unentered ? `<span style="display:inline-block;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:800;background:#fef3c7;color:#92400e;border:1px solid #fcd34d">${isAr ? 'غير مدخلة' : 'Not entered'}</span>` : accBadge(m.acc)}</td>
-            <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:14px;color:#0f172a">${m.pax || ''}</td>
+            <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:14px;color:#0f172a">${m.unentered ? '' : (m.pax ?? 0)}</td>
             <td style="${td};font-family:'IBM Plex Mono',ui-monospace,monospace;font-weight:800;font-size:14px;color:#dc2626">${m.missed || ''}</td>
           </tr>`
           }).join('')}</tbody>
@@ -1155,7 +1155,7 @@ export default function ReportsPage() {
         </div>`
 
       return `
-        <div style="page-break-after:${idx < targetStations.length - 1 ? 'always' : 'avoid'}">
+        <div style="page-break-after:${idx < targetStations.length - 1 || targetStations.length > 1 ? 'always' : 'avoid'}">
           ${brandHeader({ title: isAr ? 'تقرير الوصول والمغادرة' : 'Arrivals & Departures', subtitle: escapeHtml(stnName), lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
           <div style="padding:0 4px">
             ${kpiBar}
@@ -1171,7 +1171,37 @@ export default function ReportsPage() {
         </div>`
     }).join('')
 
-    const html = `<div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">${pages}</div>`
+    // عند تحديد أكثر من محطة: صفحة إجمالي لكل المحطات المحددة (الرحلات والركاب والمتخلفون)
+    let summaryPage = ''
+    if (targetStations.length > 1) {
+      const rowsS = targetStations.map(stn => {
+        const mv = data.movements.filter(m => m.station_id === stn.id)
+        const d = mv.filter(m => m.type === 'departure'), a = mv.filter(m => m.type === 'arrival')
+        const sum = (l, f) => l.reduce((x, m) => x + (m[f] || 0), 0)
+        return { name: isAr ? stn.name_ar : stn.name_en, dT: d.length, aT: a.length, dP: sum(d, 'pax'), aP: sum(a, 'pax'), miss: sum(mv, 'missed') }
+      })
+      const tot = rowsS.reduce((t, r) => ({ dT: t.dT + r.dT, aT: t.aT + r.aT, dP: t.dP + r.dP, aP: t.aP + r.aP, miss: t.miss + r.miss }), { dT: 0, aT: 0, dP: 0, aP: 0, miss: 0 })
+      const th = h => `<th style="padding:10px 10px;font-size:12px;font-weight:800;color:#475569;background:#eef2f6;border-bottom:2px solid #cbd5e1;text-align:center">${h}</th>`
+      const td = (v, b) => `<td style="padding:9px 10px;border-bottom:1px solid #eef2f6;text-align:center;font-size:14px;font-weight:${b ? 900 : 700};color:#0f172a;font-family:'IBM Plex Mono',ui-monospace,monospace">${v}</td>`
+      summaryPage = `
+        <div>
+          ${brandHeader({ title: isAr ? 'إجمالي المحطات المحددة' : 'Selected stations total', subtitle: isAr ? `${targetStations.length} محطات` : `${targetStations.length} stations`, lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
+          <div style="padding:0 4px">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:4px 0 14px">
+              ${[[isAr ? 'إجمالي الركاب' : 'Total passengers', tot.dP + tot.aP, '#6366f1'], [isAr ? 'ركاب المغادرة' : 'Departing', tot.dP, '#0ea5e9'], [isAr ? 'ركاب الوصول' : 'Arriving', tot.aP, '#10b981'], [isAr ? 'المتخلفون' : 'Missed', tot.miss, '#ef4444']].map(([l, v, c]) => `<div style="border:1px solid #e2e8f0;border-top:4px solid ${c};border-radius:12px;padding:14px;text-align:center;background:#fff"><div style="font-size:12px;font-weight:800;color:#475569">${l}</div><div style="font-size:34px;font-weight:900;color:#0f172a;line-height:1.1;margin-top:6px">${v}</div></div>`).join('')}
+            </div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0">
+              <thead><tr>${[isAr ? 'المحطة' : 'Station', isAr ? 'رحلات المغادرة' : 'Dep. trips', isAr ? 'رحلات الوصول' : 'Arr. trips', isAr ? 'ركاب المغادرة' : 'Dep. pax', isAr ? 'ركاب الوصول' : 'Arr. pax', isAr ? 'إجمالي الركاب' : 'Total pax', isAr ? 'المتخلفون' : 'Missed'].map(th).join('')}</tr></thead>
+              <tbody>
+                ${rowsS.map((r, i) => `<tr style="page-break-inside:avoid;background:${i % 2 ? '#f8fafc' : '#fff'}"><td style="padding:9px 12px;border-bottom:1px solid #eef2f6;font-size:13.5px;font-weight:800;color:#1e293b">${escapeHtml(r.name)}</td>${td(r.dT)}${td(r.aT)}${td(r.dP)}${td(r.aP)}${td(r.dP + r.aP, true)}${td(r.miss)}</tr>`).join('')}
+                <tr class="tot-row" style="background:#1C2B36"><td style="padding:11px 12px;font-size:14px;font-weight:900;color:#fff">${isAr ? 'الإجمالي' : 'Total'}</td>${[tot.dT, tot.aT, tot.dP, tot.aP, tot.dP + tot.aP, tot.miss].map(v => `<td style="padding:11px 10px;text-align:center;font-size:15px;font-weight:900;color:#fff;font-family:'IBM Plex Mono',ui-monospace,monospace">${v}</td>`).join('')}</tr>
+              </tbody>
+            </table>
+          </div>
+        </div>`
+    }
+
+    const html = `<div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">${pages}${summaryPage}</div>`
     // الشاشة: خلفية رمادية مزرقة هادئة وورقة بلون عاجي مريح للعين. الطباعة: أبيض نقي. وضع أبيض وأسود: تدرج رمادي بتباين أعلى وأنماط بدل الألوان
     const css = `@page{size:A4 landscape;margin:8mm}body{margin:0;padding:0;background:#e6eaef}
       .sheet{background:#fbfaf6;max-width:1180px;margin:16px auto 28px;padding:14px 16px;border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.12)}
@@ -1187,6 +1217,7 @@ export default function ReportsPage() {
       body.bw .seg-delayed{background:#000!important}
       body.bw .seg-unentered{background:repeating-linear-gradient(90deg,#555 0 2px,#e4e4e4 2px 5px)!important}
       body.bw .seg-none{background:#c4c4c4!important}
+      body.bw .tot-row{background:#fff!important;border-top:3px solid #000}
       body.bw .pill-dark{background:#fff!important;border:1.5px solid #000!important}
       body.bw .ring{background:conic-gradient(#111 var(--p),#c2c2c2 0)!important}
       body.bw .track{background:#cfcfcf!important;border:1px solid #777}
