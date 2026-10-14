@@ -1155,7 +1155,7 @@ export default function ReportsPage() {
         </div>`
 
       return `
-        <div style="page-break-after:${idx < targetStations.length - 1 || targetStations.length > 1 ? 'always' : 'avoid'}">
+        <div style="page-break-after:${idx < targetStations.length - 1 ? 'always' : 'avoid'}">
           ${brandHeader({ title: isAr ? 'تقرير الوصول والمغادرة' : 'Arrivals & Departures', subtitle: escapeHtml(stnName), lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
           <div style="padding:0 4px">
             ${kpiBar}
@@ -1171,37 +1171,91 @@ export default function ReportsPage() {
         </div>`
     }).join('')
 
-    // عند تحديد أكثر من محطة: صفحة إجمالي لكل المحطات المحددة (الرحلات والركاب والمتخلفون)
+    // عند تحديد أكثر من محطة: صفحة ملخص أولاً (إجمالي + ترتيب المحطات + أبرز المؤشرات) ثم تفاصيل كل محطة
     let summaryPage = ''
     if (targetStations.length > 1) {
+      const sum = (l, f) => l.reduce((x, m) => x + (m[f] || 0), 0)
       const rowsS = targetStations.map(stn => {
         const mv = data.movements.filter(m => m.station_id === stn.id)
         const d = mv.filter(m => m.type === 'departure'), a = mv.filter(m => m.type === 'arrival')
-        const sum = (l, f) => l.reduce((x, m) => x + (m[f] || 0), 0)
-        return { name: isAr ? stn.name_ar : stn.name_en, dT: d.length, aT: a.length, dP: sum(d, 'pax'), aP: sum(a, 'pax'), miss: sum(mv, 'missed') }
-      })
-      const tot = rowsS.reduce((t, r) => ({ dT: t.dT + r.dT, aT: t.aT + r.aT, dP: t.dP + r.dP, aP: t.aP + r.aP, miss: t.miss + r.miss }), { dT: 0, aT: 0, dP: 0, aP: 0, miss: 0 })
-      const th = h => `<th style="padding:10px 10px;font-size:12px;font-weight:800;color:#475569;background:#eef2f6;border-bottom:2px solid #cbd5e1;text-align:center">${h}</th>`
-      const td = (v, b) => `<td style="padding:9px 10px;border-bottom:1px solid #eef2f6;text-align:center;font-size:14px;font-weight:${b ? 900 : 700};color:#0f172a;font-family:'IBM Plex Mono',ui-monospace,monospace">${v}</td>`
+        const entered = mv.filter(m => !m.unentered).length
+        return { name: isAr ? stn.name_ar : stn.name_en, dT: d.length, aT: a.length, dP: sum(d, 'pax'), aP: sum(a, 'pax'), miss: sum(mv, 'missed'), rate: calcRate(mv), entered, all: mv.length }
+      }).map(r => ({ ...r, pax: r.dP + r.aP })).sort((x, y) => y.pax - x.pax || (y.dT + y.aT) - (x.dT + x.aT))
+      const tot = rowsS.reduce((t, r) => ({ dT: t.dT + r.dT, aT: t.aT + r.aT, dP: t.dP + r.dP, aP: t.aP + r.aP, miss: t.miss + r.miss, entered: t.entered + r.entered, all: t.all + r.all }), { dT: 0, aT: 0, dP: 0, aP: 0, miss: 0, entered: 0, all: 0 })
+      const totPax = tot.dP + tot.aP
+      const maxPax = Math.max(1, ...rowsS.map(r => r.pax))
+      const allMoves = data.movements.filter(m => targetIds.includes(m.station_id))
+      const overall = calcRate(allMoves)
+      const top = rowsS[0]
+      const topMiss = [...rowsS].sort((x, y) => y.miss - x.miss)[0]
+      const bestRate = [...rowsS].filter(r => r.rate !== null && r.dT + r.aT >= 3).sort((x, y) => y.rate - x.rate)[0]
+      const depPct = totPax ? Math.round(tot.dP / totPax * 100) : 0
+      const th = (h, w) => `<th style="${w ? `width:${w}%;` : ''}padding:9px 8px;font-size:11.5px;font-weight:800;color:#475569;background:#eef2f6;border-bottom:2px solid #cbd5e1;text-align:center;white-space:nowrap">${h}</th>`
+      const num = (v, b) => `<td style="padding:8px;border-bottom:1px solid #eef2f6;text-align:center;font-size:14px;font-weight:${b ? 900 : 700};color:#0f172a;font-family:'IBM Plex Mono',ui-monospace,monospace">${v}</td>`
+      const insight = (label, name, val, c) => `<div style="flex:1;border:1px solid #e2e8f0;border-inline-start:5px solid ${c};border-radius:10px;padding:10px 14px;background:#fff">
+        <div style="font-size:11px;font-weight:800;color:#64748b">${label}</div>
+        <div style="font-size:15px;font-weight:900;color:#0f172a;margin-top:3px">${escapeHtml(name)}</div>
+        <div style="font-size:12px;font-weight:700;color:${c};margin-top:2px">${val}</div></div>`
       summaryPage = `
-        <div>
-          ${brandHeader({ title: isAr ? 'إجمالي المحطات المحددة' : 'Selected stations total', subtitle: isAr ? `${targetStations.length} محطات` : `${targetStations.length} stations`, lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
+        <div style="page-break-after:always">
+          ${brandHeader({ title: isAr ? 'ملخص المحطات المحددة' : 'Selected stations summary', subtitle: isAr ? `${targetStations.length} محطة` : `${targetStations.length} stations`, lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
           <div style="padding:0 4px">
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:4px 0 14px">
-              ${[[isAr ? 'إجمالي الركاب' : 'Total passengers', tot.dP + tot.aP, '#6366f1'], [isAr ? 'ركاب المغادرة' : 'Departing', tot.dP, '#0ea5e9'], [isAr ? 'ركاب الوصول' : 'Arriving', tot.aP, '#10b981'], [isAr ? 'المتخلفون' : 'Missed', tot.miss, '#ef4444']].map(([l, v, c]) => `<div style="border:1px solid #e2e8f0;border-top:4px solid ${c};border-radius:12px;padding:14px;text-align:center;background:#fff"><div style="font-size:12px;font-weight:800;color:#475569">${l}</div><div style="font-size:34px;font-weight:900;color:#0f172a;line-height:1.1;margin-top:6px">${v}</div></div>`).join('')}
+            <div style="display:flex;gap:10px;align-items:stretch;margin-top:4px">
+              <div style="flex:1.6;border-radius:14px;padding:18px 22px;background:#1C2B36;color:#fff" class="hero-dark">
+                <div style="font-size:13px;font-weight:800;opacity:.8">${isAr ? 'إجمالي الركاب' : 'Total passengers'}</div>
+                <div style="font-size:54px;font-weight:900;line-height:1.05;margin-top:4px">${totPax.toLocaleString('en-US')}</div>
+                <div style="display:flex;height:10px;border-radius:999px;overflow:hidden;margin-top:12px;background:rgba(255,255,255,.2)">
+                  <div class="seg-ontime" style="width:${depPct}%;background:#38bdf8"></div><div class="seg-early" style="width:${100 - depPct}%;background:#34d399"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-top:7px">
+                  <span>${isAr ? 'مغادرة' : 'Departing'} <b style="font-size:14px">${tot.dP.toLocaleString('en-US')}</b> (${depPct}%)</span>
+                  <span>${isAr ? 'وصول' : 'Arriving'} <b style="font-size:14px">${tot.aP.toLocaleString('en-US')}</b> (${100 - depPct}%)</span>
+                </div>
+              </div>
+              ${[[isAr ? 'إجمالي الرحلات' : 'Total trips', tot.dT + tot.aT, `${tot.dT} ${isAr ? 'مغادرة' : 'dep'} · ${tot.aT} ${isAr ? 'وصول' : 'arr'}`, '#0ea5e9'],
+                 [isAr ? 'المتخلفون' : 'Missed', tot.miss, isAr ? 'راكب' : 'passengers', '#ef4444'],
+                 [isAr ? 'الالتزام العام' : 'Overall punctuality', overall === null ? '—' : overall + '%', rateWord(overall), overall === null ? '#94a3b8' : rateColor(overall)],
+                 [isAr ? 'اكتمال الإدخال' : 'Data entered', tot.all ? Math.round(tot.entered / tot.all * 100) + '%' : '—', isAr ? `${tot.entered} من ${tot.all}` : `${tot.entered} of ${tot.all}`, '#8b5cf6']
+                ].map(([l, v, sub, c]) => `<div style="flex:.7;border:1px solid #e2e8f0;border-top:4px solid ${c};border-radius:14px;padding:12px 14px;background:#fff;display:flex;flex-direction:column;justify-content:center">
+                  <div style="font-size:11.5px;font-weight:800;color:#475569">${l}</div>
+                  <div style="font-size:30px;font-weight:900;color:#0f172a;line-height:1.1;margin-top:4px">${v}</div>
+                  <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-top:2px">${sub}</div></div>`).join('')}
             </div>
-            <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0">
-              <thead><tr>${[isAr ? 'المحطة' : 'Station', isAr ? 'رحلات المغادرة' : 'Dep. trips', isAr ? 'رحلات الوصول' : 'Arr. trips', isAr ? 'ركاب المغادرة' : 'Dep. pax', isAr ? 'ركاب الوصول' : 'Arr. pax', isAr ? 'إجمالي الركاب' : 'Total pax', isAr ? 'المتخلفون' : 'Missed'].map(th).join('')}</tr></thead>
-              <tbody>
-                ${rowsS.map((r, i) => `<tr style="page-break-inside:avoid;background:${i % 2 ? '#f8fafc' : '#fff'}"><td style="padding:9px 12px;border-bottom:1px solid #eef2f6;font-size:13.5px;font-weight:800;color:#1e293b">${escapeHtml(r.name)}</td>${td(r.dT)}${td(r.aT)}${td(r.dP)}${td(r.aP)}${td(r.dP + r.aP, true)}${td(r.miss)}</tr>`).join('')}
-                <tr class="tot-row" style="background:#1C2B36"><td style="padding:11px 12px;font-size:14px;font-weight:900;color:#fff">${isAr ? 'الإجمالي' : 'Total'}</td>${[tot.dT, tot.aT, tot.dP, tot.aP, tot.dP + tot.aP, tot.miss].map(v => `<td style="padding:11px 10px;text-align:center;font-size:15px;font-weight:900;color:#fff;font-family:'IBM Plex Mono',ui-monospace,monospace">${v}</td>`).join('')}</tr>
+            <div style="display:flex;gap:10px;margin-top:10px">
+              ${insight(isAr ? 'الأعلى ركاباً' : 'Most passengers', top.name, `${top.pax.toLocaleString('en-US')} ${isAr ? 'راكب' : 'pax'}`, '#6366f1')}
+              ${insight(isAr ? 'الأكثر تخلفاً' : 'Most missed', topMiss.miss ? topMiss.name : '—', topMiss.miss ? `${topMiss.miss} ${isAr ? 'متخلف' : 'missed'}` : (isAr ? 'لا يوجد تخلف' : 'none'), '#ef4444')}
+              ${insight(isAr ? 'الأفضل التزاماً' : 'Best punctuality', bestRate ? bestRate.name : '—', bestRate ? `${bestRate.rate}%` : (isAr ? 'بيانات غير كافية' : 'not enough data'), '#16a34a')}
+            </div>
+            <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding:9px 14px;background:#1C2B36;color:#fff;border-radius:8px 8px 0 0">
+              <span style="font-size:15px;font-weight:800">${isAr ? 'ترتيب المحطات حسب الركاب' : 'Stations ranked by passengers'}</span>
+              <span style="font-size:12px;font-weight:800;background:rgba(255,255,255,.18);border-radius:999px;padding:3px 12px">${rowsS.length} ${isAr ? 'محطة' : 'stations'}</span>
+            </div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none">
+              <thead style="display:table-header-group"><tr>${th('#', 3)}${th(isAr ? 'المحطة' : 'Station', 20)}${th(isAr ? 'مغادرة' : 'Dep.', 6)}${th(isAr ? 'وصول' : 'Arr.', 6)}${th(isAr ? 'توزيع الركاب' : 'Passengers', 27)}${th(isAr ? 'الإجمالي' : 'Total', 8)}${th(isAr ? 'الحصة' : 'Share', 6)}${th(isAr ? 'الالتزام' : 'Punctual', 8)}${th(isAr ? 'المتخلفون' : 'Missed', 8)}</tr></thead>
+              <tbody>${rowsS.map((r, i) => {
+                const idle = r.pax === 0 && r.dT + r.aT === 0
+                const w = Math.round(r.pax / maxPax * 100)
+                const dW = r.pax ? Math.round(r.dP / r.pax * w) : 0
+                return `<tr style="page-break-inside:avoid;background:${i % 2 ? '#f8fafc' : '#fff'};${idle ? 'opacity:.55' : ''}">
+                  <td style="padding:8px;border-bottom:1px solid #eef2f6;text-align:center;color:#94a3b8;font-size:11.5px;font-weight:800">${i + 1}</td>
+                  <td style="padding:8px 10px;border-bottom:1px solid #eef2f6;font-size:13.5px;font-weight:800;color:#1e293b">${escapeHtml(r.name)}</td>
+                  ${num(r.dT)}${num(r.aT)}
+                  <td style="padding:8px 10px;border-bottom:1px solid #eef2f6"><div class="track" style="height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;display:flex"><div class="seg-ontime" style="width:${dW}%;background:#38bdf8"></div><div class="seg-early" style="width:${w - dW}%;background:#34d399"></div></div></td>
+                  ${num(r.pax.toLocaleString('en-US'), true)}
+                  <td style="padding:8px;border-bottom:1px solid #eef2f6;text-align:center;font-size:12px;font-weight:700;color:#64748b">${totPax ? Math.round(r.pax / totPax * 100) : 0}%</td>
+                  <td style="padding:8px;border-bottom:1px solid #eef2f6;text-align:center;font-size:13px;font-weight:900;color:${r.rate === null ? '#cbd5e1' : rateColor(r.rate)}">${r.rate === null ? '—' : r.rate + '%'}</td>
+                  <td style="padding:8px;border-bottom:1px solid #eef2f6;text-align:center;font-size:14px;font-weight:900;color:${r.miss ? '#dc2626' : '#cbd5e1'};font-family:'IBM Plex Mono',ui-monospace,monospace">${r.miss || '—'}</td>
+                </tr>`
+              }).join('')}
+                <tr class="tot-row" style="background:#1C2B36"><td></td><td style="padding:10px;font-size:14px;font-weight:900;color:#fff">${isAr ? 'الإجمالي' : 'Total'}</td>${[tot.dT, tot.aT].map(v => `<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#fff">${v}</td>`).join('')}<td style="padding:10px;text-align:center;font-size:11.5px;font-weight:700;color:#cbd5e1">${isAr ? 'مغادرة' : 'dep'} ${tot.dP.toLocaleString('en-US')} · ${isAr ? 'وصول' : 'arr'} ${tot.aP.toLocaleString('en-US')}</td><td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#fff">${totPax.toLocaleString('en-US')}</td><td style="padding:10px;text-align:center;color:#fff;font-weight:800">100%</td><td style="padding:10px;text-align:center;font-size:14px;font-weight:900;color:#fff">${overall === null ? '—' : overall + '%'}</td><td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#fff">${tot.miss}</td></tr>
               </tbody>
             </table>
+            <div style="margin-top:8px;font-size:11px;color:#64748b;display:flex;gap:16px"><span><span class="seg-ontime" style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#38bdf8;vertical-align:-1px;margin-inline-end:5px"></span>${isAr ? 'ركاب المغادرة' : 'Departing'}</span><span><span class="seg-early" style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#34d399;vertical-align:-1px;margin-inline-end:5px"></span>${isAr ? 'ركاب الوصول' : 'Arriving'}</span><span>${isAr ? 'تفاصيل كل محطة في الصفحات التالية' : 'Station details on the following pages'}</span></div>
           </div>
         </div>`
     }
 
-    const html = `<div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">${pages}${summaryPage}</div>`
+    const html = `<div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">${summaryPage}${pages}</div>`
     // الشاشة: خلفية رمادية مزرقة هادئة وورقة بلون عاجي مريح للعين. الطباعة: أبيض نقي. وضع أبيض وأسود: تدرج رمادي بتباين أعلى وأنماط بدل الألوان
     const css = `@page{size:A4 landscape;margin:8mm}body{margin:0;padding:0;background:#e6eaef}
       .sheet{background:#fbfaf6;max-width:1180px;margin:16px auto 28px;padding:14px 16px;border-radius:14px;box-shadow:0 8px 30px rgba(15,23,42,.12)}
@@ -1217,6 +1271,8 @@ export default function ReportsPage() {
       body.bw .seg-delayed{background:#000!important}
       body.bw .seg-unentered{background:repeating-linear-gradient(90deg,#555 0 2px,#e4e4e4 2px 5px)!important}
       body.bw .seg-none{background:#c4c4c4!important}
+      body.bw .hero-dark{background:#fff!important;border:2px solid #000}
+      body.bw .hero-dark *{color:#000!important}
       body.bw .tot-row{background:#fff!important;border-top:3px solid #000}
       body.bw .pill-dark{background:#fff!important;border:1.5px solid #000!important}
       body.bw .ring{background:conic-gradient(#111 var(--p),#c2c2c2 0)!important}
