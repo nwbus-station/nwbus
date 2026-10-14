@@ -11,6 +11,7 @@ import PrintAccessModal from '../components/sales/PrintAccessModal'
 import { useAppSettings } from '../context/AppSettingsContext'
 import { PRINT_ACCESS_KEY, parseAccess, accountState } from '../utils/printAccess'
 import { todayStr, toLocalDateStr } from '../utils/dates'
+import { parseShifts, SHIFT_SETTING_KEY } from '../utils/shifts'
 import { DAY_CUTOFF_KEY, parseCutoff, fmtCutoff, businessDate } from '../utils/businessDay'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -18,11 +19,10 @@ import { safeImport } from '../lib/chunkReload'
 import SelectField from '../components/shared/SelectField'
 import { brandHeader, docHeader, docShell, openDocWindow, previewToolbar, TOOLBAR_CSS, esc } from '../utils/printDoc'
 
-const SHIFTS = [
-  { value: 'A', ar: 'الوردية أ', en: 'Shift A', range: '00:00 – 08:00', end: 8 },
-  { value: 'B', ar: 'الوردية ب', en: 'Shift B', range: '08:00 – 16:00', end: 16 },
-  { value: 'C', ar: 'الوردية ج', en: 'Shift C', range: '16:00 – 24:00', end: 24 },
-]
+// الورديات تتبع إعداد الأدمن (3 أو 4) من الإعدادات؛ تُحدَّث عند كل عرض من app_settings
+const salesShiftsFrom = raw => parseShifts(raw).map(s => ({ value: s.k, ar: s.ar, en: s.en, range: s.range, end: s.to / 60 }))
+let SHIFTS = salesShiftsFrom(null)
+const lastShift = () => SHIFTS[SHIFTS.length - 1]
 
 // الوردية المتوقعة من الوقت الحالي: وقت الإقفال (قبل نهاية الوردية بساعة وحتى ساعة ونصف بعدها) يعني الوردية المنتهية،
 // وإلا فالوردية الجارية. بعد منتصف الليل مباشرة (حتى 1:30) تكون ورديّة ج ليوم أمس — الوردية الأخيرة فقط، وباقي الأوقات تتبع الوردية الجارية.
@@ -32,9 +32,9 @@ function suggestShift(now = new Date(), cutoffMin = 90) {
   for (const sh of SHIFTS) {
     if (h >= sh.end - 1 && h < sh.end + 1.5 && sh.end < 24) return { shift: sh.value, date: today, closing: true }
   }
-  if (h >= 23) return { shift: 'C', date: today, closing: true }
-  if (h < cutoffMin / 60) { const d = new Date(now); d.setDate(d.getDate() - 1); return { shift: 'C', date: toLocalDateStr(d), closing: true, yesterday: true } }
-  return { shift: h < 8 ? 'A' : h < 16 ? 'B' : 'C', date: today, closing: false }
+  if (h >= 23) return { shift: lastShift().value, date: today, closing: true }
+  if (h < cutoffMin / 60) { const d = new Date(now); d.setDate(d.getDate() - 1); return { shift: lastShift().value, date: toLocalDateStr(d), closing: true, yesterday: true } }
+  return { shift: (SHIFTS.find(sh => h <= sh.end) ?? lastShift()).value, date: today, closing: false }
 }
 
 const fmt  = n => Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -71,7 +71,7 @@ function ShiftBoard({ stationId, date, shift, onPick, saleId, employeeName, prof
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
       <p className="text-[11px] font-bold text-gray-500 mb-2">{isAr ? `يوميات هذي المحطة بتاريخ ${date}` : `Records for this station on ${date}`}</p>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${SHIFTS.length}, minmax(0, 1fr))` }}>
         {SHIFTS.map(sh => {
           const list = rows.filter(r => r.shift === sh.value)
           const active = shift === sh.value
@@ -324,6 +324,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   useEscapeKey(onClose)
   const { profile, isAccountant, isGeneralAdmin, allowCap, workStations } = useAuth()
   const { settings } = useAppSettings()
+  SHIFTS = salesShiftsFrom(settings?.[SHIFT_SETTING_KEY])
   // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
   const multi = !isGeneralAdmin && workStations?.length > 1
   const { i18n } = useTranslation()
@@ -399,7 +400,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     // اليوم الجديد ما يُفتح قبل وقت الفتح (إعداد، افتراضي 01:30): قبله تُدخل الوردية الأخيرة بتاريخ أمس فقط
     if (!sale && form.sale_date > businessDate(new Date(), cutoffMin)) {
       const t = fmtCutoff(cutoffMin)
-      setError(isAr ? `اليوم الجديد يُفتح بعد الساعة ${t}. قبلها تُدخل الوردية ج بتاريخ أمس.` : `The new day opens after ${t}. Before that, enter shift C with yesterday's date.`)
+      setError(isAr ? `اليوم الجديد يُفتح بعد الساعة ${t}. قبلها تُدخل ${lastShift().ar} بتاريخ أمس.` : `The new day opens after ${t}. Before that, enter ${lastShift().en} with yesterday's date.`)
       return
     }
     if (!sale && (form.shift !== suggested.shift || form.sale_date !== suggested.date) && !shiftConfirmed) {
@@ -952,6 +953,7 @@ export default function SalesPage() {
   const canPrintDaily = isGeneralAdmin
   // صلاحية طباعة يوميات الموظفين: إعداد عام يديره الأدمن (وضع عام + استثناءات حسابات، مستمر أو مؤقت)
   const { settings, saveSetting } = useAppSettings()
+  SHIFTS = salesShiftsFrom(settings?.[SHIFT_SETTING_KEY])
   const printAccess = parseAccess(settings?.[PRINT_ACCESS_KEY])
   const [printAccessOpen, setPrintAccessOpen] = useState(false)
   const canPrintRecord = r => isGeneralAdmin || (r.created_by === profile?.id && allowCap('sales_print') && accountState(printAccess, profile?.id, todayStr()).allowed)
@@ -1049,7 +1051,7 @@ export default function SalesPage() {
         : (isAr ? `${picked.length} محطات مختارة` : `${picked.length} selected stations`)
       await exportDailySalesExcel({
         isAr, records: rows, from: xlFrom, to: xlTo,
-        scopeText,
+        scopeText, shifts: SHIFTS.map(sh => ({ k: sh.value, range: sh.range })),
         preparedBy: profile?.full_name_ar || '',
       })
       setXlOpen(false)

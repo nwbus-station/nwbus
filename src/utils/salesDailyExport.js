@@ -5,8 +5,8 @@ import { createBook, XL, colLetter } from './excelExport'
 const n0 = n => Math.round(Number(n) || 0)
 const ACC_FMT = '#,##0;[Red]-#,##0;"–"'          // محاسبي: السالب أحمر، الصفر شرطة
 const DIFF_FMT = '+#,##0;[Red]-#,##0;"–"'
-const SHIFT_LABEL = { A: ['أ', 'A'], B: ['ب', 'B'], C: ['ج', 'C'] }
-const SHIFT_RANGE = { A: '00:00 – 08:00', B: '08:00 – 16:00', C: '16:00 – 24:00' }
+const SHIFT_LABEL = { A: ['أ', 'A'], B: ['ب', 'B'], C: ['ج', 'C'], D: ['د', 'D'] }
+const DEFAULT_RANGE = { A: '00:00 – 08:00', B: '08:00 – 16:00', C: '16:00 – 24:00' }
 const WD_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 const WD_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -25,7 +25,8 @@ const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(
  * records: صفوف sales_records (مع station و created_by_user.job_number)
  * from/to: 'YYYY-MM-DD' (يوم واحد أو فترة) · scopeText: وصف النطاق · preparedBy: اسم من يُصدر الملف
  */
-export async function exportDailySalesExcel({ isAr, records, from, to, scopeText, preparedBy }) {
+export async function exportDailySalesExcel({ isAr, records, from, to, scopeText, preparedBy, shifts: cfgShifts }) {
+  const SHIFT_RANGE = cfgShifts?.length ? Object.fromEntries(cfgShifts.map(x => [x.k, x.range])) : DEFAULT_RANGE
   const T = (a, e) => (isAr ? a : e)
   const book = await createBook({ isAr })
   const stamp = new Date().toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' })
@@ -141,7 +142,7 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
 
   // تسوية الورديات
   S.section(T('تسوية الورديات', 'Shift reconciliation'), T('لكل وردية: المبيعات المتوقعة مقابل المحصَّل الفعلي — الفرق يُلوَّن (أحمر عجز · أزرق زيادة)', 'Per shift: expected sales vs actual collection — difference is colored (red deficit · blue surplus)'))
-  const shifts = ['A', 'B', 'C'].filter(k => rows.some(r => r.raw.shift === k)).concat([...new Set(rows.map(r => r.raw.shift))].filter(k => !['A', 'B', 'C'].includes(k)))
+  const shifts = ['A', 'B', 'C', 'D'].filter(k => rows.some(r => r.raw.shift === k)).concat([...new Set(rows.map(r => r.raw.shift))].filter(k => !['A', 'B', 'C', 'D'].includes(k)))
   const s0 = S.r + 1
   const shRow = k => {
     const rs = rows.filter(r => r.raw.shift === k), lab = SHIFT_LABEL[k]?.[isAr ? 0 : 1] ?? k
