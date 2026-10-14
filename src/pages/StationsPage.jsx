@@ -10,6 +10,8 @@ import { useEscapeKey } from '../hooks/useEscapeKey'
 import SearchSelect from '../components/shared/SearchSelect'
 import StatStrip from '../components/shared/StatStrip'
 import SelectField from '../components/shared/SelectField'
+import TimeInput24 from '../components/shared/TimeInput24'
+import { validEnds, fmtMin, toMin } from '../utils/shifts'
 
 /* ─── دمج محطة مكررة في الأساسية — أدمن فقط ─────────────── */
 function MergeModal({ stations, onClose, onSaved }) {
@@ -151,6 +153,14 @@ function StationModal({ station, onClose, onSaved }) {
     combined_arr_dep: station?.combined_arr_dep ?? false,
     is_agent:   station?.is_agent   ?? false,
   })
+  // ورديات المحطة (للإيرادات): فارغ = الافتراضي العام من الإعدادات، وإلا 3 أو 4 ورديات بأوقات نهاية مخصصة
+  const initEnds = Array.isArray(station?.shift_ends) && validEnds(station.shift_ends) ? station.shift_ends : null
+  const [shiftMode, setShiftMode] = useState(initEnds ? 'custom' : 'default')
+  const [shiftCount, setShiftCount] = useState(initEnds ? initEnds.length : 3)
+  const [shiftEnds, setShiftEnds] = useState(initEnds ? initEnds.slice(0, -1).map(fmtMin) : ['08:00', '16:00'])
+  const setCountSafe = n => { setShiftCount(n); setShiftEnds(prev => n === 4 ? (prev.length === 3 ? prev : [prev[0] ?? '08:00', prev[1] ?? '16:00', '20:00']) : prev.slice(0, 2)) }
+  const draftEnds = [...shiftEnds.map(toMin), 1440]
+  const shiftsValid = shiftMode !== 'custom' || (draftEnds.length === shiftCount && validEnds(draftEnds))
   const [tripNums, setTripNums] = useState(Array.isArray(station?.trip_numbers) ? station.trip_numbers : [])
   const [numInput, setNumInput] = useState('')
   const [allTrips, setAllTrips] = useState([])   // قائمة الرحلات من الجدول
@@ -180,7 +190,11 @@ function StationModal({ station, onClose, onSaved }) {
     setSaving(true)
     setError('')
     // الاسم العربي إن أُدخل — وإلا الإنجليزي (يُستخدم في العرض والمناداة الصوتية)
+    if (!shiftsValid) { setError(isAr ? 'رتّب أوقات نهاية الورديات تصاعدياً (كل وقت بعد الذي قبله وقبل 24:00)' : 'Shift end times must be ascending and before 24:00'); setSaving(false); return }
     const payload = { ...form, name_ar: (form.name_ar || '').trim() || form.name_en, trip_numbers: tripNums, created_by: profile.id }
+    // العمود يُرسل فقط عند الحاجة (تخصيص، أو إلغاء تخصيص سابق) حتى تعمل الصفحة قبل تشغيل SQL
+    if (shiftMode === 'custom') payload.shift_ends = draftEnds
+    else if (station?.shift_ends != null) payload.shift_ends = null
     const res = station
       ? await supabase.from('stations').update(payload).eq('id', station.id).select('id').single()
       : await supabase.from('stations').insert(payload).select('id').single()
@@ -313,6 +327,39 @@ function StationModal({ station, onClose, onSaved }) {
               {isAr ? 'للمحطات اللي الباص يوصلها ويغادرها بنفس الوقت (مثل الطائف): يُدخل الموظف بطاقة واحدة، وتُسجَّل في التقارير كوصول ومغادرة.'
                     : 'For stops where the bus arrives and departs together: one entry card, still recorded as both arrival and departure in reports.'}
             </p>
+          </div>
+          <div className="rounded-lg border border-gray-200 p-3">
+            <p className="text-sm font-bold text-gray-800">{isAr ? 'ورديات الإيرادات لهذي المحطة' : 'Sales shifts for this station'}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{isAr ? 'كل محطة لها ورديات حسب دوامها: 3 أو 4. الافتراضي يتبع الإعداد العام.' : 'Each station can run 3 or 4 shifts. Default follows the global setting.'}</p>
+            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold mt-2">
+              {[['default', isAr ? 'افتراضي' : 'Default'], ['custom', isAr ? 'مخصصة' : 'Custom']].map(([k, l]) => (
+                <button key={k} type="button" onClick={() => setShiftMode(k)} className={`px-4 py-1.5 ${shiftMode === k ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{l}</button>
+              ))}
+            </div>
+            {shiftMode === 'custom' && (
+              <div className="mt-3 space-y-3">
+                <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
+                  {[3, 4].map(n => (
+                    <button key={n} type="button" onClick={() => setCountSafe(n)} className={`px-4 py-1.5 ${shiftCount === n ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{isAr ? `${n} ورديات` : `${n} shifts`}</button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {shiftEnds.map((v, i) => (
+                    <div key={i}>
+                      <label className="block text-[11px] text-gray-500 mb-1">{isAr ? `نهاية ${['أ', 'ب', 'ج'][i]}` : `End of ${['A', 'B', 'C'][i]}`}</label>
+                      <TimeInput24 value={v} onChange={x => setShiftEnds(prev => prev.map((p, j) => (j === i ? x : p)))} />
+                    </div>
+                  ))}
+                  <div>
+                    <label className="block text-[11px] text-gray-500 mb-1">{isAr ? `نهاية ${['أ', 'ب', 'ج', 'د'][shiftCount - 1]}` : `End of ${['A', 'B', 'C', 'D'][shiftCount - 1]}`}</label>
+                    <div className="px-3 py-2 rounded-lg bg-gray-100 text-gray-500 text-sm font-mono">24:00</div>
+                  </div>
+                </div>
+                {shiftsValid
+                  ? <div className="flex flex-wrap gap-1.5" dir="ltr">{draftEnds.map((e, i) => <span key={i} className="text-[11px] font-mono bg-gray-50 border border-gray-200 rounded px-2 py-0.5">{['A', 'B', 'C', 'D'][i]} {fmtMin(i ? draftEnds[i - 1] : 0)} – {fmtMin(e)}</span>)}</div>
+                  : <p className="text-[11px] text-red-600">{isAr ? 'الأوقات لازم تتصاعد وتكون قبل 24:00' : 'Times must ascend and be before 24:00'}</p>}
+              </div>
+            )}
           </div>
           {error && <p className="text-red-600 text-xs bg-red-50 rounded p-2">{error}</p>}
           <div className="flex gap-3">

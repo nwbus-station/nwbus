@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useCallback } from 'react'
+import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -11,7 +11,7 @@ import PrintAccessModal from '../components/sales/PrintAccessModal'
 import { useAppSettings } from '../context/AppSettingsContext'
 import { PRINT_ACCESS_KEY, parseAccess, accountState } from '../utils/printAccess'
 import { todayStr, toLocalDateStr } from '../utils/dates'
-import { parseShifts, SHIFT_SETTING_KEY } from '../utils/shifts'
+import { parseShifts, validEnds, SHIFT_SETTING_KEY } from '../utils/shifts'
 import { DAY_CUTOFF_KEY, parseCutoff, fmtCutoff, businessDate } from '../utils/businessDay'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -125,7 +125,7 @@ export function printSaleRecord({ sale, isAr, profile }) {
     const diff = totalActualVal - Number(sale?.total_expected??0)
     const hasDeficit = diff < 0
     const deficitAcknowledged = sale?.accountant_notes?.includes('تم إقرار العجز')
-    const shiftLabel = { A: isAr ? 'الوردية أ' : 'Shift A', B: isAr ? 'الوردية ب' : 'Shift B', C: isAr ? 'الوردية ج' : 'Shift C' }[sale?.shift] ?? sale?.shift ?? '—'
+    const shiftLabel = { A: isAr ? 'الوردية أ' : 'Shift A', B: isAr ? 'الوردية ب' : 'Shift B', C: isAr ? 'الوردية ج' : 'Shift C', D: isAr ? 'الوردية د' : 'Shift D' }[sale?.shift] ?? sale?.shift ?? '—'
 
     const shareText = [
       `${isAr ? 'كشف الإيرادات اليومية' : 'Daily Revenue Report'} — ${stationName}`,
@@ -342,7 +342,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
 
   // الوردية المتوقعة تُحسب مرة واحدة عند فتح السجل الجديد
   const cutoffMin = parseCutoff(settings?.[DAY_CUTOFF_KEY])
-  const [suggested] = useState(() => suggestShift(new Date(), cutoffMin))
+  const [initialSuggest] = useState(() => suggestShift(new Date(), cutoffMin))
   const [shiftConfirmed, setShiftConfirmed] = useState(false)
 
   const parseInitialRefs = raw => {
@@ -351,8 +351,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   }
 
   const [form, setForm] = useState({
-    sale_date:         sale?.sale_date ?? suggested.date,
-    shift:             sale?.shift ?? suggested.shift,
+    sale_date:         sale?.sale_date ?? initialSuggest.date,
+    shift:             sale?.shift ?? initialSuggest.shift,
     station_id:        sale?.station_id ?? (multi ? '' : (profile.station_id ?? '')),
     employee_name:     sale?.employee_name      ?? profile?.full_name_ar          ?? '',
     cashier_ref:       sale ? (parseInitialRefs(sale.balance_ref)[0] ?? '') : savedCashier,
@@ -370,14 +370,31 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     deficit_acknowledged:  false,
   })
   const [saving, setSaving] = useState(false)
+  // ورديات المحطة المختارة (3 أو 4): من إعداد المحطة نفسها، وإلا الافتراضي العام من الإعدادات
+  const curStationId = (isGeneralAdmin || multi) ? form.station_id : profile.station_id
+  const [stEnds, setStEnds] = useState({})
+  useEffect(() => {
+    if (!curStationId || stEnds[curStationId] !== undefined) return
+    supabase.from('stations').select('shift_ends').eq('id', curStationId).maybeSingle()
+      .then(({ data, error }) => setStEnds(m => ({ ...m, [curStationId]: !error && Array.isArray(data?.shift_ends) && validEnds(data.shift_ends) ? data.shift_ends : null })))
+  }, [curStationId])
+  const stationEnds = stEnds[curStationId] ?? null
+  SHIFTS = salesShiftsFrom(stationEnds ? JSON.stringify({ ends: stationEnds }) : settings?.[SHIFT_SETTING_KEY])
+  const shiftsKey = SHIFTS.map(sh => sh.value + sh.end).join()
+  const suggested = useMemo(() => suggestShift(new Date(), cutoffMin), [shiftsKey, cutoffMin])
+  const shiftTouched = useRef(false)
+  useEffect(() => {
+    if (sale) return
+    setForm(f => (shiftTouched.current && SHIFTS.some(sh => sh.value === f.shift) ? f : { ...f, shift: suggested.shift }))
+  }, [shiftsKey, suggested.shift])
   const [error,  setError]  = useState('')
   const [totalMissing, setTotalMissing] = useState(false)
   // الحقول التي تعتبر تغييراً حقيقياً للبيانات (لا تشمل is_confirmed والملاحظات فقط)
   const DATA_FIELDS = ['sale_date','shift','station_id','employee_name','cashier_ref','balance_refs','cash_amount','mada_amount','mada_network_ref','visa_amount','mastercard_amount','other_amount','other_type','total_sales']
-  const set = (k, v) => setForm(f => ({
+  const set = (k, v) => { if (k === 'shift') shiftTouched.current = true; setForm(f => ({
     ...f, [k]: v,
     ...(DATA_FIELDS.includes(k) && sale ? { _dataChanged: true } : {}),
-  }))
+  })) }
 
   const totalActual = Math.round(Number(form.cash_amount)) + Math.round(Number(form.mada_amount)) +
     Math.round(Number(form.visa_amount)) + Math.round(Number(form.mastercard_amount)) + Math.round(Number(form.other_amount))
@@ -962,7 +979,7 @@ export default function SalesPage() {
     const sName = r => (isAr ? (r.station?.name_ar || r.station?.name_en) : (r.station?.name_en || r.station?.name_ar)) || '—'
     const oth = r => Number(r.visa_amount ?? 0) + Number(r.mastercard_amount ?? 0) + Number(r.other_amount ?? 0)
     const sum = (list, f) => list.reduce((a, r) => a + Number(f(r) ?? 0), 0)
-    const shiftLbl = v => SHIFTS.find(x => x.value === v)?.ar ?? v
+    const shiftLbl = v => SHIFTS.find(x => x.value === v)?.ar ?? ({ A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج', D: 'الوردية د' }[v] ?? v)
     const sgn = n => (n > 0 ? '+' : '') + fmt(n)
     const stIds = [...new Set(records.map(r => r.station_id))]
     const groups = stIds.map(id => ({ name: sName(records.find(r => r.station_id === id)), list: records.filter(r => r.station_id === id).sort((a, b) => String(a.shift).localeCompare(String(b.shift))) }))
