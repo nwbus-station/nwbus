@@ -361,6 +361,82 @@ function MoveTableComp({ list, color, label, isAr, storageKey }) {
   )
 }
 
+// قائمة اختيار محطات الطباعة المتعددة: بحث، اختصارات (الكل / لا شيء / التي فيها موظفون نشطون)، عدد الموظفين لكل محطة، وزر الطباعة بالأعلى
+function StationPrintPicker({ isAr, label, accent, list, staff, selected, setSelected, open, setOpen, onPrint }) {
+  const [q, setQ] = useState('')
+  const ids = list.map(s => s.id)
+  const eff = selected.length === 0 ? ids : selected[0] === '__none__' ? [] : selected.filter(id => ids.includes(id))
+  const set = arr => setSelected(arr.length === 0 ? ['__none__'] : arr)
+  const toggle = id => set(eff.includes(id) ? eff.filter(x => x !== id) : [...eff, id])
+  const withStaff = list.filter(s => (staff[s.id] || 0) > 0)
+  const term = q.trim().toLowerCase()
+  const shown = list
+    .filter(s => !term || (s.name_ar || '').toLowerCase().includes(term) || (s.name_en || '').toLowerCase().includes(term))
+    .sort((a, b) => ((staff[b.id] || 0) > 0) - ((staff[a.id] || 0) > 0) || (a.name_ar || a.name_en || '').localeCompare(b.name_ar || b.name_en || '', isAr ? 'ar' : 'en'))
+  const c = accent === 'indigo' ? { bg: 'bg-indigo-700', soft: 'bg-indigo-50 text-indigo-700 border-indigo-200', acc: 'accent-indigo-700' } : { bg: 'bg-teal-700', soft: 'bg-teal-50 text-teal-700 border-teal-200', acc: 'accent-teal-700' }
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open}
+        className={`${c.bg} text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 flex items-center gap-2`}>
+        {label}
+        <span className="text-xs opacity-80 font-mono">({eff.length}/{list.length})</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="fixed inset-x-3 top-24 z-50 sm:absolute sm:inset-x-auto sm:top-full sm:mt-2 sm:start-0 sm:w-[380px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
+            {/* الرأس: العنوان + زر الطباعة */}
+            <div className="p-3 border-b border-gray-100 flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold text-gray-900 truncate">{label}</p>
+                <p className="text-[11px] text-gray-500">{isAr ? `${eff.length} من ${list.length} محطة محددة` : `${eff.length} of ${list.length} selected`}</p>
+              </div>
+              <button type="button" disabled={eff.length === 0} onClick={() => { setOpen(false); onPrint(eff) }}
+                className={`${c.bg} text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-40 shrink-0`}>
+                {isAr ? `طباعة (${eff.length})` : `Print (${eff.length})`}
+              </button>
+            </div>
+            {/* بحث + اختصارات */}
+            <div className="p-3 pb-2 space-y-2">
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder={isAr ? 'ابحث عن محطة…' : 'Search stations…'}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary/30 focus:outline-none" />
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  [isAr ? 'الكل' : 'All', () => set(ids)],
+                  [isAr ? 'لا شيء' : 'None', () => set([])],
+                  [isAr ? `فيها موظفون نشطون (${withStaff.length})` : `With active staff (${withStaff.length})`, () => set(withStaff.map(s => s.id))],
+                ].map(([l, fn]) => (
+                  <button key={l} type="button" onClick={fn} className={`text-[11px] font-bold border rounded-full px-3 py-1 ${c.soft} hover:opacity-80`}>{l}</button>
+                ))}
+              </div>
+            </div>
+            {/* القائمة */}
+            <div className="max-h-[320px] overflow-y-auto border-t border-gray-100">
+              {shown.length === 0 && <p className="text-center text-xs text-gray-400 py-6">{isAr ? 'لا توجد محطات مطابقة' : 'No matching stations'}</p>}
+              {shown.map(s => {
+                const n = staff[s.id] || 0
+                const on = eff.includes(s.id)
+                return (
+                  <label key={s.id} className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-gray-50 ${on ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
+                    <input type="checkbox" className={`${c.acc} w-4 h-4 shrink-0`} checked={on} onChange={() => toggle(s.id)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-gray-900 truncate">{isAr ? (s.name_ar || s.name_en) : (s.name_en || s.name_ar)}</span>
+                      {isAr && s.name_en && s.name_ar && <span className="block text-[11px] text-gray-400 truncate" dir="ltr" style={{ textAlign: 'right' }}>{s.name_en}</span>}
+                    </span>
+                    <span className={`shrink-0 text-[11px] font-bold rounded-full px-2.5 py-0.5 border ${n > 0 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                      {n > 0 ? (isAr ? `${n} موظف` : `${n} staff`) : (isAr ? 'بلا موظفين' : 'No staff')}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function ReportsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -408,6 +484,12 @@ export default function ReportsPage() {
     _setPrintAgentIds(next)
   }
   const [showAgentPicker, setShowAgentPicker] = useState(false)
+  // عدد الموظفين النشطين لكل محطة (لقوائم الطباعة المتعددة)
+  const [staffByStation, setStaffByStation] = useState({})
+  useEffect(() => {
+    supabase.from('users').select('station_id').eq('is_active', true).not('station_id', 'is', null).limit(5000)
+      .then(({ data }) => { const m = {}; for (const u of data ?? []) m[u.station_id] = (m[u.station_id] || 0) + 1; setStaffByStation(m) })
+  }, [])
   const [showUnenteredWarn, setShowUnenteredWarn] = useState(false)
 
   // سجل النشاط — الأدمن دائماً، وأي دور/مسمى ثاني فعّل له الأدمن الصلاحية
@@ -487,13 +569,13 @@ export default function ReportsPage() {
   // جلب المحطات: الكل للأدمن، محطاته لمشرف المنطقة، والمعيّنة للمشرف/المحاسب
   useEffect(() => {
     if (seesAll) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group').eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, is_agent').eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     } else if (scopedIds) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group').in('id', scopedIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, is_agent').in('id', scopedIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     } else if (isAreaSupervisor && allowedStationIds?.length) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, is_agent').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
     } else if ((isStationAdmin || isAccountant) && profile?.id) {
       supabase.from('user_stations').select('station:station_id(id, name_ar, name_en)').eq('user_id', profile.id)
@@ -1447,104 +1529,15 @@ export default function ReportsPage() {
           <div className="rp-actions col-span-2 lg:col-span-4 flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
             <span className="rp-label me-1">{isAr ? 'طباعة متعددة' : 'Bulk print'}</span>
           <div className="flex flex-wrap gap-2 items-start">
-          <div className="flex flex-col gap-1 relative">
-            <button onClick={() => setShowStationPicker(v => !v)}
-              className="bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 flex items-center gap-2">
-              {isAr ? 'طباعة تقرير المحطات' : 'Print Stations Report'}
-              <span className="text-xs opacity-70">
-                {printStationIds[0] === '__none__' ? (isAr ? '(لا شيء)' : '(None)') : printStationIds.length ? `(${printStationIds.length})` : isAr ? '(الكل)' : '(All)'}
-              </span>
-            </button>
-            {showStationPicker && (
-              <div className="absolute z-50 top-full mt-2 end-0 w-[min(92vw,300px)] bg-white rounded-xl shadow-xl border p-3 max-h-72 overflow-y-auto">
-                <div className="flex items-center justify-between mb-2 border-b pb-2">
-                  <span className="text-xs font-bold text-gray-600">{isAr ? 'اختر المحطات للطباعة' : 'Select stations to print'}</span>
-                  <div className="flex gap-1.5">
-                    <button onClick={() => setPrintStationIds([])} title={isAr ? 'تحديد الكل' : 'Select All'} className="w-6 h-6 flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 rounded-md hover:bg-teal-100 transition-colors">
-                      ✓
-                    </button>
-                    <button onClick={() => setPrintStationIds(['__none__'])} title={isAr ? 'إلغاء الكل' : 'Deselect All'} className="w-6 h-6 flex items-center justify-center bg-red-50 text-red-500 border border-red-200 rounded-md hover:bg-red-100 transition-colors">
-                      ✕
-                    </button>
-                  </div>
-                </div>
-                {stations.map(s => (
-                  <label key={s.id} className="flex items-center gap-2 py-1 px-1 rounded hover:bg-gray-50 cursor-pointer text-sm">
-                    <input type="checkbox" className="accent-teal-700"
-                      checked={printStationIds.length === 0 || printStationIds.includes(s.id)}
-                      onChange={() => {
-                        if (printStationIds.length === 0) {
-                          // كل محطات محددة — اضغط يلغي هذه المحطة
-                          setPrintStationIds(stations.map(x => x.id).filter(id => id !== s.id))
-                        } else if (printStationIds[0] === '__none__') {
-                          // لا شيء محدد — اضغط يحدد هذه فقط
-                          setPrintStationIds([s.id])
-                        } else {
-                          setPrintStationIds(prev => prev.includes(s.id) ? prev.filter(x => x !== s.id) : [...prev, s.id])
-                        }
-                      }} />
-                    <span>{isAr ? s.name_ar : s.name_en}</span>
-                  </label>
-                ))}
-                <div className="border-t mt-2 pt-2">
-                  <button onClick={() => { printStationsReport(); setShowStationPicker(false) }}
-                    className="w-full bg-teal-700 text-white py-1.5 rounded-lg text-sm font-semibold hover:opacity-90">
-                    {isAr ? 'طباعة الآن' : 'Print Now'}
-                  </button>
-                </div>
-              </div>
-            )}
+            <StationPrintPicker isAr={isAr} label={isAr ? 'طباعة تقرير المحطات' : 'Print Stations Report'} accent="teal"
+              list={stations} staff={staffByStation} selected={printStationIds} setSelected={setPrintStationIds}
+              open={showStationPicker} setOpen={v => { setShowStationPicker(v); if (v) setShowAgentPicker(false) }}
+              onPrint={ids => printStationsReport(ids)} />
+            <StationPrintPicker isAr={isAr} label={isAr ? 'تقرير محطات الوكلاء' : 'Agent Stations Report'} accent="indigo"
+              list={stations.some(s => s.is_agent) ? stations.filter(s => s.is_agent) : stations} staff={staffByStation} selected={printAgentIds} setSelected={setPrintAgentIds}
+              open={showAgentPicker} setOpen={v => { setShowAgentPicker(v); if (v) setShowStationPicker(false) }}
+              onPrint={ids => printStationsReport(ids)} />
           </div>
-
-          {/* محطات الوكلاء */}
-          <div className="flex flex-col gap-1 relative">
-            <button onClick={() => setShowAgentPicker(v => !v)}
-              className="bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 flex items-center gap-2">
-              {isAr ? 'تقرير محطات الوكلاء' : 'Agent Stations Report'}
-              <span className="text-xs opacity-70">
-                {printAgentIds[0] === '__none__' ? (isAr ? '(لا شيء)' : '(None)') : printAgentIds.length ? `(${printAgentIds.length})` : isAr ? '(الكل)' : '(All)'}
-              </span>
-            </button>
-            {showAgentPicker && (
-              <div className="absolute z-50 top-full mt-2 end-0 w-[min(92vw,300px)] bg-white rounded-xl shadow-xl border p-3 max-h-72 overflow-y-auto">
-                <div className="flex items-center justify-between mb-2 border-b pb-2">
-                  <span className="text-xs font-bold text-gray-600">{isAr ? 'محطات الوكلاء' : 'Agent Stations'}</span>
-                  <div className="flex gap-1.5">
-                    <button onClick={() => setPrintAgentIds([])} title={isAr ? 'تحديد الكل' : 'Select All'} className="w-6 h-6 flex items-center justify-center bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors">
-                      ✓
-                    </button>
-                    <button onClick={() => setPrintAgentIds(['__none__'])} title={isAr ? 'إلغاء الكل' : 'Deselect All'} className="w-6 h-6 flex items-center justify-center bg-red-50 text-red-500 border border-red-200 rounded-md hover:bg-red-100 transition-colors">
-                      ✕
-                    </button>
-                  </div>
-                </div>
-                {stations.map(s => (
-                  <label key={s.id} className="flex items-center gap-2 py-1 px-1 rounded hover:bg-gray-50 cursor-pointer text-sm">
-                    <input type="checkbox" className="accent-indigo-700"
-                      checked={printAgentIds.length === 0 || printAgentIds.includes(s.id)}
-                      onChange={() => {
-                        if (printAgentIds.length === 0) {
-                          setPrintAgentIds(stations.map(x => x.id).filter(id => id !== s.id))
-                        } else if (printAgentIds[0] === '__none__') {
-                          setPrintAgentIds([s.id])
-                        } else {
-                          setPrintAgentIds(prev => prev.includes(s.id) ? prev.filter(x => x !== s.id) : [...prev, s.id])
-                        }
-                      }} />
-                    <span>{isAr ? s.name_ar : s.name_en}</span>
-                  </label>
-                ))}
-                <div className="border-t mt-2 pt-2">
-                  <button onClick={() => { printStationsReport(printAgentIds); setShowAgentPicker(false) }}
-                    className="w-full bg-indigo-700 text-white py-1.5 rounded-lg text-sm font-semibold hover:opacity-90">
-                    {isAr ? 'طباعة الآن' : 'Print Now'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          </div>
-        
           </div>
         )}
       </div>
