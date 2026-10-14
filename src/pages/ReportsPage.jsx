@@ -1069,14 +1069,17 @@ export default function ReportsPage() {
       return Math.round(onTime / withSched.length * 100)
     }
     const rateColor = r => r >= 80 ? '#16a34a' : r >= 60 ? '#d97706' : '#dc2626'
+    const rateWord = r => r === null ? (isAr ? 'لا بيانات' : 'No data') : r >= 80 ? (isAr ? 'ممتاز' : 'Excellent') : r >= 60 ? (isAr ? 'مقبول' : 'Fair') : (isAr ? 'يحتاج تحسين' : 'Needs work')
     const rateCard = (title, rate, sub) => `
-      <div style="flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;background:#fff">
-        <div style="display:flex;align-items:baseline;justify-content:space-between">
-          <span style="font-size:13px;font-weight:800;color:#334155">${title}</span>
-          <span style="font-size:30px;font-weight:900;line-height:1;color:${rate === null ? '#cbd5e1' : rateColor(rate)}">${rate === null ? '—' : rate + '%'}</span>
+      <div style="flex:1;display:flex;align-items:center;gap:16px;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;background:#fff">
+        <div class="ring" style="flex:none;width:96px;height:96px;border-radius:50%;--p:${rate ?? 0}%;background:conic-gradient(${rate === null ? '#cbd5e1' : rateColor(rate)} var(--p),#e2e8f0 0);display:grid;place-items:center">
+          <div style="width:72px;height:72px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:22px;font-weight:900;color:#0f172a">${rate === null ? '—' : rate + '%'}</div>
         </div>
-        <div style="height:9px;border-radius:999px;background:#e2e8f0;margin-top:9px;overflow:hidden"><div class="rate-fill" style="height:100%;width:${rate ?? 0}%;background:${rate === null ? '#cbd5e1' : rateColor(rate)};border-radius:999px"></div></div>
-        <div style="font-size:11px;color:#64748b;margin-top:6px">${sub}</div>
+        <div style="min-width:0">
+          <div style="font-size:14px;font-weight:800;color:#334155">${title}</div>
+          <div style="display:inline-block;margin-top:6px;border:1.5px solid ${rate === null ? '#cbd5e1' : rateColor(rate)};color:${rate === null ? '#94a3b8' : rateColor(rate)};border-radius:999px;padding:2px 12px;font-size:12px;font-weight:800">${rateWord(rate)}</div>
+          <div style="font-size:11.5px;color:#64748b;margin-top:7px">${sub}</div>
+        </div>
       </div>`
 
     const pages = targetStations.map((stn, idx) => {
@@ -1100,33 +1103,54 @@ export default function ReportsPage() {
       ].map(d => ({ ...d, n: cnt(d.k) })).filter(d => d.n > 0)
       const total = Math.max(1, stMoves.length)
 
+      const enteredN = stMoves.filter(m => !m.unentered).length
+      const followUp = cnt('delayed') + cnt('noton')
+      const completion = stMoves.length ? Math.round(enteredN / stMoves.length * 100) : null
+      const I = {
+        dep: '<path d="M7 17L17 7M8 7h9v9"/>',
+        arr: '<path d="M17 7L7 17M16 17H7V8"/>',
+        users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+        userx: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M17 8l5 5M22 8l-5 5"/>',
+        warn: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
+        check: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 14l2 2 4-4"/>',
+      }
       const kpis = [
-        { val: deps.length, lbl: isAr ? 'رحلات المغادرة' : 'Departures', accent: '#0ea5e9' },
-        { val: arrs.length, lbl: isAr ? 'رحلات الوصول' : 'Arrivals', accent: '#10b981' },
-        { val: depPax, lbl: isAr ? 'ركاب المغادرة' : 'Dep. passengers', accent: '#6366f1' },
-        { val: arrPax, lbl: isAr ? 'ركاب الوصول' : 'Arr. passengers', accent: '#06b6d4' },
-        { val: missed, lbl: isAr ? 'المتخلفون' : 'Missed', accent: '#ef4444' },
+        { val: deps.length, lbl: isAr ? 'رحلات المغادرة' : 'Departures', sub: isAr ? 'رحلة' : 'trips', accent: '#0ea5e9', icon: I.dep },
+        { val: arrs.length, lbl: isAr ? 'رحلات الوصول' : 'Arrivals', sub: isAr ? 'رحلة' : 'trips', accent: '#10b981', icon: I.arr },
+        { val: depPax, lbl: isAr ? 'ركاب المغادرة' : 'Departing pax', sub: isAr ? 'راكب' : 'passengers', accent: '#6366f1', icon: I.users },
+        { val: arrPax, lbl: isAr ? 'ركاب الوصول' : 'Arriving pax', sub: isAr ? 'راكب' : 'passengers', accent: '#0891b2', icon: I.users },
+        { val: missed, lbl: isAr ? 'المتخلفون' : 'Missed', sub: isAr ? 'راكب' : 'passengers', accent: '#ef4444', icon: I.userx },
+        { val: followUp, lbl: isAr ? 'تحتاج متابعة' : 'Need follow-up', sub: isAr ? 'متأخرة أو غير منتظمة' : 'delayed / irregular', accent: '#f97316', icon: I.warn },
+        { val: completion === null ? '—' : completion + '%', lbl: isAr ? 'اكتمال الإدخال' : 'Data entered', sub: isAr ? `${enteredN} من ${stMoves.length} رحلة` : `${enteredN} of ${stMoves.length}`, accent: '#8b5cf6', icon: I.check },
       ]
       const kpiBar = `
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:4px">
-          ${kpis.map(k => `<div style="border:1px solid #e2e8f0;border-top:4px solid ${k.accent};border-radius:10px;padding:10px 6px 9px;text-align:center;background:#fff">
-            <div style="font-size:26px;font-weight:900;color:#0f172a;line-height:1.05">${k.val}</div>
-            <div style="font-size:11px;font-weight:700;color:#64748b;margin-top:5px">${k.lbl}</div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:9px;margin-top:4px">
+          ${kpis.map(k => `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:11px 12px 10px;background:#fff;border-top:4px solid ${k.accent}">
+            <div style="display:flex;align-items:center;gap:7px">
+              <span class="kpi-chip" style="flex:none;width:28px;height:28px;border-radius:50%;background:${k.accent}22;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="${k.accent}" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">${k.icon}</svg></span>
+              <span style="font-size:11.5px;font-weight:800;color:#475569;line-height:1.25">${k.lbl}</span>
+            </div>
+            <div style="font-size:30px;font-weight:900;color:#0f172a;line-height:1;margin-top:9px">${k.val}</div>
+            <div style="font-size:10.5px;font-weight:600;color:#94a3b8;margin-top:4px">${k.sub}</div>
           </div>`).join('')}
         </div>`
 
       const perf = `
-        <div style="display:flex;gap:10px;margin-top:10px">
+        <div style="display:flex;gap:10px;margin-top:10px;align-items:stretch">
           ${rateCard(isAr ? 'الالتزام بالمغادرة' : 'Departure punctuality', depRate, isAr ? `${deps.length} رحلة مغادرة` : `${deps.length} departures`)}
           ${rateCard(isAr ? 'الالتزام بالوصول' : 'Arrival punctuality', arrRate, isAr ? `${arrs.length} رحلة وصول` : `${arrs.length} arrivals`)}
-          <div style="flex:1.3;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;background:#fff">
-            <div style="font-size:13px;font-weight:800;color:#334155;margin-bottom:9px">${isAr ? 'توزيع حالات الرحلات' : 'Trip status breakdown'}</div>
-            <div style="display:flex;height:13px;border-radius:999px;overflow:hidden;background:#e2e8f0">
-              ${dist.map(d => `<div class="seg-${d.k}" style="width:${(d.n / total) * 100}%;background:${d.c};color:#fff;font-size:10px;font-weight:800;text-align:center;line-height:13px">${d.n}</div>`).join('')}
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:9px">
-              ${dist.map(d => `<span style="font-size:11.5px;font-weight:700;color:#334155"><span class="seg-${d.k}" style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${d.c};margin-inline-end:5px;vertical-align:-2px;border:1px solid rgba(0,0,0,.25)"></span>${d.l} <b style="color:#0f172a">${d.n}</b></span>`).join('')}
-            </div>
+          <div style="flex:1.25;border:1px solid #e2e8f0;border-radius:12px;padding:12px 16px;background:#fff">
+            <div style="font-size:14px;font-weight:800;color:#334155;margin-bottom:8px">${isAr ? 'توزيع حالات الرحلات' : 'Trip status breakdown'}</div>
+            ${dist.map(d => {
+              const pct = Math.round((d.n / total) * 100)
+              return `<div style="display:flex;align-items:center;gap:8px;margin-top:5px">
+                <span class="seg-${d.k}" style="flex:none;width:11px;height:11px;border-radius:3px;background:${d.c};border:1px solid rgba(0,0,0,.25)"></span>
+                <span style="flex:none;width:78px;font-size:12px;font-weight:700;color:#334155">${d.l}</span>
+                <span class="track" style="flex:1;height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden"><span class="seg-${d.k}" style="display:block;height:100%;width:${Math.max(pct, 3)}%;background:${d.c};border-radius:999px"></span></span>
+                <span style="flex:none;width:22px;text-align:end;font-size:13px;font-weight:900;color:#0f172a">${d.n}</span>
+                <span style="flex:none;width:34px;text-align:end;font-size:10.5px;font-weight:700;color:#64748b">${pct}%</span>
+              </div>`
+            }).join('')}
           </div>
         </div>`
 
@@ -1164,6 +1188,10 @@ export default function ReportsPage() {
       body.bw .seg-unentered{background:repeating-linear-gradient(90deg,#555 0 2px,#e4e4e4 2px 5px)!important}
       body.bw .seg-none{background:#c4c4c4!important}
       body.bw .pill-dark{background:#fff!important;border:1.5px solid #000!important}
+      body.bw .ring{background:conic-gradient(#111 var(--p),#c2c2c2 0)!important}
+      body.bw .track{background:#cfcfcf!important;border:1px solid #777}
+      body.bw .kpi-chip{background:#fff!important;border:1.5px solid #000}
+      body.bw .kpi-chip svg{stroke:#000!important}
       body.bw .rate-fill{background:#111!important}
       body.bw td,body.bw th{border-color:#777!important}
       body.bw table{border-color:#000!important}`
