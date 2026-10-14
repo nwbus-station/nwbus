@@ -24,7 +24,7 @@ const SHIFTS = [
 ]
 
 // الوردية المتوقعة من الوقت الحالي: وقت الإقفال (قبل نهاية الوردية بساعة وحتى ساعة ونصف بعدها) يعني الوردية المنتهية،
-// وإلا فالوردية الجارية. بعد منتصف الليل مباشرة تكون ورديّة ج ليوم أمس.
+// وإلا فالوردية الجارية. بعد منتصف الليل وحتى 7 صباحاً (قبل إقفال الوردية أ) تكون ورديّة ج ليوم أمس، فتبقى ضمن يومها حتى لو أُدخلت متأخرة.
 function suggestShift(now = new Date()) {
   const h = now.getHours() + now.getMinutes() / 60
   const today = todayStr()
@@ -32,7 +32,7 @@ function suggestShift(now = new Date()) {
     if (h >= sh.end - 1 && h < sh.end + 1.5 && sh.end < 24) return { shift: sh.value, date: today, closing: true }
   }
   if (h >= 23) return { shift: 'C', date: today, closing: true }
-  if (h < 1.5) { const d = new Date(now); d.setDate(d.getDate() - 1); return { shift: 'C', date: toLocalDateStr(d), closing: true, yesterday: true } }
+  if (h < 7) { const d = new Date(now); d.setDate(d.getDate() - 1); return { shift: 'C', date: toLocalDateStr(d), closing: true, yesterday: true } }
   return { shift: h < 8 ? 'A' : h < 16 ? 'B' : 'C', date: today, closing: false }
 }
 
@@ -422,7 +422,12 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       })
     }
 
-    if (res.error) { setError(res.error.message) }
+    if (res.error) {
+      const dup = /duplicate key|unique constraint/i.test(res.error.message || '')
+      setError(dup
+        ? (isAr ? 'يوجد سجل لنفس المحطة والتاريخ والوردية من نفس الحساب. افتحه وعدّله من القائمة بدل إضافة سجل جديد، أو غيّر الوردية/التاريخ.' : 'A record already exists for this station, date and shift from this account. Edit it from the list, or change the shift/date.')
+        : res.error.message)
+    }
     else { localStorage.removeItem(DRAFT_KEY); onSaved(); onClose() }
     setSaving(false)
   }
