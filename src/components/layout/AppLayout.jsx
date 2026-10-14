@@ -401,16 +401,11 @@ function NavTab({ item, isAr }) {
   )
 }
 
-// شعار نورث وست باص: علامة NW + الاسم (عربي وإنجليزي) — يعمل بالوضعين
-function BrandMark({ isAr }) {
+// شعار نورث وست باص: علامة NW فقط
+function BrandMark() {
   return (
     <NavLink to="/" className="brand-mark" aria-label="North West Bus">
       <NWLogo height={26} />
-      <span className="brand-sep" />
-      <span className="brand-text">
-        <b>{isAr ? <><i>نورث</i> وست باص</> : <><i>North</i> West Bus</>}</b>
-        <small dir="ltr">NORTH WEST BUS</small>
-      </span>
     </NavLink>
   )
 }
@@ -713,7 +708,7 @@ export default function AppLayout() {
         </button>
 
         {/* الشعار */}
-        <BrandMark isAr={isAr} />
+        <BrandMark />
 
         <div style={{ flex: 1 }} />
 
