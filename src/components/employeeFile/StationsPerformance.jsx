@@ -9,6 +9,7 @@ import { isRestStation } from '../../utils/stations'
 import { shiftIdx, SHIFT_AR } from '../../utils/shifts'
 import { shiftsOfStation } from '../../utils/stationShifts'
 import { esc, docHeader, docShell, openDocWindow } from '../../utils/printDoc'
+import { usePresence } from '../../lib/presence'
 
 const MONO = 'ui-monospace, Menlo, Consolas, monospace'
 const NON_STAFF = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
@@ -19,6 +20,15 @@ const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDa
 const dateList = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) out.push(d); return out }
 const toMin = t => { const [h, m] = String(t || '0:0').slice(0, 5).split(':').map(Number); return (h || 0) * 60 + (m || 0) }
 const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null)
+// آخر دخول: اليوم/أمس مع الوقت، أو التاريخ — بتوقيت الرياض
+const fmtLogin = iso => {
+  if (!iso) return null
+  const d = new Date(iso), r = new Date(d.getTime() + 3 * 3600 * 1000)
+  const day = r.toISOString().slice(0, 10), t = r.toISOString().slice(11, 16)
+  const td = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10)
+  const yd = new Date(Date.now() + 3 * 3600 * 1000 - 86400000).toISOString().slice(0, 10)
+  return day === td ? `اليوم ${t}` : day === yd ? `أمس ${t}` : `${day.slice(5).replace('-', '/')} ${t}`
+}
 
 async function pageAll(make) {
   const out = []
@@ -52,6 +62,8 @@ export default function StationsPerformance({ isAr = true }) {
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const [showInfoOnly, setShowInfoOnly] = useState(false)
+  const [openStaff, setOpenStaff] = useState({})   // محطة → عرض أسماء موظفيها
+  const presence = usePresence()
 
   const load = useCallback(async () => {
     setLoading(true); setErr('')
@@ -60,7 +72,7 @@ export default function StationsPerformance({ isAr = true }) {
       const fT = `${from}T00:00:00+03:00`, tT = `${end}T23:59:59.999+03:00`
       const [stations, users, userStations, stationTrips, stops, records, sales, ratings, lost] = await Promise.all([
         pageAll(() => supabase.from('stations').select('id, name_ar, name_en, is_agent, shift_ends, city_group').eq('is_active', true).order('id')),
-        pageAll(() => supabase.from('users').select('id, full_name_ar, role, station_id, supervisor_id, is_active, can_rate_customers').eq('is_active', true).order('id')),
+        pageAll(() => supabase.from('users').select('id, full_name_ar, role, station_id, supervisor_id, is_active, can_rate_customers, last_login, job_title').eq('is_active', true).order('id')),
         pageAll(() => supabase.from('user_stations').select('user_id, station_id').order('user_id').order('station_id')),
         pageAll(() => supabase.from('station_trips').select(`trip_schedule_id, station_id, departure_time, arrival_time, dep_enabled, arr_enabled,
           trip:trip_schedule_id(trip_number, from_station_id, to_station_id, scheduled_departure, scheduled_arrival, is_active, is_rf, rf_date, days_of_week, start_date, end_date,
@@ -180,6 +192,13 @@ export default function StationsPerformance({ isAr = true }) {
       })
       const measured = byShift.filter(x => x.score != null)
       const weakest = measured.length ? measured.reduce((a, b) => (b.score < a.score ? b : a)) : null
+      const fromTs = new Date(`${from}T00:00:00+03:00`).getTime()
+      // الموظفون + المشرفون (مدير المحطة / مشرف المنطقة) — بدون المدير العام والإدارة العليا
+      const memberIds = new Set([...staff.map(u => u.id), ...(mgrBy[stn.id] ?? [])])
+      const staffRows = [...memberIds].map(id => userById[id]).filter(u => u && u.is_active !== false && !NON_STAFF.includes(u.role))
+        .map(u => ({ id: u.id, name: u.full_name_ar, isMgr: MANAGER_ROLES.includes(u.role), last: u.last_login || null, inPeriod: !!u.last_login && new Date(u.last_login).getTime() >= fromTs }))
+        .sort((a, b) => (Number(b.isMgr) - Number(a.isMgr)) || ((b.last ? new Date(b.last).getTime() : 0) - (a.last ? new Date(a.last).getTime() : 0)))
+      const loggedIn = staffRows.filter(x => x.inPeriod).length
       const mgrs = [...(mgrBy[stn.id] ?? [])].map(id => userById[id]?.full_name_ar).filter(Boolean)
       if (!mgrs.length) {
         const cnt = {}
@@ -197,7 +216,7 @@ export default function StationsPerformance({ isAr = true }) {
       if (rate === 0) bits.push('ولم تُقيَّم من العملاء')
       rows.push({
         id: stn.id, name: isAr ? stn.name_ar : (stn.name_en || stn.name_ar), nameEn: stn.name_en, agent: !!stn.is_agent,
-        staff: staff.length, managers: mgrs, expected: expected.length, entered: hit.length, tripsPct, salesApplicable, salesCovered, salesExpected, salesPct,
+        staff: staff.length, staffRows, loggedIn, managers: mgrs, expected: expected.length, entered: hit.length, tripsPct, salesApplicable, salesCovered, salesExpected, salesPct,
         rate, rateEnabled: !!rateEnabled[stn.id], lost: lostCnt[stn.id] || 0, score, verdict: v, sentence: bits.join('، '), byShift, weakest,
       })
     })
@@ -235,8 +254,8 @@ export default function StationsPerformance({ isAr = true }) {
           ${kpi(result.avgScore ?? '—', 'متوسط الأداء العام', '#1C2B4A')}${kpi(result.counts.bad + result.counts.stopped, 'مقصّرة / متوقفة', '#b91c1c')}${kpi(result.counts.watch, 'تحتاج متابعة', '#b45309')}${kpi(result.counts.top + result.counts.ok, 'منتظمة أو متميّزة', '#15803d')}${kpi(result.infoOnly.length, 'بلا موظفين (للعلم)', '#64748b')}
         </div></div>
         <div class="sec"><h3>جودة الإدخال حسب فترات اليوم (كل المحطات)</h3><table class="t"><thead><tr>${result.netShifts.map(s => `<th>${esc(s.ar)}</th>`).join('')}</tr></thead><tbody><tr>${result.netShifts.map(s => cell(s.score)).join('')}</tr></tbody></table></div>
-        <div class="sec"><h3>ترتيب المحطات (الأضعف أولاً)</h3><table class="t"><thead><tr><th>#</th><th>المحطة</th><th>المدير المعيّن</th><th>الموظفون</th><th>الدرجة</th><th>الحكم</th><th>الرحلات</th><th>الإيرادات</th>${shiftKeys.map(k => `<th>${esc(SHIFT_AR[k])}</th>`).join('')}<th>تقييم العملاء</th></tr></thead><tbody>
-          ${result.rows.map((r, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(r.name)}</b></td><td class="l">${esc(r.managers.join('، ') || '—')}</td><td>${r.staff}</td>${cell(r.score)}<td><span class="chip" style="background:${r.verdict.bg};color:${r.verdict.c}">${esc(r.verdict.ar)}</span></td>${cell(r.tripsPct)}${cell(r.salesPct)}${shiftKeys.map(k => cell(r.byShift.find(s => s.k === k)?.score ?? null)).join('')}<td>${r.rate || 'لم تُقيَّم'}</td></tr>`).join('')}
+        <div class="sec"><h3>ترتيب المحطات (الأضعف أولاً)</h3><table class="t"><thead><tr><th>#</th><th>المحطة</th><th>المدير المعيّن</th><th>الموظفون</th><th>دخلوا للحساب</th><th>الدرجة</th><th>الحكم</th><th>الرحلات</th><th>الإيرادات</th>${shiftKeys.map(k => `<th>${esc(SHIFT_AR[k])}</th>`).join('')}<th>تقييم العملاء</th></tr></thead><tbody>
+          ${result.rows.map((r, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(r.name)}</b></td><td class="l">${esc(r.managers.join('، ') || '—')}</td><td>${r.staff}</td><td>${r.loggedIn}/${r.staffRows.length}</td>${cell(r.score)}<td><span class="chip" style="background:${r.verdict.bg};color:${r.verdict.c}">${esc(r.verdict.ar)}</span></td>${cell(r.tripsPct)}${cell(r.salesPct)}${shiftKeys.map(k => cell(r.byShift.find(s => s.k === k)?.score ?? null)).join('')}<td>${r.rate || 'لم تُقيَّم'}</td></tr>`).join('')}
         </tbody></table></div>
         ${result.infoOnly.length ? `<div class="sec"><h3>للعلم فقط — محطات بلا موظفين نشطين (${result.infoOnly.length})</h3><p class="muted">لا تُحتسب في التقييم لعدم وجود موظفين نشطين عليها.</p><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${result.infoOnly.map(s => `<span class="chip" style="background:#f1f5f9;color:#334155">${esc(s.name)}${s.expected ? ` · ${s.expected} حركة مجدولة` : ''}</span>`).join('')}</div></div>` : ''}
         <ul class="notes"><li>الدرجة العامة: إدخال الرحلات ${W_TRIPS}% + تغطية الإيرادات للورديات ${W_SALES}% + تقييم العملاء ${W_RATING}%. التقييم بالإدخالات فقط، بدون مبالغ ولا أعداد ركاب.</li><li>الحكم: متميّزة (90+) · منتظمة (75–89) · تحتاج متابعة (50–74) · مقصّرة (أقل من 50) · متوقفة (لا إدخال إطلاقاً).</li></ul>
@@ -373,6 +392,28 @@ export default function StationsPerformance({ isAr = true }) {
                         <div style={{ marginTop: 3, fontFamily: MONO, fontWeight: 900, fontSize: '0.95rem', color: 'var(--text-1)' }}>{r.lost}</div></div>
                     </div>
                   </div>
+                  {/* موظفو المحطة ومتى دخلوا لحساباتهم */}
+                  <button type="button" onClick={() => setOpenStaff(o => ({ ...o, [r.id]: !o[r.id] }))}
+                    style={{ marginTop: 12, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? `الموظفون والمشرفون (${r.staffRows.length}) — دخل لحسابه خلال الفترة ${r.loggedIn} من ${r.staffRows.length}` : `Staff & supervisors (${r.staffRows.length}) — logged in during period: ${r.loggedIn}`}</span>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--text-3)' }}>{openStaff[r.id] ? '▲' : '▼'}</span>
+                  </button>
+                  {openStaff[r.id] && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 8, marginTop: 8 }}>
+                      {r.staffRows.map(x => {
+                        const live = presence[x.id]
+                        const [bg, fg] = x.inPeriod ? ['#dcfce7', '#15803d'] : x.last ? ['#fef3c7', '#b45309'] : ['#f3f4f6', '#6b7280']
+                        return (
+                          <div key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', minWidth: 0 }}>
+                            <i style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: live ? (live.active ? '#16a34a' : '#f59e0b') : '#d1d5db' }} title={live ? (live.active ? 'متصل الآن' : 'متصل · خامل') : 'غير متصل'} />
+                            <span style={{ flex: 1, minWidth: 0, fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.name}</span>
+                            {x.isMgr && <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{isAr ? 'مشرف' : 'Sup.'}</span>}
+                            <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, background: bg, color: fg, whiteSpace: 'nowrap', fontFamily: MONO }}>{live ? (isAr ? 'متصل الآن' : 'online') : (fmtLogin(x.last) || (isAr ? 'لم يدخل' : 'never'))}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                   {/* فترات اليوم للمحطة */}
                   <div style={{ display: 'grid', gridTemplateColumns: `repeat(${r.byShift.length}, minmax(0, 1fr))`, gap: 8, marginTop: 12 }}>
                     {r.byShift.map(s => {
