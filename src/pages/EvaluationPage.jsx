@@ -226,7 +226,7 @@ const ROLE_LABELS_EN = {
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
 const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
-function StationPicker({ stations, value, onChange, isAr }) {
+function StationPicker({ stations, value, onChange, isAr, counts }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const ref = useRef(null)
@@ -268,10 +268,11 @@ function StationPicker({ stations, value, onChange, isAr }) {
             )}
             {filtered.map(s => (
               <div key={s.id} onClick={() => { onChange(s.id); setOpen(false) }}
-                style={{ padding:'9px 14px', fontSize:'0.82rem', cursor:'pointer', fontWeight: value===s.id ? 700 : 400, background: value===s.id ? 'var(--surface)' : 'transparent', color:'var(--text-1)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}
+                style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 14px', fontSize:'0.82rem', cursor:'pointer', fontWeight: value===s.id ? 700 : 400, background: value===s.id ? 'var(--surface)' : 'transparent', color:'var(--text-1)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}
                 onMouseEnter={e => e.currentTarget.style.background='var(--surface)'}
                 onMouseLeave={e => e.currentTarget.style.background = value===s.id ? 'var(--surface)' : 'transparent'}>
-                {isAr ? s.name_ar : (s.name_en || s.name_ar)}
+                <span style={{ overflow:'hidden', textOverflow:'ellipsis' }}>{isAr ? s.name_ar : (s.name_en || s.name_ar)}</span>
+                {counts && <span style={{ marginInlineStart:'auto', fontSize:'0.68rem', fontWeight:800, color:'var(--text-2)', background:'var(--surface-2)', borderRadius:99, padding:'1px 9px', fontFamily:'monospace', flexShrink:0 }}>{counts[s.id] ?? 0}</span>}
               </div>
             ))}
           </div>
@@ -1058,6 +1059,16 @@ export default function EvaluationPage() {
     return () => { dead = true }
   }, [myEvalSource, employees, selMonth, selYear, empEvals])
 
+  // قائمة المحطات للتصفية: المحطات اللي فيها موظفون فقط (مع عدد الموظفين بكل محطة)
+  const stationEmpCounts = {}
+  for (const e of employees) if (e.station_id) stationEmpCounts[e.station_id] = (stationEmpCounts[e.station_id] || 0) + 1
+  const pickerStations = Object.keys(stationEmpCounts).map(id => {
+    const st = stations.find(x => x.id === id)
+    const em = employees.find(x => x.station_id === id)
+    const ar = st?.name_ar || em?.station?.name_ar || '—'
+    return { id, name_ar: ar, name_en: st?.name_en || em?.station?.name_en || ar }
+  }).sort((a, b) => (a.name_ar || '').localeCompare(b.name_ar || '', 'ar'))
+
   const filteredEmployees = employees
     .filter(e => !(isAssistantDirector && onlyMine) || e.supervisor_id === profile?.id || !!supervisedStationIds?.includes(e.station_id))
     .filter(e => filterStation === 'all' || e.station_id === filterStation)
@@ -1224,7 +1235,7 @@ export default function EvaluationPage() {
                 </div>
               )}
               {isAdmin && (
-                <StationPicker stations={stations} value={filterStation} onChange={setFilterStation} isAr={isAr} />
+                <StationPicker stations={pickerStations} counts={stationEmpCounts} value={filterStation} onChange={setFilterStation} isAr={isAr} />
               )}
             </div>
 
