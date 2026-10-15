@@ -43,12 +43,45 @@ async function pageAll(make) {
 
 // حكم الأداء (صيغة مميزة) حسب الدرجة
 const VERDICTS = [
-  { key: 'stopped', ar: 'متوقفة', c: '#7f1d1d', bg: '#fee2e2', line: 'لا إدخال إطلاقاً رغم وجود موظفين' },
-  { key: 'bad', ar: 'مقصّرة', c: '#b91c1c', bg: '#fee2e2', line: 'إدخالاتها ناقصة وتحتاج تدخلاً مباشراً' },
-  { key: 'watch', ar: 'تحتاج متابعة', c: '#b45309', bg: '#fef3c7', line: 'أداؤها متذبذب وفيه فجوات' },
-  { key: 'ok', ar: 'منتظمة', c: '#1d4ed8', bg: '#dbeafe', line: 'تسير على النسق المطلوب' },
-  { key: 'top', ar: 'متميّزة', c: '#15803d', bg: '#dcfce7', line: 'إدخالات كاملة وفي وقتها' },
+  { key: 'stopped', ar: 'بلا نشاط مسجَّل', c: '#7f1d1d', bg: '#fee2e2', line: 'لا أثر لأي إدخال رغم وجود موظفين' },
+  { key: 'bad', ar: 'تنبيه عاجل', c: '#b91c1c', bg: '#fee2e2', line: 'فجوة كبيرة بين المطلوب والمُنجَز' },
+  { key: 'watch', ar: 'تحت المجهر', c: '#b45309', bg: '#fef3c7', line: 'تذبذب في الإدخال وفجوات تتكرر' },
+  { key: 'ok', ar: 'مستقرة', c: '#1d4ed8', bg: '#dbeafe', line: 'إيقاع ثابت مع هوامش تحسين محدودة' },
+  { key: 'top', ar: 'في الصدارة', c: '#15803d', bg: '#dcfce7', line: 'التزام كامل وإدخالات تصل في وقتها' },
 ]
+// سرد الحالة: ما حدث، لماذا، وماذا نفعل (يُبنى من أرقام المحطة)
+function narrate(d) {
+  const { v, expected, hit, tripsPct, salesApplicable, salesCovered, salesExpected, salesPct, weakest, rate, rateOn, members, loggedIn, mgrName } = d
+  const who = mgrName ? `مع ${mgrName}` : 'مع إدارة المحطة'
+  if (v.key === 'stopped') {
+    return {
+      status: `لا أثر لأي إدخال خلال الفترة رغم ${expected} حركة مجدولة و${members} حساب نشط.`,
+      diag: [loggedIn === 0 ? 'لم يسجّل أي حساب في المحطة دخولاً خلال الفترة.' : `سجّل ${loggedIn} من ${members} دخولهم دون أن يُترجم ذلك إلى إدخال.`],
+      action: loggedIn === 0 ? `التوصية: التواصل ${who} اليوم للتأكد من تسلّم الموظفين لحساباتهم.` : `التوصية: بحث سبب التوقف ${who} وإعادة الإدخال خلال 24 ساعة.`,
+    }
+  }
+  const status = !expected
+    ? 'لا حركات مجدولة في الفترة، فالتقييم مبني على الإيرادات وآراء العملاء.'
+    : ({
+      top: `إيقاع مثالي: أُدخلت ${hit} من ${expected} حركة (${tripsPct}%).`,
+      ok: `إدخال مستقر: ${hit} من ${expected} حركة مُدخلة (${tripsPct}%).`,
+      watch: `إدخال غير مكتمل: ${hit} فقط من ${expected} حركة (${tripsPct}%).`,
+      bad: `فجوة واضحة: ${hit} حركة مُدخلة من أصل ${expected} (${tripsPct}%).`,
+    })[v.key]
+  const diag = []
+  if (salesApplicable) diag.push(salesPct < 90 ? `الإيرادات مغطّاة في ${salesCovered} من ${salesExpected} وردية فقط (${salesPct}%).` : `تغطية الإيرادات ${salesCovered} من ${salesExpected} وردية.`)
+  else diag.push('لا إيرادات مُدخلة في الفترة.')
+  if (weakest && weakest.score < 75) diag.push(`أضعف فترات اليوم: ${weakest.ar} (${weakest.score}%).`)
+  if (rate === 0) diag.push(rateOn ? 'لم تتلقَّ أي تقييم من العملاء رغم تفعيله.' : 'تقييم العملاء غير مفعّل لأي حساب في المحطة.')
+  if (loggedIn < members && v.key !== 'top') diag.push(`${members - loggedIn} من ${members} حسابات لم تدخل خلال الفترة.`)
+  const todo = []
+  if (tripsPct != null && tripsPct < 75) todo.push('إدخال الرحلات فور تنفيذها لا في نهاية الوردية')
+  if (!salesApplicable || salesPct < 75) todo.push('إقفال إيراد كل وردية قبل تسليمها')
+  if (rate === 0) todo.push(rateOn ? 'حثّ الموظفين على طلب تقييم العملاء' : 'تفعيل صلاحية تقييم العملاء لحساب المحطة')
+  const action = v.key === 'top' ? 'التوصية: المحافظة على المستوى الحالي.'
+    : todo.length ? `التوصية: ${todo.join('، و')}${mgrName ? ` — بمتابعة ${mgrName}` : ''}.` : 'التوصية: الاستمرار على النهج الحالي.'
+  return { status, diag, action }
+}
 const verdictOf = (score, stopped) => stopped ? VERDICTS[0] : score < 50 ? VERDICTS[1] : score < 75 ? VERDICTS[2] : score < 90 ? VERDICTS[3] : VERDICTS[4]
 const heat = p => (p == null ? ['#e5e7eb', '#6b7280'] : p >= 90 ? ['#16a34a', '#fff'] : p >= 75 ? ['#65a30d', '#fff'] : p >= 50 ? ['#f59e0b', '#1f1300'] : p >= 25 ? ['#f97316', '#fff'] : ['#dc2626', '#fff'])
 
@@ -161,7 +194,7 @@ export default function StationsPerformance({ isAr = true }) {
     stations.forEach(stn => {
       const staff = staffBy[stn.id] ?? []
       const expected = exp[stn.id] ?? []
-      if (staff.length === 0) { infoOnly.push({ id: stn.id, name: isAr ? stn.name_ar : (stn.name_en || stn.name_ar), expected: expected.length, agent: !!stn.is_agent }); return }
+      if (staff.length === 0) { const ea = expected.filter(e => e.key.endsWith('|a')).length; infoOnly.push({ id: stn.id, name: isAr ? stn.name_ar : (stn.name_en || stn.name_ar), expected: expected.length, arr: ea, dep: expected.length - ea, agent: !!stn.is_agent }); return }
       const shifts = shiftsOfStation(stn)
       const hit = expected.filter(e => entered.has(e.key))
       const tripsPct = pct(hit.length, expected.length)
@@ -207,17 +240,11 @@ export default function StationsPerformance({ isAr = true }) {
         if (top) mgrs.push(userById[top[0]].full_name_ar)
       }
       const v = verdictOf(score, stopped)
-      // جملة الحكم
-      const bits = []
-      if (expected.length) bits.push(`أُدخل ${tripsPct}% من رحلاتها (${hit.length} من ${expected.length})`)
-      else bits.push('لا رحلات مجدولة في الفترة')
-      bits.push(salesApplicable ? `وغُطّيت ${salesCovered} من ${salesExpected} وردية بالإيرادات` : 'ولا إيرادات مُدخلة')
-      if (weakest && weakest.score < 75) bits.push(`وأضعف فترة ${weakest.ar} (${weakest.score}%)`)
-      if (rate === 0) bits.push('ولم تُقيَّم من العملاء')
+      const story = narrate({ v, expected: expected.length, hit: hit.length, tripsPct, salesApplicable, salesCovered, salesExpected, salesPct, weakest, rate, rateOn: !!rateEnabled[stn.id], members: staffRows.length, loggedIn, mgrName: mgrs[0] })
       rows.push({
         id: stn.id, name: isAr ? stn.name_ar : (stn.name_en || stn.name_ar), nameEn: stn.name_en, agent: !!stn.is_agent,
         staff: staff.length, staffRows, loggedIn, managers: mgrs, expected: expected.length, entered: hit.length, tripsPct, salesApplicable, salesCovered, salesExpected, salesPct,
-        rate, rateEnabled: !!rateEnabled[stn.id], lost: lostCnt[stn.id] || 0, score, verdict: v, sentence: bits.join('، '), byShift, weakest,
+        rate, rateEnabled: !!rateEnabled[stn.id], lost: lostCnt[stn.id] || 0, score, verdict: v, story, byShift, weakest,
       })
     })
     rows.sort((a, b) => a.score - b.score || b.expected - a.expected)
@@ -243,24 +270,69 @@ export default function StationsPerformance({ isAr = true }) {
   // ── الطباعة ──
   function printReport() {
     if (!result) return
+    const R = result, n = R.rows.length
     const period = from === to ? from : `${from} → ${to}`
-    const kpi = (v, l, c) => `<div class="kpi" style="--c:${c}"><small>${esc(l)}</small><b>${esc(v)}</b></div>`
+    const periodH = `<span dir="ltr">${esc(period)}</span>`
+    const dayWord = R.days === 1 ? 'يوم واحد' : R.days === 2 ? 'يومان' : `${R.days} ${R.days > 10 ? 'يوماً' : 'أيام'}`
+    const kpi = (v, l, c, em = '') => `<div class="kpi" style="--c:${c}"><small>${esc(l)}</small><b>${esc(v)}</b>${em ? `<em>${esc(em)}</em>` : ''}</div>`
     const cell = p => { const [bg, fg] = heat(p); return `<td style="background:${bg};color:${fg};font-weight:800">${p == null ? '—' : p + '%'}</td>` }
-    const shiftKeys = ['A', 'B', 'C', 'D'].filter(k => result.netShifts.some(s => s.k === k))
+    const chip = v => `<span class="chip" style="background:${v.bg};color:${v.c};white-space:nowrap">${esc(v.ar)}</span>`
+    const shiftKeys = ['A', 'B', 'C', 'D'].filter(k => R.netShifts.some(s => s.k === k))
+    const strong = R.counts.top + R.counts.ok, weak = R.counts.bad + R.counts.stopped
+    const byScore = R.netShifts.filter(s => s.score != null).sort((a, b) => b.score - a.score)
+    const bestS = byScore[0], worstS = byScore[byScore.length - 1]
+    const para = `خلال الفترة <b>${periodH}</b> (${dayWord}) حُلِّل أداء <b>${n}</b> محطة لديها موظفون نشطون، وبلغ متوسط الأداء العام <b>${R.avgScore ?? '—'}%</b>. `
+      + `<b>${strong}</b> محطة تسير على النسق المطلوب أو تتقدّم عليه، و<b>${R.counts.watch}</b> تحت المجهر، و<b>${weak}</b> تستدعي تدخلاً عاجلاً${R.counts.stopped ? ` منها ${R.counts.stopped} بلا أي نشاط مسجَّل` : ''}. `
+      + (bestS && worstS && bestS.k !== worstS.k ? `أقوى فترات اليوم <b>${esc(bestS.ar)}</b> (${bestS.score}%) وأضعفها <b>${esc(worstS.ar)}</b> (${worstS.score}%). ` : '')
+      + `${R.notRated.length ? `وبقيت <b>${R.notRated.length}</b> محطة دون أي تقييم من العملاء. ` : ''}${R.infoOnly.length ? `وترد <b>${R.infoOnly.length}</b> محطة بلا موظفين نشطين للعلم فقط في آخر التقرير.` : ''}`
+    const order = ['top', 'ok', 'watch', 'bad', 'stopped'].map(k => VERDICTS.find(v => v.key === k))
+    const stack = order.map(v => R.counts[v.key] ? `<i style="width:${(R.counts[v.key] / n) * 100}%;background:${v.c}"></i>` : '').join('')
+    const legend = order.filter(v => R.counts[v.key]).map(v => `<span class="chip" style="background:${v.bg};color:${v.c}">${esc(v.ar)} · ${R.counts[v.key]}</span>`).join(' ')
+    const mini = list => `<table class="t"><thead><tr><th>#</th><th>المحطة</th><th>المدير</th><th>الدرجة</th></tr></thead><tbody>${list.map((r, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(r.name)}</b></td><td class="l">${esc(r.managers[0] || '—')}</td>${cell(r.score)}</tr>`).join('')}</tbody></table>`
+    const best = [...R.rows].reverse().filter(r => r.score >= 75).slice(0, 5)
+    const worst = R.rows.filter(r => r.score < 75).slice(0, 5)
+    const crit = R.rows.filter(r => r.verdict.key === 'bad' || r.verdict.key === 'stopped')
+    const critCap = crit.slice(0, 15)
+    const file = r => `<div class="ins" style="border-right:4px solid ${r.verdict.c};background:#fff;margin-bottom:6px;break-inside:avoid">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:13.5px;color:#0f172a">${esc(r.name)}</b><span>${chip(r.verdict)} <b style="font-family:ui-monospace,Menlo,monospace;direction:ltr;display:inline-block;margin-right:6px">${r.score}%</b></span></div>
+        <div class="muted" style="margin:2px 0 4px">المدير: ${esc(r.managers.slice(0, 2).join('، ') || 'غير معيّن')} · الحسابات: دخل ${r.loggedIn} من ${r.staffRows.length}</div>
+        <p style="margin:0;font-size:12.3px;line-height:1.85;color:#1e293b">${esc(r.story.status)} ${esc(r.story.diag.join(' '))}</p>
+        <p style="margin:3px 0 0;font-size:12.3px;font-weight:800;color:#264673">${esc(r.story.action)}</p></div>`
+    const withMv = R.infoOnly.filter(x => x.expected > 0), noMv = R.infoOnly.filter(x => !x.expected)
+    const totA = withMv.reduce((a, x) => a + x.arr, 0), totD = withMv.reduce((a, x) => a + x.dep, 0)
+    const half = Math.ceil(withMv.length / 2)
+    const sc = x => x ? `<td class="l">${esc(x.name)}${x.agent ? ' <span class="muted">(وكيل)</span>' : ''}</td><td>${x.arr}</td><td>${x.dep}</td>` : '<td></td><td></td><td></td>'
+    const pairRows = Array.from({ length: half }, (_, i) => `<tr>${sc(withMv[i])}${sc(withMv[i + half])}</tr>`).join('')
+    const unstaffed = R.infoOnly.length ? `<div class="sec" style="break-inside:auto"><h3>محطات بلا موظفين نشطين — للعلم فقط (${R.infoOnly.length})</h3>
+        <p class="muted" style="margin:0 0 6px">لا تدخل هذه المحطات في التقييم لعدم وجود حساب نشط عليها.${withMv.length ? ` الأرقام أدناه هي الحركات المجدولة عليها بلا من يُدخلها: وصول <b>${totA}</b> · مغادرة <b>${totD}</b>.` : ''}</p>
+        ${withMv.length ? `<table class="t"><thead><tr><th>المحطة</th><th>وصول</th><th>مغادرة</th><th>المحطة</th><th>وصول</th><th>مغادرة</th></tr></thead><tbody>${pairRows}</tbody></table>` : ''}
+        ${noMv.length ? `<p class="muted" style="margin:8px 0 0"><b>بلا حركات مجدولة في الفترة:</b> ${noMv.map(x => esc(x.name)).join('، ')}.</p>` : ''}</div>` : ''
     const body = `
-      ${docHeader({ title: 'تقرير أداء المحطات', infoLines: [`الفترة: <b>${esc(period)}</b>`, `المحطات المقيَّمة: <b>${result.rows.length}</b>`, `أعدّه: ${esc('الإدارة')}`] })}
+      ${docHeader({ title: 'تقرير أداء المحطات', infoLines: [`الفترة: <b>${periodH}</b>`, `المحطات المقيَّمة: <b>${n}</b>`, `أعدّه: ${esc('الإدارة')}`] })}
       <div class="body">
-        <div class="sec"><h3>الملخص</h3><div class="grid g5">
-          ${kpi(result.avgScore ?? '—', 'متوسط الأداء العام', '#1C2B4A')}${kpi(result.counts.bad + result.counts.stopped, 'مقصّرة / متوقفة', '#b91c1c')}${kpi(result.counts.watch, 'تحتاج متابعة', '#b45309')}${kpi(result.counts.top + result.counts.ok, 'منتظمة أو متميّزة', '#15803d')}${kpi(result.infoOnly.length, 'بلا موظفين (للعلم)', '#64748b')}
-        </div></div>
-        <div class="sec"><h3>جودة الإدخال حسب فترات اليوم (كل المحطات)</h3><table class="t"><thead><tr>${result.netShifts.map(s => `<th>${esc(s.ar)}</th>`).join('')}</tr></thead><tbody><tr>${result.netShifts.map(s => cell(s.score)).join('')}</tr></tbody></table></div>
-        <div class="sec"><h3>ترتيب المحطات (الأضعف أولاً)</h3><table class="t"><thead><tr><th>#</th><th>المحطة</th><th>المدير المعيّن</th><th>الموظفون</th><th>دخلوا للحساب</th><th>الدرجة</th><th>الحكم</th><th>الرحلات</th><th>الإيرادات</th>${shiftKeys.map(k => `<th>${esc(SHIFT_AR[k])}</th>`).join('')}<th>تقييم العملاء</th></tr></thead><tbody>
-          ${result.rows.map((r, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(r.name)}</b></td><td class="l">${esc(r.managers.join('، ') || '—')}</td><td>${r.staff}</td><td>${r.loggedIn}/${r.staffRows.length}</td>${cell(r.score)}<td><span class="chip" style="background:${r.verdict.bg};color:${r.verdict.c}">${esc(r.verdict.ar)}</span></td>${cell(r.tripsPct)}${cell(r.salesPct)}${shiftKeys.map(k => cell(r.byShift.find(s => s.k === k)?.score ?? null)).join('')}<td>${r.rate || 'لم تُقيَّم'}</td></tr>`).join('')}
+        <div class="sec"><h3>الخلاصة التنفيذية</h3>
+          <div class="ins" style="background:#fff;border-right:4px solid #264673"><p style="margin:0;font-size:13.3px;line-height:2;color:#1e293b">${para}</p></div>
+        </div>
+        <div class="sec"><div class="grid g5">
+          ${kpi((R.avgScore ?? '—') + (R.avgScore != null ? '%' : ''), 'متوسط الأداء العام', '#1C2B4A')}${kpi(weak, 'تنبيه عاجل / بلا نشاط', '#b91c1c')}${kpi(R.counts.watch, 'تحت المجهر', '#b45309')}${kpi(strong, 'مستقرة أو في الصدارة', '#15803d')}${kpi(R.notRated.length, 'دون تقييم عملاء', '#7c3aed')}
+        </div>
+        <div class="stack" style="height:12px;margin-top:10px">${stack}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${legend}</div></div>
+        <div class="sec"><h3>إيقاع الإدخال خلال اليوم</h3><table class="t"><thead><tr><th>الفترة</th><th>الأداء العام</th><th>إدخال الرحلات</th><th>تغطية الإيرادات</th><th>محطات مقيَّمة</th></tr></thead><tbody>
+          ${R.netShifts.map(x => `<tr><td class="l"><b>${esc(x.ar)}</b></td>${cell(x.score)}${cell(x.trips)}${cell(x.sales)}<td>${x.stations}</td></tr>`).join('')}
         </tbody></table></div>
-        ${result.infoOnly.length ? `<div class="sec"><h3>للعلم فقط — محطات بلا موظفين نشطين (${result.infoOnly.length})</h3><p class="muted">لا تُحتسب في التقييم لعدم وجود موظفين نشطين عليها.</p><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${result.infoOnly.map(s => `<span class="chip" style="background:#f1f5f9;color:#334155">${esc(s.name)}${s.expected ? ` · ${s.expected} حركة مجدولة` : ''}</span>`).join('')}</div></div>` : ''}
-        <ul class="notes"><li>الدرجة العامة: إدخال الرحلات ${W_TRIPS}% + تغطية الإيرادات للورديات ${W_SALES}% + تقييم العملاء ${W_RATING}%. التقييم بالإدخالات فقط، بدون مبالغ ولا أعداد ركاب.</li><li>الحكم: متميّزة (90+) · منتظمة (75–89) · تحتاج متابعة (50–74) · مقصّرة (أقل من 50) · متوقفة (لا إدخال إطلاقاً).</li></ul>
+        ${(best.length || worst.length) ? `<div class="grid g2" style="margin-top:14px;gap:14px;align-items:start">
+          ${best.length ? `<div><h4 class="sub">الأفضل أداءً</h4>${mini(best)}</div>` : '<div></div>'}
+          ${worst.length ? `<div><h4 class="sub">الأولى بالدعم</h4>${mini(worst)}</div>` : '<div></div>'}
+        </div>` : ''}
+        ${crit.length ? `<div class="sec" style="break-inside:auto"><h3>ملفات التدخل العاجل (${crit.length})</h3>${critCap.map(file).join('')}${crit.length > critCap.length ? `<p class="muted">عُرضت أضعف ${critCap.length} محطة؛ بقية المحطات في جدول الترتيب أدناه.</p>` : ''}</div>` : ''}
+        <div class="sec" style="break-inside:auto"><h3>ترتيب المحطات — من الأضعف إلى الأقوى</h3><table class="t"><thead><tr><th>#</th><th>المحطة</th><th>المدير المعيّن</th><th>الحسابات</th><th>دخلوا</th><th>الدرجة</th><th>الحالة</th><th>الرحلات</th><th>الإيرادات</th>${shiftKeys.map(k => `<th>${esc(SHIFT_AR[k])}</th>`).join('')}<th>العملاء</th></tr></thead><tbody>
+          ${R.rows.map((r, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(r.name)}</b></td><td class="l">${esc(r.managers.join('، ') || '—')}</td><td>${r.staffRows.length}</td><td>${r.loggedIn}</td>${cell(r.score)}<td>${chip(r.verdict)}</td>${cell(r.tripsPct)}${cell(r.salesPct)}${shiftKeys.map(k => cell(r.byShift.find(x => x.k === k)?.score ?? null)).join('')}<td>${r.rate || 'لم تُقيَّم'}</td></tr>`).join('')}
+        </tbody></table></div>
+        ${unstaffed}
+        <ul class="notes"><li>الدرجة العامة = إدخال الرحلات ${W_TRIPS}% + تغطية الإيرادات للورديات ${W_SALES}% + تقييم العملاء ${W_RATING}%؛ وتُعاد توزيع الأوزان إن لم يتوفر أحد المقاييس. التقييم بالإدخالات فقط، بلا مبالغ ولا أعداد ركاب.</li><li>الحالات: في الصدارة (90 فأكثر) · مستقرة (75–89) · تحت المجهر (50–74) · تنبيه عاجل (أقل من 50) · بلا نشاط مسجَّل (لا إدخال إطلاقاً رغم وجود حركات وموظفين).</li><li>«دخلوا» = عدد الحسابات (موظفون ومشرفون) التي سجّلت دخولاً خلال الفترة.</li></ul>
+        <div class="sig"><div><span>إعداد</span><b></b><i></i></div><div><span>مراجعة</span><b></b><i></i></div><div><span>اعتماد</span><b></b><i></i></div></div>
       </div>`
-    openDocWindow(docShell({ title: `تقرير أداء المحطات — ${period}`, body, footerLeft: esc(period), footerRight: 'NORTH WEST BUS' }))
+    openDocWindow(docShell({ title: `تقرير أداء المحطات — ${period}`, body, footerLeft: periodH, footerRight: 'NORTH WEST BUS' }))
   }
 
   // ── الواجهة ──
@@ -318,9 +390,9 @@ export default function StationsPerformance({ isAr = true }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, opacity: loading ? 0.6 : 1 }}>
             {[
               [result.avgScore ?? '—', isAr ? 'متوسط الأداء العام' : 'Overall score', '#1C2B4A'],
-              [result.counts.bad + result.counts.stopped, isAr ? 'مقصّرة / متوقفة' : 'Underperforming', '#b91c1c'],
-              [result.counts.watch, isAr ? 'تحتاج متابعة' : 'Needs follow-up', '#b45309'],
-              [result.counts.ok + result.counts.top, isAr ? 'منتظمة أو متميّزة' : 'Good', '#15803d'],
+              [result.counts.bad + result.counts.stopped, isAr ? 'تنبيه عاجل / بلا نشاط' : 'Urgent / inactive', '#b91c1c'],
+              [result.counts.watch, isAr ? 'تحت المجهر' : 'Watchlist', '#b45309'],
+              [result.counts.ok + result.counts.top, isAr ? 'مستقرة أو في الصدارة' : 'Stable or leading', '#15803d'],
               [result.notRated.length, isAr ? 'لم تُقيَّم من العملاء' : 'No customer ratings', '#7c3aed'],
               [result.infoOnly.length, isAr ? 'بلا موظفين (للعلم)' : 'No staff (info)', '#64748b'],
             ].map(([v, l, c]) => (
@@ -380,8 +452,9 @@ export default function StationsPerformance({ isAr = true }) {
                         <span style={{ margin: '0 8px', opacity: 0.4 }}>|</span>{isAr ? `${r.staff} موظف نشط` : `${r.staff} active staff`}
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-2)', marginTop: 6, lineHeight: 1.7 }}>
-                        <b style={{ color: r.verdict.c }}>{r.verdict.line}.</b> {r.sentence}.
+                        <b style={{ color: r.verdict.c }}>{r.story.status}</b> {r.story.diag.join(' ')}
                       </div>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-1)', marginTop: 4, fontWeight: 800 }}>{r.story.action}</div>
                     </div>
                     <div style={{ flex: '1 1 300px', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px 18px' }}>
                       <Meter label={isAr ? 'إدخال الرحلات' : 'Trips entered'} p={r.tripsPct} sub={r.expected ? `${r.entered} / ${r.expected}` : (isAr ? 'لا رحلات' : 'none scheduled')} />
@@ -438,7 +511,7 @@ export default function StationsPerformance({ isAr = true }) {
               <button type="button" onClick={() => setShowInfoOnly(v => !v)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start', padding: 0 }}>
                 <span>
                   <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'للعلم فقط — محطات بلا موظفين نشطين' : 'For information — stations without active staff'}</span>
-                  <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{isAr ? `${result.infoOnly.length} محطة لا تُحتسب في التقييم لأنه لا يوجد عليها موظفون` : `${result.infoOnly.length} stations are not scored`}</span>
+                  <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{isAr ? `${result.infoOnly.length} محطة لا تُحتسب في التقييم لأنه لا يوجد عليها موظفون. الأرقام بجانب كل محطة هي الحركات المجدولة عليها بلا مُدخِل.` : `${result.infoOnly.length} stations are not scored`}</span>
                 </span>
                 <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-2)' }}>{showInfoOnly ? '▲' : '▼'}</span>
               </button>
@@ -446,7 +519,7 @@ export default function StationsPerformance({ isAr = true }) {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
                   {result.infoOnly.map(s => (
                     <span key={s.id} style={{ fontSize: '0.74rem', fontWeight: 700, padding: '5px 12px', borderRadius: 99, background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>
-                      {s.name}{s.agent ? (isAr ? ' · وكيل' : ' · agent') : ''}{s.expected ? <span style={{ color: 'var(--text-3)' }}>{isAr ? ` · ${s.expected} حركة مجدولة` : ` · ${s.expected} scheduled`}</span> : null}
+                      {s.name}{s.agent ? (isAr ? ' · وكيل' : ' · agent') : ''}{s.expected ? <span style={{ color: 'var(--text-3)' }}>{isAr ? ` · وصول ${s.arr} · مغادرة ${s.dep}` : ` · arr ${s.arr} · dep ${s.dep}`}</span> : null}
                     </span>
                   ))}
                 </div>
