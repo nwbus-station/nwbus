@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { NWB_LOGO_SVG } from '../utils/logo'
+import { NW_LOGO_PATHS, NW_LOGO_VIEWBOX } from '../utils/nwLogoPaths'
 import { isRestStation } from '../utils/stations'
 
 import { todayStr } from '../utils/dates'
@@ -13,22 +13,30 @@ const hhmmFromTs = v => v ? new Date(v).toLocaleTimeString('en-GB', { hour: '2-d
 const s5 = v => v ? String(v).slice(0, 5) : ''
 const toMin = hm => { const [h, m] = (hm || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
 
-function Clock({ accent, muted }) {
+function Clock({ accent, muted, isAr }) {
   const [c, setC] = useState(new Date())
   useEffect(() => { const t = setInterval(() => setC(new Date()), 1000); return () => clearInterval(t) }, [])
+  const hm = c.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const sec = String(c.getSeconds()).padStart(2, '0')
   return (
-    <div style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-      <div style={{ fontSize: 40, fontWeight: 700, color: accent, lineHeight: 1 }}>{c.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
-      <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{c.toLocaleDateString('en-GB')}</div>
+    <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} dir="ltr">
+      <div style={{ fontSize: 46, fontWeight: 700, color: accent, lineHeight: 1, display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: isAr ? 'flex-start' : 'flex-end' }}>
+        <span>{hm}</span><span style={{ fontSize: 22, opacity: 0.55 }}>:{sec}</span>
+      </div>
+      <div style={{ fontSize: 13, color: muted, marginTop: 6, fontFamily: "'IBM Plex Sans Arabic', sans-serif", textAlign: isAr ? 'left' : 'right' }} dir={isAr ? 'rtl' : 'ltr'}>
+        {c.toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      </div>
     </div>
   )
 }
 
+// قوالب الشاشة: لون الخلفية + تدرجات ناعمة بدل اللون الواحد
+const GRID = 'repeating-linear-gradient(135deg, rgba(255,255,255,0.022) 0 1px, transparent 1px 22px)'
 const THEMES = {
-  nwb:   { name: 'هوية النظام',   bg: '#101B24', accent: '#DE9526', arr: '#4BC98F', dep: '#6FB1D8', text: '#F2EFE8', muted: '#77848E' },
-  navy:  { name: 'كحلي/ذهبي',    bg: '#0B1B34', accent: '#D9B25F', arr: '#3DDC97', dep: '#5AA6FF', text: '#E8EEF7', muted: '#8EA3C4' },
-  black: { name: 'أسود/كهرماني',  bg: '#0A0A0C', accent: '#F0A92B', arr: '#37D67A', dep: '#5AA6FF', text: '#F2F2F4', muted: '#9A9AA2' },
-  teal:  { name: 'بترولي',        bg: '#07211F', accent: '#E6C66B', arr: '#56E0B0', dep: '#4FC3D9', text: '#EAFAF6', muted: '#8FB8B2' },
+  nwb:   { name: 'هوية النظام',   bg: '#0C161F', fx: `${GRID}, radial-gradient(1100px 520px at 85% -10%, rgba(222,149,38,0.16), transparent 62%), radial-gradient(900px 480px at 0% 105%, rgba(111,177,216,0.12), transparent 58%), linear-gradient(180deg,#101C27,#091119)`, accent: '#E3A02E', arr: '#4BC98F', dep: '#6FB1D8', text: '#F2EFE8', muted: '#8493A0' },
+  navy:  { name: 'كحلي/ذهبي',    bg: '#0B1B34', fx: `${GRID}, radial-gradient(1000px 520px at 90% -10%, rgba(217,178,95,0.16), transparent 60%), radial-gradient(900px 500px at 0% 110%, rgba(90,166,255,0.14), transparent 58%), linear-gradient(180deg,#0E2142,#081528)`, accent: '#D9B25F', arr: '#3DDC97', dep: '#5AA6FF', text: '#E8EEF7', muted: '#8EA3C4' },
+  black: { name: 'أسود/كهرماني',  bg: '#0A0A0C', fx: `${GRID}, radial-gradient(1000px 520px at 85% -10%, rgba(240,169,43,0.14), transparent 60%), linear-gradient(180deg,#121216,#070709)`, accent: '#F0A92B', arr: '#37D67A', dep: '#5AA6FF', text: '#F2F2F4', muted: '#9A9AA2' },
+  teal:  { name: 'بترولي',        bg: '#07211F', fx: `${GRID}, radial-gradient(1000px 520px at 85% -10%, rgba(230,198,107,0.15), transparent 60%), radial-gradient(900px 480px at 0% 110%, rgba(79,195,217,0.14), transparent 58%), linear-gradient(180deg,#0A2B28,#051917)`, accent: '#E6C66B', arr: '#56E0B0', dep: '#4FC3D9', text: '#EAFAF6', muted: '#8FB8B2' },
 }
 
 const nmOf = (s, isAr) => (isAr ? s?.name_ar : s?.name_en) || '—'
@@ -44,24 +52,30 @@ const dedupeEvents = list => {
 }
 
 // صف الحركة — مكوّن مستقل ومُحفّظ (memo) حتى لا يُعاد إنشاؤه عند كل رسم (يمنع الاهتزاز)
-const Row = memo(function Row({ e, accent, th, isAr }) {
+const Row = memo(function Row({ e, accent, th, isAr, nowMin }) {
   const upcoming = e.status === 'upcoming'
   const arr = e.type === 'arrival'
+  const mins = upcoming && nowMin != null ? toMin(e.time) - nowMin : null
+  const soon = mins != null && mins >= 0 && mins <= 20
   return (
-    <div className="lb-row" style={{ display: 'flex', alignItems: 'center', gap: 14, height: 80, boxSizing: 'border-box', padding: '0 18px', borderBottom: '1px solid rgba(255,255,255,0.07)', opacity: upcoming ? 0.72 : 1 }}>
-      <div style={{ minWidth: 70, textAlign: 'center', fontFamily: "'IBM Plex Mono', monospace", fontSize: 28, fontWeight: 800, color: th.accent, letterSpacing: 1 }}>{e.time}</div>
+    <div className="lb-row" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16, height: 88, boxSizing: 'border-box', padding: '0 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: soon ? `linear-gradient(90deg, ${accent}14, transparent)` : 'transparent', opacity: upcoming && !soon ? 0.82 : 1 }}>
+      <span style={{ position: 'absolute', insetInlineStart: 0, top: 14, bottom: 14, width: 4, borderRadius: 3, background: upcoming ? `${accent}66` : accent }} />
+      <div dir="ltr" style={{ minWidth: 104, textAlign: 'center', fontFamily: "'IBM Plex Mono', monospace", fontSize: 34, fontWeight: 800, color: th.text, letterSpacing: 1, lineHeight: 1 }}>{e.time}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 16, fontWeight: 900, color: th.text, lineHeight: 1.18, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {nmOf(e.trip?.from_station, isAr)} <span style={{ color: accent, fontWeight: 700, margin: '0 4px' }}>→</span> {nmOf(e.trip?.to_station, isAr)}
+        <div dir="ltr" style={{ fontSize: 18, fontWeight: 800, color: th.text, lineHeight: 1.22, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textAlign: isAr ? 'right' : 'left' }}>
+          {nmOf(e.trip?.from_station, isAr)} <span style={{ color: accent, fontWeight: 800, margin: '0 6px' }}>→</span> {nmOf(e.trip?.to_station, isAr)}
         </div>
-        <div style={{ fontSize: 13, color: th.muted, marginTop: 3, fontFamily: "'IBM Plex Mono', monospace" }}>
-          {isAr ? 'رحلة' : 'Trip'} {e.trip?.trip_number || '—'}{e.bus && <span style={{ marginInlineStart: 10 }}>{e.bus}</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }} dir="ltr">
+          <span style={{ fontSize: 13, fontWeight: 700, color: th.text, background: 'rgba(255,255,255,0.08)', borderRadius: 5, padding: '2px 9px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</span>
+          {e.bus && <span style={{ fontSize: 13, fontWeight: 700, color: th.muted, border: '1px solid rgba(255,255,255,0.14)', borderRadius: 5, padding: '1px 8px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.bus}</span>}
         </div>
       </div>
-      <div style={{ textAlign: 'center', minWidth: 96 }}>
+      <div style={{ textAlign: 'center', minWidth: 118 }}>
         {upcoming
-          ? <span style={{ fontSize: 12, fontWeight: 700, color: th.muted, border: `1px solid ${th.muted}55`, borderRadius: 6, padding: '4px 12px', whiteSpace: 'nowrap' }}>{isAr ? 'مجدولة' : 'Scheduled'}</span>
-          : <span style={{ fontSize: 13, fontWeight: 800, color: accent, background: `${accent}1f`, borderRadius: 6, padding: '4px 12px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>}
+          ? (soon
+            ? <span className="lb-ar" style={{ fontSize: 14, fontWeight: 800, color: '#101010', background: accent, borderRadius: 7, padding: '6px 14px', whiteSpace: 'nowrap' }}>{mins <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${mins} د` : `in ${mins} min`)}</span>
+            : <span style={{ fontSize: 13, fontWeight: 700, color: th.muted, border: `1px solid ${th.muted}55`, borderRadius: 7, padding: '5px 13px', whiteSpace: 'nowrap' }}>{mins != null && mins > 0 ? (isAr ? `بعد ${mins >= 60 ? `${Math.floor(mins / 60)}س ${mins % 60}د` : `${mins} د`}` : `in ${mins}m`) : (isAr ? 'مجدولة' : 'Scheduled')}</span>)
+          : <span style={{ fontSize: 14, fontWeight: 800, color: accent, background: `${accent}22`, border: `1px solid ${accent}55`, borderRadius: 7, padding: '5px 13px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>}
       </div>
     </div>
   )
@@ -97,6 +111,8 @@ export default function LiveBoard() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [rotateSec, setRotateSec] = useState(() => Number(localStorage.getItem('nwbus_board_rotate')) || 15)
   const [tick, setTick] = useState(0)   // عدّاد لقطات الوضع التلقائي
+  const [nowMin, setNowMin] = useState(() => new Date().getHours() * 60 + new Date().getMinutes())
+  useEffect(() => { const id = setInterval(() => { const d = new Date(); setNowMin(d.getHours() * 60 + d.getMinutes()) }, 15000); return () => clearInterval(id) }, [])
 
   // في الوضع التلقائي فقط: العناوين ثابتة، والرحلات تتبدّل كلقطة كل (rotateSec) ثانية
   useEffect(() => {
@@ -175,11 +191,18 @@ export default function LiveBoard() {
       })
     } else {
       // الكل: مغادرة من المنشأ (scheduled_departure) + وصول للوجهة (scheduled_arrival)
-      const { data } = await supabase.from('trip_schedule')
-        .select(`trip_number, scheduled_departure, scheduled_arrival, is_active, is_rf, rf_date,
-          from_station:from_station_id(name_ar,name_en), to_station:to_station_id(name_ar,name_en)`)
-        .eq('is_active', true).limit(4000)
-      ;(data ?? []).forEach(t => {
+      // حد الخادم 1000 صف: نجلب كل الصفحات بترتيب ثابت
+      const data = []
+      for (let f = 0; f < 20000; f += 1000) {
+        const { data: part, error } = await supabase.from('trip_schedule')
+          .select(`id, trip_number, scheduled_departure, scheduled_arrival, is_active, is_rf, rf_date,
+            from_station:from_station_id(name_ar,name_en), to_station:to_station_id(name_ar,name_en)`)
+          .eq('is_active', true).order('id').range(f, f + 999)
+        if (error) break
+        data.push(...(part ?? []))
+        if ((part ?? []).length < 1000) break
+      }
+      data.forEach(t => {
         if (t.is_rf && t.rf_date !== today) return
         const dep = s5(t.scheduled_departure), arr = s5(t.scheduled_arrival)
         if (dep) legs.push({ id: t.trip_number + '-d', type: 'departure', time: dep, trip: t })
@@ -215,80 +238,122 @@ export default function LiveBoard() {
   }, [navigate])
 
   const containerBg = bg
-    ? { backgroundImage: `linear-gradient(rgba(8,16,34,0.62), rgba(8,16,34,0.7)), url(${bg})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : { background: th.bg }
+    ? { backgroundImage: `linear-gradient(rgba(8,16,34,0.66), rgba(8,16,34,0.74)), url(${bg})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { background: th.fx || th.bg }
   // المتتالي مرتّب بالوقت (وصول/مغادرة مع بعض)
   const feedSorted = [...events].sort((a, b) => toMin(a.time) - toMin(b.time))
   const stationLabel = scoped
     ? (nm(stations.find(s => s.id === boardStation)) !== '—' ? nm(stations.find(s => s.id === boardStation)) : nm(profile?.station))
     : (isAr ? 'كل المحطات' : 'All Stations')
+  const depCount = events.filter(e => e.type === 'departure').length
+  const arrCount = events.filter(e => e.type === 'arrival').length
+  const nextEv = mode === 'scheduled' ? [...events].filter(e => e.status === 'upcoming').sort((a, b) => toMin(a.time) - toMin(b.time))[0] : null
+  const nextMins = nextEv ? toMin(nextEv.time) - nowMin : null
+  const HEADER_H = 150   // ارتفاع الرأس + الشريط (لحساب ارتفاع المحتوى)
 
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ position: 'fixed', inset: 0, color: th.text, fontFamily: 'IBM Plex Sans Arabic, sans-serif', overflow: 'hidden', ...containerBg }}>
       <style>{`
         @keyframes slidein { from { opacity:0; transform: translateY(-10px) } to { opacity:1; transform:none } }
-        @keyframes glow { 0%,100%{opacity:.9} 50%{opacity:.4} }
+        @keyframes glow { 0%,100%{opacity:1} 50%{opacity:.55} }
+        @keyframes livedot { 0%{box-shadow:0 0 0 0 rgba(75,201,143,.6)} 100%{box-shadow:0 0 0 9px rgba(75,201,143,0)} }
         @keyframes scrollup { from { transform: translateY(0) } to { transform: translateY(-50%) } }
         .lb-row { animation: slidein .45s ease both }
-        .lb-ar { animation: glow 1.8s ease-in-out infinite }
+        .lb-ar { animation: glow 1.6s ease-in-out infinite }
+        .lb-live { animation: livedot 1.6s ease-out infinite }
       `}</style>
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '22px 48px', borderBottom: `2px solid ${th.accent}` }}>
-        <div style={{ width: 160 }} dangerouslySetInnerHTML={{ __html: NWB_LOGO_SVG.replace('width="180" height="90"', 'width="160" height="68"') }} />
+      {/* ── الرأس ── */}
+      <header style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 24, padding: '20px 44px 18px', background: 'linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0))' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, color: th.text }}>
+          <svg viewBox={NW_LOGO_VIEWBOX} width={Math.round(52 * 398 / 115)} height={52} fill="currentColor" aria-label="North West Bus">
+            {NW_LOGO_PATHS.map((d, i) => <path key={i} d={d} />)}
+          </svg>
+          <div style={{ width: 1, height: 40, background: 'rgba(255,255,255,0.18)' }} />
+          <div style={{ lineHeight: 1.2 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: 0.3 }}>{isAr ? 'نورث وست باص' : 'North West Bus'}</div>
+            <div style={{ fontSize: 11, color: th.muted, letterSpacing: 4, marginTop: 3 }}>NORTH WEST BUS</div>
+          </div>
+        </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: 1 }}>{isAr ? 'حركة الرحلات المباشرة' : 'Live Trip Movements'}</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: th.accent, marginTop: 2 }}>{stationLabel}</div>
-          <div style={{ fontSize: 12, color: th.muted, letterSpacing: 3 }}>NORTH WEST BUS</div>
+          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: 0.5 }}>{isAr ? 'حركة الرحلات المباشرة' : 'Live Trip Movements'}</div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+            <span style={{ fontSize: 17, fontWeight: 800, color: th.accent, background: `${th.accent}1c`, border: `1px solid ${th.accent}55`, borderRadius: 999, padding: '3px 18px' }}>{stationLabel}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 800, color: '#4BC98F', letterSpacing: 1 }}>
+              <i className="lb-live" style={{ width: 9, height: 9, borderRadius: '50%', background: '#4BC98F', display: 'inline-block' }} />{mode === 'scheduled' ? (isAr ? 'جدول اليوم' : 'TODAY\'S SCHEDULE') : (isAr ? 'مباشر' : 'LIVE')}
+            </span>
+          </div>
         </div>
-        <div style={{ textAlign: isAr ? 'left' : 'right' }}>
-          <Clock accent={th.accent} muted={th.muted} />
+        <div style={{ justifySelf: isAr ? 'start' : 'end' }}>
+          <Clock accent={th.accent} muted={th.muted} isAr={isAr} />
         </div>
+        <span style={{ position: 'absolute', insetInline: 0, bottom: 0, height: 3, background: `linear-gradient(90deg, transparent, ${th.accent}, transparent)` }} />
+      </header>
+
+      {/* ── شريط الملخص ── */}
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 12, padding: '14px 44px 0' }}>
+        {[
+          { l: isAr ? 'مغادرة' : 'Departures', v: depCount, c: th.dep },
+          { l: isAr ? 'وصول' : 'Arrivals', v: arrCount, c: th.arr },
+        ].map(k => (
+          <div key={k.l} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 20px', borderRadius: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderInlineStart: `4px solid ${k.c}` }}>
+            <span style={{ fontSize: 30, fontWeight: 800, color: k.c, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1 }}>{k.v}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: th.muted }}>{k.l}</span>
+          </div>
+        ))}
+        {nextEv && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 14, padding: '8px 20px', borderRadius: 12, background: `${th.accent}14`, border: `1px solid ${th.accent}44`, minWidth: 0 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: th.accent, letterSpacing: 1, whiteSpace: 'nowrap' }}>{isAr ? 'التالية' : 'NEXT'}</span>
+            <span dir="ltr" style={{ fontSize: 24, fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace", color: th.text }}>{nextEv.time}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><bdi dir="ltr">{nmOf(nextEv.trip?.from_station, isAr)} → {nmOf(nextEv.trip?.to_station, isAr)}</bdi></span>
+            <span style={{ marginInlineStart: 'auto', fontSize: 14, fontWeight: 800, color: th.accent, whiteSpace: 'nowrap' }}>{nextMins != null && nextMins > 0 ? (isAr ? `بعد ${nextMins} د` : `in ${nextMins} min`) : (isAr ? 'الآن' : 'Now')}</span>
+          </div>
+        )}
       </div>
 
-      {/* Admin controls */}
+      {/* ── أزرار المشرف (تظهر عند تحريك الفأرة) ── */}
       {isGeneralAdmin && (
-        <div style={{ position: 'absolute', top: 100, insetInlineStart: 48, display: 'flex', gap: 6, opacity: showHint ? 1 : 0, transition: 'opacity .4s', zIndex: 6 }}>
+        <div style={{ position: 'absolute', bottom: 14, insetInlineEnd: 44, display: 'flex', gap: 8, opacity: showHint ? 1 : 0, transition: 'opacity .4s', zIndex: 6, pointerEvents: showHint ? 'auto' : 'none' }}>
           {[['actual', isAr ? 'فعلي' : 'Actual'], ['scheduled', isAr ? 'مجدول' : 'Scheduled']].map(([v, l]) => (
-            <button key={v} onClick={() => setModePref(v)} style={{ padding: '6px 16px', borderRadius: 6, border: `1px solid ${th.accent}66`, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: mode === v ? th.accent : 'transparent', color: mode === v ? '#0b1b34' : th.text }}>{l}</button>
+            <button key={v} onClick={() => setModePref(v)} style={{ padding: '7px 18px', borderRadius: 8, border: `1px solid ${th.accent}77`, fontSize: 13, fontWeight: 800, cursor: 'pointer', background: mode === v ? th.accent : 'rgba(0,0,0,0.35)', color: mode === v ? '#101010' : th.text, fontFamily: 'inherit' }}>{l}</button>
           ))}
-          <button onClick={() => setSettingsOpen(true)} style={{ padding: '6px 14px', borderRadius: 6, border: `1px solid ${th.accent}66`, fontSize: 13, cursor: 'pointer', background: 'transparent', color: th.text }}>{isAr ? 'إعدادات' : 'Settings'}</button>
+          <button onClick={() => setSettingsOpen(true)} style={{ padding: '7px 16px', borderRadius: 8, border: `1px solid ${th.accent}77`, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: 'rgba(0,0,0,0.35)', color: th.text, fontFamily: 'inherit' }}>{isAr ? 'إعدادات' : 'Settings'}</button>
         </div>
       )}
 
-      {/* Content */}
+      {/* ── المحتوى ── */}
       {view === 'columns' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, padding: '18px 40px', height: 'calc(100% - 130px)', boxSizing: 'border-box' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22, padding: '16px 44px 56px', height: `calc(100% - ${HEADER_H + 56}px)`, boxSizing: 'border-box' }}>
           {[{ type: 'departure', label: isAr ? 'المغادرة' : 'Departures', accent: th.dep, icon: '↑' }, { type: 'arrival', label: isAr ? 'الوصول' : 'Arrivals', accent: th.arr, icon: '↓' }].map(col => {
             const items = events.filter(e => e.type === col.type)
             // التلقائي: لقطة ثابتة تتبدّل؛ العمودين: تمرير مستمر
             const pages = Math.max(1, Math.ceil(items.length / COL_PER))
             const p = ((tick % pages) + pages) % pages
             const shown = isAuto ? items.slice(p * COL_PER, p * COL_PER + COL_PER) : items
-            const flow = !isAuto && items.length > 7
+            const flow = !isAuto && items.length > 6
             return (
-              <div key={col.type} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: 'rgba(255,255,255,0.025)', borderRadius: 8, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', background: 'rgba(255,255,255,0.04)', borderBottom: `2px solid ${col.accent}` }}>
-                  <span className="lb-ar" style={{ fontSize: 24, color: col.accent }}>{col.icon}</span>
-                  <span style={{ fontSize: 22, fontWeight: 800, color: col.accent }}>{col.label}</span>
-                  <span style={{ marginInlineStart: 'auto', fontSize: 13, color: th.muted }}>{items.length}{isAuto && pages > 1 ? ` · ${p + 1}/${pages}` : ''}</span>
+              <section key={col.type} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: 'rgba(8,14,20,0.45)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', backdropFilter: 'blur(6px)', boxShadow: '0 12px 40px rgba(0,0,0,0.35)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 22px', background: `linear-gradient(90deg, ${col.accent}26, transparent)`, borderBottom: `2px solid ${col.accent}` }}>
+                  <span style={{ width: 38, height: 38, borderRadius: 12, background: `${col.accent}22`, border: `1px solid ${col.accent}66`, color: col.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800 }}>{col.icon}</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: col.accent }}>{col.label}</span>
+                  <span style={{ marginInlineStart: 'auto', fontSize: 15, fontWeight: 800, color: th.text, background: 'rgba(255,255,255,0.1)', borderRadius: 999, padding: '3px 14px', fontFamily: "'IBM Plex Mono', monospace" }}>{items.length}{isAuto && pages > 1 ? ` · ${p + 1}/${pages}` : ''}</span>
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={flow ? { animation: `scrollup ${items.length * 3.5}s linear infinite` } : {}}>
-                    {[...shown, ...(flow ? items : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={col.accent} th={th} isAr={isAr} />)}
+                    {[...shown, ...(flow ? items : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={col.accent} th={th} isAr={isAr} nowMin={nowMin} />)}
                   </div>
-                  {items.length === 0 && <div style={{ textAlign: 'center', color: th.muted, fontSize: 18, padding: '50px 0' }}>—</div>}
+                  {items.length === 0 && <div style={{ textAlign: 'center', color: th.muted, fontSize: 18, padding: '60px 0', fontWeight: 700 }}>{isAr ? 'لا توجد حركة' : 'No movements'}</div>}
                 </div>
-              </div>
+              </section>
             )
           })}
         </div>
       ) : (
-        <div style={{ padding: '18px 40px', height: 'calc(100% - 130px)', overflow: 'hidden', boxSizing: 'border-box' }}>
-          <div style={{ background: 'rgba(255,255,255,0.025)', borderRadius: 8, overflow: 'hidden', height: '100%' }}>
-            <div style={feedSorted.length > 9 ? { animation: `scrollup ${feedSorted.length * 3.5}s linear infinite` } : {}}>
-              {[...feedSorted, ...(feedSorted.length > 9 ? feedSorted : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={e.type === 'arrival' ? th.arr : th.dep} th={th} isAr={isAr} />)}
-              {feedSorted.length === 0 && <div style={{ textAlign: 'center', color: th.muted, fontSize: 20, padding: '80px 0' }}>{isAr ? 'لا حركة حالياً' : 'No movements'}</div>}
+        <div style={{ padding: '16px 44px 56px', height: `calc(100% - ${HEADER_H + 56}px)`, overflow: 'hidden', boxSizing: 'border-box' }}>
+          <div style={{ background: 'rgba(8,14,20,0.45)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', height: '100%', boxShadow: '0 12px 40px rgba(0,0,0,0.35)' }}>
+            <div style={feedSorted.length > 8 ? { animation: `scrollup ${feedSorted.length * 3.5}s linear infinite` } : {}}>
+              {[...feedSorted, ...(feedSorted.length > 8 ? feedSorted : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={e.type === 'arrival' ? th.arr : th.dep} th={th} isAr={isAr} nowMin={nowMin} />)}
+              {feedSorted.length === 0 && <div style={{ textAlign: 'center', color: th.muted, fontSize: 20, padding: '90px 0', fontWeight: 700 }}>{isAr ? 'لا حركة حالياً' : 'No movements'}</div>}
             </div>
           </div>
         </div>
@@ -359,10 +424,10 @@ export default function LiveBoard() {
         </div>
       )}
 
-      {/* Exit */}
-      <div style={{ position: 'absolute', bottom: 16, width: '100%', textAlign: 'center', opacity: showHint ? 1 : 0, transition: 'opacity .5s' }}>
-        <button onClick={() => navigate('/')} style={{ background: 'rgba(255,255,255,0.08)', color: th.muted, border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '7px 20px', fontSize: 13, cursor: 'pointer' }}>
-          {isAr ? '✕ خروج (أو زر Esc)' : '✕ Exit (or Esc)'}
+      {/* خروج */}
+      <div style={{ position: 'absolute', bottom: 14, insetInlineStart: 44, opacity: showHint ? 1 : 0, transition: 'opacity .5s', pointerEvents: showHint ? 'auto' : 'none' }}>
+        <button onClick={() => navigate('/')} style={{ background: 'rgba(0,0,0,0.35)', color: th.muted, border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8, padding: '7px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {isAr ? '✕ خروج (Esc)' : '✕ Exit (Esc)'}
         </button>
       </div>
     </div>
