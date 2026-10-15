@@ -14,6 +14,8 @@ import { usePresence } from '../../lib/presence'
 const MONO = 'ui-monospace, Menlo, Consolas, monospace'
 const NON_STAFF = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
 const MANAGER_ROLES = ['station_admin', 'area_supervisor']
+// لا يُحتسبون في التقارير: عمال النظافة ومشرفو المرحّلين
+const EXCLUDED_JOB = /cleaner|dispatcher_supervisor|نظاف|مشرف\s*مرحّ|مشرف\s*مرح/i
 const W_TRIPS = 55, W_SALES = 35, W_RATING = 10
 
 const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
@@ -29,6 +31,10 @@ const fmtLogin = iso => {
   const yd = new Date(Date.now() + 3 * 3600 * 1000 - 86400000).toISOString().slice(0, 10)
   return day === td ? `اليوم ${t}` : day === yd ? `أمس ${t}` : `${day.slice(5).replace('-', '/')} ${t}`
 }
+
+// عزل الأرقام والتواريخ داخل النص العربي حتى لا تنعكس (2026-10-15 ← 15-10-2026)
+const lri = t => `\u2066${t}\u2069`
+const loginP = iso => (fmtLogin(iso) ? lri(fmtLogin(iso)) : 'لم يدخل')
 
 async function pageAll(make) {
   const out = []
@@ -125,7 +131,6 @@ export default function StationsPerformance({ isAr = true }) {
   const [raw, setRaw] = useState(null)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
-  const [showInfoOnly, setShowInfoOnly] = useState(false)
   const [tab, setTab] = useState('stations')   // محطات | حسابات
   const [aSt, setASt] = useState('all'), [aRole, setARole] = useState('all'), [aStatus, setAStatus] = useState('all'), [aQ, setAQ] = useState(''), [aSort, setASort] = useState('low'), [aMore, setAMore] = useState(100)
   const [openStaff, setOpenStaff] = useState({})   // محطة → عرض أسماء موظفيها
@@ -138,7 +143,7 @@ export default function StationsPerformance({ isAr = true }) {
       const fT = `${from}T00:00:00+03:00`, tT = `${end}T23:59:59.999+03:00`
       const [stations, users, userStations, stationTrips, stops, records, sales, ratings, lost] = await Promise.all([
         pageAll(() => supabase.from('stations').select('id, name_ar, name_en, is_agent, shift_ends, city_group').eq('is_active', true).order('id')),
-        pageAll(() => supabase.from('users').select('id, full_name_ar, role, station_id, supervisor_id, is_active, can_rate_customers, last_login, job_title').eq('is_active', true).order('id')),
+        pageAll(() => supabase.from('users').select('id, full_name_ar, role, station_id, supervisor_id, is_active, can_rate_customers, last_login, job_title, job_number').eq('is_active', true).order('id')),
         pageAll(() => supabase.from('user_stations').select('user_id, station_id').order('user_id').order('station_id')),
         pageAll(() => supabase.from('station_trips').select(`trip_schedule_id, station_id, departure_time, arrival_time, dep_enabled, arr_enabled,
           trip:trip_schedule_id(trip_number, from_station_id, to_station_id, scheduled_departure, scheduled_arrival, is_active, is_rf, rf_date, days_of_week, start_date, end_date,
@@ -158,7 +163,8 @@ export default function StationsPerformance({ isAr = true }) {
   // ── الحساب ──
   const result = useMemo(() => {
     if (!raw) return null
-    const { stations: allSt, users, userStations, stationTrips, stops, records, sales, ratings, lost, end } = raw
+    const { stations: allSt, users: allUsers, userStations, stationTrips, stops, records, sales, ratings, lost, end } = raw
+    const users = allUsers.filter(u => !EXCLUDED_JOB.test(u.job_title || ''))
     const stations = allSt.filter(s => !isRestStation(s))
     const stById = Object.fromEntries(stations.map(s => [s.id, s]))
     const days = dateList(from, end)
@@ -262,7 +268,7 @@ export default function StationsPerformance({ isAr = true }) {
       // الموظفون + المشرفون (مدير المحطة / مشرف المنطقة) — بدون المدير العام والإدارة العليا
       const memberIds = new Set([...staff.map(u => u.id), ...(mgrBy[stn.id] ?? [])])
       const staffRows = [...memberIds].map(id => userById[id]).filter(u => u && u.is_active !== false && !NON_STAFF.includes(u.role))
-        .map(u => ({ id: u.id, name: u.full_name_ar, isMgr: MANAGER_ROLES.includes(u.role), last: u.last_login || null, inPeriod: !!u.last_login && new Date(u.last_login).getTime() >= fromTs }))
+        .map(u => ({ id: u.id, name: u.full_name_ar, jobNo: u.job_number || '', isMgr: MANAGER_ROLES.includes(u.role), last: u.last_login || null, inPeriod: !!u.last_login && new Date(u.last_login).getTime() >= fromTs }))
         .sort((a, b) => (Number(b.isMgr) - Number(a.isMgr)) || ((b.last ? new Date(b.last).getTime() : 0) - (a.last ? new Date(a.last).getTime() : 0)))
       const loggedIn = staffRows.filter(x => x.inPeriod).length
       const mgrs = [...(mgrBy[stn.id] ?? [])].map(id => userById[id]?.full_name_ar).filter(Boolean)
@@ -339,7 +345,7 @@ export default function StationsPerformance({ isAr = true }) {
     if (!result) return
     const R = result
     const period = from === to ? from : `${from} → ${to}`
-    const periodH = from === to ? esc(from) : `من ${esc(from)} إلى ${esc(to)}`
+    const periodH = from === to ? lri(from) : `من ${lri(from)} إلى ${lri(to)}`
     const stName = aSt === 'all' ? 'كل المحطات' : (accStations.find(x => String(x.id) === aSt)?.name || '')
     const roleName = aRole === 'all' ? 'موظفون ومشرفون' : aRole === 'mgr' ? 'المشرفون' : 'الموظفون'
     const flt = aStatus === 'all' ? 'كل التقديرات' : ACC_STATUS.find(x => x.key === aStatus)?.ar
@@ -361,15 +367,15 @@ export default function StationsPerformance({ isAr = true }) {
     const lo = list.filter(a => a.status.key === 'loginOnly')
     const topTbl = top.length ? `<h4 class="sub">الأكثر إدخالاً</h4><table class="t"><thead><tr><th>#</th><th>الحساب</th><th>المحطة</th><th>رحلات</th><th>إيراد</th><th>أيام</th></tr></thead><tbody>${top.map((a, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(a.name)}</b></td><td class="l">${esc(a.station)}</td><td>${a.trips}</td><td>${a.sales}</td><td>${a.activeDays}/${R.days}</td></tr>`).join('')}</tbody></table>` : ''
     const sentence = a => {
-      if (a.activeDays > 0) return `أدخل ${a.trips} رحلة و${a.sales} سجل إيراد على ${a.activeDays} من ${R.days} أيام، وآخر إدخال ${a.lastEntry.slice(5).replace('-', '/')}.`
-      if (a.inPeriod) return `سجّل دخولاً (${fmtLogin(a.last)}) دون أي إدخال خلال الفترة.`
-      return a.last ? `لا دخول ولا إدخال خلال الفترة، وآخر دخول ${fmtLogin(a.last)}.` : 'لم يدخل هذا الحساب إلى النظام من قبل.'
+      if (a.activeDays > 0) return `أدخل ${a.trips} رحلة و${a.sales} سجل إيراد على ${a.activeDays} من ${R.days} أيام، وآخر إدخال ${lri(a.lastEntry.slice(5).replace('-', '/'))}.`
+      if (a.inPeriod) return `سجّل دخولاً (${lri(fmtLogin(a.last))}) دون أي إدخال خلال الفترة.`
+      return a.last ? `لا دخول ولا إدخال خلال الفترة، وآخر دخول ${lri(fmtLogin(a.last))}.` : 'لم يدخل هذا الحساب إلى النظام من قبل.'
     }
     const card = a => {
       const pc = Math.round((a.activeDays / Math.max(1, R.days)) * 100), tot = stTotal[a.stationId] || 0, mine = a.trips + a.sales
       return `<div class="sc" style="--c:${a.status.c}">
         <div class="top"><div class="ring" style="background:conic-gradient(${a.status.c} ${pc * 3.6}deg,#e8edf3 0)"><b>${pc}%</b></div>
-          <div class="nm"><b>${esc(a.name)}${a.isMgr ? ' <span class="muted">(مشرف)</span>' : ''}</b><small>آخر دخول: ${esc(fmtLogin(a.last) || 'لم يدخل')}</small></div>${chip(a.status)}</div>
+          <div class="nm"><b>${esc(a.name)}${a.isMgr ? ' <span class="muted">(مشرف)</span>' : ''}</b><small>آخر دخول: ${loginP(a.last)}</small></div>${chip(a.status)}</div>
         <div class="st"><div>رحلات<b>${a.trips}</b></div><div>إيراد<b>${a.sales}</b></div><div>إسهامه في المحطة<b>${tot ? Math.round((mine / tot) * 100) + '%' : '—'}</b></div></div>
         <p>${esc(sentence(a))}</p></div>`
     }
@@ -400,12 +406,62 @@ export default function StationsPerformance({ isAr = true }) {
     openDocWindow(docShell({ title: `تقرير أداء الحسابات — ${period}`, body, footerLeft: periodH, footerRight: 'NORTH WEST BUS' }))
   }
 
+  // ── صفحة لكل محطة: نسب الإدخال + أسماء الموظفين وأرقامهم الوظيفية فقط ──
+  function printStationPages(input) {
+    if (!result || !input.length) return
+    const list = [...input].sort((a, b) => a.name.localeCompare(b.name, isAr ? 'ar' : 'en'))
+    const period = from === to ? from : `${from} → ${to}`
+    const periodH = from === to ? lri(from) : `من ${lri(from)} إلى ${lri(to)}`
+    const gauge = (label, p, sub) => { const [c] = heat(p); return `<div class="gz"><div class="gr" style="background:conic-gradient(${c} ${(p ?? 0) * 3.6}deg,#e8edf3 0)"><b>${p == null ? '—' : p + '%'}</b></div><span>${esc(label)}</span><small>${esc(sub)}</small></div>` }
+    const page = r => {
+      const emps = r.staffRows
+      const two = emps.length > 14
+      const rowsHtml = list => list.map((x, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(x.name)}</b>${x.isMgr ? ' <span class="tg">مشرف</span>' : ''}</td><td class="no">${esc(x.jobNo || '—')}</td></tr>`).join('')
+      const th = '<thead><tr><th>#</th><th>الاسم</th><th>الرقم الوظيفي</th></tr></thead>'
+      const shown = emps.slice(0, 40)
+      const half = Math.ceil(shown.length / 2)
+      const tbl = two
+        ? `<div class="cg">${[shown.slice(0, half), shown.slice(half)].map(part => `<table class="t">${th}<tbody>${rowsHtml(part)}</tbody></table>`).join('')}</div>`
+        : `<table class="t">${th}<tbody>${rowsHtml(shown)}</tbody></table>`
+      const mg = r.managers.length ? r.managers.slice(0, 3).join(' · ') : '—'
+      return `<section class="pg" style="--c:${r.verdict.c}">
+        <div class="pgh"><div><small>المحطة</small><h2>${esc(r.name)}</h2></div><div class="pgm"><small>المشرف</small><b>${esc(mg)}</b></div><div class="pgp"><small>الفترة</small><b>${periodH}</b></div></div>
+        <div class="gzs">${gauge('نسبة إدخال الرحلات', r.tripsPct, r.expected ? `${r.entered} من ${r.expected}` : 'لا رحلات')}${gauge('نسبة إدخال الإيرادات', r.salesPct, r.salesApplicable ? `${r.salesCovered} من ${r.salesExpected} وردية` : 'لا إيرادات')}</div>
+        <div class="vs">${r.byShift.map(x => `<div class="vc"><b>${esc(x.ar)}</b><div class="vb"><span>رحلات</span><i style="--w:${x.trips ?? 0}%;--k:${heat(x.trips)[0]}"></i><em>${x.trips == null ? '—' : x.trips + '%'}</em></div><div class="vb"><span>إيرادات</span><i style="--w:${x.sales ?? 0}%;--k:${heat(x.sales)[0]}"></i><em>${x.sales == null ? '—' : x.sales + '%'}</em></div></div>`).join('')}</div>
+        <div class="pgt"><h3>الموظفون <span>${emps.length}</span></h3>${tbl}${emps.length > shown.length ? `<div class="more">+${emps.length - shown.length}</div>` : ''}</div>
+      </section>`
+    }
+    const css = `
+      .pg { padding: 6px 22px 0; min-height: 250mm; break-after: page; page-break-after: always; border-bottom: 1px dashed #cbd5e1; margin-bottom: 14px; }
+      .pg:last-of-type { break-after: auto; page-break-after: auto; border-bottom: none; }
+      .pgh { display: grid; grid-template-columns: 1fr auto auto; gap: 18px; align-items: end; padding: 12px 0 10px; border-bottom: 3px solid var(--c, #264673); margin-bottom: 14px; }
+      .pgh small { display: block; font-size: 10.5px; color: #64748b; font-weight: 700; } .pgh h2 { margin: 0; font-size: 26px; font-weight: 900; color: #1C2B36; line-height: 1.25; } .pgh b { font-size: 14px; color: #0f172a; }
+      .pgm, .pgp { text-align: right; padding-right: 14px; border-right: 1px solid #cbd5e1; }
+      .gzs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .gz { border: 1px solid #dbe2ea; border-radius: 14px; background: #fff; text-align: center; padding: 16px 10px 12px; }
+      .gz .gr { width: 150px; height: 150px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 10px; }
+      .gz .gr b { width: 112px; height: 112px; border-radius: 50%; background: #fff; display: grid; place-items: center; font: 900 34px ui-monospace, Menlo, monospace; direction: ltr; color: #0f172a; }
+      .gz span { display: block; font-size: 15px; font-weight: 800; color: #1C2B36; } .gz small { display: block; font-size: 12px; color: #64748b; margin-top: 2px; font-weight: 700; }
+      .vs { display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); gap: 8px; margin-top: 14px; }
+      .vc { border: 1px solid #dbe2ea; border-radius: 10px; background: #fff; padding: 8px 10px; } .vc > b { display: block; font-size: 12.5px; color: #1C2B36; margin-bottom: 4px; }
+      .vb { display: grid; grid-template-columns: 44px 1fr 38px; gap: 6px; align-items: center; margin-top: 4px; font-size: 10.5px; color: #475569; font-weight: 700; }
+      .vb i { display: block; height: 8px; border-radius: 99px; background: linear-gradient(90deg, var(--k) var(--w), #e8edf3 0); } .vb em { font: 800 10.5px ui-monospace, Menlo, monospace; font-style: normal; direction: ltr; text-align: left; color: #0f172a; }
+      .pgt { margin-top: 16px; } .pgt h3 { margin: 0 0 6px; font-size: 14.5px; color: #1C2B36; padding-right: 8px; border-right: 4px solid #EE712D; } .pgt h3 span { font-size: 12px; color: #64748b; font-weight: 700; margin-right: 4px; }
+      .pgt table.t td { padding: 3px 7px; font-size: 12.5px; } .pgt td.no { font-family: ui-monospace, Menlo, monospace; direction: ltr; font-weight: 800; }
+      .pgt .cg { align-items: start; } .tg { font-size: 9.5px; font-weight: 800; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 5px; } .more { text-align: center; font-size: 11px; color: #64748b; margin-top: 4px; }
+      body.bw .gz .gr b { background: #fff !important; }
+    `
+    const body = `<style>${CARD_CSS}${css}</style>
+      ${list.map(r => `<div style="--n:${r.byShift.length}">${page(r)}</div>`).join('')}`
+    openDocWindow(docShell({ title: list.length === 1 ? `${list[0].name} — ${period}` : `صفحات المحطات — ${period}`, body, footerLeft: periodH, footerRight: 'NORTH WEST BUS' }))
+  }
+
   // ── الطباعة ──
   function printReport() {
     if (!result) return
     const R = result, n = R.rows.length
     const period = from === to ? from : `${from} → ${to}`
-    const periodH = from === to ? esc(from) : `من ${esc(from)} إلى ${esc(to)}`
+    const periodH = from === to ? lri(from) : `من ${lri(from)} إلى ${lri(to)}`
     const dayWord = R.days === 1 ? 'يوم واحد' : R.days === 2 ? 'يومان' : `${R.days} ${R.days > 10 ? 'يوماً' : 'أيام'}`
     const kpi = (v, l, c, em = '') => `<div class="kpi" style="--c:${c}"><small>${esc(l)}</small><b>${esc(v)}</b>${em ? `<em>${esc(em)}</em>` : ''}</div>`
     const cell = p => { const [bg, fg] = heat(p); return `<td style="background:${bg};color:${fg};font-weight:800">${p == null ? '—' : p + '%'}</td>` }
@@ -417,7 +473,7 @@ export default function StationsPerformance({ isAr = true }) {
     const para = `خلال الفترة <b>${periodH}</b> (${dayWord}) حُلِّل أداء <b>${n}</b> محطة لديها موظفون نشطون، وبلغ متوسط الأداء العام <b>${R.avgScore ?? '—'}%</b>. `
       + `<b>${strong}</b> محطة بتقدير «ممتاز» أو «جيد»، و<b>${R.counts.watch}</b> بتقدير «يحتاج إلى تحسين»، و<b>${weak}</b> بتقدير «ضعيف» أو بلا نشاط مسجَّل${R.counts.stopped ? ` (منها ${R.counts.stopped} بلا أي نشاط)` : ''}. `
       + (bestS && worstS && bestS.k !== worstS.k ? `أقوى فترات اليوم <b>${esc(bestS.ar)}</b> (${bestS.score}%) وأضعفها <b>${esc(worstS.ar)}</b> (${worstS.score}%). ` : '')
-      + `${R.notRated.length ? `وبقيت <b>${R.notRated.length}</b> محطة دون أي تقييم من العملاء. ` : ''}${R.infoOnly.length ? `وترد <b>${R.infoOnly.length}</b> محطة بلا موظفين نشطين للعلم فقط في آخر التقرير.` : ''}`
+      + `${R.notRated.length ? `وبقيت <b>${R.notRated.length}</b> محطة دون أي تقييم من العملاء. ` : ''}`
     const order = ['top', 'ok', 'watch', 'bad', 'stopped'].map(k => VERDICTS.find(v => v.key === k))
     const stack = order.map(v => R.counts[v.key] ? `<i style="width:${(R.counts[v.key] / n) * 100}%;background:${v.c}"></i>` : '').join('')
     const legend = order.filter(v => R.counts[v.key]).map(v => `<span class="chip" style="background:${v.bg};color:${v.c}">${esc(v.ar)} · ${R.counts[v.key]}</span>`).join(' ')
@@ -434,18 +490,9 @@ export default function StationsPerformance({ isAr = true }) {
         <div class="shs">${r.byShift.map(x => { const [bg, fg] = heat(x.score); return `<span class="sh" style="background:${bg};color:${fg}"><small>${esc(x.ar)}</small><b>${x.score == null ? '—' : x.score + '%'}</b></span>` }).join('')}</div>
         <div class="mt"><span>الموجودات</span><span></span><span class="mv">${r.lost} مسجّل</span></div>
         <p>${esc(r.story.status)} ${esc(r.story.diag.join(' '))}</p><p class="ac">${esc(r.story.action)}</p>
-        <div class="pp">${r.staffRows.slice(0, 10).map(x => `<span class="${x.inPeriod ? 'on' : x.last ? 'old' : 'no'}">${esc(x.name)}${x.isMgr ? ' (مشرف)' : ''} · ${esc(fmtLogin(x.last) || 'لم يدخل')}</span>`).join('')}${r.staffRows.length > 10 ? `<span class="no">+${r.staffRows.length - 10}</span>` : ''}</div></div>`
+        <div class="pp">${r.staffRows.slice(0, 10).map(x => `<span class="${x.inPeriod ? 'on' : x.last ? 'old' : 'no'}">${esc(x.name)}${x.isMgr ? ' (مشرف)' : ''} · ${loginP(x.last)}</span>`).join('')}${r.staffRows.length > 10 ? `<span class="no">+${r.staffRows.length - 10}</span>` : ''}</div></div>`
     const groups = VERDICTS.map(v => ({ v, list: R.rows.filter(r => r.verdict.key === v.key) })).filter(g => g.list.length)
     const cardsHtml = groups.map(g => `<div class="gh" style="--c:${g.v.c}"><b>${esc(g.v.ar)} — ${g.list.length} ${g.list.length === 1 ? 'محطة' : 'محطات'}</b><span>${esc(g.v.line)}</span></div><div class="cg">${g.list.map(card).join('')}</div>`).join('')
-    const withMv = R.infoOnly.filter(x => x.expected > 0), noMv = R.infoOnly.filter(x => !x.expected)
-    const totA = withMv.reduce((a, x) => a + x.arr, 0), totD = withMv.reduce((a, x) => a + x.dep, 0)
-    const half = Math.ceil(withMv.length / 2)
-    const sc = x => x ? `<td class="l">${esc(x.name)}${x.agent ? ' <span class="muted">(وكيل)</span>' : ''}</td><td>${x.arr}</td><td>${x.dep}</td>` : '<td></td><td></td><td></td>'
-    const pairRows = Array.from({ length: half }, (_, i) => `<tr>${sc(withMv[i])}${sc(withMv[i + half])}</tr>`).join('')
-    const unstaffed = R.infoOnly.length ? `<div class="sec" style="break-inside:auto"><h3>محطات بلا موظفين نشطين — للعلم فقط (${R.infoOnly.length})</h3>
-        <p class="muted" style="margin:0 0 6px">لا تدخل هذه المحطات في التقييم لعدم وجود حساب نشط عليها.${withMv.length ? ` الأرقام أدناه هي الحركات المجدولة عليها بلا من يُدخلها: وصول <b>${totA}</b> · مغادرة <b>${totD}</b>.` : ''}</p>
-        ${withMv.length ? `<table class="t"><thead><tr><th>المحطة</th><th>وصول</th><th>مغادرة</th><th>المحطة</th><th>وصول</th><th>مغادرة</th></tr></thead><tbody>${pairRows}</tbody></table>` : ''}
-        ${noMv.length ? `<p class="muted" style="margin:8px 0 0"><b>بلا حركات مجدولة في الفترة:</b> ${noMv.map(x => esc(x.name)).join('، ')}.</p>` : ''}</div>` : ''
     const body = `
       ${docHeader({ title: 'تقرير أداء المحطات', infoLines: [`الفترة: <b>${periodH}</b>`, `المحطات المقيَّمة: <b>${n}</b>`, `أعدّه: ${esc('الإدارة')}`] })}
       <style>${CARD_CSS}</style>
@@ -465,7 +512,6 @@ export default function StationsPerformance({ isAr = true }) {
           ${worst.length ? `<div><h4 class="sub">الأحوج إلى التحسين</h4>${mini(worst)}</div>` : '<div></div>'}
         </div>` : ''}
         <div class="sec" style="break-inside:auto"><h3>بطاقات المحطات — من الأضعف إلى الأقوى</h3>${cardsHtml}</div>
-        ${unstaffed}
         <ul class="notes"><li>الدرجة العامة = إدخال الرحلات ${W_TRIPS}% + تغطية الإيرادات للورديات ${W_SALES}% + تقييم العملاء ${W_RATING}%؛ ويُعاد توزيع الأوزان إن لم يتوفر أحد المقاييس. التقييم بالإدخالات فقط، بلا مبالغ ولا أعداد ركاب.</li><li>مقياس التقدير: ممتاز (90 فأكثر) · جيد (75–89) · يحتاج إلى تحسين (50–74) · ضعيف (أقل من 50) · لا يوجد نشاط مسجَّل (لا إدخال إطلاقاً رغم وجود حركات وموظفين).</li><li>«دخلوا» = عدد الحسابات (موظفون ومشرفون) التي سجّلت دخولاً خلال الفترة.</li></ul>
       </div>`
     openDocWindow(docShell({ title: `تقرير أداء المحطات — ${period}`, body, footerLeft: periodH, footerRight: 'NORTH WEST BUS' }))
@@ -508,6 +554,10 @@ export default function StationsPerformance({ isAr = true }) {
             style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit', cursor: result && !loading ? 'pointer' : 'not-allowed', opacity: result && !loading ? 1 : 0.5 }}>
             {isAr ? 'طباعة التقرير / PDF' : 'Print / PDF'}
           </button>
+          <button type="button" onClick={() => printStationPages(visible)} disabled={!result || loading || !visible.length}
+            style={{ padding: '10px 22px', borderRadius: 10, border: '1.5px solid #1C2B4A', background: 'var(--card)', color: '#1C2B4A', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit', cursor: result && !loading && visible.length ? 'pointer' : 'not-allowed', opacity: result && !loading && visible.length ? 1 : 0.5 }}>
+            {isAr ? `صفحة لكل محطة (${visible.length})` : `Page per station (${visible.length})`}
+          </button>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {PRESETS.map(([l, a, b]) => { const f = addDays(today, a), t = addDays(today, b); return <button key={l} type="button" onClick={() => { setFrom(f); setTo(t) }} style={pill(from === f && to === t)}>{l}</button> })}
@@ -537,7 +587,6 @@ export default function StationsPerformance({ isAr = true }) {
               [result.counts.watch, isAr ? 'يحتاج إلى تحسين' : 'Needs improvement', '#b45309'],
               [result.counts.ok + result.counts.top, isAr ? 'ممتاز أو جيد' : 'Excellent or good', '#15803d'],
               [result.notRated.length, isAr ? 'لم تُقيَّم من العملاء' : 'No customer ratings', '#7c3aed'],
-              [result.infoOnly.length, isAr ? 'بلا موظفين (للعلم)' : 'No staff (info)', '#64748b'],
             ].map(([v, l, c]) => (
               <div key={l} style={{ ...card, borderTop: `4px solid ${c}`, padding: '12px 14px' }}>
                 <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '1.7rem', color: 'var(--text-1)', lineHeight: 1.1 }}>{v}</div>
@@ -589,6 +638,7 @@ export default function StationsPerformance({ isAr = true }) {
                         <span style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--text-1)' }}>{r.name}</span>
                         <span style={{ fontSize: '0.74rem', fontWeight: 800, padding: '3px 12px', borderRadius: 99, background: r.verdict.bg, color: r.verdict.c }}>{r.verdict.ar}</span>
                         {r.agent && <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '2px 8px', borderRadius: 6, background: '#ede9fe', color: '#6d28d9' }}>{isAr ? 'وكيل' : 'Agent'}</span>}
+                        <button type="button" onClick={() => printStationPages([r])} style={{ marginInlineStart: 'auto', fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'صفحة المحطة' : 'Station page'}</button>
                       </div>
                       <div style={{ fontSize: '0.74rem', color: 'var(--text-2)', marginTop: 4, fontWeight: 600 }}>
                         {isAr ? 'المدير: ' : 'Manager: '}<b style={{ color: 'var(--text-1)' }}>{r.managers.length ? r.managers.slice(0, 2).join('، ') + (r.managers.length > 2 ? ` +${r.managers.length - 2}` : '') : (isAr ? 'غير معيّن' : 'Not assigned')}</b>
@@ -648,27 +698,6 @@ export default function StationsPerformance({ isAr = true }) {
             </div>
           )}
 
-          {/* للعلم فقط */}
-          {result.infoOnly.length > 0 && (
-            <div style={{ ...card, padding: '14px 18px', background: 'var(--surface)' }}>
-              <button type="button" onClick={() => setShowInfoOnly(v => !v)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start', padding: 0 }}>
-                <span>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'للعلم فقط — محطات بلا موظفين نشطين' : 'For information — stations without active staff'}</span>
-                  <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{isAr ? `${result.infoOnly.length} محطة لا تُحتسب في التقييم لأنه لا يوجد عليها موظفون. الأرقام بجانب كل محطة هي الحركات المجدولة عليها بلا مُدخِل.` : `${result.infoOnly.length} stations are not scored`}</span>
-                </span>
-                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-2)' }}>{showInfoOnly ? '▲' : '▼'}</span>
-              </button>
-              {showInfoOnly && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-                  {result.infoOnly.map(s => (
-                    <span key={s.id} style={{ fontSize: '0.74rem', fontWeight: 700, padding: '5px 12px', borderRadius: 99, background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>
-                      {s.name}{s.agent ? (isAr ? ' · وكيل' : ' · agent') : ''}{s.expected ? <span style={{ color: 'var(--text-3)' }}>{isAr ? ` · وصول ${s.arr} · مغادرة ${s.dep}` : ` · arr ${s.arr} · dep ${s.dep}`}</span> : null}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </>
       )}
 
