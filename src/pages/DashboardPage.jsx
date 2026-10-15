@@ -280,6 +280,14 @@ function MagazineFeed({ posts, isAr, onNavigate }) {
   )
 }
 
+// تاريخ ووقت بناء النسخة (توقيت الرياض)
+const buildStamp = () => {
+  try {
+    if (typeof __BUILD_TIME__ === 'undefined' || !__BUILD_TIME__) return ''
+    return new Date(__BUILD_TIME__).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).replace(',', '')
+  } catch { return '' }
+}
+
 export default function DashboardPage() {
   const { profile, isAdmin, isGeneralAdmin, allowedStationIds, customTitle, canSeeModule } = useAuth()
   const { i18n } = useTranslation()
@@ -509,7 +517,7 @@ export default function DashboardPage() {
             { label: remText, val: isAr ? curShift.ar : curShift.en, sub: `${curShift.range}`, bar: shiftPct, tone: 'var(--text-1)', small: true, wide: true },
             { label: isAr ? 'إشعارات غير مقروءة' : 'Unread notifications', val: unread, tone: unread ? 'var(--accent)' : 'var(--text-1)' },
             { label: isAr ? 'حالة النظام' : 'System', val: updatePending ? (isAr ? 'تحديث متوفر' : 'Update ready') : (isAr ? 'متصل' : 'Online'), tone: updatePending ? 'var(--warning)' : 'var(--success)', small: true, onClick: updatePending ? applyPwaUpdate : undefined },
-            { label: isAr ? 'نسخة البرنامج' : 'Version', val: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev', tone: 'var(--text-2)', mono: true, small: true },
+            { label: isAr ? 'نسخة البرنامج' : 'Version', val: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev', sub: buildStamp(), tone: 'var(--text-2)', mono: true, small: true },
           ].map((c, i) => (
             <div key={c.label} onClick={c.onClick} style={{ flex: c.wide ? '2 1 220px' : '1 1 150px', padding: '12px 18px', borderInlineStart: i ? '1px solid var(--border)' : 'none', cursor: c.onClick ? 'pointer' : 'default' }}>
               {c.wide && <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.08em', marginBottom: 2 }}>{isAr ? 'الوردية الحالية' : 'CURRENT SHIFT'}</div>}
