@@ -9,6 +9,7 @@ import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
+import { startPresence, updatePresencePath, stopPresence } from '../../lib/presence'
 import { onPwaUpdateAvailable, applyPwaUpdate, hardRefresh, consumeUpdatedFlag } from '../../lib/pwaUpdate'
 
 const MONO = "'IBM Plex Mono', monospace"
@@ -657,6 +658,9 @@ export default function AppLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const location = useLocation()
   useEffect(() => { setMobileMenuOpen(false) }, [location.pathname])
+  // إعلان الاتصال (يظهر للأدمن بصفحة الموظفين)
+  useEffect(() => { if (profile?.id) startPresence(profile, location.pathname) }, [profile?.id])
+  useEffect(() => { updatePresencePath(location.pathname) }, [location.pathname])
 
   // تنبيه لطيف بعد فترة قصيرة من فتح الجلسة — لأي حساب لسا يستخدم كلمة المرور اللي حطها الأدمن ولا غيّرها بنفسه
   const [showPwdNudge, setShowPwdNudge] = useState(false)
@@ -767,7 +771,7 @@ export default function AppLayout() {
     document.documentElement.dir  = next === 'ar' ? 'rtl' : 'ltr'
   }
 
-  async function handleLogout() { await signOut(); navigate('/login') }
+  async function handleLogout() { stopPresence(); await signOut(); navigate('/login') }
 
   // idle timer disabled
 

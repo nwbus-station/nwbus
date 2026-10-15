@@ -13,6 +13,7 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import DatePicker from '../components/shared/DatePicker'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import { ratingShiftsFor, computeActiveUntil } from '../utils/ratingShifts'
+import { usePresence } from '../lib/presence'
 import { leaveRemaining } from '../utils/leaveBalance'
 import SelectField from '../components/shared/SelectField'
 import { brandHeader, brandLogo, previewBar, PAPER_CSS } from '../utils/printDoc'
@@ -2208,6 +2209,8 @@ function UsersPageFull() {
   const [listKind,     setListKind]     = useState('staff') // 'staff' الموظفون | 'agents' الوكلاء (حسابات وكيل في قائمة منفصلة)
   const [stationFilter, setStationFilter] = useState('')
   const [statusFilter,  setStatusFilter]  = useState('')   // '' | 'active' | 'inactive'
+  const [onlineFilter,  setOnlineFilter]  = useState('')   // '' | 'online' | 'offline'
+  const presence = usePresence()
   const [jobFilter,     setJobFilter]     = useState('')
   const [moduleFilter,  setModuleFilter]  = useState('')
   const [moduleFilterExclude, setModuleFilterExclude] = useState(false) // true = "ما عندهم القسم"
@@ -2391,6 +2394,7 @@ function UsersPageFull() {
       matchesSearch(u.job_number, search)
     const matchRole    = !roleFilter    || (roleFilter.startsWith('title:') ? u.custom_title_id === roleFilter.slice(6) : (u.role === roleFilter && !u.custom_title_id))
     const matchStatus  = !statusFilter  || (statusFilter === 'active' ? u.is_active : !u.is_active)
+    const matchOnline  = !onlineFilter  || (onlineFilter === 'online' ? !!presence[u.id] : !presence[u.id])
     const matchJob     = !jobFilter     || u.job_title  === jobFilter
     const hasModule    = !moduleFilter || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
     const matchModule  = !moduleFilter || (moduleFilterExclude ? !hasModule : hasModule)
@@ -2401,14 +2405,14 @@ function UsersPageFull() {
       leaveFilter === 'ok'   ? (u.leaveRemaining ?? 0) >= 7 : true
     )
     const matchKind = listKind === 'agents' ? !!u.is_agent : !u.is_agent
-    return matchKind && matchSearch && matchRole && matchStatus && matchJob && matchModule && matchSupervisor && matchLeave
+    return matchKind && matchSearch && matchRole && matchStatus && matchOnline && matchJob && matchModule && matchSupervisor && matchLeave
   }
   const agentCount = users.filter(u => u.is_agent).length
   const staffCount = users.length - agentCount
 
   const filtered = users.filter(u => matchesNonStationFilters(u) && (!stationFilter || u.station_id === stationFilter))
 
-  const activeFilters = [roleFilter, stationFilter, statusFilter, jobFilter, moduleFilter, supervisorFilter, leaveFilter].filter(Boolean).length
+  const activeFilters = [roleFilter, stationFilter, statusFilter, onlineFilter, jobFilter, moduleFilter, supervisorFilter, leaveFilter].filter(Boolean).length
 
   // أولوية الطباعة/التصدير: موظفين محددين يدوياً (مربعات التحديد) > محطات مختارة من
   // منتقي محطات الطباعة (متعدد) > كل اللي ظاهر بعد الفلاتر الحالية كما كان
@@ -2691,6 +2695,9 @@ function UsersPageFull() {
         ))}
       </div>
 
+      <PresencePanel accounts={users.filter(u => u.is_active && (listKind === 'agents' ? !!u.is_agent : !u.is_agent))} presence={presence} isAr={isAr}
+        onlineFilter={onlineFilter} setOnlineFilter={setOnlineFilter} stationFilter={stationFilter} setStationFilter={setStationFilter} />
+
       {/* Search + Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 space-y-3">
         {/* Search bar */}
@@ -2813,7 +2820,7 @@ function UsersPageFull() {
 
           {/* Clear all */}
           {activeFilters > 0 && (
-            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setJobFilter(''); setModuleFilter(''); setModuleFilterExclude(false); setSupervisorFilter(''); setLeaveFilter('') }}
+            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setOnlineFilter(''); setJobFilter(''); setModuleFilter(''); setModuleFilterExclude(false); setSupervisorFilter(''); setLeaveFilter('') }}
               className="px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors font-medium">
               {isAr ? `مسح الفلاتر (${activeFilters})` : `Clear (${activeFilters})`}
             </button>
@@ -2908,8 +2915,10 @@ function UsersPageFull() {
                   )}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-nwbus-primary/10 text-nwbus-primary text-xs font-bold grid place-items-center shrink-0">
+                      <div className="relative w-8 h-8 rounded-full bg-nwbus-primary/10 text-nwbus-primary text-xs font-bold grid place-items-center shrink-0">
                         {(u.full_name_ar || '؟').trim().charAt(0)}
+                        <i className="absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full border-2 border-white"
+                          style={{ background: presence[u.id] ? (presence[u.id].active ? '#16a34a' : '#f59e0b') : '#d1d5db' }} />
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-800 truncate flex items-center gap-1.5">
@@ -2948,6 +2957,13 @@ function UsersPageFull() {
                       <span className={`w-1.5 h-1.5 rounded-full ${u.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
                       {u.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطّل' : 'Inactive')}
                     </span>
+                    {u.is_active && (
+                      <p className={`text-[11px] mt-1 font-semibold ${presence[u.id] ? (presence[u.id].active ? 'text-green-600' : 'text-amber-600') : 'text-gray-400'}`}>
+                        {presence[u.id]
+                          ? (presence[u.id].active ? (isAr ? 'متصل الآن' : 'Online now') : (isAr ? 'متصل · خامل' : 'Online · idle'))
+                          : (u.last_login ? `${isAr ? 'آخر دخول ' : 'Last seen '}${new Date(u.last_login).toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { day: 'numeric', month: 'short' })}` : (isAr ? 'غير متصل' : 'Offline'))}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {canManageAccounts && (
@@ -3097,6 +3113,95 @@ function DispatchersDirectory() {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+// لوحة الحضور اللحظي: من المتصل الآن، وأي المحطات فيها أكثر مستخدمين يعملون (الضغط على محطة يصفّي القائمة بها)
+function PresencePanel({ accounts, presence, isAr, onlineFilter, setOnlineFilter, stationFilter, setStationFilter }) {
+  const [all, setAll] = useState(false)
+  const online = accounts.filter(u => presence[u.id])
+  const activeNow = online.filter(u => presence[u.id].active)
+  const idle = online.length - activeNow.length
+  const offline = accounts.length - online.length
+  const total = Math.max(1, accounts.length)
+  // ترتيب المحطات: الأكثر اتصالاً أولاً
+  const byStation = {}
+  for (const u of accounts) {
+    const id = u.station_id || '__none__'
+    const r = (byStation[id] ??= { id, name: u.station ? (isAr ? u.station.name_ar : u.station.name_en) : (isAr ? 'بدون محطة' : 'No station'), total: 0, online: 0, active: 0 })
+    r.total++
+    if (presence[u.id]) { r.online++; if (presence[u.id].active) r.active++ }
+  }
+  const rows = Object.values(byStation).sort((a, b) => b.online - a.online || b.total - a.total)
+  const shown = all ? rows : rows.filter(r => r.online > 0).slice(0, 6)
+  const maxOnline = Math.max(1, ...rows.map(r => r.online))
+  const pill = (key, n, label, color) => (
+    <button type="button" onClick={() => setOnlineFilter(onlineFilter === key ? '' : key)}
+      className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors ${onlineFilter === key ? 'border-nwbus-primary bg-nwbus-primary/10 text-nwbus-primary' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}>
+      <i className="w-2 h-2 rounded-full" style={{ background: color }} />
+      <span className="font-mono text-sm text-gray-900">{n}</span>{label}
+    </button>
+  )
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-60 animate-ping" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-green-500" />
+          </span>
+          <div>
+            <p className="text-sm font-extrabold text-gray-900">{isAr ? 'الحضور اللحظي' : 'Live presence'}</p>
+            <p className="text-[11px] text-gray-500">{isAr ? `${online.length} متصل من ${accounts.length} حساب نشط — يتحدّث تلقائياً` : `${online.length} online of ${accounts.length} active accounts — live`}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {pill('online', online.length, isAr ? 'متصل' : 'Online', '#16a34a')}
+          {pill('offline', offline, isAr ? 'غير متصل' : 'Offline', '#9ca3af')}
+        </div>
+      </div>
+      {/* شريط التوزيع: نشط الآن / خامل / غير متصل */}
+      <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100 mt-3" title={isAr ? `نشط ${activeNow.length} · خامل ${idle} · غير متصل ${offline}` : `active ${activeNow.length} · idle ${idle} · offline ${offline}`}>
+        <i style={{ width: `${activeNow.length / total * 100}%`, background: '#16a34a' }} />
+        <i style={{ width: `${idle / total * 100}%`, background: '#f59e0b' }} />
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-gray-500">
+        <span><i className="inline-block w-2 h-2 rounded-full bg-green-600 me-1.5" />{isAr ? `نشط الآن ${activeNow.length}` : `Active now ${activeNow.length}`}</span>
+        <span><i className="inline-block w-2 h-2 rounded-full bg-amber-500 me-1.5" />{isAr ? `خامل (التبويب بالخلفية) ${idle}` : `Idle (tab in background) ${idle}`}</span>
+        <span><i className="inline-block w-2 h-2 rounded-full bg-gray-300 me-1.5" />{isAr ? `غير متصل ${offline}` : `Offline ${offline}`}</span>
+      </div>
+      {/* المحطات الأكثر اتصالاً */}
+      <div className="mt-4 pt-3 border-t border-gray-100">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-extrabold text-gray-700">{isAr ? 'المحطات الأكثر اتصالاً الآن' : 'Busiest stations right now'}</p>
+          {rows.length > 0 && <button type="button" onClick={() => setAll(v => !v)} className="text-[11px] font-bold text-nwbus-primary hover:underline">{all ? (isAr ? 'المتصلة فقط' : 'Online only') : (isAr ? 'كل المحطات' : 'All stations')}</button>}
+        </div>
+        {shown.length === 0 ? (
+          <p className="text-xs text-gray-400 py-2">{isAr ? 'لا أحد متصل حالياً' : 'Nobody is online right now'}</p>
+        ) : (
+          <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+            {shown.map((r, i) => {
+              const on = stationFilter === r.id
+              return (
+                <button key={r.id} type="button" onClick={() => setStationFilter(on || r.id === '__none__' ? '' : r.id)}
+                  className={`text-start rounded-lg px-2.5 py-2 border transition-colors ${on ? 'border-nwbus-primary bg-nwbus-primary/5' : 'border-transparent hover:bg-gray-50'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="w-5 h-5 rounded-md bg-gray-100 text-[10px] font-extrabold text-gray-500 grid place-items-center shrink-0">{i + 1}</span>
+                      <span className="text-sm font-bold text-gray-900 truncate">{r.name}</span>
+                    </span>
+                    <span className="text-xs font-mono font-bold text-gray-700 shrink-0">{r.online}<span className="text-gray-400">/{r.total}</span></span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-gray-100 mt-1.5 overflow-hidden">
+                    <i className="block h-full rounded-full" style={{ width: `${r.online / maxOnline * 100}%`, background: r.active > 0 ? '#16a34a' : '#f59e0b' }} />
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
