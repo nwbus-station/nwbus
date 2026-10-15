@@ -94,6 +94,25 @@ const accStatus = (activeDays, days, inPeriod) => {
   const p = days ? activeDays / days : 0
   return ACC_STATUS.find(x => x.key === (activeDays === 0 ? (inPeriod ? 'loginOnly' : 'idle') : p >= 0.7 ? 'steady' : p >= 0.35 ? 'fair' : 'low'))
 }
+const CARD_CSS = `
+  .cg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sc { border: 1px solid #dbe2ea; border-right: 5px solid var(--c, #64748b); border-radius: 10px; background: #fff; padding: 9px 11px; break-inside: avoid; }
+  .sc .top { display: flex; gap: 10px; align-items: center; }
+  .sc .ring { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
+  .sc .ring b { width: 41px; height: 41px; border-radius: 50%; background: #fff; display: grid; place-items: center; font: 900 13.5px ui-monospace, Menlo, monospace; direction: ltr; color: #0f172a; }
+  .sc .nm { flex: 1; min-width: 0; } .sc .nm b { display: block; font-size: 13.2px; color: #0f172a; line-height: 1.35; } .sc .nm small { display: block; font-size: 10.6px; color: #64748b; margin-top: 1px; line-height: 1.5; }
+  .sc .mt { display: grid; grid-template-columns: 58px 1fr 86px; gap: 6px; align-items: center; margin-top: 5px; font-size: 10.6px; color: #475569; font-weight: 700; }
+  .sc .mb { height: 7px; border-radius: 99px; background: #e8edf3; overflow: hidden; } .sc .mb i { display: block; height: 100%; border-radius: 99px; }
+  .sc .mv { direction: ltr; text-align: left; font: 800 10.4px ui-monospace, Menlo, monospace; color: #0f172a; }
+  .sc .shs { display: flex; gap: 4px; margin-top: 7px; } .sc .sh { flex: 1; text-align: center; border-radius: 6px; padding: 3px 1px; } .sc .sh small { display: block; font-size: 9.2px; opacity: .92; font-weight: 700; } .sc .sh b { font: 900 11.5px ui-monospace, Menlo, monospace; }
+  .sc p { margin: 6px 0 0; font-size: 11.2px; line-height: 1.8; color: #1e293b; } .sc p.ac { font-weight: 800; color: #264673; margin-top: 3px; }
+  .sc .st { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 7px; } .sc .st div { background: #f1f5f9; border-radius: 6px; text-align: center; padding: 3px 2px; font-size: 9.6px; color: #64748b; font-weight: 700; } .sc .st b { display: block; font: 900 13px ui-monospace, Menlo, monospace; color: #0f172a; direction: ltr; }
+  .sc .pp { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 7px; } .sc .pp span { font-size: 9.4px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: #f1f5f9; color: #64748b; } .sc .pp span.on { background: #dcfce7; color: #15803d; } .sc .pp span.old { background: #fef3c7; color: #b45309; }
+  .gh { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 6px; padding: 5px 10px; border-radius: 8px; background: #eef2f7; border-right: 4px solid var(--c, #264673); break-after: avoid; }
+  .gh b { font-size: 13.5px; color: #1C2B36; } .gh span { font-size: 11px; color: #475569; }
+  body.bw .sc .ring b, body.bw .sc .st div { background: #fff !important; border: 1px solid #777; }
+  @media (max-width: 640px) { .cg { grid-template-columns: 1fr; } }
+`
 const verdictOf = (score, stopped) => stopped ? VERDICTS[0] : score < 50 ? VERDICTS[1] : score < 75 ? VERDICTS[2] : score < 90 ? VERDICTS[3] : VERDICTS[4]
 const heat = p => (p == null ? ['#e5e7eb', '#6b7280'] : p >= 90 ? ['#16a34a', '#fff'] : p >= 75 ? ['#65a30d', '#fff'] : p >= 50 ? ['#f59e0b', '#1f1300'] : p >= 25 ? ['#f97316', '#fff'] : ['#dc2626', '#fff'])
 
@@ -318,21 +337,65 @@ export default function StationsPerformance({ isAr = true }) {
 
   function printAccounts() {
     if (!result) return
+    const R = result
     const period = from === to ? from : `${from} → ${to}`
-    const periodH = `<span dir="ltr">${esc(period)}</span>`
+    const periodH = from === to ? esc(from) : `من ${esc(from)} إلى ${esc(to)}`
     const stName = aSt === 'all' ? 'كل المحطات' : (accStations.find(x => String(x.id) === aSt)?.name || '')
     const roleName = aRole === 'all' ? 'موظفون ومشرفون' : aRole === 'mgr' ? 'المشرفون' : 'الموظفون'
-    const stName2 = aStatus === 'all' ? 'كل الحالات' : ACC_STATUS.find(x => x.key === aStatus)?.ar
+    const flt = aStatus === 'all' ? 'كل التقديرات' : ACC_STATUS.find(x => x.key === aStatus)?.ar
     const chip = v => `<span class="chip" style="background:${v.bg};color:${v.c};white-space:nowrap">${esc(v.ar)}</span>`
     const kpi = (v, l, c) => `<div class="kpi" style="--c:${c}"><small>${esc(l)}</small><b>${esc(v)}</b></div>`
+    const list = accList
+    const n = list.length
+    const stTotal = {}
+    R.accounts.forEach(a => { stTotal[a.stationId] = (stTotal[a.stationId] || 0) + a.trips + a.sales })
+    const sumT = list.reduce((x, a) => x + a.trips, 0), sumS = list.reduce((x, a) => x + a.sales, 0)
+    const mgrN = list.filter(a => a.isMgr).length, stN = new Set(list.map(a => a.stationId)).size
+    const cnt = k => list.filter(a => a.status.key === k).length
+    const dayWord = R.days === 1 ? 'يوم واحد' : R.days === 2 ? 'يومان' : `${R.days} ${R.days > 10 ? 'يوماً' : 'أيام'}`
+    const para = `خلال الفترة <b>${periodH}</b> (${dayWord}) جرى تحليل نشاط <b>${n}</b> حساباً (${n - mgrN} موظفاً و${mgrN} مشرفاً) في <b>${stN}</b> محطة. أدخلت هذه الحسابات مجتمعةً <b>${sumT}</b> رحلة و<b>${sumS}</b> سجل إيراد. `
+      + `<b>${cnt('steady')}</b> حساباً منتظماً، و<b>${cnt('fair')}</b> متقطعاً، و<b>${cnt('low')}</b> بنشاط محدود، و<b>${cnt('loginOnly')}</b> سجّلوا دخولاً دون أي إدخال، و<b>${cnt('idle')}</b> غير نشطين.`
+    const stack = ACC_STATUS.map(v => cnt(v.key) ? `<i style="width:${(cnt(v.key) / Math.max(1, n)) * 100}%;background:${v.c}"></i>` : '').join('')
+    const legend = ACC_STATUS.filter(v => cnt(v.key)).map(v => `<span class="chip" style="background:${v.bg};color:${v.c}">${esc(v.ar)} · ${cnt(v.key)}</span>`).join(' ')
+    const top = [...list].filter(a => a.trips + a.sales > 0).sort((x, y) => (y.trips + y.sales) - (x.trips + x.sales)).slice(0, 5)
+    const lo = list.filter(a => a.status.key === 'loginOnly')
+    const topTbl = top.length ? `<h4 class="sub">الأكثر إدخالاً</h4><table class="t"><thead><tr><th>#</th><th>الحساب</th><th>المحطة</th><th>رحلات</th><th>إيراد</th><th>أيام</th></tr></thead><tbody>${top.map((a, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(a.name)}</b></td><td class="l">${esc(a.station)}</td><td>${a.trips}</td><td>${a.sales}</td><td>${a.activeDays}/${R.days}</td></tr>`).join('')}</tbody></table>` : ''
+    const sentence = a => {
+      if (a.activeDays > 0) return `أدخل ${a.trips} رحلة و${a.sales} سجل إيراد على ${a.activeDays} من ${R.days} أيام، وآخر إدخال ${a.lastEntry.slice(5).replace('-', '/')}.`
+      if (a.inPeriod) return `سجّل دخولاً (${fmtLogin(a.last)}) دون أي إدخال خلال الفترة.`
+      return a.last ? `لا دخول ولا إدخال خلال الفترة، وآخر دخول ${fmtLogin(a.last)}.` : 'لم يدخل هذا الحساب إلى النظام من قبل.'
+    }
+    const card = a => {
+      const pc = Math.round((a.activeDays / Math.max(1, R.days)) * 100), tot = stTotal[a.stationId] || 0, mine = a.trips + a.sales
+      return `<div class="sc" style="--c:${a.status.c}">
+        <div class="top"><div class="ring" style="background:conic-gradient(${a.status.c} ${pc * 3.6}deg,#e8edf3 0)"><b>${pc}%</b></div>
+          <div class="nm"><b>${esc(a.name)}${a.isMgr ? ' <span class="muted">(مشرف)</span>' : ''}</b><small>آخر دخول: ${esc(fmtLogin(a.last) || 'لم يدخل')}</small></div>${chip(a.status)}</div>
+        <div class="st"><div>رحلات<b>${a.trips}</b></div><div>إيراد<b>${a.sales}</b></div><div>إسهامه في المحطة<b>${tot ? Math.round((mine / tot) * 100) + '%' : '—'}</b></div></div>
+        <p>${esc(sentence(a))}</p></div>`
+    }
+    const byStation = {}
+    list.forEach(a => { (byStation[a.stationId] ??= { name: a.station, accs: [] }).accs.push(a) })
+    const sev = k => ACC_STATUS.findIndex(x => x.key === k)
+    const stGroups = Object.values(byStation).map(g => {
+      g.accs.sort((x, y) => (sev(y.status.key) - sev(x.status.key)) || (x.activeDays - y.activeDays) || x.name.localeCompare(y.name, 'ar'))
+      g.avg = Math.round(g.accs.reduce((t, a) => t + a.activeDays / Math.max(1, R.days), 0) / g.accs.length * 100)
+      return g
+    }).sort((x, y) => x.avg - y.avg || x.name.localeCompare(y.name, 'ar'))
+    const groupsHtml = stGroups.map(g => {
+      const [bg] = heat(g.avg)
+      return `<div class="gh" style="--c:${bg}"><b>${esc(g.name)} — ${g.accs.length} ${g.accs.length === 1 ? 'حساب' : 'حسابات'}</b><span>متوسط أيام الإدخال <bdi dir="ltr">${g.avg}%</bdi></span></div><div class="cg">${g.accs.map(card).join('')}</div>`
+    }).join('')
     const body = `
-      ${docHeader({ title: 'تقرير أداء الحسابات', infoLines: [`الفترة: <b>${periodH}</b>`, `المحطة: <b>${esc(stName)}</b>`, `النطاق: ${esc(roleName)} · ${esc(stName2)}`] })}
+      ${docHeader({ title: 'تقرير أداء الحسابات', infoLines: [`الفترة: <b>${periodH}</b>`, `المحطة: <b>${esc(stName)}</b>`, `النطاق: ${esc(roleName)} · ${esc(flt)}`] })}
+      <style>${CARD_CSS}</style>
       <div class="body">
-        <div class="sec"><div class="grid g5">${ACC_STATUS.map(x => kpi(accCounts[x.key], x.ar, x.c)).join('')}</div></div>
-        <div class="sec" style="break-inside:auto"><h3>الحسابات (${accList.length})</h3><table class="t"><thead><tr><th>#</th><th>الحساب</th><th>الصفة</th><th>المحطة</th><th>رحلات مُدخلة</th><th>سجلات إيراد</th><th>أيام الإدخال</th><th>آخر إدخال</th><th>آخر دخول</th><th>التقدير</th></tr></thead><tbody>
-          ${accList.map((a, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(a.name)}</b></td><td>${a.isMgr ? 'مشرف' : 'موظف'}</td><td class="l">${esc(a.station)}</td><td>${a.trips}</td><td>${a.sales}</td><td>${a.activeDays}/${result.days}</td><td>${a.lastEntry ? esc(a.lastEntry.slice(5).replace('-', '/')) : '—'}</td><td>${esc(fmtLogin(a.last) || 'لم يدخل')}</td><td>${chip(a.status)}</td></tr>`).join('')}
-        </tbody></table></div>
-        <ul class="notes"><li>نشاط الحساب = عدد الأيام التي أدخل فيها رحلات أو إيرادات من أيام الفترة. منتظم (70% فأكثر) · متقطع (35–69%) · نشاط محدود (أقل من 35%) · دخول بلا إدخال (سجّل دخولاً دون أي إدخال) · غير نشط (لا دخول ولا إدخال).</li><li>الموظف الذي يعمل بنظام ورديات متناوبة قد لا يعمل كل الأيام؛ فاقرأ النتيجة مع جدول دوامه.</li></ul>
+        <div class="sec"><h3>الخلاصة التنفيذية</h3><div class="ins" style="background:#fff;border-right:4px solid #264673"><p style="margin:0;font-size:13.3px;line-height:2;color:#1e293b">${para}</p></div></div>
+        <div class="sec"><div class="grid g5">${ACC_STATUS.map(x => kpi(cnt(x.key), x.ar, x.c)).join('')}</div>
+          <div class="stack" style="height:12px;margin-top:10px">${stack}</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${legend}</div></div>
+        ${topTbl ? `<div class="sec">${topTbl}</div>` : ''}
+        ${lo.length ? `<div class="sec"><h4 class="sub">سجّلوا دخولاً دون إدخال (${lo.length})</h4><p class="muted" style="margin:0">${lo.slice(0, 25).map(a => `${esc(a.name)} (${esc(a.station)})`).join('، ')}${lo.length > 25 ? ` و${lo.length - 25} آخرون` : ''}.</p></div>` : ''}
+        <div class="sec" style="break-inside:auto"><h3>بطاقات الحسابات حسب المحطة — الأقل نشاطاً أولاً</h3>${groupsHtml}</div>
+        <ul class="notes"><li>نشاط الحساب = عدد الأيام التي أدخل فيها رحلات أو إيرادات من أيام الفترة. منتظم (70% فأكثر) · متقطع (35–69%) · نشاط محدود (أقل من 35%) · دخول بلا إدخال (سجّل دخولاً دون أي إدخال) · غير نشط (لا دخول ولا إدخال).</li><li>«إسهامه في المحطة» = نصيب الحساب من إجمالي إدخالات حسابات محطته (رحلات وإيرادات) خلال الفترة.</li><li>الموظف الذي يعمل بنظام ورديات متناوبة قد لا يعمل كل الأيام؛ فاقرأ النتيجة مع جدول دوامه.</li></ul>
       </div>`
     openDocWindow(docShell({ title: `تقرير أداء الحسابات — ${period}`, body, footerLeft: periodH, footerRight: 'NORTH WEST BUS' }))
   }
@@ -342,7 +405,7 @@ export default function StationsPerformance({ isAr = true }) {
     if (!result) return
     const R = result, n = R.rows.length
     const period = from === to ? from : `${from} → ${to}`
-    const periodH = `<span dir="ltr">${esc(period)}</span>`
+    const periodH = from === to ? esc(from) : `من ${esc(from)} إلى ${esc(to)}`
     const dayWord = R.days === 1 ? 'يوم واحد' : R.days === 2 ? 'يومان' : `${R.days} ${R.days > 10 ? 'يوماً' : 'أيام'}`
     const kpi = (v, l, c, em = '') => `<div class="kpi" style="--c:${c}"><small>${esc(l)}</small><b>${esc(v)}</b>${em ? `<em>${esc(em)}</em>` : ''}</div>`
     const cell = p => { const [bg, fg] = heat(p); return `<td style="background:${bg};color:${fg};font-weight:800">${p == null ? '—' : p + '%'}</td>` }
@@ -361,13 +424,19 @@ export default function StationsPerformance({ isAr = true }) {
     const mini = list => `<table class="t"><thead><tr><th>#</th><th>المحطة</th><th>المدير</th><th>الدرجة</th></tr></thead><tbody>${list.map((r, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(r.name)}</b></td><td class="l">${esc(r.managers[0] || '—')}</td>${cell(r.score)}</tr>`).join('')}</tbody></table>`
     const best = [...R.rows].reverse().filter(r => r.score >= 75).slice(0, 5)
     const worst = R.rows.filter(r => r.score < 75).slice(0, 5)
-    const crit = R.rows.filter(r => r.verdict.key === 'bad' || r.verdict.key === 'stopped')
-    const critCap = crit.slice(0, 15)
-    const file = r => `<div class="ins" style="border-right:4px solid ${r.verdict.c};background:#fff;margin-bottom:6px;break-inside:avoid">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:13.5px;color:#0f172a">${esc(r.name)}</b><span>${chip(r.verdict)} <b style="font-family:ui-monospace,Menlo,monospace;direction:ltr;display:inline-block;margin-right:6px">${r.score}%</b></span></div>
-        <div class="muted" style="margin:2px 0 4px">المدير: ${esc(r.managers.slice(0, 2).join('، ') || 'غير معيّن')} · الحسابات: دخل ${r.loggedIn} من ${r.staffRows.length}</div>
-        <p style="margin:0;font-size:12.3px;line-height:1.85;color:#1e293b">${esc(r.story.status)} ${esc(r.story.diag.join(' '))}</p>
-        <p style="margin:3px 0 0;font-size:12.3px;font-weight:800;color:#264673">${esc(r.story.action)}</p></div>`
+    const meter = (l, p, txt) => { const [bg] = heat(p); return `<div class="mt"><span>${esc(l)}</span><span class="mb"><i style="width:${p ?? 0}%;background:${bg}"></i></span><span class="mv">${esc(txt)}</span></div>` }
+    const card = r => `<div class="sc" style="--c:${r.verdict.c}">
+        <div class="top"><div class="ring" style="background:conic-gradient(${heat(r.score)[0]} ${r.score * 3.6}deg,#e8edf3 0)"><b>${r.score}</b></div>
+          <div class="nm"><b>${esc(r.name)}</b><small>المدير: ${esc(r.managers.slice(0, 2).join('، ') || 'غير معيّن')} · دخل ${r.loggedIn} من ${r.staffRows.length} حسابات</small></div>${chip(r.verdict)}</div>
+        ${meter('الرحلات', r.tripsPct, r.expected ? `${r.tripsPct}% · ${r.entered}/${r.expected}` : 'لا رحلات')}
+        ${meter('الإيرادات', r.salesPct, r.salesApplicable ? `${r.salesPct}% · ${r.salesCovered}/${r.salesExpected}` : 'لا إيرادات')}
+        ${meter('العملاء', r.rate ? 100 : 0, r.rate ? `${r.rate} تقييم` : 'لم تُقيَّم')}
+        <div class="shs">${r.byShift.map(x => { const [bg, fg] = heat(x.score); return `<span class="sh" style="background:${bg};color:${fg}"><small>${esc(x.ar)}</small><b>${x.score == null ? '—' : x.score + '%'}</b></span>` }).join('')}</div>
+        <div class="mt"><span>الموجودات</span><span></span><span class="mv">${r.lost} مسجّل</span></div>
+        <p>${esc(r.story.status)} ${esc(r.story.diag.join(' '))}</p><p class="ac">${esc(r.story.action)}</p>
+        <div class="pp">${r.staffRows.slice(0, 10).map(x => `<span class="${x.inPeriod ? 'on' : x.last ? 'old' : 'no'}">${esc(x.name)}${x.isMgr ? ' (مشرف)' : ''} · ${esc(fmtLogin(x.last) || 'لم يدخل')}</span>`).join('')}${r.staffRows.length > 10 ? `<span class="no">+${r.staffRows.length - 10}</span>` : ''}</div></div>`
+    const groups = VERDICTS.map(v => ({ v, list: R.rows.filter(r => r.verdict.key === v.key) })).filter(g => g.list.length)
+    const cardsHtml = groups.map(g => `<div class="gh" style="--c:${g.v.c}"><b>${esc(g.v.ar)} — ${g.list.length} ${g.list.length === 1 ? 'محطة' : 'محطات'}</b><span>${esc(g.v.line)}</span></div><div class="cg">${g.list.map(card).join('')}</div>`).join('')
     const withMv = R.infoOnly.filter(x => x.expected > 0), noMv = R.infoOnly.filter(x => !x.expected)
     const totA = withMv.reduce((a, x) => a + x.arr, 0), totD = withMv.reduce((a, x) => a + x.dep, 0)
     const half = Math.ceil(withMv.length / 2)
@@ -379,6 +448,7 @@ export default function StationsPerformance({ isAr = true }) {
         ${noMv.length ? `<p class="muted" style="margin:8px 0 0"><b>بلا حركات مجدولة في الفترة:</b> ${noMv.map(x => esc(x.name)).join('، ')}.</p>` : ''}</div>` : ''
     const body = `
       ${docHeader({ title: 'تقرير أداء المحطات', infoLines: [`الفترة: <b>${periodH}</b>`, `المحطات المقيَّمة: <b>${n}</b>`, `أعدّه: ${esc('الإدارة')}`] })}
+      <style>${CARD_CSS}</style>
       <div class="body">
         <div class="sec"><h3>الخلاصة التنفيذية</h3>
           <div class="ins" style="background:#fff;border-right:4px solid #264673"><p style="margin:0;font-size:13.3px;line-height:2;color:#1e293b">${para}</p></div>
@@ -394,13 +464,9 @@ export default function StationsPerformance({ isAr = true }) {
           ${best.length ? `<div><h4 class="sub">الأفضل أداءً</h4>${mini(best)}</div>` : '<div></div>'}
           ${worst.length ? `<div><h4 class="sub">الأحوج إلى التحسين</h4>${mini(worst)}</div>` : '<div></div>'}
         </div>` : ''}
-        ${crit.length ? `<div class="sec" style="break-inside:auto"><h3>المحطات التي تتطلب معالجة (${crit.length})</h3>${critCap.map(file).join('')}${crit.length > critCap.length ? `<p class="muted">عُرضت أضعف ${critCap.length} محطة؛ بقية المحطات في جدول الترتيب أدناه.</p>` : ''}</div>` : ''}
-        <div class="sec" style="break-inside:auto"><h3>ترتيب المحطات — من الأضعف إلى الأقوى</h3><table class="t"><thead><tr><th>#</th><th>المحطة</th><th>المدير المعيّن</th><th>الحسابات</th><th>دخلوا</th><th>الدرجة</th><th>التقدير</th><th>الرحلات</th><th>الإيرادات</th>${shiftKeys.map(k => `<th>${esc(SHIFT_AR[k])}</th>`).join('')}<th>العملاء</th></tr></thead><tbody>
-          ${R.rows.map((r, i) => `<tr><td>${i + 1}</td><td class="l"><b>${esc(r.name)}</b></td><td class="l">${esc(r.managers.join('، ') || '—')}</td><td>${r.staffRows.length}</td><td>${r.loggedIn}</td>${cell(r.score)}<td>${chip(r.verdict)}</td>${cell(r.tripsPct)}${cell(r.salesPct)}${shiftKeys.map(k => cell(r.byShift.find(x => x.k === k)?.score ?? null)).join('')}<td>${r.rate || 'لم تُقيَّم'}</td></tr>`).join('')}
-        </tbody></table></div>
+        <div class="sec" style="break-inside:auto"><h3>بطاقات المحطات — من الأضعف إلى الأقوى</h3>${cardsHtml}</div>
         ${unstaffed}
         <ul class="notes"><li>الدرجة العامة = إدخال الرحلات ${W_TRIPS}% + تغطية الإيرادات للورديات ${W_SALES}% + تقييم العملاء ${W_RATING}%؛ ويُعاد توزيع الأوزان إن لم يتوفر أحد المقاييس. التقييم بالإدخالات فقط، بلا مبالغ ولا أعداد ركاب.</li><li>مقياس التقدير: ممتاز (90 فأكثر) · جيد (75–89) · يحتاج إلى تحسين (50–74) · ضعيف (أقل من 50) · لا يوجد نشاط مسجَّل (لا إدخال إطلاقاً رغم وجود حركات وموظفين).</li><li>«دخلوا» = عدد الحسابات (موظفون ومشرفون) التي سجّلت دخولاً خلال الفترة.</li></ul>
-        <div class="sig"><div><span>إعداد</span><b></b><i></i></div><div><span>مراجعة</span><b></b><i></i></div><div><span>اعتماد</span><b></b><i></i></div></div>
       </div>`
     openDocWindow(docShell({ title: `تقرير أداء المحطات — ${period}`, body, footerLeft: periodH, footerRight: 'NORTH WEST BUS' }))
   }
