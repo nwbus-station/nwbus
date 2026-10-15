@@ -404,7 +404,7 @@ function StationPrintPicker({ isAr, label, accent, list, staff, selected, setSel
                 {[
                   [isAr ? 'الكل' : 'All', () => set(ids)],
                   [isAr ? 'لا شيء' : 'None', () => set([])],
-                  [isAr ? `فيها موظفون نشطون (${withStaff.length})` : `With active staff (${withStaff.length})`, () => set(withStaff.map(s => s.id))],
+                  [isAr ? `فيها حسابات نشطة (${withStaff.length})` : `With active accounts (${withStaff.length})`, () => set(withStaff.map(s => s.id))],
                 ].map(([l, fn]) => (
                   <button key={l} type="button" onClick={fn} className={`text-[11px] font-bold border rounded-full px-3 py-1 ${c.soft} hover:opacity-80`}>{l}</button>
                 ))}
@@ -424,7 +424,7 @@ function StationPrintPicker({ isAr, label, accent, list, staff, selected, setSel
                       {isAr && s.name_en && s.name_ar && <span className="block text-[11px] text-gray-400 truncate" dir="ltr" style={{ textAlign: 'right' }}>{s.name_en}</span>}
                     </span>
                     <span className={`shrink-0 text-[11px] font-bold rounded-full px-2.5 py-0.5 border ${n > 0 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                      {n > 0 ? (isAr ? `${n} موظف` : `${n} staff`) : (isAr ? 'بلا موظفين' : 'No staff')}
+                      {n > 0 ? (isAr ? `${n} حساب` : `${n} accounts`) : (isAr ? 'بلا حسابات' : 'No accounts')}
                     </span>
                   </label>
                 )
