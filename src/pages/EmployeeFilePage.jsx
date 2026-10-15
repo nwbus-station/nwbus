@@ -13,6 +13,7 @@ import { USER_ROLES, MODULES } from '../utils/constants'
 import { esc, docHeader, docShell, openDocWindow } from '../utils/printDoc'
 import { parseShifts, shiftIdx } from '../utils/shifts'
 import { shiftsOfStation } from '../utils/stationShifts'
+import StationsPerformance from '../components/employeeFile/StationsPerformance'
 
 const MONO = 'ui-monospace, Menlo, Consolas, monospace'
 const LEAVE_AR = { annual: 'سنوية', casual: 'استئذان خروج', compensatory: 'تعويضية', unpaid: 'بدون راتب', emergency: 'اضطرارية', sick: 'مرضية', marriage: 'زواج', paternity: 'مولود', bereavement: 'وفاة' }
@@ -699,6 +700,7 @@ export default function EmployeeFilePage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
+  const [view, setView] = useState('employee')   // employee | stations (أداء المحطات)
 
   useEffect(() => { try { localStorage.setItem('empfile_sections_v3', JSON.stringify([...sel])) } catch { /* بدون تخزين */ } }, [sel])
   useEffect(() => {
@@ -926,13 +928,23 @@ export default function EmployeeFilePage() {
             <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'السجل الوظيفي' : 'Staff record'}</h1>
             <p style={{ margin: '3px 0 0', fontSize: '0.76rem', color: 'var(--text-3)' }}>{isAr ? 'سجل شامل للموظف: البيانات، الإجازات، الأداء التشغيلي، الإيرادات، التقييمات، والدخول — للأدمن فقط' : 'Complete employee record: details, leaves, operations, revenue, evaluations and logins — admin only'}</p>
           </div>
-          <button type="button" onClick={printFile} disabled={!an} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', fontFamily: 'inherit', opacity: an ? 1 : 0.4 }}>
+          <div style={{ display: 'inline-flex', border: '1px solid var(--border-2)', borderRadius: 12, overflow: 'hidden' }}>
+            {[['employee', isAr ? 'ملف الموظف' : 'Employee'], ['stations', isAr ? 'أداء المحطات' : 'Stations performance']].map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setView(k)} style={{ padding: '9px 20px', border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', background: view === k ? '#1C2B4A' : 'var(--card)', color: view === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
+            ))}
+          </div>
+          {view === 'employee' && <button type="button" onClick={printFile} disabled={!an} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', fontFamily: 'inherit', opacity: an ? 1 : 0.4 }}>
             {isAr ? 'طباعة التقرير / PDF' : 'Print report / PDF'}
-          </button>
+          </button>}
         </div>
       </div>
 
-      <div style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {view === 'stations' && (
+        <div style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 20px' }}>
+          <StationsPerformance isAr={isAr} />
+        </div>
+      )}
+      <div style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 20px', display: view === 'employee' ? 'flex' : 'none', flexDirection: 'column', gap: 16 }}>
         {/* الفلاتر */}
         <div style={{ ...card, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
