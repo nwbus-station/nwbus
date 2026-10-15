@@ -168,6 +168,7 @@ export default function StationsPerformance({ isAr = true }) {
     const stations = allSt.filter(s => !isRestStation(s))
     const stById = Object.fromEntries(stations.map(s => [s.id, s]))
     const days = dateList(from, end)
+    const rn = new Date(Date.now() + 3 * 3600 * 1000), nowMin = rn.getUTCHours() * 60 + rn.getUTCMinutes()
     const stopMap = {}
     stops.forEach(s => { stopMap[`${s.trip_schedule_id}|${s.station_id}`] = s })
     const tripInfo = {}
@@ -197,6 +198,7 @@ export default function StationsPerformance({ isAr = true }) {
         if (t.days_of_week?.length && !t.days_of_week.includes(new Date(date + 'T00:00:00').getDay())) return
         legs.forEach(([isArr, time]) => {
           if (!time) return
+          if (date === today && toMin(time) > nowMin) return   // رحلة اليوم التي لم يحن وقتها بعد لا تُحسب
           const k = shifts[shiftIdx(toMin(time), shifts)].k
           ;(exp[st.station_id] ??= []).push({ key: `${st.trip_schedule_id}|${date}|${st.station_id}|${isArr ? 'a' : 'd'}`, shift: k })
         })
@@ -239,10 +241,13 @@ export default function StationsPerformance({ isAr = true }) {
       const tripsPct = pct(hit.length, expected.length)
       const nShifts = shifts.length
       const sset = salesSet[stn.id]
-      const salesApplicable = !!sset && sset.size > 0
+      // اليوم الحالي: لا تُحسب إلا الورديات التي انتهت (الإيراد يُدخل بعد نهاية الوردية)
+      const due = (d, sh) => d !== today || sh.to <= nowMin
+      let salesExpected = 0
+      days.forEach(d => shifts.forEach(sh => { if (due(d, sh)) salesExpected++ }))
+      const salesApplicable = !!sset && sset.size > 0 && salesExpected > 0
       let salesCovered = 0
-      if (salesApplicable) days.forEach(d => shifts.forEach(sh => { if (sset.has(`${d}|${sh.k}`)) salesCovered++ }))
-      const salesExpected = days.length * nShifts
+      if (salesApplicable) days.forEach(d => shifts.forEach(sh => { if (due(d, sh) && sset.has(`${d}|${sh.k}`)) salesCovered++ }))
       const salesPct = salesApplicable ? Math.min(100, pct(salesCovered, salesExpected)) : null
       const rate = ratingCnt[stn.id] || 0
       const ratingScore = rate > 0 ? 100 : 0
@@ -258,7 +263,7 @@ export default function StationsPerformance({ isAr = true }) {
       const byShift = shifts.map(sh => {
         const e = expected.filter(x => x.shift === sh.k), h = e.filter(x => entered.has(x.key))
         const tp = pct(h.length, e.length)
-        const sp = salesApplicable ? pct(days.filter(d => sset.has(`${d}|${sh.k}`)).length, days.length) : null
+        const dueDays = days.filter(d => due(d, sh)), sp = salesApplicable && dueDays.length ? pct(dueDays.filter(d => sset.has(`${d}|${sh.k}`)).length, dueDays.length) : null
         const vals = [tp, sp].filter(v => v != null)
         return { k: sh.k, ar: sh.ar, range: sh.range, trips: tp, sales: sp, n: e.length, score: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null }
       })
