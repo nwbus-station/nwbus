@@ -1116,9 +1116,22 @@ export default function ReportsPage() {
     </div>`
   }
 
-  function openPrintPreview(bodyHtml, pageCss, withBw = false) {
+  // اسم التقرير حسب الفترة: يومي / أسبوعي / شهري / لفترة — يظهر في تبويب المعاينة وهو اسم ملف الـPDF عند الحفظ
+  function reportKindName() {
+    const d1 = new Date(dateFrom + 'T00:00:00Z'), d2 = new Date(dateTo + 'T00:00:00Z')
+    const days = Math.round((d2 - d1) / 86400000) + 1
+    const lastOfMonth = new Date(Date.UTC(d1.getUTCFullYear(), d1.getUTCMonth() + 1, 0)).getUTCDate()
+    if (days === 1) return isAr ? 'التقرير اليومي' : 'Daily Report'
+    if (days === 7) return isAr ? 'التقرير الأسبوعي' : 'Weekly Report'
+    if (d1.getUTCDate() === 1 && d2.getUTCDate() === lastOfMonth && d1.getUTCMonth() === d2.getUTCMonth() && d1.getUTCFullYear() === d2.getUTCFullYear()) return isAr ? 'التقرير الشهري' : 'Monthly Report'
+    return isAr ? `تقرير ${days} يوماً` : `${days}-day Report`
+  }
+  const periodForName = () => (dateFrom === dateTo ? dateFrom : `${dateFrom} ${isAr ? 'إلى' : 'to'} ${dateTo}`)
+  const safeName = t => String(t).replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim()
+
+  function openPrintPreview(bodyHtml, pageCss, withBw = false, docTitle = '') {
     const w = window.open('', '_blank')
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>${pageCss}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}@media print{.no-print{display:none!important}}</style></head><body>${reportPrintBarHtml(withBw)}${bodyHtml}</body></html>`)
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${escapeHtml(safeName(docTitle || reportKindName()))}</title><style>${pageCss}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}@media print{.no-print{display:none!important}}</style></head><body>${reportPrintBarHtml(withBw)}${bodyHtml}</body></html>`)
     w.document.close()
   }
 
@@ -1315,7 +1328,11 @@ export default function ReportsPage() {
     }
 
     const html = `<div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">${summaryPage}${pages}</div>`
-    openPrintPreview(html, SHEET_CSS, true)
+    const kindS = reportKindName()
+    const docTitleS = targetStations.length > 1
+      ? `${kindS} — ${isAr ? 'ملخص المحطات' : 'Stations summary'} (${targetStations.length}) — ${periodForName()}`
+      : `${kindS} — ${isAr ? targetStations[0]?.name_ar || targetStations[0]?.name_en : targetStations[0]?.name_en || targetStations[0]?.name_ar} — ${periodForName()}`
+    openPrintPreview(html, SHEET_CSS, true, docTitleS)
   }
 
   function printReport() {
@@ -1346,7 +1363,14 @@ export default function ReportsPage() {
         </div>
       </div>`
 
-    openPrintPreview(html, SHEET_CSS, true)
+    const kind = reportKindName()
+    const scopeName = station !== 'all' ? ` — ${stationLabel}` : ''
+    const docTitle = types.length === ALL_TYPES.length
+      ? `${kind} — ${periodForName()}${scopeName}`
+      : types.length === 1
+        ? `${REPORT_LABEL[types[0]]} — ${kind.replace(isAr ? 'التقرير ' : ' Report', '') } — ${periodForName()}${scopeName}`
+        : `${kind} (${types.length} ${isAr ? 'أقسام' : 'sections'}) — ${periodForName()}${scopeName}`
+    openPrintPreview(html, SHEET_CSS, true, docTitle)
   }
 
   function exportCompliance() {
