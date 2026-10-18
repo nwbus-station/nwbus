@@ -13,7 +13,11 @@ const CACHE_KEY = 'lostfound_logs_all'
 const PAGE = 60
 const DONATE_AFTER = 30    // يوم: بعدها يحق تسليم الغرض للجمعية
 const DELETE_AFTER = 40    // يوم: بعدها يُقترح الحذف (بعد تأكيد الأدمن)
-const DELIVERED_KEEP = 30  // يوم: بعد التسليم للعميل
+const PHOTO_KEEP_HOURS = 24  // ساعة: بعد التسليم (لعميل أو جمعية) تُحذف صور الغرض ويبقى سجله للتقارير
+const deliveredAtOf = i => (i.status === 'donated' ? i.donated_at : (i.delivered_to_client_at || i.resolved_date))
+const hoursSince = d => (d ? (Date.now() - new Date(d).getTime()) / 3600000 : 0)
+// مسار الصورة داخل تخزين lost-found من رابطها العام
+const photoPath = url => { const m = String(url).match(/\/lost-found\/([^?]+)/); return m ? decodeURIComponent(m[1]) : null }
 
 const daysSince = d => (d ? Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86400000)) : 0)
 const day10 = d => (d ? String(d).slice(0, 10) : '—')
@@ -105,6 +109,24 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [load])
+  // حذف صور الأغراض المسلَّمة بعد 24 ساعة من التسليم (للمشرفين والأدمن؛ يبقى سجل الغرض)
+  useEffect(() => {
+    if (!(isAdmin || canDonate)) return
+    const due = items.filter(i => (i.status === 'claimed' || i.status === 'donated') && Array.isArray(i.photos) && i.photos.length > 0 && hoursSince(deliveredAtOf(i)) >= PHOTO_KEEP_HOURS)
+    if (due.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      const done = []
+      for (const it of due) {
+        const paths = it.photos.map(photoPath).filter(Boolean)
+        if (paths.length) { const { error: re } = await supabase.storage.from('lost-found').remove(paths); if (re) console.warn('photo remove failed:', re.message) }
+        const { data: upd, error: ue } = await supabase.from('lost_found_items').update({ photos: [] }).eq('id', it.id).select('id')
+        if (!ue && upd && upd.length) done.push(it.id)
+      }
+      if (!cancelled && done.length) { setItems(prev => prev.map(x => (done.includes(x.id) ? { ...x, photos: [] } : x))); clearCached(CACHE_KEY) }
+    })()
+    return () => { cancelled = true }
+  }, [items, isAdmin, canDonate])
   // أي تغيير فلتر يرجع العدّاد لأول صفحة
   useEffect(() => { setLimit(PAGE) }, [sub, search, fStation, fStatus, fType, fPeriod, sort])
 
@@ -121,8 +143,8 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
     setBusy(null)
   }
 
-  const expiredItems = useMemo(() => items.filter(i => (i.created_at && daysSince(i.created_at) >= DELETE_AFTER)
-    || (i.status === 'claimed' && i.delivered_to_client_at && daysSince(i.delivered_to_client_at) >= DELIVERED_KEEP)), [items])
+  // المسلَّمة (لعميل أو جمعية) تبقى سجلاً للتقارير ولا تُقترح للحذف؛ المقترح للحذف: غير المستلمة المنتهية مدتها فقط
+  const expiredItems = useMemo(() => items.filter(i => i.status !== 'claimed' && i.status !== 'donated' && i.created_at && daysSince(i.created_at) >= DELETE_AFTER), [items])
   const expiredReports = useMemo(() => reports.filter(r => r.created_at && daysSince(r.created_at) >= DELETE_AFTER), [reports])
   async function removeExpired() {
     setBusy('expired')
@@ -192,7 +214,7 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
         <div style={{ ...card, borderColor: 'rgba(217,119,6,0.45)', background: 'rgba(217,119,6,0.08)', padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220, fontSize: '0.8rem', color: 'var(--text-1)', lineHeight: 1.7 }}>
             <b>{t('انتهت مدة الاحتفاظ', 'Retention period ended')}</b> — {t(
-              `${expiredItems.length} من الموجودات و${expiredReports.length} من البلاغات (أكثر من ${DELETE_AFTER} يوماً، أو مُسلَّمة للعميل من أكثر من ${DELIVERED_KEEP} يوماً). لن تُحذف إلا بعد تأكيدك.`,
+              `${expiredItems.length} من الموجودات و${expiredReports.length} من البلاغات (أكثر من ${DELETE_AFTER} يوماً دون استلام أو تسليم). لن تُحذف إلا بعد تأكيدك.`,
               `${expiredItems.length} items and ${expiredReports.length} reports. Nothing is deleted until you confirm.`)}
           </div>
           <button onClick={() => setConfirm({ kind: 'expired' })} disabled={busy === 'expired'} style={{ ...actBtn(true), background: '#dc2626', color: '#fff', border: 'none' }}>{t('مراجعة وحذف', 'Review & delete')}</button>
@@ -213,7 +235,7 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: 'var(--text-1)' }}>{t('السجل والأرشيف', 'Archive & Log')}</h2>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 3 }}>{t(`${DONATE_AFTER} يوماً ← تسليم للجمعية (للمشرفين) · ${DELETE_AFTER} يوماً ← حذف بعد تأكيد الأدمن`, `${DONATE_AFTER} days → charity (supervisors) · ${DELETE_AFTER} days → delete after admin confirmation`)}</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 3 }}>{t(`${DONATE_AFTER} يوماً ← تسليم للجمعية (للمشرفين) · الصور تُحذف بعد ${PHOTO_KEEP_HOURS} ساعة من التسليم ويبقى السجل للتقارير`, `${DONATE_AFTER} days → charity (supervisors) · ${DELETE_AFTER} days → delete after admin confirmation`)}</div>
         </div>
         <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--card)' }}>
           {[['items', t('الموجودات', 'Found items'), items.length], ['reports', t('بلاغات المفقودات', 'Lost reports'), reports.length]].map(([k, l, n]) => (
@@ -310,7 +332,8 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
               const left = Math.max(0, DONATE_AFTER - foundDays)
               const pctAge = Math.min(100, Math.round((foundDays / DONATE_AFTER) * 100))
               const ageColor = foundDays >= DONATE_AFTER ? '#dc2626' : foundDays >= 20 ? '#d97706' : '#16a34a'
-              const deliveredLeft = item.status === 'claimed' && item.delivered_to_client_at ? Math.max(0, DELIVERED_KEEP - daysSince(item.delivered_to_client_at)) : null
+              const delivered = item.status === 'claimed' || item.status === 'donated'
+              const photoHoursLeft = delivered && photos.length > 0 ? Math.max(0, Math.ceil(PHOTO_KEEP_HOURS - hoursSince(deliveredAtOf(item)))) : null
               return (
                 <article key={item.id} style={{ ...card, overflow: 'hidden', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${S.c}` }}>
                   <div style={{ padding: '12px 14px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -352,7 +375,11 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
                       <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-2, var(--surface))', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${pctAge}%`, background: ageColor, borderRadius: 99 }} /></div>
                     </div>
                   )}
-                  {deliveredLeft !== null && <div style={{ padding: '0 14px 10px', fontSize: '0.66rem', color: 'var(--text-3)' }}>{t(`يُحذف بعد ${deliveredLeft} يوم`, `Deleted in ${deliveredLeft} days`)}</div>}
+                  {delivered && (
+                    <div style={{ padding: '0 14px 10px', fontSize: '0.66rem', color: 'var(--text-3)' }}>
+                      {photoHoursLeft !== null ? t(`تُحذف الصور بعد ${photoHoursLeft} ساعة من التسليم ويبقى السجل`, `Photos are deleted in ${photoHoursLeft} h; the record is kept`) : t('حُذفت الصور بعد التسليم — السجل محفوظ', 'Photos deleted after delivery — record kept')}
+                    </div>
+                  )}
 
                   {open && (
                     <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 12 }}>
