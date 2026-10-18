@@ -9,6 +9,7 @@ import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
+import { buildStamp } from '../../utils/buildInfo'
 import { startPresence, updatePresencePath, stopPresence } from '../../lib/presence'
 import { onPwaUpdateAvailable, applyPwaUpdate, hardRefresh, consumeUpdatedFlag } from '../../lib/pwaUpdate'
 
@@ -572,7 +573,7 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
             <Icon d={ICONS.logout} size={16} />
             <span>{isAr ? 'تسجيل الخروج' : 'Sign out'}</span>
           </button>
-          <p className="mm-ver" dir="ltr">NW Station · v{__APP_VERSION__}</p>
+          <p className="mm-ver" dir="ltr">NW Station · v{__APP_VERSION__} · {buildStamp()}</p>
         </div>
       </aside>
     </>
@@ -999,9 +1000,8 @@ export default function AppLayout() {
 
       {/* شارة ثابتة دايماً — تصير مرئية بدون تمرير، على أي صفحة */}
       {location.pathname !== '/' && <div className="no-print app-version-badge">
-        {isAr ? 'آخر تحديث: ' : 'Updated: '}
-        {new Date(__BUILD_TIME__).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' })}
-        {' · '}v{__APP_VERSION__}
+        <span>{isAr ? 'آخر تحديث' : 'Updated'}</span>{' '}
+        <bdi dir="ltr">{buildStamp()} · v{__APP_VERSION__}</bdi>
       </div>}
 
       {/* ── Bottom nav (mobile only) ── */}

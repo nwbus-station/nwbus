@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { buildStamp } from '../utils/buildInfo'
 import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
@@ -278,14 +279,6 @@ function MagazineFeed({ posts, isAr, onNavigate }) {
       {byTemplate.map(group => <MagazineTypeCard key={group[0].template} posts={group} isAr={isAr} onNavigate={onNavigate} />)}
     </div>
   )
-}
-
-// تاريخ ووقت بناء النسخة (توقيت الرياض)
-const buildStamp = () => {
-  try {
-    if (typeof __BUILD_TIME__ === 'undefined' || !__BUILD_TIME__) return ''
-    return new Date(__BUILD_TIME__).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).replace(',', '')
-  } catch { return '' }
 }
 
 export default function DashboardPage() {
