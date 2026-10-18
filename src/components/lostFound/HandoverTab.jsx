@@ -22,7 +22,7 @@ export default function HandoverTab({ profile, isAr = true }) {
   const [fStation, setFStation] = useState('')
   const [fType, setFType] = useState('')
   const [selectedId, setSelectedId] = useState(null)
-  const [form, setForm] = useState({ owner_name: '', owner_contact: '', resolved_date: todayStr(), notes: '' })
+  const [form, setForm] = useState({ owner_name: '', owner_id_number: '', owner_contact: '', resolved_date: todayStr(), notes: '' })
   const [saving, setSaving] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const [banner, setBanner] = useState(null)   // { kind: 'ok'|'err', text }
@@ -48,7 +48,7 @@ export default function HandoverTab({ profile, isAr = true }) {
 
   function pick(item) {
     setSelectedId(item.id)
-    setForm({ owner_name: '', owner_contact: '', resolved_date: todayStr(), notes: '' })
+    setForm({ owner_name: '', owner_id_number: '', owner_contact: '', resolved_date: todayStr(), notes: '' })
     setBanner(null)
     // الجوال: لوحة التسليم فوق القائمة، فنمرّر لها فور الاختيار
     setTimeout(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
@@ -61,6 +61,7 @@ export default function HandoverTab({ profile, isAr = true }) {
     const { error } = await supabase.from('lost_found_items').update({
       status: 'claimed',
       owner_name: form.owner_name.trim(),
+      owner_id_number: form.owner_id_number.trim(),
       owner_contact: form.owner_contact.trim(),
       resolved_date: form.resolved_date,
       notes: form.notes || null,
@@ -69,7 +70,11 @@ export default function HandoverTab({ profile, isAr = true }) {
       delivered_to_client_at: now,
     }).eq('id', selected.id)
     setSaving(false)
-    if (error) { setBanner({ kind: 'err', text: t('تعذّر تسجيل التسليم: ', 'Handover failed: ') + error.message }); return }
+    if (error) {
+      const noCol = /owner_id_number/.test(error.message || '')
+      setBanner({ kind: 'err', text: noCol ? t('عمود رقم الهوية غير موجود في قاعدة البيانات. شغّل أمر SQL الخاص به أولاً (alter table lost_found_items add column owner_id_number text).', 'The ID number column is missing in the database. Run its SQL first.') : t('تعذّر تسجيل التسليم: ', 'Handover failed: ') + error.message })
+      return
+    }
     clearCached('lostfound_logs_all')
     setBanner({ kind: 'ok', text: t(`✓ تم تسليم الغرض #${selected.item_number ?? ''} إلى ${form.owner_name.trim()}`, `✓ Item #${selected.item_number ?? ''} handed over to ${form.owner_name.trim()}`) })
     setSelectedId(null)
@@ -80,6 +85,7 @@ export default function HandoverTab({ profile, isAr = true }) {
   function submit(e) {
     e.preventDefault()
     if (!form.owner_name.trim()) return
+    if (form.owner_id_number.trim().length < 5) { setBanner({ kind: 'err', text: t('أدخل رقم هوية المستلم (5 خانات على الأقل)', 'Enter the recipient ID number (at least 5 characters)') }); return }
     setConfirm(true)
   }
 
@@ -187,6 +193,10 @@ export default function HandoverTab({ profile, isAr = true }) {
                   <div>
                     <label style={label}>{t('اسم المستلم *', 'Recipient name *')}</label>
                     <input required value={form.owner_name} onChange={e => setForm(f => ({ ...f, owner_name: e.target.value }))} style={fieldStyle} />
+                  </div>
+                  <div>
+                    <label style={label}>{t('رقم الهوية *', 'ID number *')}</label>
+                    <input required inputMode="numeric" dir="ltr" maxLength={20} value={form.owner_id_number} onChange={e => setForm(f => ({ ...f, owner_id_number: toLatinNums(e.target.value).replace(/\s/g, '') }))} style={{ ...fieldStyle, fontFamily: MONO, letterSpacing: 1 }} placeholder={t('الهوية الوطنية / الإقامة / الجواز', 'National ID / Iqama / Passport')} />
                   </div>
                   <div>
                     <label style={label}>{t('رقم التواصل', 'Contact number')}</label>

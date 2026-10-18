@@ -353,6 +353,13 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
 
                   {open && (
                     <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {item.status === 'claimed' && item.owner_id_number && (isAdmin || canDonate) && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: '0.78rem' }}>
+                          <span style={{ color: 'var(--text-3)', fontWeight: 700 }}>{t('رقم هوية المستلم', 'Recipient ID')}</span>
+                          <button type="button" onClick={() => togglePhone('id' + item.id)} style={actBtn()}>{phones.has('id' + item.id) ? t('إخفاء', 'Hide') : t('إظهار', 'Show')}</button>
+                          {phones.has('id' + item.id) && <span dir="ltr" style={{ fontFamily: MONO, fontWeight: 700, color: 'var(--text-1)' }}>{item.owner_id_number}</span>}
+                        </div>
+                      )}
                       {item.creator?.phone && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: '0.78rem' }}>
                           <span style={{ color: 'var(--text-3)', fontWeight: 700 }}>{t('جوال المسجّل', 'Registrant phone')}</span>
