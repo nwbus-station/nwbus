@@ -337,7 +337,6 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
                     {item.status === 'claimed' && <Meta label={t('سلّمه', 'Delivered by')}>{item.delivered_by_name || item.updated_by_name || '—'}</Meta>}
                     {item.status === 'claimed' && <Meta label={t('محطة التسليم', 'Delivery station')}>{item.delivered_station_name || '—'}</Meta>}
                     {item.status === 'donated' && <Meta label={t('تاريخ ووقت التسليم للجمعية', 'Donated on')}><span dir="ltr">{fmtDT(item.donated_at)}</span></Meta>}
-                    {item.status === 'donated' && <Meta label={t('الجمعية', 'Charity')}>{donMap[item.donation_id]?.charity_name || '—'}</Meta>}
                     {item.status === 'donated' && <Meta label={t('سلّمها', 'Delivered by')}>{donMap[item.donation_id]?.created_by_name || '—'}</Meta>}
                     {item.status === 'donated' && <Meta label={t('محطة التسليم', 'Delivery station')}>{donMap[item.donation_id]?.station_name || '—'}</Meta>}
                     {item.status === 'donated' && donMap[item.donation_id] && <Meta label={t('رقم المحضر', 'Record')}><span dir="ltr" style={{ fontFamily: MONO }}>{`DN-${String(donMap[item.donation_id].donation_no ?? 0).padStart(4, '0')}`}</span></Meta>}

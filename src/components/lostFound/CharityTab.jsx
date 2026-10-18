@@ -12,7 +12,6 @@ import ConfirmDialog from '../shared/ConfirmDialog'
 import { MONO, card, fieldStyle, FormCard, Section, Banner, PrimaryButton, GhostButton, AutoStamp, fmtDT } from './ui'
 
 const DONATE_AFTER = 30
-const LAST_CHARITY_KEY = 'nwbus_last_charity'
 const NONE = '00000000-0000-0000-0000-000000000000'
 const lri = v => `⁦${v}⁩`   // يعزل الأرقام والتواريخ داخل النص العربي
 const toLatinNums = v => String(v ?? '').replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => d.charCodeAt(0) - 1632)
@@ -28,17 +27,16 @@ export function printDonation(d, items) {
   const cell = (l, v) => `<div class="cell"><small>${esc(l)}</small><b>${v || '—'}</b></div>`
   const rows = items.map((i, k) => `<tr><td>${k + 1}</td><td>${esc(i.item_number ? `#${i.item_number}` : '—')}</td><td class="l"><b>${esc(i.item_description || '—')}</b></td><td>${esc(typeOf(i.item_type))}</td><td class="l">${esc(i.found_location || '—')}</td><td>${lri(esc(day10(i.found_date || i.created_at)))}</td><td>${lri(String(daysSince(i.found_date || i.created_at)))}</td></tr>`).join('')
   const body = `
-    ${docHeader({ title: 'محضر تسليم موجودات للجمعية', infoLines: [`رقم المحضر: <b>${lri(esc(donationLabel(d.donation_no)))}</b>`, `التاريخ والوقت: <b>${lri(esc(fmtDT(d.created_at || d.donated_date)))}</b>`, `عدد الأغراض: <b>${lri(String(items.length))}</b>`] })}
+    ${docHeader({ title: 'محضر تسليم موجودات', infoLines: [`رقم المحضر: <b>${lri(esc(donationLabel(d.donation_no)))}</b>`, `التاريخ والوقت: <b>${lri(esc(fmtDT(d.created_at || d.donated_date)))}</b>`] })}
     <div class="body">
-      <div class="sec"><h3>بيانات التسليم</h3><div class="grid g3">
-        ${cell('الجمعية المستلمة', esc(d.charity_name))}${cell('اسم المستلم', esc(d.recipient_name))}${cell('رقم هوية المستلم', lri(esc(d.recipient_id_number)))}
-        ${cell('جوال المستلم', d.recipient_phone ? lri(esc(d.recipient_phone)) : '')}${cell('المسلِّم (الموظف)', esc(d.created_by_name))}${cell('محطة التسليم', esc(d.station_name))}${cell('ملاحظات', esc(d.notes))}
+      <div class="sec"><div class="grid g4">
+        ${cell('المحطة', esc(d.station_name))}${cell('المسلِّم', esc(d.created_by_name))}${cell('عدد الأغراض', lri(String(items.length)))}${cell('سبب التسليم', `مضيّ ${DONATE_AFTER} يوماً دون استلام`)}
       </div></div>
-      <div class="sec" style="break-inside:auto"><h3>الأغراض المسلّمة</h3>
+      <div class="sec" style="break-inside:auto"><h3>الأغراض</h3>
         <table class="t"><thead><tr><th>#</th><th>رقم الغرض</th><th>الوصف</th><th>النوع</th><th>المحطة</th><th>تاريخ العثور</th><th>الأيام</th></tr></thead><tbody>${rows}</tbody></table>
       </div>
-      <ul class="notes"><li>أقرّ المستلم أعلاه باستلام الأغراض الموضحة في هذا المحضر كما هي، وتنتقل ملكيتها للجمعية المستلمة بعد انقضاء مدة الاحتفاظ النظامية (${DONATE_AFTER} يوماً).</li></ul>
-      <div class="sig"><div><span>المسلِّم</span><b>${esc(d.created_by_name || '')}</b><i></i></div><div><span>المستلم من الجمعية</span><b>${esc(d.recipient_name || '')}</b><i></i></div><div><span>اعتماد المشرف</span><b></b><i></i></div></div>
+      ${d.notes ? `<div class="sec"><div class="cell"><small>ملاحظات</small><b style="font-weight:600">${esc(d.notes)}</b></div></div>` : ''}
+      <div class="sig" style="grid-template-columns:repeat(2,1fr)"><div><span>المسلِّم</span><b>${esc(d.created_by_name || '')}</b><i></i></div><div><span>اعتماد المشرف</span><b></b><i></i></div></div>
     </div>`
   openDocWindow(docShell({ title: `محضر تسليم ${donationLabel(d.donation_no)}`, body, footerLeft: lri(esc(fmtDT(d.created_at || d.donated_date))), footerRight: 'NORTH WEST BUS' }))
 }
@@ -61,7 +59,7 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
   const [fType, setFType] = useState('')
   const [selected, setSelected] = useState(() => new Set())
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState(() => ({ charity_name: (() => { try { return localStorage.getItem(LAST_CHARITY_KEY) || '' } catch { return '' } })(), recipient_name: '', recipient_id_number: '', recipient_phone: '', notes: '' }))
+  const [form, setForm] = useState({ notes: '' })
   const [confirm, setConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [banner, setBanner] = useState(null)   // { kind, text, donation?, items? }
@@ -98,7 +96,6 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
     && (!q || [i.item_description, i.found_location, i.created_by_name, String(i.item_number ?? '')].some(v => String(v ?? '').toLowerCase().includes(q)))
   ), [items, fStation, fType, q])
   const chosen = useMemo(() => items.filter(i => selected.has(i.id)), [items, selected])
-  const charityNames = useMemo(() => [...new Set(donations.map(d => d.charity_name).filter(Boolean))], [donations])
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
   const thisMonth = donations.filter(d => new Date(d.created_at) >= monthStart)
   const thisMonthItems = thisMonth.reduce((a, d) => a + (d.item_count || 0), 0)
@@ -110,7 +107,6 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
   function submit(e) {
     e.preventDefault()
     if (chosen.length === 0) return
-    if (form.recipient_id_number.trim().length < 5) { setBanner({ kind: 'err', text: t('أدخل رقم هوية المستلم (5 خانات على الأقل)', 'Enter the recipient ID number (at least 5 characters)') }); return }
     setConfirm(true)
   }
 
@@ -118,8 +114,8 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
     setSaving(true)
     const rows = chosen
     const header = {
-      charity_name: form.charity_name.trim(), recipient_name: form.recipient_name.trim(), recipient_id_number: form.recipient_id_number.trim(),
-      recipient_phone: form.recipient_phone.trim() || null, donated_date: todayStr(), notes: form.notes.trim() || null,
+      charity_name: '', recipient_name: '', recipient_id_number: '',   // لا تُطلب هذه البيانات: التسليم يُسجَّل باسم الموظف والمحطة والوقت
+      donated_date: todayStr(), notes: form.notes.trim() || null,
       item_count: rows.length, created_by: profile?.id, created_by_name: profile?.full_name_ar, station_name: profile?.station?.name_ar || null,
     }
     const { data: don, error: de } = await supabase.from('charity_donations').insert(header).select().single()
@@ -137,14 +133,13 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
       setBanner({ kind: 'err', text: t('تعذّر تسجيل الأغراض كمسلّمة (لم يُحفظ المحضر): ', 'Could not mark items as donated (record not saved): ') + ue.message })
       return
     }
-    try { localStorage.setItem(LAST_CHARITY_KEY, header.charity_name) } catch { /* بدون تخزين */ }
     clearCached('lostfound_logs_all')
     setSaving(false)
     setBanner({ kind: 'ok', text: t(`✓ تم تسليم ${rows.length} غرض للجمعية — المحضر ${donationLabel(don.donation_no)}`, `✓ ${rows.length} items handed to charity — record ${donationLabel(don.donation_no)}`), donation: don, items: rows })
     setItems(prev => prev.filter(i => !selected.has(i.id)))
     setDonations(prev => [don, ...prev])
     setSelected(new Set()); setShowForm(false)
-    setForm(f => ({ ...f, recipient_name: '', recipient_id_number: '', recipient_phone: '', notes: '' }))
+    setForm({ notes: '' })
   }
 
   async function toggleDonation(d) {
@@ -177,7 +172,7 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
 
       {confirm && (
         <ConfirmDialog
-          message={t(`تسليم ${chosen.length} غرض إلى «${form.charity_name.trim()}» (المستلم: ${form.recipient_name.trim()})؟ يُنشأ محضر رسمي ولا يمكن التراجع.`, `Hand ${chosen.length} items to "${form.charity_name.trim()}" (recipient: ${form.recipient_name.trim()})? An official record is created and cannot be undone.`)}
+          message={t(`تسليم ${chosen.length} غرض؟ يُنشأ محضر رسمي باسمك وباسم محطتك ولا يمكن التراجع.`, `Hand over ${chosen.length} items? An official record is created in your name and station and cannot be undone.`)}
           confirmLabel={t('تأكيد التسليم للجمعية', 'Confirm')} cancelLabel={t('إلغاء', 'Cancel')}
           onConfirm={() => { setConfirm(false); doDonate() }} onCancel={() => setConfirm(false)} />
       )}
@@ -217,12 +212,9 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
                     <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>{t(`${d.item_count || 0} غرض`, `${d.item_count || 0} items`)}</span>
                   </div>
                   <div style={{ padding: '10px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
-                    <div style={{ gridColumn: '1 / -1' }}><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('الجمعية', 'Charity')}</div><div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>{d.charity_name}</div></div>
-                    <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('المستلم', 'Recipient')}</div><div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{d.recipient_name}</div></div>
                     <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('تاريخ ووقت التسليم', 'Date & time')}</div><div dir="ltr" style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)', textAlign: isAr ? 'right' : 'left' }}>{fmtDT(d.created_at || d.donated_date)}</div></div>
                     <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('المسلِّم', 'By')}</div><div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{d.created_by_name || '—'}</div></div>
                     <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('محطة التسليم', 'Station')}</div><div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{d.station_name || '—'}</div></div>
-                    <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('رقم الهوية', 'ID')}</div><div dir="ltr" style={{ fontFamily: MONO, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)', textAlign: isAr ? 'right' : 'left' }}>{d.recipient_id_number || '—'}</div></div>
                   </div>
                   {open && (
                     <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -252,28 +244,15 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {showForm && chosen.length > 0 && (
             <form onSubmit={submit}>
-              <FormCard icon="hand" accent="#8b5cf6" title={t('بيانات التسليم للجمعية', 'Charity hand-over details')} subtitle={t(`${chosen.length} غرض مختار`, `${chosen.length} items selected`)}>
-                <Section title={t('الجمعية والمستلم', 'Charity & recipient')}>
-                  <div>
-                    <label style={label}>{t('اسم الجمعية *', 'Charity name *')}</label>
-                    <input required list="charity-names" value={form.charity_name} onChange={e => setForm(f => ({ ...f, charity_name: e.target.value }))} style={fieldStyle} />
-                    <datalist id="charity-names">{charityNames.map(n => <option key={n} value={n} />)}</datalist>
-                  </div>
-                  <div>
-                    <label style={label}>{t('اسم المستلم من الجمعية *', 'Recipient name *')}</label>
-                    <input required value={form.recipient_name} onChange={e => setForm(f => ({ ...f, recipient_name: e.target.value }))} style={fieldStyle} />
-                  </div>
-                  <div>
-                    <label style={label}>{t('رقم هوية المستلم *', 'Recipient ID *')}</label>
-                    <input required inputMode="numeric" dir="ltr" maxLength={20} value={form.recipient_id_number} onChange={e => setForm(f => ({ ...f, recipient_id_number: toLatinNums(e.target.value).replace(/\s/g, '') }))} style={{ ...fieldStyle, fontFamily: MONO, letterSpacing: 1 }} />
-                  </div>
-                  <div>
-                    <label style={label}>{t('جوال المستلم', 'Recipient phone')}</label>
-                    <input inputMode="tel" dir="ltr" value={form.recipient_phone} onChange={e => setForm(f => ({ ...f, recipient_phone: toLatinNums(e.target.value) }))} style={fieldStyle} placeholder="05xxxxxxxx" />
+              <FormCard icon="hand" accent="#8b5cf6" title={t('تأكيد التسليم', 'Confirm hand-over')} subtitle={t(`${chosen.length} غرض مختار`, `${chosen.length} items selected`)}>
+                <Section title={t('بيانات المحضر', 'Record details')}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div><label style={label}>{t('المسلِّم', 'Delivered by')}</label><div style={{ ...fieldStyle, background: 'var(--surface)', fontWeight: 700 }}>{profile?.full_name_ar || '—'}</div></div>
+                    <div><label style={label}>{t('المحطة', 'Station')}</label><div style={{ ...fieldStyle, background: 'var(--surface)', fontWeight: 700 }}>{profile?.station?.name_ar || '—'}</div></div>
                   </div>
                   <AutoStamp isAr={isAr} label={t('تاريخ ووقت التسليم', 'Hand-over date & time')} />
                   <div>
-                    <label style={label}>{t('ملاحظات', 'Notes')}</label>
+                    <label style={label}>{t('ملاحظات (اختياري)', 'Notes (optional)')}</label>
                     <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ ...fieldStyle, resize: 'none' }} />
                   </div>
                 </Section>
