@@ -11,6 +11,17 @@ const LOGIN_AT_KEY   = 'nwbus_login_at'
 // إذا فُتح التبويب من رابط خارجي فالمفتاح غير موجود → خروج فوري
 const TAB_AUTH_KEY   = 'nwbus_tab_auth'
 
+// مشرف المرحّلين: حساب مقيّد بصلاحيات ثابتة مهما كانت إعدادات مسماه — موظفوه (تحت اسمه) فقط:
+// يشوف إجازاتهم ويوافق عليها ويقيّمهم (المرحّلين منهم فقط)، ولا يوافق ولا يقيّم موظفي المحطات التي تُخصّص له،
+// وتخصيص المحطات له يفتح له الترحيل والتقارير ومعلومات المحطات فقط.
+const isDispSupAccount = (u, t) => u?.job_title === 'dispatcher_supervisor' || t?.job_title === 'dispatcher_supervisor' || t?.eval_source === 'dispatcher_supervisor'
+const DISP_SUP_FORCED = {
+  restricted_mode: true, assigned_leaves: true, assigned_evaluate: true, evaluation_dispatchers_only: true, scope_assigned_stations: true,
+  leaves_supervisor_stage: false, evaluation_my_employees: false, leaves_final_approve: false, leaves_supervise: false,
+  evaluation_stations_tab: false, evaluation_supervisors_tab: false,
+  jg_dispatchers_leaves: false, jg_dispatchers_evaluate: false, jg_customer_service_leaves: false, jg_customer_service_evaluate: false, jg_supervisors_leaves: false,
+}
+
 export function AuthProvider({ children }) {
   const [session,           setSession]           = useState(null)
   const [profile,           setProfile]           = useState(null)   // users table row
@@ -61,14 +72,20 @@ export function AuthProvider({ children }) {
         const { data: rp } = await supabase.from('role_permissions').select('permissions').eq('role', data.role).maybeSingle()  // data.role = الدور الأصلي (مشرف المنطقة مستقل)
         setRolePerms(rp?.permissions ?? null)
       }
-      if (title?.permissions?.assigned_evaluate || title?.permissions?.assigned_leaves) {
+      if (title?.permissions?.assigned_evaluate || title?.permissions?.assigned_leaves || isDispSupAccount(data, title)) {
         const { data: asg } = await supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', data.id)
-        setAssignedEmployeeIds((asg ?? []).map(r => r.employee_id))
+        let ids = (asg ?? []).map(r => r.employee_id)
+        if (isDispSupAccount(data, title)) {
+          // الموظفون تحت اسمه = المسؤول المباشر (حقل «المشرف» بحساب الموظف) + المخصصون له بالاسم
+          const { data: direct } = await supabase.from('users').select('id').eq('supervisor_id', data.id).eq('is_active', true)
+          ids = [...new Set([...ids, ...(direct ?? []).map(r => r.id)])]
+        }
+        setAssignedEmployeeIds(ids)
       } else {
         setAssignedEmployeeIds([])
       }
       // مشرف منطقة / مشرف محطة — نجلب محطاته المخصصة من user_stations
-      if (data.role === ASSISTANT_DIRECTOR_ROLE || title?.permissions?.leaves_supervisor_stage || title?.permissions?.evaluation_my_employees || title?.permissions?.scope_assigned_stations || title?.permissions?.stations_manage_assigned) {
+      if (data.role === ASSISTANT_DIRECTOR_ROLE || isDispSupAccount(data, title) || title?.permissions?.leaves_supervisor_stage || title?.permissions?.evaluation_my_employees || title?.permissions?.scope_assigned_stations || title?.permissions?.stations_manage_assigned) {
         const { data: us } = await supabase.from('user_stations').select('station_id').eq('user_id', data.id)
         setSupervisedStationIds((us ?? []).map(r => r.station_id))
       } else {
@@ -259,7 +276,8 @@ export function AuthProvider({ children }) {
   const isAssistantDirector = profile?.role === ASSISTANT_DIRECTOR_ROLE
   // مصفوفة صلاحيات المسمى المخصص: grantCap تمنح قدرة إضافية، allowCap تقيّد قدرة الدور الأساسي
   // نفس أولوية القاعدة: قيمة المسمى لو موجودة، وإلا قيمة الدور الأساسي، وإلا الافتراضي
-  const permOf = key => customTitle?.permissions?.[key] ?? rolePerms?.[key]
+  const dispSup = isDispSupAccount(profile, customTitle)
+  const permOf = key => (dispSup && key in DISP_SUP_FORCED) ? DISP_SUP_FORCED[key] : (customTitle?.permissions?.[key] ?? rolePerms?.[key])
   // سقف الأقسام للدور الأساسي (الحساب اللي عليه مسمى مخصص ما ينطبق عليه)
   const roleAllowsModule = mod => roleModuleAllowed(mod, profile?.display_role ?? profile?.role, rolePerms, !!customTitle)
   // المصدر الوحيد لظهور أي قسم: قسم الحساب نفسه + سقف دوره/مسماه
@@ -269,7 +287,7 @@ export function AuthProvider({ children }) {
   // المسميات الوظيفية اللي له عليها هذا الإجراء (view / evaluate / leaves) بحسب المجموعات الوظيفية
   const jobsFor = action => jobsForAction(action, grantCap)
   // حساب مقيّد (مثل مشرف المرحلين): أساسه أدمن في قاعدة البيانات لكن التطبيق يعامله كمشرف — لا يُعامل كأدمن أبداً
-  const isRestricted = ADMIN_ROLE_VALUES.includes(profile?.role) && grantCap('restricted_mode')
+  const isRestricted = dispSup || (ADMIN_ROLE_VALUES.includes(profile?.role) && grantCap('restricted_mode'))
   const isGeneralAdmin    = ADMIN_ROLE_VALUES.includes(profile?.role) && !isRestricted
   const actsAsSupervisor = isAssistantDirector || grantCap('leaves_supervisor_stage')
   const evaluatesOwnEmployees = isAssistantDirector || grantCap('evaluation_my_employees')
