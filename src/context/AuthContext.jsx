@@ -281,7 +281,8 @@ export function AuthProvider({ children }) {
   // سقف الأقسام للدور الأساسي (الحساب اللي عليه مسمى مخصص ما ينطبق عليه)
   const roleAllowsModule = mod => roleModuleAllowed(mod, profile?.display_role ?? profile?.role, rolePerms, !!customTitle)
   // المصدر الوحيد لظهور أي قسم: قسم الحساب نفسه + سقف دوره/مسماه
-  const canSeeModule = mod => (!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod)
+  // الموجودات: مفتوحة لكل الحسابات (البحث عن غرض ضائع يُسأل عنه في أي محطة)، مهما كانت أقسام الحساب
+  const canSeeModule = mod => mod === 'lost_found' || ((!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod))
   const grantCap = key => permOf(key) === true
   const allowCap = key => permOf(key) !== false
   // المسميات الوظيفية اللي له عليها هذا الإجراء (view / evaluate / leaves) بحسب المجموعات الوظيفية
