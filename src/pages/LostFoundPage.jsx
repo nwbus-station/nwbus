@@ -745,7 +745,17 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
     let rq = supabase.from('lost_reports').select('*, from_st:from_station_id(name_ar), to_st:to_station_id(name_ar)').order('created_at', { ascending: false })
     let iq = supabase.from('lost_found_items').select('*, creator:created_by(phone)').order('created_at', { ascending: false })
     if (stationFilter) { rq = rq.eq('station_id', stationFilter); iq = iq.eq('station_id', stationFilter) }
-    const [{ data: r }, { data: i }] = await Promise.all([rq, iq])
+    let [{ data: r, error: rErr }, { data: i }] = await Promise.all([rq, iq])
+    if (rErr) {
+      // فشل جلب البلاغات مع أسماء المحطات المرتبطة: نجلبها بدونها ونركّب الأسماء من جدول المحطات
+      console.warn('lost_reports embed failed:', rErr.message)
+      const [{ data: plain }, { data: sts }] = await Promise.all([
+        supabase.from('lost_reports').select('*').order('created_at', { ascending: false }),
+        supabase.from('stations').select('id, name_ar'),
+      ])
+      const nm = Object.fromEntries((sts ?? []).map(x => [x.id, x.name_ar]))
+      r = (plain ?? []).map(x => ({ ...x, from_st: x.from_station_id ? { name_ar: nm[x.from_station_id] } : null, to_st: x.to_station_id ? { name_ar: nm[x.to_station_id] } : null }))
+    }
     const rpts = r ?? [], itms = i ?? []
     if (rpts.length || itms.length) setCached(cacheKey, { reports: rpts, items: itms })
     setReports(rpts); setItems(itms); setLoading(false)
