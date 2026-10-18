@@ -4,10 +4,9 @@ import { supabase } from '../../lib/supabase'
 import { clearCached } from '../../lib/pageCache'
 import { ITEM_TYPES } from '../../utils/constants'
 import { todayStr } from '../../utils/dates'
-import DatePicker from '../shared/DatePicker'
 import SelectField from '../shared/SelectField'
 import ConfirmDialog from '../shared/ConfirmDialog'
-import { MONO, card, fieldStyle, FormCard, Section, Banner, PrimaryButton, GhostButton } from './ui'
+import { MONO, card, fieldStyle, FormCard, Section, Banner, PrimaryButton, GhostButton, AutoStamp } from './ui'
 
 const toLatinNums = v => String(v ?? '').replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => d.charCodeAt(0) - 1632)
 const daysSince = d => (d ? Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86400000)) : 0)
@@ -63,16 +62,18 @@ export default function HandoverTab({ profile, isAr = true }) {
       owner_name: form.owner_name.trim(),
       owner_id_number: form.owner_id_number.trim(),
       owner_contact: form.owner_contact.trim(),
-      resolved_date: form.resolved_date,
+      resolved_date: todayStr(),
       notes: form.notes || null,
       updated_by_name: profile?.full_name_ar,
       updated_at: now,
       delivered_to_client_at: now,
+      delivered_by_name: profile?.full_name_ar || null,
+      delivered_station_name: profile?.station?.name_ar || null,
     }).eq('id', selected.id)
     setSaving(false)
     if (error) {
-      const noCol = /owner_id_number/.test(error.message || '')
-      setBanner({ kind: 'err', text: noCol ? t('عمود رقم الهوية غير موجود في قاعدة البيانات. شغّل أمر SQL الخاص به أولاً (alter table lost_found_items add column owner_id_number text).', 'The ID number column is missing in the database. Run its SQL first.') : t('تعذّر تسجيل التسليم: ', 'Handover failed: ') + error.message })
+      const noCol = /owner_id_number|delivered_by_name|delivered_station_name/.test(error.message || '')
+      setBanner({ kind: 'err', text: noCol ? t('أعمدة التسليم (رقم الهوية / المسلِّم / المحطة) غير موجودة في قاعدة البيانات. شغّل أمر SQL الخاص بها أولاً.', 'Hand-over columns are missing in the database. Run the SQL first.') : t('تعذّر تسجيل التسليم: ', 'Handover failed: ') + error.message })
       return
     }
     clearCached('lostfound_logs_all')
@@ -202,10 +203,7 @@ export default function HandoverTab({ profile, isAr = true }) {
                     <label style={label}>{t('رقم التواصل', 'Contact number')}</label>
                     <input inputMode="tel" dir="ltr" value={form.owner_contact} onChange={e => setForm(f => ({ ...f, owner_contact: toLatinNums(e.target.value) }))} style={fieldStyle} placeholder="05xxxxxxxx" />
                   </div>
-                  <div>
-                    <label style={label}>{t('تاريخ التسليم', 'Handover date')}</label>
-                    <DatePicker isAr={isAr} value={form.resolved_date} onChange={v => setForm(f => ({ ...f, resolved_date: v }))} style={fieldStyle} />
-                  </div>
+                  <AutoStamp isAr={isAr} label={t('تاريخ ووقت التسليم', 'Hand-over date & time')} />
                   <div>
                     <label style={label}>{t('ملاحظات', 'Notes')}</label>
                     <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ ...fieldStyle, resize: 'none' }} />

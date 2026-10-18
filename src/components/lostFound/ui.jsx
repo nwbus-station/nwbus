@@ -71,3 +71,25 @@ export function GhostButton({ children, ...rest }) {
     </button>
   )
 }
+
+// تاريخ ووقت (بتوقيت الرياض): 18/10/2026 05:12
+export const fmtDT = iso => {
+  if (!iso) return '—'
+  try { return new Date(iso).toLocaleString('en-GB', { timeZone: 'Asia/Riyadh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).replace(',', '') } catch { return '—' }
+}
+
+// حقل وقت التسليم: يُسجَّل تلقائياً لحظة التأكيد ولا يُعدَّل يدوياً
+import { useState, useEffect } from 'react'
+export function AutoStamp({ label, isAr = true }) {
+  const [now, setNow] = useState(() => new Date().toISOString())
+  useEffect(() => { const id = setInterval(() => setNow(new Date().toISOString()), 20000); return () => clearInterval(id) }, [])
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{label}</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 9, border: '1.5px dashed var(--border)', background: 'var(--card)' }}>
+        <span dir="ltr" style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-1)' }}>{fmtDT(now)}</span>
+        <span style={{ marginInlineStart: 'auto', fontSize: '0.64rem', fontWeight: 700, color: 'var(--text-3)' }}>{isAr ? 'يُسجَّل تلقائياً — لا يُعدَّل' : 'Recorded automatically — not editable'}</span>
+      </div>
+    </div>
+  )
+}

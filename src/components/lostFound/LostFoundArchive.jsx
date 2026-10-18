@@ -7,6 +7,7 @@ import { ITEM_TYPES } from '../../utils/constants'
 import RouteText from '../shared/RouteText'
 import SelectField from '../shared/SelectField'
 import ConfirmDialog from '../shared/ConfirmDialog'
+import { fmtDT } from './ui'
 
 const CACHE_KEY = 'lostfound_logs_all'
 const PAGE = 60
@@ -47,12 +48,13 @@ function Meta({ label, children }) {
 }
 const actBtn = (danger = false) => ({ padding: '6px 12px', borderRadius: 8, border: `1px solid ${danger ? 'rgba(220,38,38,0.4)' : 'var(--border)'}`, background: 'var(--surface)', color: danger ? '#dc2626' : 'var(--text-2)', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' })
 
-export default function LostFoundArchive({ isAdmin = false, canDonate = false, isAr = true }) {
+export default function LostFoundArchive({ isAdmin = false, canDonate = false, onDonate = null, isAr = true }) {
   const t = (ar, en) => (isAr ? ar : en)
   const cached = getCached(CACHE_KEY)
   const [sub, setSub] = useState('items')
   const [reports, setReports] = useState(() => cached?.reports ?? [])
   const [items, setItems] = useState(() => cached?.items ?? [])
+  const [donMap, setDonMap] = useState({})   // donation_id → محضر التسليم للجمعية
   const [loading, setLoading] = useState(() => !cached)
   const [search, setSearch] = useState('')
   const [fStation, setFStation] = useState('')
@@ -87,6 +89,9 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
       r = (plain ?? []).map(x => ({ ...x, from_st: x.from_station_id ? { name_ar: nm[x.from_station_id] } : null, to_st: x.to_station_id ? { name_ar: nm[x.to_station_id] } : null }))
     }
     const rpts = r ?? [], itms = i ?? []
+    // محاضر التسليم للجمعية (قد يكون الجدول غير منشأ بعد: نتجاهل الخطأ)
+    const { data: dons } = await supabase.from('charity_donations').select('id, donation_no, charity_name, created_by_name, station_name')
+    setDonMap(Object.fromEntries((dons ?? []).map(d => [d.id, d])))
     if (rpts.length || itms.length) setCached(CACHE_KEY, { reports: rpts, items: itms })
     setReports(rpts); setItems(itms); setLoading(false)
   }, [])
@@ -104,14 +109,6 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
   useEffect(() => { setLimit(PAGE) }, [sub, search, fStation, fStatus, fType, fPeriod, sort])
 
   // ── عمليات ──
-  async function donate(id) {
-    setBusy(id)
-    const now = new Date().toISOString()
-    const { error } = await supabase.from('lost_found_items').update({ status: 'donated', donated_at: now }).eq('id', id)
-    if (error) flash(t('تعذّر التسليم للجمعية: ', 'Could not donate: ') + error.message)
-    else { setItems(prev => prev.map(x => (x.id === id ? { ...x, status: 'donated', donated_at: now } : x))); clearCached(CACHE_KEY) }
-    setBusy(null)
-  }
   async function removeOne(table, id) {
     setBusy(id)
     const { error } = await supabase.from(table).delete().eq('id', id)
@@ -140,8 +137,7 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
   function runConfirmed() {
     const c = confirm; setConfirm(null)
     if (!c) return
-    if (c.kind === 'donate') donate(c.id)
-    else if (c.kind === 'item') removeOne('lost_found_items', c.id)
+    if (c.kind === 'item') removeOne('lost_found_items', c.id)
     else if (c.kind === 'report') removeOne('lost_reports', c.id)
     else if (c.kind === 'expired') removeExpired()
   }
@@ -206,11 +202,10 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
 
       {confirm && (
         <ConfirmDialog
-          message={confirm.kind === 'donate' ? t('تسليم هذا الغرض للجمعية؟ يُسجَّل بتاريخ اليوم ولا يمكن التراجع.', 'Hand this item over to charity? It is logged today and cannot be undone.')
-            : confirm.kind === 'expired' ? t(`حذف نهائي لـ ${expiredItems.length} من الموجودات و${expiredReports.length} من البلاغات المنتهية مدتها؟ لا يمكن التراجع.`, `Permanently delete ${expiredItems.length} items and ${expiredReports.length} reports?`)
+          message={confirm.kind === 'expired' ? t(`حذف نهائي لـ ${expiredItems.length} من الموجودات و${expiredReports.length} من البلاغات المنتهية مدتها؟ لا يمكن التراجع.`, `Permanently delete ${expiredItems.length} items and ${expiredReports.length} reports?`)
             : confirm.kind === 'report' ? t('حذف هذا البلاغ نهائياً؟ لا يمكن التراجع.', 'Delete this report permanently?')
             : t('حذف هذه القطعة نهائياً؟ لا يمكن التراجع.', 'Delete this item permanently?')}
-          confirmLabel={confirm.kind === 'donate' ? t('تسليم للجمعية', 'Donate') : t('حذف', 'Delete')} cancelLabel={t('إلغاء', 'Cancel')}
+          confirmLabel={t('حذف', 'Delete')} cancelLabel={t('إلغاء', 'Cancel')}
           onConfirm={runConfirmed} onCancel={() => setConfirm(null)} />
       )}
 
@@ -338,7 +333,14 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
                     <Meta label={t('تاريخ العثور', 'Found on')}><span dir="ltr">{day10(item.found_date || item.created_at)}</span></Meta>
                     <Meta label={t('المسجّل', 'Registered by')}>{item.created_by_name || '—'}</Meta>
                     {item.status === 'claimed' && <Meta label={t('العميل', 'Client')}>{item.owner_name || '—'}</Meta>}
-                    {item.status === 'donated' && <Meta label={t('تاريخ التسليم للجمعية', 'Donated on')}><span dir="ltr">{day10(item.donated_at)}</span></Meta>}
+                    {item.status === 'claimed' && <Meta label={t('تاريخ ووقت التسليم للعميل', 'Delivered on')}><span dir="ltr">{item.delivered_to_client_at ? fmtDT(item.delivered_to_client_at) : day10(item.resolved_date)}</span></Meta>}
+                    {item.status === 'claimed' && <Meta label={t('سلّمه', 'Delivered by')}>{item.delivered_by_name || item.updated_by_name || '—'}</Meta>}
+                    {item.status === 'claimed' && <Meta label={t('محطة التسليم', 'Delivery station')}>{item.delivered_station_name || '—'}</Meta>}
+                    {item.status === 'donated' && <Meta label={t('تاريخ ووقت التسليم للجمعية', 'Donated on')}><span dir="ltr">{fmtDT(item.donated_at)}</span></Meta>}
+                    {item.status === 'donated' && <Meta label={t('الجمعية', 'Charity')}>{donMap[item.donation_id]?.charity_name || '—'}</Meta>}
+                    {item.status === 'donated' && <Meta label={t('سلّمها', 'Delivered by')}>{donMap[item.donation_id]?.created_by_name || '—'}</Meta>}
+                    {item.status === 'donated' && <Meta label={t('محطة التسليم', 'Delivery station')}>{donMap[item.donation_id]?.station_name || '—'}</Meta>}
+                    {item.status === 'donated' && donMap[item.donation_id] && <Meta label={t('رقم المحضر', 'Record')}><span dir="ltr" style={{ fontFamily: MONO }}>{`DN-${String(donMap[item.donation_id].donation_no ?? 0).padStart(4, '0')}`}</span></Meta>}
                   </div>
                   {item.status !== 'claimed' && item.status !== 'donated' && (
                     <div style={{ padding: '0 14px 12px' }}>
@@ -381,9 +383,9 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
                   <div style={{ marginTop: 'auto', padding: '10px 14px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                     <button type="button" onClick={() => setOpenId(open ? null : item.id)} style={actBtn()}>{open ? t('إخفاء التفاصيل', 'Hide details') : t('التفاصيل والصور', 'Details & photos')}</button>
                     <span style={{ flex: 1 }} />
-                    {canDonate && st === 'due' && (
-                      <button type="button" disabled={busy === item.id} onClick={() => setConfirm({ kind: 'donate', id: item.id })} style={{ ...actBtn(), background: 'rgba(139,92,246,0.14)', color: '#8b5cf6', borderColor: 'rgba(139,92,246,0.4)', opacity: busy === item.id ? 0.6 : 1 }}>
-                        {busy === item.id ? '...' : t('تسليم للجمعية', 'Donate')}
+                    {canDonate && onDonate && st === 'due' && (
+                      <button type="button" onClick={() => onDonate(item.id)} style={{ ...actBtn(), background: 'rgba(139,92,246,0.14)', color: '#8b5cf6', borderColor: 'rgba(139,92,246,0.4)' }}>
+                        {t('تسليم للجمعية', 'Donate')}
                       </button>
                     )}
                     {isAdmin && <button type="button" disabled={busy === item.id} onClick={() => setConfirm({ kind: 'item', id: item.id })} style={actBtn(true)}>{t('حذف', 'Delete')}</button>}

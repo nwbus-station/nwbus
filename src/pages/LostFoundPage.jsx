@@ -11,6 +11,7 @@ import SelectField from '../components/shared/SelectField'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import LostFoundArchive from '../components/lostFound/LostFoundArchive'
 import HandoverTab from '../components/lostFound/HandoverTab'
+import CharityTab from '../components/lostFound/CharityTab'
 import { FormCard, Section, Banner, PrimaryButton } from '../components/lostFound/ui'
 import { ADMIN_ROLE_VALUES } from '../utils/constants'
 
@@ -679,6 +680,7 @@ const TABS = [
   { id: 'register', ar: 'تسجيل موجود جديد',  en: 'Register Item',   hint: { ar: 'عثرت على غرض؟ سجّله هنا', en: 'Found something? Log it' } },
   { id: 'handover', ar: 'تسليم لصاحبه',      en: 'Hand Over',       hint: { ar: 'سلّم الغرض لمن جاء يطلبه', en: 'Give an item to its owner' } },
   { id: 'report',   ar: 'بلاغ مفقود',        en: 'Lost Report',     hideForEmployee: true, hint: { ar: 'عميل فقد غرضاً؟ سجّل بلاغه', en: 'A customer lost something' } },
+  { id: 'charity',  ar: 'التسليم للجمعية',   en: 'Charity',         donorsOnly: true, hint: { ar: 'دفعة أغراض بمحضر رسمي', en: 'Batch hand-over with record' } },
   { id: 'logs',     ar: 'السجل والأرشيف',    en: 'Archive & Log',   hint: { ar: 'كل الموجودات والبلاغات السابقة', en: 'All past items and reports' } },
 ]
 
@@ -694,6 +696,7 @@ export default function LostFoundPage() {
   const canDonate = ['station_admin', 'area_supervisor', 'shift_supervisor', ...ADMIN_ROLE_VALUES].includes(profile?.role)
   const isAr = i18n.language === 'ar'
   const [tab, setTab] = useState('register')
+  const [preselect, setPreselect] = useState(null)   // غرض يُفتح مختاراً في تبويب التسليم للجمعية
   const [stations, setStations] = useState([])
   const [counts, setCounts] = useState({ unclaimed: null, reports: null, aging: null })
   const narrow = useNarrow()
@@ -706,7 +709,7 @@ export default function LostFoundPage() {
   }, [])
 
   const TAB_CAP = { report: 'lostfound_report_tab', handover: 'lostfound_handover_tab', register: 'lostfound_register_tab', logs: 'lostfound_archive_tab' }
-  const visibleTabs = TABS.filter(t => !(t.hideForEmployee && isEmployee) && allowCap(TAB_CAP[t.id]))
+  const visibleTabs = TABS.filter(t => !(t.hideForEmployee && isEmployee) && !(t.donorsOnly && !canDonate) && allowCap(TAB_CAP[t.id]))
   const activeTab = visibleTabs.some(t => t.id === tab) ? tab : visibleTabs[0]?.id
 
   // ملخص سريع أعلى الصفحة — يتحدّث عند تبديل التبويب (بعد تسجيل أو تسليم)
@@ -763,7 +766,8 @@ export default function LostFoundPage() {
       {activeTab === 'report'   && !isEmployee && <LostReportTab   stations={stations} profile={profile} isAr={isAr} />}
       {activeTab === 'handover' && <HandoverTab    profile={profile} isAr={isAr} />}
       {activeTab === 'register' && <RegisterItemTab profile={profile} isAr={isAr} stations={stations} />}
-      {activeTab === 'logs'     && <LostFoundArchive isAdmin={isAdmin} canDonate={canDonate} isAr={isAr} />}
+      {activeTab === 'charity'  && canDonate && <CharityTab preselectId={preselect} onPreselectUsed={() => setPreselect(null)} isAr={isAr} />}
+      {activeTab === 'logs'     && <LostFoundArchive isAdmin={isAdmin} canDonate={canDonate} onDonate={id => { setPreselect(id); setTab('charity') }} isAr={isAr} />}
     </div>
   )
 }
