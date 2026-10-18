@@ -373,7 +373,7 @@ function LostReportTab({ stations, profile, isAr }) {
 /* ══════════════════════════════════════════════════════════
    TAB 2 — تسليم موجودات
 ══════════════════════════════════════════════════════════ */
-function HandoverTab({ profile, isAr }) {
+function HandoverTab({ profile, scopeIds = undefined, isAr }) {
   const { workStations } = useAuth()
   const [items, setItems]   = useState([])
   const [search, setSearch] = useState('')
@@ -385,8 +385,9 @@ function HandoverTab({ profile, isAr }) {
 
   useEffect(() => {
     let q = supabase.from('lost_found_items').select('*').eq('status', 'unclaimed')
-    if (workStations?.length > 1) q = q.in('station_id', workStations.map(x => x.id))
-    else if (profile.station_id) q = q.eq('station_id', profile.station_id)
+    if (scopeIds) q = q.in('station_id', scopeIds.length ? scopeIds : ['00000000-0000-0000-0000-000000000000'])
+    else if (scopeIds === undefined && workStations?.length > 1) q = q.in('station_id', workStations.map(x => x.id))
+    else if (scopeIds === undefined && profile.station_id) q = q.eq('station_id', profile.station_id)
     q.order('created_at', { ascending: false })
       .then(({ data }) => { setItems(data ?? []); setLoading(false) })
   }, [done])
@@ -720,7 +721,9 @@ const delBtn = (onClick, loading) => (
   </button>
 )
 
-function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
+function LogsTab({ stationIds = null, isAdmin = false, isAr = true }) {
+  // نطاق المحطات: null = كل المحطات (الأدمن)، وإلا فمحطات الحساب فقط
+  const stationFilter = stationIds ? (stationIds.join(',') || 'none') : null
   const initialLogsCacheKey = `lostfound_logs_${stationFilter ?? 'all'}`
   const initialLogsCache = getCached(initialLogsCacheKey)
 
@@ -746,7 +749,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
 
     let rq = supabase.from('lost_reports').select('*, from_st:from_station_id(name_ar), to_st:to_station_id(name_ar)').order('created_at', { ascending: false })
     let iq = supabase.from('lost_found_items').select('*, creator:created_by(phone)').order('created_at', { ascending: false })
-    if (stationFilter) { rq = rq.eq('station_id', stationFilter); iq = iq.eq('station_id', stationFilter) }
+    if (stationIds) { const ids = stationIds.length ? stationIds : ['00000000-0000-0000-0000-000000000000']; rq = rq.in('station_id', ids); iq = iq.in('station_id', ids) }
     const [{ data: r }, { data: i }] = await Promise.all([rq, iq])
     const rpts = r ?? [], itms = i ?? []
     if (rpts.length || itms.length) setCached(cacheKey, { reports: rpts, items: itms })
@@ -872,7 +875,7 @@ function LogsTab({ stationFilter = null, isAdmin = false, isAr = true }) {
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder={isAr ? 'بحث...' : 'Search...'}
               style={{ ...inp, flex: '1 1 200px', boxSizing: 'border-box', marginBottom: 0 }} />
-            {sub === 'items' && !stationFilter && itemStations.length > 1 && (
+            {sub === 'items' && !(stationIds && stationIds.length < 2) && itemStations.length > 1 && (
               <SelectField value={itemStation} onChange={e => setItemStation(e.target.value)}
                 style={{ ...inp, flex: '0 1 180px', boxSizing: 'border-box', marginBottom: 0 }}>
                 <option value="">{isAr ? 'كل المحطات' : 'All stations'}</option>
@@ -1181,15 +1184,20 @@ const TABS = [
 ══════════════════════════════════════════════════════════ */
 export default function LostFoundPage() {
   const { i18n } = useTranslation()
-  const { profile, isAdmin: isAdminRole, allowCap } = useAuth()
+  const { profile, isAdmin: isAdminRole, allowCap, isGeneralAdmin, allowedStationIds, supervisedStationIds, workStations } = useAuth()
   const isAdmin = isAdminRole && allowCap('lostfound_manage')
+  // كل حساب يشوف موجودات محطاته فقط؛ الأدمن الفعلي وحده يشوف كل المحطات
+  const scopeIds = isGeneralAdmin ? null
+    : allowedStationIds?.length ? allowedStationIds
+    : workStations?.length > 1 ? workStations.map(x => x.id)
+    : supervisedStationIds?.length ? supervisedStationIds
+    : profile?.station_id ? [profile.station_id] : []
   const isEmployee = profile?.role === 'station_employee'
   const isAr = i18n.language === 'ar'
   const [tab, setTab] = useState('register')
   const [stations, setStations] = useState([])
   const [counts, setCounts] = useState({ unclaimed: null, reports: null, aging: null })
   const narrow = useNarrow()
-  const { workStations } = useAuth()
   const multi = workStations?.length > 1
 
   useEffect(() => {
@@ -1204,14 +1212,12 @@ export default function LostFoundPage() {
   // ملخص سريع أعلى الصفحة — يتحدّث عند تبديل التبويب (بعد تسجيل أو تسليم)
   useEffect(() => {
     const cutoff30 = new Date(Date.now() - 30 * 86400000).toISOString()
-    const sid = multi ? null : (profile?.station_id || null)   // متعدد المحطات: صلاحيات القاعدة تحصره بمحطاته
     let uq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed')
     let aq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed').lt('created_at', cutoff30)
     let rq = supabase.from('lost_reports').select('id', { count: 'exact', head: true })
-    if (sid) { uq = uq.eq('station_id', sid); aq = aq.eq('station_id', sid) }
-    if (isEmployee && sid) rq = rq.eq('station_id', sid)
+    if (scopeIds) { const ids = scopeIds.length ? scopeIds : ['00000000-0000-0000-0000-000000000000']; uq = uq.in('station_id', ids); aq = aq.in('station_id', ids); rq = rq.in('station_id', ids) }
     Promise.all([uq, aq, rq]).then(([u, a, r]) => setCounts({ unclaimed: u.count ?? 0, aging: a.count ?? 0, reports: r.count ?? 0 }))
-  }, [activeTab, profile?.station_id, isEmployee])
+  }, [activeTab, profile?.station_id, isEmployee, scopeIds?.join(',')])
 
   return (
     <div style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
@@ -1256,9 +1262,9 @@ export default function LostFoundPage() {
 
       {/* Content */}
       {activeTab === 'report'   && !isEmployee && <LostReportTab   stations={stations} profile={profile} isAr={isAr} />}
-      {activeTab === 'handover' && <HandoverTab    profile={profile} isAr={isAr} />}
+      {activeTab === 'handover' && <HandoverTab    profile={profile} scopeIds={scopeIds} isAr={isAr} />}
       {activeTab === 'register' && <RegisterItemTab profile={profile} isAr={isAr} stations={stations} />}
-      {activeTab === 'logs'     && <LogsTab stationFilter={isEmployee && !multi ? profile?.station_id : null} isAdmin={isAdmin} isAr={isAr} />}
+      {activeTab === 'logs'     && <LogsTab stationIds={scopeIds} isAdmin={isAdmin} isAr={isAr} />}
     </div>
   )
 }
