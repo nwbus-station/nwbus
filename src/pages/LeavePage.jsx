@@ -1418,7 +1418,7 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
               <button onClick={() => setShowNotes(v => !v)} title={isAr ? 'إضافة ملاحظة' : 'Add note'} style={{ ...sbtn, fontSize: '0.85rem' }}>✎</button>
             </>
           )}
-          {!canAct && !isOwn && !inMySupervisedStations && !isAdmin && jobsFor('view').includes(leave.job_title) && (
+          {!canAct && !isOwn && !inMySupervisedStations && !isAdmin && jobsFor('view').includes(leave.cur_job ?? leave.job_title) && (
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 12px' }}>{isAr ? 'اطلاع فقط' : 'View only'}</span>
           )}
           <span style={{ flex: 1 }} />
@@ -1519,11 +1519,28 @@ export default function LeavePage() {
       }
     }
     if (tab === 'all' && !isAdmin) {
-      if (isRestricted) q = restrictedScope(q, true)
+      if (isRestricted) { /* الحساب المقيّد: القاعدة تحصر الصفوف، ونصفّي هنا بالمسمى الوظيفي الحالي للموظف (مو المسمى المحفوظ بالطلب وقت تقديمه) */ }
       else if ((isAreaSupervisor || role === 'station_admin') && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
       else q = q.eq('station_id', profile.station_id)
     }
-    const { data } = await q
+    let { data } = await q
+    if (data && isRestricted && tab !== 'mine') {
+      // المسمى الوظيفي الحالي للموظف: الطلب يحفظ المسمى وقت التقديم، وتغيير المسمى لاحقاً يجب أن ينعكس على من يشوفه
+      const ids = [...new Set(data.map(r => r.employee_id).filter(Boolean))]
+      const jm = {}
+      let ok = true
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data: us, error } = await supabase.from('users').select('id, job_title').in('id', ids.slice(i, i + 200))
+        if (error) { ok = false; break }
+        ;(us ?? []).forEach(u => { jm[u.id] = u.job_title })
+      }
+      data = data.map(r => ({ ...r, cur_job: ok ? jm[r.employee_id] : r.job_title }))
+        .filter(r => r.employee_id === profile.id
+          || (grantCap('assigned_leaves') && assignedEmployeeIds?.includes(r.employee_id))
+          || (tab === 'all' && viewJobs.includes(r.cur_job))
+          || (actsAsSupervisor && supervisedStationIds?.includes(r.station_id))
+          || leaveJobs.includes(r.cur_job))
+    }
     if (data) { setCached(cacheKey, data); setLeaves(data) }
     setLoading(false)
     // سجل أصحاب الطلبات (للمراجعة قبل الاعتماد): كل طلباتهم السابقة بطلب واحد
