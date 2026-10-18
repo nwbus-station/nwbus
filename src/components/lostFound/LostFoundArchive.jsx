@@ -189,7 +189,7 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
   const visible = shown.slice(0, limit)
 
   return (
-    <div style={{ maxWidth: 1180, margin: '0 auto', padding: '18px 16px 40px' }} dir={isAr ? 'rtl' : 'ltr'}>
+    <div style={{ maxWidth: 820, margin: '0 auto', padding: '18px 14px 40px' }} dir={isAr ? 'rtl' : 'ltr'}>
       {msg && <div style={{ ...card, padding: '10px 14px', marginBottom: 12, borderColor: 'rgba(220,38,38,0.4)', color: '#dc2626', fontSize: '0.82rem', fontWeight: 700 }}>{msg}</div>}
 
       {isAdmin && !hideExpired && (expiredItems.length + expiredReports.length) > 0 && (
@@ -230,14 +230,14 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
       </div>
 
       {/* المؤشرات (تعمل كفلاتر للموجودات) */}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${sub === 'items' ? 140 : 180}px, 1fr))`, gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${sub === 'items' ? 104 : 104}px, 1fr))`, gap: 8, marginBottom: 12 }}>
         {kpis.map(([key, label, n, color], i) => {
           const clickable = sub === 'items' && key
           const on = clickable && fStatus === key
           return (
             <button key={i} type="button" disabled={!clickable} onClick={() => clickable && setFStatus(key === fStatus ? 'all' : key)}
               style={{ ...card, padding: '12px 14px', textAlign: 'start', cursor: clickable ? 'pointer' : 'default', fontFamily: 'inherit', borderTop: `3px solid ${color}`, outline: on ? `2px solid ${color}` : 'none', outlineOffset: -1 }}>
-              <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '1.55rem', lineHeight: 1.1, color: 'var(--text-1)' }}>{n}</div>
+              <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '1.4rem', lineHeight: 1.1, color: 'var(--text-1)' }}>{n}</div>
               <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', marginTop: 4 }}>{label}</div>
             </button>
           )
@@ -305,7 +305,7 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, i
         </div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
             {sub === 'items' ? visible.map(item => {
               const st = itemState(item), S = STATES[st]
               const foundDays = daysSince(item.found_date || item.created_at)

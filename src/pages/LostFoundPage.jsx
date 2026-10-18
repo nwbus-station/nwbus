@@ -10,6 +10,8 @@ import RouteText from '../components/shared/RouteText'
 import SelectField from '../components/shared/SelectField'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import LostFoundArchive from '../components/lostFound/LostFoundArchive'
+import HandoverTab from '../components/lostFound/HandoverTab'
+import { FormCard, Section, Banner, PrimaryButton } from '../components/lostFound/ui'
 import { ADMIN_ROLE_VALUES } from '../utils/constants'
 
 const toLatinNums = v => v.replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => d.charCodeAt(0) - 1632)
@@ -252,40 +254,12 @@ function LostReportTab({ stations, profile, isAr }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px' }}>
-
-      {done && (
-        <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: 'var(--surface)', border: '1.5px solid var(--text-1)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.85rem' }}>
-          {isAr ? '✓ تم تسجيل البلاغ بنجاح' : '✓ Report submitted successfully'}
-        </div>
-      )}
-      {error && (
-        <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)', fontSize: '0.82rem' }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{ background: 'var(--card)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
-
-        {/* Header */}
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? 'بلاغ مفقودات' : 'Lost Report'}</span>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>{profile?.full_name_ar}</span>
-        </div>
-
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          {/* إدخال سريع */}
-          <div>
-            <p style={{ margin: '0 0 8px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.04em' }}>{isAr ? 'وصف الغرض المفقود — إدخال سريع' : 'Quick Description'}</p>
-            <QuickDescBuilder value={form.item_description} onChange={v => set('item_description', v)} />
-          </div>
-
-          <Field label={isAr ? 'وصف الغرض المفقود *' : 'Lost Item Description *'}>
-            <textarea required rows={2} value={form.item_description} onChange={e => set('item_description', e.target.value)}
-              style={{ ...inp, resize: 'none' }} placeholder={isAr ? 'صف الغرض بدقة...' : 'Describe the item in detail...'} />
-          </Field>
-
+    <form onSubmit={handleSubmit} style={{ maxWidth: 820, margin: '0 auto', padding: '18px 14px 40px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {done && <Banner kind="ok">{isAr ? '✓ تم تسجيل البلاغ بنجاح' : '✓ Report submitted successfully'}</Banner>}
+      {error && <Banner kind="err">{error}</Banner>}
+      <FormCard icon="flag" accent="#dc2626" title={isAr ? 'بلاغ مفقودات' : 'Lost Report'} subtitle={profile?.full_name_ar}>
+        <Section title={isAr ? 'بيانات العميل' : 'Customer'}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
             <Field label={isAr ? 'اسم العميل *' : 'Customer Name *'}>
               <input required value={form.customer_name} onChange={e => set('customer_name', e.target.value)}
@@ -320,6 +294,21 @@ function LostReportTab({ stations, profile, isAr }) {
             )}
           </div>
 
+        </Section>
+        <Section title={isAr ? 'الغرض المفقود' : 'Lost item'}>
+          {/* إدخال سريع */}
+          <div>
+            <p style={{ margin: '0 0 8px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.04em' }}>{isAr ? 'وصف الغرض المفقود — إدخال سريع' : 'Quick Description'}</p>
+            <QuickDescBuilder value={form.item_description} onChange={v => set('item_description', v)} />
+          </div>
+
+          <Field label={isAr ? 'وصف الغرض المفقود *' : 'Lost Item Description *'}>
+            <textarea required rows={2} value={form.item_description} onChange={e => set('item_description', e.target.value)}
+              style={{ ...inp, resize: 'none' }} placeholder={isAr ? 'صف الغرض بدقة...' : 'Describe the item in detail...'} />
+          </Field>
+
+        </Section>
+        <Section title={isAr ? 'بيانات الرحلة' : 'Trip details'} hint={isAr ? 'اختياري — تساعد في تتبع الغرض' : 'Optional — helps tracing the item'}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
             <Field label={isAr ? 'رقم الاستكر' : 'Sticker No.'}>
               <input inputMode="numeric" value={form.sticker_number} onChange={e => set('sticker_number', toLatinNums(e.target.value))}
@@ -353,6 +342,8 @@ function LostReportTab({ stations, profile, isAr }) {
             </Field>
           </div>
 
+        </Section>
+        <Section title={isAr ? 'ملاحظات' : 'Notes'}>
           <Field label={isAr ? 'ملاحظات' : 'Notes'}>
             <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)}
               style={{ ...inp, resize: 'none' }} placeholder={isAr ? 'تفاصيل إضافية...' : 'Additional details...'} />
@@ -362,124 +353,11 @@ function LostReportTab({ stations, profile, isAr }) {
             {isAr ? 'تاريخ البلاغ:' : 'Report Date:'} {new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn')} — {nowLocal()}
           </div>
 
-          <button type="submit" disabled={saving}
-            style={{ padding: '10px 32px', borderRadius: 8, border: '1.5px solid var(--text-1)', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.88rem', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit', alignSelf: 'flex-start' }}>
-            {saving ? (isAr ? 'جارٍ التسجيل...' : 'Submitting...') : (isAr ? 'تسجيل البلاغ' : 'Submit Report')}
-          </button>
-        </div>
+        </Section>
+        <PrimaryButton type="submit" disabled={saving}>{saving ? (isAr ? 'جارٍ التسجيل...' : 'Submitting...') : (isAr ? 'تسجيل البلاغ' : 'Submit Report')}</PrimaryButton>
+      </FormCard>
       </div>
     </form>
-  )
-}
-
-/* ══════════════════════════════════════════════════════════
-   TAB 2 — تسليم موجودات
-══════════════════════════════════════════════════════════ */
-function HandoverTab({ profile, isAr }) {
-  const { workStations } = useAuth()
-  const [items, setItems]   = useState([])
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [done, setDone] = useState(false)
-  const [form, setForm] = useState({ owner_name: '', owner_contact: '', resolved_date: todayStr(), notes: '' })
-
-  useEffect(() => {
-    let q = supabase.from('lost_found_items').select('*').eq('status', 'unclaimed')
-    q.order('created_at', { ascending: false })
-      .then(({ data }) => { setItems(data ?? []); setLoading(false) })
-  }, [done])
-
-  const filtered = items.filter(i =>
-    !search || i.item_description?.toLowerCase().includes(search.toLowerCase())
-  )
-
-  async function handleHandover(e) {
-    e.preventDefault()
-    setSaving(true)
-    await supabase.from('lost_found_items').update({
-      status: 'claimed',
-      owner_name: form.owner_name,
-      owner_contact: form.owner_contact,
-      resolved_date: form.resolved_date,
-      notes: form.notes,
-      updated_by_name: profile.full_name_ar,
-      updated_at: new Date().toISOString(),
-      delivered_to_client_at: new Date().toISOString(),
-    }).eq('id', selected.id)
-    setSaving(false)
-    setSelected(null)
-    setDone(d => !d)
-  }
-
-  return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px' }}>
-      <div style={{ background: 'var(--card)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-          <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? 'تسليم موجودات' : 'Item Handover'}</span>
-        </div>
-
-        <div style={{ padding: '16px 20px' }}>
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder={isAr ? 'ابحث عن موجود...' : 'Search found items...'}
-            style={{ ...inp, marginBottom: 12, boxSizing: 'border-box' }} />
-
-          {loading ? (
-            <p style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem', padding: 20 }}>{isAr ? 'جارٍ التحميل...' : 'Loading...'}</p>
-          ) : filtered.length === 0 ? (
-            <p style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem', padding: 20 }}>{isAr ? 'لا توجد موجودات غير مستلمة' : 'No unclaimed items found'}</p>
-          ) : filtered.map(item => (
-            <div key={item.id} onClick={() => setSelected(item)}
-              style={{ padding: '12px 14px', borderRadius: 10,
-                border: `1.5px solid ${selected?.id === item.id ? 'var(--text-1)' : 'var(--border)'}`,
-                marginBottom: 8, cursor: 'pointer',
-                background: selected?.id === item.id ? 'var(--surface)' : 'var(--card)',
-                transition: 'all 0.15s' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {item.item_number && (
-                  <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text-3)', background: 'var(--surface)', padding: '1px 7px', borderRadius: 6, border: '1px solid var(--border)', fontFamily: 'monospace' }}>#{item.item_number}</span>
-                )}
-                <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-1)' }}>{item.item_description}</span>
-              </div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 3 }}>
-                {item.found_date} · {item.found_location || '—'}
-              </div>
-            </div>
-          ))}
-
-          {selected && (
-            <form onSubmit={handleHandover}
-              style={{ marginTop: 16, padding: '16px', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-1)' }}>
-                {isAr ? 'تسليم:' : 'Handover:'} {selected.item_description}
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
-                <Field label={isAr ? 'اسم المستلم *' : 'Recipient Name *'}>
-                  <input required value={form.owner_name} onChange={e => setForm(f => ({ ...f, owner_name: e.target.value }))} style={inp} />
-                </Field>
-                <Field label={isAr ? 'رقم التواصل' : 'Contact Number'}>
-                  <input value={form.owner_contact} onChange={e => setForm(f => ({ ...f, owner_contact: e.target.value }))} style={inp} dir="ltr" />
-                </Field>
-              </div>
-              <Field label={isAr ? 'تاريخ التسليم' : 'Handover Date'}>
-                <DatePicker isAr={true} value={form.resolved_date} onChange={v => setForm(f => ({ ...f, resolved_date: v }))} style={inp} />
-              </Field>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="submit" disabled={saving}
-                  style={{ padding: '9px 24px', borderRadius: 8, border: '1.5px solid var(--text-1)', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'تأكيد التسليم' : 'Confirm Handover')}
-                </button>
-                <button type="button" onClick={() => setSelected(null)}
-                  style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {isAr ? 'إلغاء' : 'Cancel'}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -562,18 +440,12 @@ function RegisterItemTab({ profile, isAr, stations }) {
   }
 
   return (
-    <form onSubmit={handleSave} style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px' }}>
-      {done  && <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: 'var(--surface)', border: '1.5px solid var(--text-1)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.85rem' }}>{isAr ? '✓ تم تسجيل الموجود' : '✓ Item registered successfully'}</div>}
-      {error && <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)', fontSize: '0.82rem' }}>{error}</div>}
-
-      <div style={{ background: 'var(--card)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? 'تسجيل موجود' : 'Register Found Item'}</span>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>{profile?.full_name_ar}</span>
-        </div>
-
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
+    <form onSubmit={handleSave} style={{ maxWidth: 820, margin: '0 auto', padding: '18px 14px 40px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {done && <Banner kind="ok">{isAr ? '✓ تم تسجيل الموجود بنجاح' : '✓ Item registered successfully'}</Banner>}
+      {error && <Banner kind="err">{error}</Banner>}
+      <FormCard icon="plus" accent="#16a34a" title={isAr ? 'تسجيل موجود' : 'Register Found Item'} subtitle={profile?.full_name_ar}>
+        <Section title={isAr ? 'المحطة' : 'Station'}>
           {/* المحطة */}
           {hasStation ? (
             <div style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -606,6 +478,8 @@ function RegisterItemTab({ profile, isAr, stations }) {
             </div>
           )}
 
+        </Section>
+        <Section title={isAr ? 'الغرض الموجود' : 'Found item'}>
           {/* إدخال سريع */}
           <div>
             <p style={{ margin: '0 0 8px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.04em' }}>{isAr ? 'إدخال سريع' : 'Quick Input'}</p>
@@ -628,6 +502,8 @@ function RegisterItemTab({ profile, isAr, stations }) {
             </Field>
           </div>
 
+        </Section>
+        <Section title={isAr ? 'بيانات الرحلة' : 'Trip details'} hint={isAr ? 'اختياري' : 'Optional'}>
           <StationRouteSelector
             stations={stations} fromId={form.from_station_id} toId={form.to_station_id}
             onFromChange={v => set('from_station_id', v)} onToChange={v => set('to_station_id', v)} isAr={isAr} />
@@ -641,6 +517,8 @@ function RegisterItemTab({ profile, isAr, stations }) {
             </Field>
           </div>
 
+        </Section>
+        <Section title={isAr ? 'الصور والملاحظات' : 'Photos & notes'}>
           {/* صور */}
           <Field label={isAr ? 'صور الموجود' : 'Item Photos'}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, border: '1.5px dashed var(--border)', cursor: 'pointer', background: 'var(--surface)', transition: 'border-color 0.15s' }}
@@ -684,11 +562,9 @@ function RegisterItemTab({ profile, isAr, stations }) {
               style={{ ...inp, resize: 'none' }} />
           </Field>
 
-          <button type="submit" disabled={saving}
-            style={{ padding: '10px 32px', borderRadius: 8, border: '1.5px solid var(--text-1)', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.88rem', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit', alignSelf: 'flex-start' }}>
-            {saving ? `${isAr ? 'جارٍ الحفظ...' : 'Saving...'} ${photos.length > 0 ? progress + '%' : ''}` : (isAr ? 'تسجيل الموجود' : 'Register Item')}
-          </button>
-        </div>
+        </Section>
+        <PrimaryButton type="submit" disabled={saving}>{saving ? `${isAr ? 'جارٍ الحفظ...' : 'Saving...'} ${photos.length > 0 ? progress + '%' : ''}` : (isAr ? 'تسجيل الموجود' : 'Register Item')}</PrimaryButton>
+      </FormCard>
       </div>
     </form>
   )
@@ -849,42 +725,38 @@ export default function LostFoundPage() {
   return (
     <div style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
 
-      {/* ملخص سريع */}
-      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        {[
-          [isAr ? 'بانتظار التسليم' : 'Awaiting hand-over', counts.unclaimed, 'handover', false],
-          [isAr ? 'تجاوزت 30 يوماً (للجمعية)' : 'Over 30 days (charity)', counts.aging, 'logs', (counts.aging ?? 0) > 0],
-          [isAr ? 'بلاغات المفقودات' : 'Lost reports', counts.reports, 'logs', false],
-        ].map(([label, n, go, warn], i) => (
-          <button key={i} onClick={() => visibleTabs.some(t => t.id === go) && setTab(go)}
-            style={{ padding: '12px 10px', border: 'none', borderInlineStart: i ? '1px solid var(--border)' : 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, lineHeight: 1.1, color: warn ? '#B45309' : 'var(--text-1)' }}>{n ?? '—'}</div>
-            <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', marginTop: 3, fontWeight: 600 }}>{label}</div>
-          </button>
-        ))}
-      </div>
-
-      {/* Tabs */}
-      <div style={narrow
-        ? { background: 'var(--card)', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr' }
-        : { background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '0 12px', display: 'flex', gap: 2, overflowX: 'auto' }}>
-        {visibleTabs.map(t => {
-          const on = activeTab === t.id
-          const badge = t.id === 'handover' ? counts.unclaimed : null
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)} title={isAr ? t.hint.ar : t.hint.en}
-              style={{
-                padding: narrow ? '10px 12px 8px' : '11px 16px 9px', border: 'none', background: narrow && on ? 'var(--surface)' : 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start',
-                borderBottom: `2.5px solid ${on ? 'var(--text-1)' : (narrow ? 'var(--border)' : 'transparent')}`, transition: 'all 0.15s', whiteSpace: narrow ? 'normal' : 'nowrap',
-              }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.88rem', fontWeight: on ? 800 : 600, color: on ? 'var(--text-1)' : 'var(--text-3)' }}>
-                {isAr ? t.ar : t.en}
-                {badge > 0 && <span style={{ fontSize: '0.62rem', fontWeight: 800, background: 'var(--text-1)', color: 'var(--card)', borderRadius: 99, padding: '1px 7px' }}>{badge}</span>}
-              </span>
-              <span style={{ display: 'block', fontSize: '0.64rem', color: 'var(--text-3)', marginTop: 2, fontWeight: 500 }}>{isAr ? t.hint.ar : t.hint.en}</span>
+      {/* ملخص سريع + تبويبات — نفس بطاقات بقية الأقسام */}
+      <div style={{ maxWidth: 820, margin: '0 auto', padding: '16px 14px 0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+          {[
+            [isAr ? 'بانتظار التسليم' : 'Awaiting hand-over', counts.unclaimed, 'handover', '#d97706'],
+            [isAr ? 'تجاوزت 30 يوماً (للجمعية)' : 'Over 30 days (charity)', counts.aging, 'logs', '#dc2626'],
+            [isAr ? 'بلاغات المفقودات' : 'Lost reports', counts.reports, 'logs', '#8b5cf6'],
+          ].map(([label, n, go, color], i) => (
+            <button key={i} type="button" onClick={() => visibleTabs.some(t => t.id === go) && setTab(go)}
+              style={{ background: 'var(--card)', border: '1px solid var(--border)', borderTop: `3px solid ${color}`, borderRadius: 14, padding: '12px 10px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}>
+              <div style={{ fontSize: '1.45rem', fontWeight: 900, lineHeight: 1.1, color: 'var(--text-1)', fontFamily: 'ui-monospace, Menlo, Consolas, monospace' }}>{n ?? '—'}</div>
+              <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', marginTop: 4, fontWeight: 700 }}>{label}</div>
             </button>
-          )
-        })}
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${narrow ? 2 : Math.max(1, visibleTabs.length)}, minmax(0, 1fr))`, gap: 8, marginTop: 12 }}>
+          {visibleTabs.map(t => {
+            const on = activeTab === t.id
+            const badge = t.id === 'handover' ? counts.unclaimed : null
+            return (
+              <button key={t.id} type="button" onClick={() => setTab(t.id)} title={isAr ? t.hint.ar : t.hint.en}
+                style={{ padding: '10px 12px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start', border: `1.5px solid ${on ? 'var(--text-1)' : 'var(--border)'}`, background: on ? 'var(--text-1)' : 'var(--card)', transition: 'all 0.15s' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.86rem', fontWeight: 800, color: on ? 'var(--card)' : 'var(--text-1)' }}>
+                  {isAr ? t.ar : t.en}
+                  {badge > 0 && <span style={{ fontSize: '0.62rem', fontWeight: 800, background: on ? 'var(--card)' : 'var(--text-1)', color: on ? 'var(--text-1)' : 'var(--card)', borderRadius: 99, padding: '1px 7px' }}>{badge}</span>}
+                </span>
+                <span style={{ display: 'block', fontSize: '0.63rem', color: on ? 'var(--card)' : 'var(--text-3)', opacity: on ? 0.8 : 1, marginTop: 2, fontWeight: 500 }}>{isAr ? t.hint.ar : t.hint.en}</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Content */}
