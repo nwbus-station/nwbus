@@ -385,8 +385,6 @@ function HandoverTab({ profile, isAr }) {
 
   useEffect(() => {
     let q = supabase.from('lost_found_items').select('*').eq('status', 'unclaimed')
-    if (workStations?.length > 1) q = q.in('station_id', workStations.map(x => x.id))
-    else if (profile.station_id) q = q.eq('station_id', profile.station_id)
     q.order('created_at', { ascending: false })
       .then(({ data }) => { setItems(data ?? []); setLoading(false) })
   }, [done])
@@ -1204,7 +1202,8 @@ export default function LostFoundPage() {
   // ملخص سريع أعلى الصفحة — يتحدّث عند تبديل التبويب (بعد تسجيل أو تسليم)
   useEffect(() => {
     const cutoff30 = new Date(Date.now() - 30 * 86400000).toISOString()
-    const sid = multi ? null : (profile?.station_id || null)   // متعدد المحطات: صلاحيات القاعدة تحصره بمحطاته
+    // الموجودات والبلاغات مفتوحة لكل الحسابات على كل المحطات (غرض ضائع يُسأل عنه في أي محطة)
+    const sid = null
     let uq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed')
     let aq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed').lt('created_at', cutoff30)
     let rq = supabase.from('lost_reports').select('id', { count: 'exact', head: true })
@@ -1258,7 +1257,7 @@ export default function LostFoundPage() {
       {activeTab === 'report'   && !isEmployee && <LostReportTab   stations={stations} profile={profile} isAr={isAr} />}
       {activeTab === 'handover' && <HandoverTab    profile={profile} isAr={isAr} />}
       {activeTab === 'register' && <RegisterItemTab profile={profile} isAr={isAr} stations={stations} />}
-      {activeTab === 'logs'     && <LogsTab stationFilter={isEmployee && !multi ? profile?.station_id : null} isAdmin={isAdmin} isAr={isAr} />}
+      {activeTab === 'logs'     && <LogsTab stationFilter={null} isAdmin={isAdmin} isAr={isAr} />}
     </div>
   )
 }
