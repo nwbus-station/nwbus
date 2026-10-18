@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, Fragment } from 'react'
+import { useState, useCallback, useEffect, useRef, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { exportTableXlsx, XL } from '../utils/excelExport'
@@ -11,7 +11,7 @@ import SearchSelect from '../components/shared/SearchSelect'
 import StatStrip from '../components/shared/StatStrip'
 import { toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
-import { USER_ROLES } from '../utils/constants'
+import { USER_ROLES, ADMIN_ROLE_VALUES } from '../utils/constants'
 import SelectField from '../components/shared/SelectField'
 import { brandHeader } from '../utils/printDoc'
 
@@ -521,6 +521,20 @@ export default function ReportsPage() {
     })
   }, [canSeeAudit])
 
+  // أسماء الأدمن الفعليين (بدون الحسابات المقيّدة): تُخفى حركاتهم عن غير الأدمن — الأدمن وحده يرى ما فعله الأدمن
+  const adminNamesRef = useRef(null)
+  const getAdminNames = async () => {
+    if (adminNamesRef.current) return adminNamesRef.current
+    const [{ data: us }, { data: ts }] = await Promise.all([
+      supabase.from('users').select('full_name_ar, role, custom_title_id').in('role', ADMIN_ROLE_VALUES),
+      supabase.from('custom_titles').select('id, permissions'),
+    ])
+    const restrictedTitles = new Set((ts ?? []).filter(t => t.permissions?.restricted_mode === true).map(t => t.id))
+    const names = [...new Set((us ?? []).filter(u => !(u.custom_title_id && restrictedTitles.has(u.custom_title_id))).map(u => u.full_name_ar).filter(Boolean))]
+    adminNamesRef.current = names
+    return names
+  }
+
   const fetchAudit = useCallback(async (page = 0, withDiff = true) => {
     setAuditLoading(true)
     const from = page * PAGE_SIZE
@@ -538,6 +552,13 @@ export default function ReportsPage() {
       .range(from, to)
 
     if (auditTable !== 'all') q = q.eq('table_name', auditTable)
+
+    // غير الأدمن: لا يرى حركات الأدمن ولا التعديلات المباشرة على قاعدة البيانات (بدون اسم منفّذ)
+    if (!isGeneralAdmin) {
+      const names = await getAdminNames()
+      q = q.not('actor_name', 'is', null)
+      if (names.length) q = q.not('actor_name', 'in', `(${names.map(n => `"${String(n).replace(/"/g, '')}"`).join(',')})`)
+    }
 
     // فلتر المحطة
     if (isGeneralAdmin) {
