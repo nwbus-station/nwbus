@@ -11,7 +11,7 @@ import SelectField from '../components/shared/SelectField'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import LostFoundArchive from '../components/lostFound/LostFoundArchive'
 import HandoverTab from '../components/lostFound/HandoverTab'
-import CharityTab from '../components/lostFound/CharityTab'
+import CharityTab, { donationScope } from '../components/lostFound/CharityTab'
 import { FormCard, Section, Banner, PrimaryButton } from '../components/lostFound/ui'
 import { ADMIN_ROLE_VALUES } from '../utils/constants'
 
@@ -689,7 +689,7 @@ const TABS = [
 ══════════════════════════════════════════════════════════ */
 export default function LostFoundPage() {
   const { i18n } = useTranslation()
-  const { profile, isAdmin: isAdminRole, allowCap } = useAuth()
+  const { profile, isAdmin: isAdminRole, allowCap, isGeneralAdmin, isRestricted, allowedStationIds } = useAuth()
   const isAdmin = isAdminRole && allowCap('lostfound_manage')
   const isEmployee = profile?.role === 'station_employee'
   // تسليم الموجودات للجمعية: للمشرفين فقط (مشرف المحطة/المنطقة/الوردية) والإدارة
@@ -767,7 +767,7 @@ export default function LostFoundPage() {
       {activeTab === 'handover' && <HandoverTab    profile={profile} isAr={isAr} />}
       {activeTab === 'register' && <RegisterItemTab profile={profile} isAr={isAr} stations={stations} />}
       {activeTab === 'charity'  && canDonate && <CharityTab preselectId={preselect} onPreselectUsed={() => setPreselect(null)} isAr={isAr} />}
-      {activeTab === 'logs'     && <LostFoundArchive isAdmin={isAdmin} canDonate={canDonate} onDonate={id => { setPreselect(id); setTab('charity') }} isAr={isAr} />}
+      {activeTab === 'logs'     && <LostFoundArchive isAdmin={isAdmin} canDonate={canDonate} donateScope={donationScope({ isGeneralAdmin, isRestricted, allowedStationIds, profile })} onDonate={id => { setPreselect(id); setTab('charity') }} isAr={isAr} />}
     </div>
   )
 }

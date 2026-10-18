@@ -48,7 +48,7 @@ function Meta({ label, children }) {
 }
 const actBtn = (danger = false) => ({ padding: '6px 12px', borderRadius: 8, border: `1px solid ${danger ? 'rgba(220,38,38,0.4)' : 'var(--border)'}`, background: 'var(--surface)', color: danger ? '#dc2626' : 'var(--text-2)', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' })
 
-export default function LostFoundArchive({ isAdmin = false, canDonate = false, onDonate = null, isAr = true }) {
+export default function LostFoundArchive({ isAdmin = false, canDonate = false, onDonate = null, donateScope = null, isAr = true }) {
   const t = (ar, en) => (isAr ? ar : en)
   const cached = getCached(CACHE_KEY)
   const [sub, setSub] = useState('items')
@@ -90,7 +90,7 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
     }
     const rpts = r ?? [], itms = i ?? []
     // محاضر التسليم للجمعية (قد يكون الجدول غير منشأ بعد: نتجاهل الخطأ)
-    const { data: dons } = await supabase.from('charity_donations').select('id, donation_no, charity_name, created_by_name, station_name')
+    const { data: dons } = await supabase.from('charity_donations').select('*')
     setDonMap(Object.fromEntries((dons ?? []).map(d => [d.id, d])))
     if (rpts.length || itms.length) setCached(CACHE_KEY, { reports: rpts, items: itms })
     setReports(rpts); setItems(itms); setLoading(false)
@@ -337,7 +337,9 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
                     {item.status === 'claimed' && <Meta label={t('سلّمه', 'Delivered by')}>{item.delivered_by_name || item.updated_by_name || '—'}</Meta>}
                     {item.status === 'claimed' && <Meta label={t('محطة التسليم', 'Delivery station')}>{item.delivered_station_name || '—'}</Meta>}
                     {item.status === 'donated' && <Meta label={t('تاريخ ووقت التسليم للجمعية', 'Donated on')}><span dir="ltr">{fmtDT(item.donated_at)}</span></Meta>}
-                    {item.status === 'donated' && <Meta label={t('سلّمها', 'Delivered by')}>{donMap[item.donation_id]?.created_by_name || '—'}</Meta>}
+                    {item.status === 'donated' && <Meta label={t('الجمعية الخيرية', 'Charity')}>{donMap[item.donation_id]?.charity_name || '—'}</Meta>}
+                    {item.status === 'donated' && <Meta label={t('سلّمها', 'Delivered by')}>{donMap[item.donation_id]?.deliverer_name || donMap[item.donation_id]?.created_by_name || '—'}</Meta>}
+                    {item.status === 'donated' && <Meta label={t('المشرف', 'Supervisor')}>{donMap[item.donation_id]?.created_by_name || '—'}</Meta>}
                     {item.status === 'donated' && <Meta label={t('محطة التسليم', 'Delivery station')}>{donMap[item.donation_id]?.station_name || '—'}</Meta>}
                     {item.status === 'donated' && donMap[item.donation_id] && <Meta label={t('رقم المحضر', 'Record')}><span dir="ltr" style={{ fontFamily: MONO }}>{`DN-${String(donMap[item.donation_id].donation_no ?? 0).padStart(4, '0')}`}</span></Meta>}
                   </div>
@@ -382,7 +384,7 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
                   <div style={{ marginTop: 'auto', padding: '10px 14px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                     <button type="button" onClick={() => setOpenId(open ? null : item.id)} style={actBtn()}>{open ? t('إخفاء التفاصيل', 'Hide details') : t('التفاصيل والصور', 'Details & photos')}</button>
                     <span style={{ flex: 1 }} />
-                    {canDonate && onDonate && st === 'due' && (
+                    {canDonate && onDonate && st === 'due' && (!donateScope || donateScope.includes(item.station_id)) && (
                       <button type="button" onClick={() => onDonate(item.id)} style={{ ...actBtn(), background: 'rgba(139,92,246,0.14)', color: '#8b5cf6', borderColor: 'rgba(139,92,246,0.4)' }}>
                         {t('تسليم للجمعية', 'Donate')}
                       </button>

@@ -22,33 +22,39 @@ const label = { display: 'block', fontSize: '0.68rem', fontWeight: 700, color: '
 const smallBtn = (danger = false) => ({ padding: '6px 12px', borderRadius: 8, border: `1px solid ${danger ? 'rgba(220,38,38,0.4)' : 'var(--border)'}`, background: 'var(--surface)', color: danger ? '#dc2626' : 'var(--text-2)', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' })
 
 // محضر تسليم موجودات للجمعية (نافذة طباعة)
+// نطاق التسليم: الأدمن كل المحطات؛ مشرف المرحّلين محطته الأساسية فقط؛ المشرف محطاته فقط
+export function donationScope({ isGeneralAdmin, isRestricted, allowedStationIds, profile }) {
+  if (isGeneralAdmin) return null
+  if (isRestricted) return profile?.station_id ? [profile.station_id] : []
+  if (allowedStationIds?.length) return allowedStationIds
+  return profile?.station_id ? [profile.station_id] : []
+}
+
 export function printDonation(d, items) {
   const typeOf = v => ITEM_TYPES.find(x => x.value === v)?.ar || '—'
   const cell = (l, v) => `<div class="cell"><small>${esc(l)}</small><b>${v || '—'}</b></div>`
   const rows = items.map((i, k) => `<tr><td>${k + 1}</td><td>${esc(i.item_number ? `#${i.item_number}` : '—')}</td><td class="l"><b>${esc(i.item_description || '—')}</b></td><td>${esc(typeOf(i.item_type))}</td><td class="l">${esc(i.found_location || '—')}</td><td>${lri(esc(day10(i.found_date || i.created_at)))}</td><td>${lri(String(daysSince(i.found_date || i.created_at)))}</td></tr>`).join('')
+  const deliverer = d.deliverer_name || d.created_by_name
   const body = `
-    ${docHeader({ title: 'محضر تسليم موجودات', infoLines: [`رقم المحضر: <b>${lri(esc(donationLabel(d.donation_no)))}</b>`, `التاريخ والوقت: <b>${lri(esc(fmtDT(d.created_at || d.donated_date)))}</b>`] })}
+    ${docHeader({ title: 'محضر تسليم موجودات لجمعية خيرية', infoLines: [`رقم المحضر: <b>${lri(esc(donationLabel(d.donation_no)))}</b>`, `التاريخ والوقت: <b>${lri(esc(fmtDT(d.created_at || d.donated_date)))}</b>`] })}
     <div class="body">
-      <div class="sec"><div class="grid g4">
-        ${cell('المحطة', esc(d.station_name))}${cell('المسلِّم', esc(d.created_by_name))}${cell('عدد الأغراض', lri(String(items.length)))}${cell('سبب التسليم', `مضيّ ${DONATE_AFTER} يوماً دون استلام`)}
+      <div class="sec"><div class="grid g3">
+        ${cell('الجمعية الخيرية', esc(d.charity_name))}${cell('المسلِّم', esc(deliverer))}${cell('المشرف', esc(d.created_by_name))}
+        ${cell('المحطة', esc(d.station_name))}${cell('عدد الأغراض', lri(String(items.length)))}${cell('سبب التسليم', `مضيّ ${DONATE_AFTER} يوماً دون استلام`)}
       </div></div>
       <div class="sec" style="break-inside:auto"><h3>الأغراض</h3>
         <table class="t"><thead><tr><th>#</th><th>رقم الغرض</th><th>الوصف</th><th>النوع</th><th>المحطة</th><th>تاريخ العثور</th><th>الأيام</th></tr></thead><tbody>${rows}</tbody></table>
       </div>
       ${d.notes ? `<div class="sec"><div class="cell"><small>ملاحظات</small><b style="font-weight:600">${esc(d.notes)}</b></div></div>` : ''}
-      <div class="sig" style="grid-template-columns:repeat(2,1fr)"><div><span>المسلِّم</span><b>${esc(d.created_by_name || '')}</b><i></i></div><div><span>اعتماد المشرف</span><b></b><i></i></div></div>
+      <div class="sig" style="grid-template-columns:repeat(2,1fr)"><div><span>المسلِّم</span><b>${esc(deliverer || '')}</b><i></i></div><div><span>المشرف</span><b>${esc(d.created_by_name || '')}</b><i></i></div></div>
     </div>`
   openDocWindow(docShell({ title: `محضر تسليم ${donationLabel(d.donation_no)}`, body, footerLeft: lri(esc(fmtDT(d.created_at || d.donated_date))), footerRight: 'NORTH WEST BUS' }))
 }
 
 export default function CharityTab({ preselectId = null, onPreselectUsed, isAr = true }) {
   const t = (ar, en) => (isAr ? ar : en)
-  const { profile, isGeneralAdmin, allowedStationIds, supervisedStationIds } = useAuth()
-  // الأدمن يسلّم من كل المحطات؛ المشرف من محطاته فقط (القاعدة تمنع تعديل غيرها)
-  const scopeIds = isGeneralAdmin ? null
-    : allowedStationIds?.length ? allowedStationIds
-    : supervisedStationIds?.length ? supervisedStationIds
-    : profile?.station_id ? [profile.station_id] : []
+  const { profile, isGeneralAdmin, isRestricted, allowedStationIds } = useAuth()
+  const scopeIds = donationScope({ isGeneralAdmin, isRestricted, allowedStationIds, profile })
 
   const [mode, setMode] = useState('prepare')   // prepare | history
   const [items, setItems] = useState([])
@@ -59,7 +65,7 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
   const [fType, setFType] = useState('')
   const [selected, setSelected] = useState(() => new Set())
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ notes: '' })
+  const [form, setForm] = useState({ charity_name: '', deliverer_name: '', notes: '' })
   const [confirm, setConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [banner, setBanner] = useState(null)   // { kind, text, donation?, items? }
@@ -97,7 +103,10 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
   ), [items, fStation, fType, q])
   const chosen = useMemo(() => items.filter(i => selected.has(i.id)), [items, selected])
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
-  const thisMonth = donations.filter(d => new Date(d.created_at) >= monthStart)
+  // محاضر التسليم: الأدمن يرى كل المحطات، وغيره محضره ومحطته فقط
+  const myDons = useMemo(() => (isGeneralAdmin ? donations : donations.filter(d => d.created_by === profile?.id || (scopeIds && d.station_id && scopeIds.includes(d.station_id)))), [donations, isGeneralAdmin, profile?.id, scopeIds?.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
+  const charityNames = useMemo(() => [...new Set(myDons.map(d => d.charity_name).filter(Boolean))], [myDons])
+  const thisMonth = myDons.filter(d => new Date(d.created_at) >= monthStart)
   const thisMonthItems = thisMonth.reduce((a, d) => a + (d.item_count || 0), 0)
 
   const toggle = id => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -114,14 +123,16 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
     setSaving(true)
     const rows = chosen
     const header = {
-      charity_name: '', recipient_name: '', recipient_id_number: '',   // لا تُطلب هذه البيانات: التسليم يُسجَّل باسم الموظف والمحطة والوقت
+      charity_name: form.charity_name.trim(), deliverer_name: form.deliverer_name.trim(),
+      recipient_name: '', recipient_id_number: '',   // أعمدة قديمة غير مستخدمة
       donated_date: todayStr(), notes: form.notes.trim() || null,
-      item_count: rows.length, created_by: profile?.id, created_by_name: profile?.full_name_ar, station_name: profile?.station?.name_ar || null,
+      item_count: rows.length, created_by: profile?.id, created_by_name: profile?.full_name_ar,
+      station_name: profile?.station?.name_ar || null, station_id: profile?.station_id || null,
     }
     const { data: don, error: de } = await supabase.from('charity_donations').insert(header).select().single()
     if (de || !don) {
       setSaving(false)
-      const missing = /charity_donations|relation|does not exist|schema cache/i.test(de?.message || '')
+      const missing = /charity_donations|deliverer_name|station_id|relation|does not exist|schema cache/i.test(de?.message || '')
       setBanner({ kind: 'err', text: missing ? t('جدول التسليم للجمعية غير موجود في قاعدة البيانات. شغّل أمر SQL الخاص بالنظام أولاً.', 'The charity table is missing in the database. Run the system SQL first.') : t('تعذّر إنشاء المحضر: ', 'Could not create the record: ') + (de?.message || '') })
       return
     }
@@ -139,7 +150,7 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
     setItems(prev => prev.filter(i => !selected.has(i.id)))
     setDonations(prev => [don, ...prev])
     setSelected(new Set()); setShowForm(false)
-    setForm({ notes: '' })
+    setForm(f => ({ charity_name: f.charity_name, deliverer_name: '', notes: '' }))
   }
 
   async function toggleDonation(d) {
@@ -159,7 +170,7 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
     printDonation(d, its)
   }
 
-  const kpis = [[t('مستحقة للتسليم', 'Eligible'), items.length, '#dc2626'], [t('المختارة', 'Selected'), selected.size, '#8b5cf6'], [t('أغراض هذا الشهر', 'This month'), thisMonthItems, '#16a34a'], [t('عدد المحاضر', 'Records'), donations.length, 'var(--text-1)']]
+  const kpis = [[t('مستحقة للتسليم', 'Eligible'), items.length, '#dc2626'], [t('المختارة', 'Selected'), selected.size, '#8b5cf6'], [t('أغراض هذا الشهر', 'This month'), thisMonthItems, '#16a34a'], [t('عدد المحاضر', 'Records'), myDons.length, 'var(--text-1)']]
 
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', padding: '18px 14px 90px' }} dir={isAr ? 'rtl' : 'ltr'}>
@@ -172,7 +183,7 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
 
       {confirm && (
         <ConfirmDialog
-          message={t(`تسليم ${chosen.length} غرض؟ يُنشأ محضر رسمي باسمك وباسم محطتك ولا يمكن التراجع.`, `Hand over ${chosen.length} items? An official record is created in your name and station and cannot be undone.`)}
+          message={t(`تسليم ${chosen.length} غرض إلى «${form.charity_name.trim()}» (المسلِّم: ${form.deliverer_name.trim()})؟ يُنشأ محضر رسمي باسمك ولا يمكن التراجع.`, `Hand ${chosen.length} items to "${form.charity_name.trim()}" (delivered by ${form.deliverer_name.trim()})? An official record is created in your name and cannot be undone.`)}
           confirmLabel={t('تأكيد التسليم للجمعية', 'Confirm')} cancelLabel={t('إلغاء', 'Cancel')}
           onConfirm={() => { setConfirm(false); doDonate() }} onCancel={() => setConfirm(false)} />
       )}
@@ -199,11 +210,11 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
       </div>
 
       {loading ? <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: 40 }}>{t('جارٍ التحميل...', 'Loading...')}</p> : mode === 'history' ? (
-        donations.length === 0 ? (
+        myDons.length === 0 ? (
           <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.88rem' }}>{t('لا توجد تسليمات سابقة', 'No previous hand-overs')}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {donations.map(d => {
+            {myDons.map(d => {
               const open = openDon === d.id, its = donItems[d.id]
               return (
                 <article key={d.id} style={{ ...card, overflow: 'hidden', borderTop: '3px solid #8b5cf6' }}>
@@ -213,7 +224,9 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
                   </div>
                   <div style={{ padding: '10px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
                     <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('تاريخ ووقت التسليم', 'Date & time')}</div><div dir="ltr" style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)', textAlign: isAr ? 'right' : 'left' }}>{fmtDT(d.created_at || d.donated_date)}</div></div>
-                    <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('المسلِّم', 'By')}</div><div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{d.created_by_name || '—'}</div></div>
+                    <div style={{ gridColumn: '1 / -1' }}><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('الجمعية الخيرية', 'Charity')}</div><div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-1)' }}>{d.charity_name || '—'}</div></div>
+                    <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('المسلِّم', 'Delivered by')}</div><div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{d.deliverer_name || d.created_by_name || '—'}</div></div>
+                    <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('المشرف', 'Supervisor')}</div><div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{d.created_by_name || '—'}</div></div>
                     <div><div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('محطة التسليم', 'Station')}</div><div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{d.station_name || '—'}</div></div>
                   </div>
                   {open && (
@@ -244,10 +257,19 @@ export default function CharityTab({ preselectId = null, onPreselectUsed, isAr =
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {showForm && chosen.length > 0 && (
             <form onSubmit={submit}>
-              <FormCard icon="hand" accent="#8b5cf6" title={t('تأكيد التسليم', 'Confirm hand-over')} subtitle={t(`${chosen.length} غرض مختار`, `${chosen.length} items selected`)}>
+              <FormCard icon="hand" accent="#8b5cf6" title={t('تسليم موجودات لجمعية خيرية', 'Hand items to a charity')} subtitle={t(`${chosen.length} غرض مختار`, `${chosen.length} items selected`)}>
                 <Section title={t('بيانات المحضر', 'Record details')}>
+                  <div>
+                    <label style={label}>{t('اسم الجمعية الخيرية *', 'Charity name *')}</label>
+                    <input required list="charity-names" value={form.charity_name} onChange={e => setForm(f => ({ ...f, charity_name: e.target.value }))} style={fieldStyle} />
+                    <datalist id="charity-names">{charityNames.map(n => <option key={n} value={n} />)}</datalist>
+                  </div>
+                  <div>
+                    <label style={label}>{t('اسم المسلِّم *', 'Delivered by (name) *')}</label>
+                    <input required value={form.deliverer_name} onChange={e => setForm(f => ({ ...f, deliverer_name: e.target.value }))} style={fieldStyle} placeholder={t('اكتب اسم من سلّم الأغراض', 'Name of the person who delivers')} />
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div><label style={label}>{t('المسلِّم', 'Delivered by')}</label><div style={{ ...fieldStyle, background: 'var(--surface)', fontWeight: 700 }}>{profile?.full_name_ar || '—'}</div></div>
+                    <div><label style={label}>{t('المشرف', 'Supervisor')}</label><div style={{ ...fieldStyle, background: 'var(--surface)', fontWeight: 700 }}>{profile?.full_name_ar || '—'}</div></div>
                     <div><label style={label}>{t('المحطة', 'Station')}</label><div style={{ ...fieldStyle, background: 'var(--surface)', fontWeight: 700 }}>{profile?.station?.name_ar || '—'}</div></div>
                   </div>
                   <AutoStamp isAr={isAr} label={t('تاريخ ووقت التسليم', 'Hand-over date & time')} />
