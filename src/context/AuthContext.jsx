@@ -19,7 +19,7 @@ const DISP_SUP_FORCED = {
   restricted_mode: true, assigned_leaves: true, assigned_evaluate: true, evaluation_dispatchers_only: true, scope_assigned_stations: true,
   leaves_supervisor_stage: false, evaluation_my_employees: false, leaves_final_approve: false, leaves_supervise: false,
   evaluation_stations_tab: false, evaluation_supervisors_tab: false,
-  jg_dispatchers_leaves: false, jg_dispatchers_evaluate: false, jg_customer_service_leaves: false, jg_customer_service_evaluate: false, jg_supervisors_leaves: false,
+  jg_dispatchers_view: true, jg_dispatchers_leaves: false, jg_dispatchers_evaluate: false, jg_customer_service_leaves: false, jg_customer_service_evaluate: false, jg_supervisors_leaves: false,
 }
 
 export function AuthProvider({ children }) {

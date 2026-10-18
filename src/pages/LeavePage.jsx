@@ -1418,6 +1418,9 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
               <button onClick={() => setShowNotes(v => !v)} title={isAr ? 'إضافة ملاحظة' : 'Add note'} style={{ ...sbtn, fontSize: '0.85rem' }}>✎</button>
             </>
           )}
+          {!canAct && !isOwn && !inMySupervisedStations && !isAdmin && jobsFor('view').includes(leave.job_title) && (
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 12px' }}>{isAr ? 'اطلاع فقط' : 'View only'}</span>
+          )}
           <span style={{ flex: 1 }} />
           <button onClick={() => onStats?.(leave)} style={sbtn}>{isAr ? 'سجل الموظف' : 'Record'}</button>
           {(fullyApproved || isOwn) && allowCap('leaves_print') && <button onClick={() => onPrint(leave)} style={sbtn}>{isAr ? 'طباعة' : 'Print'}</button>}
@@ -1468,8 +1471,11 @@ export default function LeavePage() {
   const isSupervisor = (role === 'station_admin' || role === 'area_supervisor') && allowCap('leaves_supervise')
   const canSupervise = isAdmin || isSupervisor || actsAsSupervisor || grantCap('assigned_leaves') || leaveJobs.length > 0
   // حساب مقيّد: يشوف طلبات موظفيه المحددين والمرحّلين فقط
-  const restrictedScope = q => {
+  // اطلاع فقط: مسميات وظيفية يشوف إجازاتها (مثل بقية المرحّلين لمشرف المرحّلين) بدون أي إجراء
+  const viewJobs = jobsFor('view')
+  const restrictedScope = (q, withView = false) => {
     const parts = []
+    if (withView && viewJobs.length) parts.push(`job_title.in.(${viewJobs.join(',')})`)
     if (grantCap('assigned_leaves') && assignedEmployeeIds?.length) parts.push(`employee_id.in.(${assignedEmployeeIds.join(',')})`)
     if (leaveJobs.length) parts.push(`job_title.in.(${leaveJobs.join(',')})`)
     if (actsAsSupervisor && supervisedStationIds?.length) parts.push(`station_id.in.(${supervisedStationIds.join(',')})`)
@@ -1513,7 +1519,7 @@ export default function LeavePage() {
       }
     }
     if (tab === 'all' && !isAdmin) {
-      if (isRestricted) q = restrictedScope(q)
+      if (isRestricted) q = restrictedScope(q, true)
       else if ((isAreaSupervisor || role === 'station_admin') && allowedStationIds?.length) q = q.in('station_id', allowedStationIds)
       else q = q.eq('station_id', profile.station_id)
     }
