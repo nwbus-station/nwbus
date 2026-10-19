@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { matchesSearch } from '../../utils/digits'
-import { cityOnly } from '../../utils/arabicVocalize'
 import {
-  buildAnnouncement, clipUrl, friendlyError, playChime, playClipSequence, speakLive, speakWithDevice, listArabicVoices,
+  buildAnnouncement, clipUrl, phraseText, stationSpoken, friendlyError, playChime, playClipSequence, speakLive, speakWithDevice, listArabicVoices,
 } from '../../utils/callAudio'
 import SelectField from '../shared/SelectField'
 
@@ -42,17 +41,17 @@ export default function AnnounceTab({ lib, onGoSetup }) {
   const destIdx = dest ? stops.findIndex(s => s.id === dest.id) : -1
   const via = destIdx > 0 ? stops.slice(1, destIdx).filter(s => !stopOff[s.id]) : []
 
-  const sentence = mode === 'free' ? freeText.trim() : (dest ? buildAnnouncement(cityOnly(dest.name), via.map(s => cityOnly(s.name))) : '')
+  const sentence = mode === 'free' ? freeText.trim() : (dest ? buildAnnouncement(stationSpoken(dest), via.map(stationSpoken)) : '')
   // الأصوات الجاهزة إن اكتملت لهذه الرحلة، وإلا صوت ElevenLabs المباشر
   const missing = useMemo(() => {
     if (mode !== 'trip' || !dest) return []
     const m = []
-    if (!phraseClips.intro) m.push('عبارة المقدمة')
+    if (phraseText('intro') && !phraseClips.intro) m.push('عبارة المقدمة')
     if (!clipsIndex.has(dest.id)) m.push(dest.name)
-    if (via.length && !phraseClips.via) m.push('عبارة «مروراً بـ»')
+    if (via.length && phraseText('via') && !phraseClips.via) m.push('عبارة «مروراً بـ»')
     via.forEach(s => { if (!clipsIndex.has(s.id)) m.push(s.name) })
     return m
-  }, [mode, dest, via, clipsIndex, phraseClips])
+  }, [mode, dest, via, clipsIndex, phraseClips, lib.config])
   const source = useDevice ? 'device' : (mode === 'trip' && dest && !missing.length ? 'clips' : 'live')
 
   useEffect(() => {
@@ -101,8 +100,10 @@ export default function AnnounceTab({ lib, onGoSetup }) {
       if (chimeOn) await playChime(c)
       if (c.stopped) return
       if (source === 'clips') {
-        const urls = [clipUrl('phrases/intro.mp3'), clipUrl(`stations/${dest.id}.mp3`)]
-        if (via.length) { urls.push(clipUrl('phrases/via.mp3')); via.forEach(s => urls.push(clipUrl(`stations/${s.id}.mp3`))) }
+        const urls = []
+        if (phraseText('intro')) urls.push(clipUrl('phrases/intro.mp3'))
+        urls.push(clipUrl(`stations/${dest.id}.mp3`))
+        if (via.length) { if (phraseText('via')) urls.push(clipUrl('phrases/via.mp3')); via.forEach(s => urls.push(clipUrl(`stations/${s.id}.mp3`))) }
         await playClipSequence(urls, c)
       } else if (source === 'device') await speakWithDevice(sentence, c)
       else await speakLive(sentence, c)

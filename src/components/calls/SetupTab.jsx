@@ -2,8 +2,8 @@ import { useState, useRef, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { matchesSearch } from '../../utils/digits'
 import { arabizeStation, hasLatin } from '../../utils/arabizeStation'
-import { vocalize, cityOnly } from '../../utils/arabicVocalize'
-import { AUDIO_BUCKET, PHRASE_DEFS, clipUrl, generateClip, speakLive, friendlyError, listVoices, chooseVoice, cloneVoice } from '../../utils/callAudio'
+import { vocalize } from '../../utils/arabicVocalize'
+import { AUDIO_BUCKET, PHRASE_DEFS, activePhrases, stationSpoken, phraseText, clipUrl, generateClip, speakLive, friendlyError, listVoices, chooseVoice, cloneVoice } from '../../utils/callAudio'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import StatStrip from '../shared/StatStrip'
 
@@ -17,7 +17,7 @@ function Badge({ ok, okText = 'جاهز', noText = 'ناقص' }) {
 }
 
 export default function SetupTab({ lib }) {
-  const { stations, clipsIndex, phraseClips, stats, refresh, markClip, markPhrase, renameLocal, voice, setVoice } = lib
+  const { stations, clipsIndex, phraseClips, stats, refresh, markClip, markPhrase, renameLocal, voice, setVoice, config, saveConfig } = lib
   const [drafts, setDrafts] = useState({})          // { stationId: اسم عربي معدّل }
   const [run, setRun] = useState(null)              // { label, item, done, total } أثناء التجهيز
   const [failed, setFailed] = useState([])          // [{ key, label, error }]
@@ -39,6 +39,8 @@ export default function SetupTab({ lib }) {
   const [cloneFile, setCloneFile] = useState(null)
   const [cloneOk, setCloneOk] = useState(false)
   const [cloning, setCloning] = useState(false)
+  const [phraseDrafts, setPhraseDrafts] = useState({})  // { key: نص معدّل }
+  const [editPron, setEditPron] = useState(null)         // { id, val }
   const stopRef = useRef(false)
   const uploadTarget = useRef(null)
   const fileRef = useRef(null)
@@ -49,7 +51,7 @@ export default function SetupTab({ lib }) {
     () => latin.map(s => ({ id: s.id, name: (drafts[s.id] ?? arabizeStation(s.name_ar)).trim() })).filter(x => x.name && !hasLatin(x.name)),
     [latin, drafts],
   )
-  const missingPhrases = PHRASE_DEFS.filter(p => !phraseClips[p.key])
+  const missingPhrases = activePhrases().filter(p => !phraseClips[p.key])
   const missingClips = stations.filter(s => !clipsIndex.has(s.id))
   const busy = !!run || !!rowBusy
   const allReady = stats.total > 0 && !latin.length && !missingPhrases.length && !missingClips.length
@@ -86,8 +88,8 @@ export default function SetupTab({ lib }) {
         .filter(s => !clipsIndex.has(s.id) || renamed.has(s.id))
       for (const s of todo) {
         if (stopRef.current) throw new Error('__stopped__')
-        step('أصوات المحطات', cityOnly(s.name_ar))
-        try { await generateClip(cityOnly(s.name_ar), `stations/${s.id}.mp3`); markClip(s.id) }
+        step('أصوات المحطات', stationSpoken(s))
+        try { await generateClip(stationSpoken(s), `stations/${s.id}.mp3`); markClip(s.id) }
         catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: `s${s.id}`, label: s.name_ar, error: m }) }
         done++; await pause(350)
       }
@@ -115,7 +117,7 @@ export default function SetupTab({ lib }) {
   // ── عمليات المحطة الواحدة ──
   async function regenerateStation(s) {
     setRowBusy(s.id); setRowError('')
-    try { await generateClip(cityOnly(s.name_ar), `stations/${s.id}.mp3`); markClip(s.id) }
+    try { await generateClip(stationSpoken(s), `stations/${s.id}.mp3`); markClip(s.id) }
     catch (e) { setRowError(`${s.name_ar}: ${friendlyError(e)}`) }
     setRowBusy('')
   }
@@ -128,7 +130,27 @@ export default function SetupTab({ lib }) {
       if (error) throw error
       renameLocal(s.id, name)
       setDrafts(p => { const n = { ...p }; delete n[s.id]; return n })
-      if (clipsIndex.has(s.id)) await generateClip(cityOnly(name), `stations/${s.id}.mp3`)
+      if (clipsIndex.has(s.id)) await generateClip(stationSpoken({ id: s.id, name_ar: name }), `stations/${s.id}.mp3`)
+    } catch (e) { setRowError(`${s.name_ar}: ${friendlyError(e)}`) }
+    setRowBusy('')
+  }
+  async function savePhrase(key, text) {
+    setRowBusy(key); setRowError('')
+    try {
+      await saveConfig({ ...config, phrases: { ...config.phrases, [key]: text.trim() } })
+      setPhraseDrafts(p => { const n = { ...p }; delete n[key]; return n })
+      if (text.trim()) { await generateClip(text.trim(), `phrases/${key}.mp3`); markPhrase(key) }
+    } catch (e) { setRowError(friendlyError(e)) }
+    setRowBusy('')
+  }
+  async function savePron(s, val) {
+    setRowBusy(s.id); setRowError('')
+    try {
+      const pron = { ...config.pron }
+      if (val.trim()) pron[s.id] = val.trim(); else delete pron[s.id]
+      await saveConfig({ ...config, pron })
+      setEditPron(null)
+      if (clipsIndex.has(s.id)) { await generateClip(stationSpoken({ id: s.id, name_ar: s.name_ar }), `stations/${s.id}.mp3`); markClip(s.id) }
     } catch (e) { setRowError(`${s.name_ar}: ${friendlyError(e)}`) }
     setRowBusy('')
   }
@@ -192,9 +214,9 @@ export default function SetupTab({ lib }) {
       message: `إعادة توليد ${have.length} صوت محطة وعبارتين؟ هذا يستبدل الأصوات الحالية (بما فيها التسجيلات المرفوعة يدوياً) ويستهلك من رصيد ElevenLabs.`,
       onYes: async () => {
         stopRef.current = false; setFailed([]); setFatal(''); setSummary('')
-        const fails = []; let done = 0; const total = have.length + PHRASE_DEFS.length
+        const fails = []; let done = 0; const total = have.length + activePhrases().length
         try {
-          for (const p of PHRASE_DEFS) {
+          for (const p of activePhrases()) {
             if (stopRef.current) throw new Error('__stopped__')
             setRun({ label: 'العبارات الثابتة', item: p.text, done, total })
             try { await generateClip(p.text, `phrases/${p.key}.mp3`); markPhrase(p.key) } catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: p.key, label: p.text, error: m }) }
@@ -202,8 +224,8 @@ export default function SetupTab({ lib }) {
           }
           for (const s of have) {
             if (stopRef.current) throw new Error('__stopped__')
-            setRun({ label: 'أصوات المحطات', item: cityOnly(s.name_ar), done, total })
-            try { await generateClip(cityOnly(s.name_ar), `stations/${s.id}.mp3`) } catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: s.id, label: s.name_ar, error: m }) }
+            setRun({ label: 'أصوات المحطات', item: stationSpoken(s), done, total })
+            try { await generateClip(stationSpoken(s), `stations/${s.id}.mp3`) } catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: s.id, label: s.name_ar, error: m }) }
             done++; await pause(350)
           }
           setSummary(fails.length ? `اكتملت إعادة التوليد مع ${fails.length} إخفاق.` : 'اكتملت إعادة التوليد.')
@@ -220,7 +242,7 @@ export default function SetupTab({ lib }) {
     <div className="space-y-4">
       <StatStrip items={[
         { label: 'أسماء عربية', val: `${stats.arabic}/${stats.total}`, tone: stats.total && stats.arabic === stats.total ? 'text-green-600' : undefined },
-        { label: 'عبارات ثابتة', val: `${stats.phrases}/${PHRASE_DEFS.length}`, tone: stats.phrases === PHRASE_DEFS.length ? 'text-green-600' : undefined },
+        { label: 'عبارات ثابتة', val: `${stats.phrases}/${stats.phraseTotal}`, tone: stats.phrases === stats.phraseTotal ? 'text-green-600' : undefined },
         { label: 'أصوات المحطات', val: `${stats.clips}/${stats.total}`, tone: stats.total && stats.clips === stats.total ? 'text-green-600' : undefined },
       ]} />
 
@@ -363,17 +385,28 @@ export default function SetupTab({ lib }) {
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <p className="text-sm font-bold text-gray-800 mb-2">العبارات الثابتة</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-          {PHRASE_DEFS.map(p => (
-            <div key={p.key} className="border border-gray-200 rounded px-3 py-2 flex items-center gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-800 truncate">{p.text}</p>
-                <p className="text-[11px] text-gray-400">{p.ar}</p>
+          {PHRASE_DEFS.map(p => {
+            const cur = phraseText(p.key)
+            const draft = phraseDrafts[p.key] ?? cur
+            const changed = draft.trim() !== cur
+            return (
+              <div key={p.key} className="border border-gray-200 rounded px-3 py-2 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-gray-400">{p.ar}</p>
+                  {cur ? <Badge ok={phraseClips[p.key]} /> : <span className="text-[11px] text-gray-500 border border-gray-200 rounded px-2 py-0.5">محذوفة من النداء</span>}
+                </div>
+                <input value={draft} onChange={e => setPhraseDrafts(d => ({ ...d, [p.key]: e.target.value }))} disabled={busy}
+                  placeholder="(فارغ = بدون هذه العبارة)" className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm" />
+                <div className="flex items-center gap-2 flex-wrap">
+                  {changed && <button type="button" onClick={() => savePhrase(p.key, draft)} disabled={busy} className="text-xs bg-nwbus-primary text-white rounded px-3 py-1 disabled:opacity-40">{draft.trim() ? 'حفظ وتوليد الصوت' : 'حذف العبارة'}</button>}
+                  {changed && <button type="button" onClick={() => setPhraseDrafts(d => { const n = { ...d }; delete n[p.key]; return n })} className="text-xs text-gray-500">تراجع</button>}
+                  {!changed && cur && phraseClips[p.key] && <button type="button" onClick={() => preview(`phrases/${p.key}.mp3`)} className="text-xs text-nwbus-primary font-semibold">استماع</button>}
+                  {!changed && cur && <button type="button" onClick={() => regeneratePhrase({ key: p.key, text: cur })} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40">{phraseClips[p.key] ? 'إعادة' : 'توليد'}</button>}
+                  {!changed && !cur && <button type="button" onClick={() => savePhrase(p.key, p.text)} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40">استعادة الافتراضي</button>}
+                </div>
               </div>
-              <Badge ok={phraseClips[p.key]} />
-              {phraseClips[p.key] && <button type="button" onClick={() => preview(`phrases/${p.key}.mp3`)} className="text-xs text-nwbus-primary font-semibold shrink-0">استماع</button>}
-              <button type="button" onClick={() => regeneratePhrase(p)} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">{phraseClips[p.key] ? 'إعادة' : 'توليد'}</button>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         <div className="flex items-center gap-2 mb-2">
@@ -385,16 +418,29 @@ export default function SetupTab({ lib }) {
           {shown.map(s => {
             const has = clipsIndex.has(s.id)
             return (
-              <div key={s.id} className="flex items-center gap-2 px-3 py-2">
+              <div key={s.id} className="px-3 py-2">
+              <div className="flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-800 truncate">{s.name_ar}</p>
-                  {!hasLatin(s.name_ar) && <p className="text-[11px] text-gray-400 truncate" title="كما يُنطق في النداء">{vocalize(cityOnly(s.name_ar))}</p>}
+                  {!hasLatin(s.name_ar) && <p className="text-[11px] text-gray-400 truncate" title="كما يُنطق في النداء">{config.pron[s.id] ? 'نطق مخصص: ' : ''}{vocalize(stationSpoken(s))}</p>}
                 </div>
                 <Badge ok={has} />
                 {has && <button type="button" onClick={() => preview(`stations/${s.id}.mp3`)} className="text-xs text-nwbus-primary font-semibold shrink-0">استماع</button>}
                 <button type="button" onClick={() => regenerateStation(s)} disabled={busy || hasLatin(s.name_ar)} title={hasLatin(s.name_ar) ? 'ترجم الاسم أولاً' : ''}
                   className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">{rowBusy === s.id ? '...' : has ? 'إعادة' : 'توليد'}</button>
+                {!hasLatin(s.name_ar) && <button type="button" onClick={() => setEditPron(e => (e?.id === s.id ? null : { id: s.id, val: config.pron[s.id] || '' }))} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">نطق</button>}
                 {showAdvanced && <button type="button" onClick={() => pickRecording(s.id, `stations/${s.id}.mp3`)} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">رفع تسجيل</button>}
+              </div>
+              {editPron?.id === s.id && (
+                <div className="mt-2 bg-slate-50 border border-gray-200 rounded p-2.5 space-y-2">
+                  <p className="text-[11px] text-gray-500 leading-relaxed">اكتب الكلمة بالشكل الذي تريد أن تُنطق به (يمكنك التشكيل، مثل: تَبُوك). اتركها فارغة للعودة إلى الاسم الأصلي. عند الحفظ يُعاد توليد صوت المحطة.</p>
+                  <div className="flex items-center gap-2">
+                    <input dir="rtl" value={editPron.val} onChange={e => setEditPron({ id: s.id, val: e.target.value })} placeholder={stationSpoken({ id: s.id, name_ar: s.name_ar })} className="flex-1 border border-gray-200 rounded px-2.5 py-1.5 text-sm" />
+                    <button type="button" onClick={() => savePron(s, editPron.val)} disabled={busy} className="text-xs bg-nwbus-primary text-white rounded px-3 py-1.5 disabled:opacity-40">حفظ</button>
+                    <button type="button" onClick={() => setEditPron(null)} className="text-xs text-gray-500">إلغاء</button>
+                  </div>
+                </div>
+              )}
               </div>
             )
           })}

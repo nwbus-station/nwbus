@@ -1,6 +1,6 @@
 // صوتيات نداء الركاب: نغمة، تشغيل مقاطع، صوت الجهاز، توليد ElevenLabs، ورسائل أخطاء مفهومة
 import { supabase } from '../lib/supabase'
-import { vocalize } from './arabicVocalize'
+import { vocalize, cityOnly } from './arabicVocalize'
 
 export const AUDIO_BUCKET = 'audio-clips'
 // العبارتان الثابتتان في النداء
@@ -11,10 +11,20 @@ export const PHRASE_DEFS = [
 
 export const clipUrl = path => supabase.storage.from(AUDIO_BUCKET).getPublicUrl(path).data.publicUrl
 
+// إعدادات النداء المحفوظة (config/call.json): نصوص العبارات (الفارغ = محذوفة) وتصحيح نطق المحطات
+const DEFAULT_PHRASES = { intro: 'نداء على الركاب المسافرين إلى', via: 'مروراً بـ' }
+let callCfg = { phrases: {}, pron: {} }
+export const getCallConfig = () => callCfg
+export const phraseText = key => (callCfg.phrases[key] ?? DEFAULT_PHRASES[key]).trim()
+export const activePhrases = () => PHRASE_DEFS.map(p => ({ ...p, text: phraseText(p.key) })).filter(p => p.text)
+// الكلمة التي تُنطق للمحطة: التصحيح المخصص إن وُجد وإلا اسم المدينة
+export const stationSpoken = s => (callCfg.pron[s.id] || '').trim() || cityOnly(s.name_ar ?? s.name ?? '')
+
 // جملة النداء: السفر إلى المدينة، مروراً بالمدن
 export function buildAnnouncement(destName, viaNames) {
-  const via = viaNames.length ? ` مروراً بـ ${viaNames.join('، ')}` : ''
-  return `نداء على الركاب المسافرين إلى ${destName}${via}.`
+  const intro = phraseText('intro'), viaP = phraseText('via')
+  const via = viaNames.length ? ` ${viaP ? viaP + ' ' : ''}${viaNames.join('، ')}` : ''
+  return `${intro ? intro + ' ' : ''}${destName}${via}.`
 }
 
 // النص المرسل للصوت البشري: مشكَّل لنطق أدق (وإن زاد عن حد الخادم 500 حرف نرسل الأصلي)
@@ -117,6 +127,10 @@ export async function loadVoiceConfig() {
     const r = await fetch(`${clipUrl('config/voice.json')}?t=${Date.now()}`)
     if (r.ok) { const j = await r.json(); if (j?.voiceId) activeVoice = { id: j.voiceId, name: j.name || '' } }
   } catch { /* لا إعداد محفوظ: الصوت الافتراضي */ }
+  try {
+    const r = await fetch(`${clipUrl('config/call.json')}?t=${Date.now()}`)
+    if (r.ok) { const j = await r.json(); callCfg = { phrases: j.phrases ?? {}, pron: j.pron ?? {} } }
+  } catch { /* لا إعداد محفوظ */ }
   return activeVoice
 }
 async function jsonCall(body) {
@@ -124,6 +138,11 @@ async function jsonCall(body) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || 'تعذّر تنفيذ الطلب')
   return data
+}
+export async function saveCallConfig(next) {
+  const d = await jsonCall({ action: 'setConfig', config: next })
+  if (!d.ok) throw new Error('الدالة swift-responder قديمة: حدّثها بالكود الجديد في Supabase')
+  callCfg = next
 }
 export async function listVoices() {
   const d = await jsonCall({ action: 'voices' })

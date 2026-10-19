@@ -42,7 +42,7 @@ serve(async (req) => {
     }
     if (!allowed) return json({ error: 'Forbidden' }, 403)
 
-    const { text, savePath, voiceId: reqVoice, voiceName, action, audio: cloneAudio, mime: cloneMime, filename: cloneFile } = await req.json()
+    const { text, savePath, voiceId: reqVoice, voiceName, action, config: cfgIn, audio: cloneAudio, mime: cloneMime, filename: cloneFile } = await req.json()
     const validVoice = (v: unknown) => typeof v === 'string' && /^[A-Za-z0-9]{10,40}$/.test(v)
 
     // قائمة أصوات الحساب (للاختيار من واجهة الإعداد)
@@ -56,6 +56,21 @@ serve(async (req) => {
         voice_id: v.voice_id, name: v.name, category: v.category, preview_url: v.preview_url, labels: v.labels ?? {},
       }))
       return json({ voices })
+    }
+    // إعدادات النداء: نصوص العبارات الثابتة (الفارغ = محذوفة) وتصحيح نطق المحطات
+    if (action === 'setConfig') {
+      const str = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : undefined)
+      const phrases: Record<string, string> = {}
+      for (const k of ['intro', 'via']) { const v = str(cfgIn?.phrases?.[k], 200); if (v !== undefined) phrases[k] = v }
+      const pron: Record<string, string> = {}
+      for (const [k, v] of Object.entries(cfgIn?.pron ?? {}).slice(0, 600)) {
+        const t = str(v, 100)
+        if (t?.trim() && /^[\w-]{1,60}$/.test(k)) pron[k] = t.trim()
+      }
+      const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } })
+      const { error: cfgErr } = await admin.storage.from('audio-clips').upload('config/call.json', new Blob([JSON.stringify({ phrases, pron })], { type: 'application/json' }), { contentType: 'application/json', upsert: true, cacheControl: '0' })
+      if (cfgErr) return json({ error: cfgErr.message }, 500)
+      return json({ ok: true })
     }
     // استنساخ صوت من عيّنة صوتية (Instant Voice Cloning) — يتطلب خطة ElevenLabs تدعمه ومفتاحاً بصلاحية Voices = Write
     if (action === 'cloneVoice') {

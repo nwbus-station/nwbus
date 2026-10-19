@@ -6,7 +6,7 @@ import SetupTab from '../components/calls/SetupTab'
 // نداء الركاب: تبويبان فقط — «النداء» للتشغيل اليومي، و«إعداد الأصوات» يُنفَّذ مرة واحدة (زر تجهيز تلقائي)
 export default function CallPage() {
   const lib = useCallLibrary()
-  const ready = lib.stats.total > 0 && lib.stats.arabic === lib.stats.total && lib.stats.phrases === 2 && lib.stats.clips === lib.stats.total
+  const ready = lib.stats.total > 0 && lib.stats.arabic === lib.stats.total && lib.stats.phrases === lib.stats.phraseTotal && lib.stats.clips === lib.stats.total
   const [tab, setTab] = useState('announce')
 
   return (

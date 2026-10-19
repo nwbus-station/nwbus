@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { hasLatin } from '../../utils/arabizeStation'
-import { AUDIO_BUCKET, PHRASE_DEFS, loadVoiceConfig } from '../../utils/callAudio'
+import { AUDIO_BUCKET, activePhrases, loadVoiceConfig, saveCallConfig, getCallConfig } from '../../utils/callAudio'
 
 export default function useCallLibrary() {
   const [stations, setStations] = useState([])
@@ -10,6 +10,7 @@ export default function useCallLibrary() {
   const [phraseClips, setPhraseClips] = useState({ intro: false, via: false })
   const [loading, setLoading] = useState(true)
   const [voice, setVoice] = useState({ id: null, name: '' })
+  const [config, setConfigState] = useState({ phrases: {}, pron: {} })
 
   const refresh = useCallback(async () => {
     const [{ data: sts }, { data: stationFiles }, { data: phraseFiles }] = await Promise.all([
@@ -23,21 +24,24 @@ export default function useCallLibrary() {
     setPhraseClips({ intro: names.has('intro.mp3'), via: names.has('via.mp3') })
     setLoading(false)
   }, [])
-  useEffect(() => { refresh(); loadVoiceConfig().then(v => setVoice({ ...v })) }, [refresh])
+  useEffect(() => { refresh(); loadVoiceConfig().then(v => { setVoice({ ...v }); setConfigState({ ...getCallConfig() }) }) }, [refresh])
 
   const stats = useMemo(() => {
     const total = stations.length
     return {
       total,
       arabic: stations.filter(s => !hasLatin(s.name_ar)).length,
-      phrases: PHRASE_DEFS.filter(p => phraseClips[p.key]).length,
+      phrases: activePhrases().filter(p => phraseClips[p.key]).length,
+      phraseTotal: activePhrases().length,
       clips: stations.filter(s => clipsIndex.has(s.id)).length,
     }
-  }, [stations, clipsIndex, phraseClips])
+  }, [stations, clipsIndex, phraseClips, config])
 
   const markClip = useCallback(id => setClipsIndex(prev => new Set(prev).add(id)), [])
   const markPhrase = useCallback(key => setPhraseClips(prev => ({ ...prev, [key]: true })), [])
   const renameLocal = useCallback((id, name) => setStations(prev => prev.map(s => (s.id === id ? { ...s, name_ar: name } : s))), [])
 
-  return { voice, setVoice, stations, clipsIndex, phraseClips, loading, stats, refresh, markClip, markPhrase, renameLocal }
+  const saveConfig = useCallback(async next => { await saveCallConfig(next); setConfigState({ ...next }) }, [])
+
+  return { config, saveConfig, voice, setVoice, stations, clipsIndex, phraseClips, loading, stats, refresh, markClip, markPhrase, renameLocal }
 }
