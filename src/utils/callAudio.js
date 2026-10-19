@@ -26,6 +26,9 @@ export function friendlyError(err) {
   if (/api_key|authentication_error|invalid_api_key|api_key_id_used/i.test(m)) return 'مفتاح ElevenLabs غير صحيح. احفظ المفتاح الكامل (يبدأ بـ sk_) في Supabase ← Edge Functions ← Secrets باسم ELEVENLABS_API_KEY.'
   if (/quota|exceeded|credits|characters? limit|payment/i.test(m)) return 'انتهى حدّ حسابك في ElevenLabs لهذا الشهر. رقّ الباقة أو انتظر التجديد.'
   if (/TTS not configured/i.test(m)) return 'مفتاح ElevenLabs غير مضبوط في Supabase (Secrets). أضف ELEVENLABS_API_KEY.'
+  if (/missing_permissions|voices_write|permission/i.test(m)) return 'مفتاح ElevenLabs لا يملك صلاحية إضافة الأصوات. أنشئ مفتاحاً جديداً وفعّل Voices = Write ثم حدّث السر في Supabase.'
+  if (/can_not_use_instant_voice_cloning|instant.*voice.*clon|subscription/i.test(m)) return 'خطة ElevenLabs الحالية لا تدعم استنساخ الأصوات. رقِّ الحساب إلى باقة Starter أو أعلى.'
+  if (/Sample too large/i.test(m)) return 'ملف العيّنة كبير. استخدم ملفاً أقل من 8 ميجا.'
   if (/Forbidden/i.test(m)) return 'ما عندك صلاحية لقسم نداء الركاب.'
   if (/Unauthorized|لا توجد جلسة|No active session/i.test(m)) return 'انتهت جلسة الدخول. سجّل دخولك من جديد.'
   if (/Text too long/i.test(m)) return 'النص أطول من الحد المسموح (500 حرف).'
@@ -106,17 +109,58 @@ async function callTts(body) {
     body: JSON.stringify(body),
   })
 }
+// الصوت المعتمد للنداء (يُحفظ في config/voice.json بمكتبة الصوتيات ويُحمّل عند فتح الصفحة)
+let activeVoice = { id: null, name: '' }
+export const getActiveVoice = () => activeVoice
+export async function loadVoiceConfig() {
+  try {
+    const r = await fetch(`${clipUrl('config/voice.json')}?t=${Date.now()}`)
+    if (r.ok) { const j = await r.json(); if (j?.voiceId) activeVoice = { id: j.voiceId, name: j.name || '' } }
+  } catch { /* لا إعداد محفوظ: الصوت الافتراضي */ }
+  return activeVoice
+}
+async function jsonCall(body) {
+  const res = await callTts(body)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || 'تعذّر تنفيذ الطلب')
+  return data
+}
+export async function listVoices() {
+  const d = await jsonCall({ action: 'voices' })
+  if (!Array.isArray(d.voices)) throw new Error('الدالة swift-responder قديمة: حدّثها بالكود الجديد في Supabase')
+  return d.voices
+}
+export async function chooseVoice(id, name) {
+  const d = await jsonCall({ action: 'setVoice', voiceId: id, voiceName: name })
+  if (!d.ok) throw new Error('الدالة swift-responder قديمة: حدّثها بالكود الجديد في Supabase')
+  activeVoice = { id, name }
+}
+
+// استنساخ صوت من ملف عيّنة ثم اعتماده للنداء
+export async function cloneVoice(name, file) {
+  const audio = await new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(String(fr.result).split(',')[1] || '')
+    fr.onerror = () => reject(new Error('تعذّر قراءة الملف'))
+    fr.readAsDataURL(file)
+  })
+  const d = await jsonCall({ action: 'cloneVoice', voiceName: name, audio, mime: file.type, filename: file.name })
+  if (!d.voice_id) throw new Error('الدالة swift-responder قديمة: حدّثها بالكود الجديد في Supabase')
+  await chooseVoice(d.voice_id, name)
+  return d.voice_id
+}
+
 // توليد مقطع وحفظه في مكتبة النداء
 export async function generateClip(text, savePath) {
-  const res = await callTts({ text: speakable(text), savePath })
+  const res = await callTts({ text: speakable(text), savePath, voiceId: activeVoice.id })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error || 'تعذّر توليد المقطع')
   return body.url
 }
 // نطق نص مباشرة بصوت ElevenLabs
-export async function speakLive(text, controller) {
+export async function speakLive(text, controller, voiceOverride) {
   if (controller?.stopped) return
-  const res = await callTts({ text: speakable(text) })
+  const res = await callTts({ text: speakable(text), voiceId: voiceOverride || activeVoice.id })
   if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || 'تعذّر توليد الصوت') }
   if (controller?.stopped) return
   const url = URL.createObjectURL(await res.blob())

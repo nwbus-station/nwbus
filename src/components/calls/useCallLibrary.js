@@ -2,13 +2,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { hasLatin } from '../../utils/arabizeStation'
-import { AUDIO_BUCKET, PHRASE_DEFS } from '../../utils/callAudio'
+import { AUDIO_BUCKET, PHRASE_DEFS, loadVoiceConfig } from '../../utils/callAudio'
 
 export default function useCallLibrary() {
   const [stations, setStations] = useState([])
   const [clipsIndex, setClipsIndex] = useState(() => new Set())
   const [phraseClips, setPhraseClips] = useState({ intro: false, via: false })
   const [loading, setLoading] = useState(true)
+  const [voice, setVoice] = useState({ id: null, name: '' })
 
   const refresh = useCallback(async () => {
     const [{ data: sts }, { data: stationFiles }, { data: phraseFiles }] = await Promise.all([
@@ -22,7 +23,7 @@ export default function useCallLibrary() {
     setPhraseClips({ intro: names.has('intro.mp3'), via: names.has('via.mp3') })
     setLoading(false)
   }, [])
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { refresh(); loadVoiceConfig().then(v => setVoice({ ...v })) }, [refresh])
 
   const stats = useMemo(() => {
     const total = stations.length
@@ -38,5 +39,5 @@ export default function useCallLibrary() {
   const markPhrase = useCallback(key => setPhraseClips(prev => ({ ...prev, [key]: true })), [])
   const renameLocal = useCallback((id, name) => setStations(prev => prev.map(s => (s.id === id ? { ...s, name_ar: name } : s))), [])
 
-  return { stations, clipsIndex, phraseClips, loading, stats, refresh, markClip, markPhrase, renameLocal }
+  return { voice, setVoice, stations, clipsIndex, phraseClips, loading, stats, refresh, markClip, markPhrase, renameLocal }
 }

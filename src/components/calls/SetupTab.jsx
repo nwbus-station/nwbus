@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { matchesSearch } from '../../utils/digits'
 import { arabizeStation, hasLatin } from '../../utils/arabizeStation'
 import { vocalize, cityOnly } from '../../utils/arabicVocalize'
-import { AUDIO_BUCKET, PHRASE_DEFS, clipUrl, generateClip, speakLive, friendlyError } from '../../utils/callAudio'
+import { AUDIO_BUCKET, PHRASE_DEFS, clipUrl, generateClip, speakLive, friendlyError, listVoices, chooseVoice, cloneVoice } from '../../utils/callAudio'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import StatStrip from '../shared/StatStrip'
 
@@ -17,7 +17,7 @@ function Badge({ ok, okText = 'جاهز', noText = 'ناقص' }) {
 }
 
 export default function SetupTab({ lib }) {
-  const { stations, clipsIndex, phraseClips, stats, refresh, markClip, markPhrase, renameLocal } = lib
+  const { stations, clipsIndex, phraseClips, stats, refresh, markClip, markPhrase, renameLocal, voice, setVoice } = lib
   const [drafts, setDrafts] = useState({})          // { stationId: اسم عربي معدّل }
   const [run, setRun] = useState(null)              // { label, item, done, total } أثناء التجهيز
   const [failed, setFailed] = useState([])          // [{ key, label, error }]
@@ -29,6 +29,16 @@ export default function SetupTab({ lib }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [rowBusy, setRowBusy] = useState('')
   const [rowError, setRowError] = useState('')
+  const [voices, setVoices] = useState(null)       // null = لم تُحمَّل بعد
+  const [voicesBusy, setVoicesBusy] = useState(false)
+  const [voiceMsg, setVoiceMsg] = useState({ ok: '', err: '' })
+  const [voiceTest, setVoiceTest] = useState('')
+  const [voiceChanged, setVoiceChanged] = useState(false)
+  const [showClone, setShowClone] = useState(false)
+  const [cloneName, setCloneName] = useState('')
+  const [cloneFile, setCloneFile] = useState(null)
+  const [cloneOk, setCloneOk] = useState(false)
+  const [cloning, setCloning] = useState(false)
   const stopRef = useRef(false)
   const uploadTarget = useRef(null)
   const fileRef = useRef(null)
@@ -141,6 +151,36 @@ export default function SetupTab({ lib }) {
   }
   function pickRecording(id, path) { uploadTarget.current = { id, path }; fileRef.current?.click() }
 
+  async function openVoices() {
+    setVoicesBusy(true); setVoiceMsg({ ok: '', err: '' })
+    try { setVoices(await listVoices()) }
+    catch (e) { setVoiceMsg({ ok: '', err: /Missing text/.test(e.message) ? 'الدالة swift-responder في Supabase قديمة. الصق فيها الكود الجديد ثم أعد المحاولة.' : friendlyError(e) }) }
+    setVoicesBusy(false)
+  }
+  async function doClone() {
+    if (!cloneFile || !cloneName.trim() || !cloneOk) return
+    if (cloneFile.size > 8 * 1024 * 1024) { setVoiceMsg({ ok: '', err: friendlyError(new Error('Sample too large')) }); return }
+    setCloning(true); setVoiceMsg({ ok: '', err: '' })
+    try {
+      const id = await cloneVoice(cloneName.trim(), cloneFile)
+      setVoice({ id, name: cloneName.trim() }); setVoiceChanged(true); setVoices(null)
+      setVoiceMsg({ ok: `تم إنشاء الصوت واعتماده: ${cloneName.trim()}`, err: '' })
+      setShowClone(false); setCloneName(''); setCloneFile(null); setCloneOk(false)
+    } catch (e) { setVoiceMsg({ ok: '', err: /Missing text/.test(e.message) ? 'الدالة swift-responder في Supabase قديمة. الصق فيها الكود الجديد ثم أعد المحاولة.' : friendlyError(e) }) }
+    setCloning(false)
+  }
+  async function tryVoice(v) {
+    setVoiceTest(v.voice_id); setVoiceMsg({ ok: '', err: '' })
+    try { await speakLive('نداء على الركاب المسافرين إلى الرياض مروراً بالقصيم.', undefined, v.voice_id) }
+    catch (e) { setVoiceMsg({ ok: '', err: friendlyError(e) }) }
+    setVoiceTest('')
+  }
+  async function pickVoice(v) {
+    setVoicesBusy(true); setVoiceMsg({ ok: '', err: '' })
+    try { await chooseVoice(v.voice_id, v.name); setVoice({ id: v.voice_id, name: v.name }); setVoiceChanged(true); setVoiceMsg({ ok: `تم اعتماد الصوت: ${v.name}`, err: '' }) }
+    catch (e) { setVoiceMsg({ ok: '', err: /Missing text/.test(e.message) ? 'الدالة swift-responder في Supabase قديمة. الصق فيها الكود الجديد ثم أعد المحاولة.' : friendlyError(e) }) }
+    setVoicesBusy(false)
+  }
   async function testConnection() {
     setTestState({ busy: true, ok: false, error: '' })
     try { await speakLive('تجربة صوت النداء. نداء على الركاب المسافرين إلى الرياض.'); setTestState({ busy: false, ok: true, error: '' }) }
@@ -239,6 +279,60 @@ export default function SetupTab({ lib }) {
           className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 shrink-0">{testState.busy ? 'جارٍ الفحص...' : 'تجربة الصوت'}</button>
         {testState.ok && <p className="w-full text-sm text-green-700">الاتصال سليم.</p>}
         {testState.error && <p className="w-full text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3 leading-relaxed">{testState.error}</p>}
+      </div>
+
+      {/* صوت المذيع */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-800">صوت المذيع</p>
+            <p className="text-xs text-gray-500 mt-0.5">الصوت الحالي: <span className="font-semibold text-gray-700">{voice.id ? (voice.name || 'مخصص') : 'الافتراضي (Adam)'}</span></p>
+          </div>
+          <button type="button" onClick={openVoices} disabled={voicesBusy || busy} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 shrink-0">{voicesBusy && !voices ? 'جارٍ التحميل...' : voices ? 'تحديث القائمة' : 'تغيير الصوت'}</button>
+        </div>
+        {voiceMsg.err && <p className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3 leading-relaxed">{voiceMsg.err}</p>}
+        {voiceMsg.ok && <p className="mt-3 text-sm text-green-700">{voiceMsg.ok}</p>}
+        {voiceChanged && (
+          <div className="mt-2 bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-900 leading-relaxed">
+            الأصوات المولّدة سابقاً ما زالت بالصوت القديم. لتطبيق الصوت الجديد عليها اضغط «إعادة توليد كل الأصوات» من الخيارات المتقدمة بالأسفل.
+          </div>
+        )}
+        {voices && (
+          <div className="mt-3 border border-gray-200 rounded divide-y divide-gray-100 max-h-80 overflow-y-auto">
+            {voices.map(v => {
+              const meta = [v.labels?.gender === 'male' ? 'رجالي' : v.labels?.gender === 'female' ? 'نسائي' : '', v.labels?.accent, v.labels?.description || v.labels?.use_case].filter(Boolean).join(' · ')
+              const current = voice.id === v.voice_id
+              return (
+                <div key={v.voice_id} className="flex items-center gap-2 px-3 py-2 flex-wrap">
+                  <div className="flex-1 min-w-[140px]">
+                    <p className="text-sm text-gray-800 font-semibold">{v.name}{current && <span className="text-[11px] text-green-700 ms-2">المعتمد</span>}</p>
+                    {meta && <p className="text-[11px] text-gray-400 truncate" dir="ltr">{meta}</p>}
+                  </div>
+                  {v.preview_url && <button type="button" onClick={() => new Audio(v.preview_url).play().catch(() => {})} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 shrink-0">عينة</button>}
+                  <button type="button" onClick={() => tryVoice(v)} disabled={!!voiceTest || voicesBusy} className="text-xs text-nwbus-primary border border-nwbus-primary rounded px-2 py-1 disabled:opacity-40 shrink-0">{voiceTest === v.voice_id ? '...' : 'تجربة بالعربي'}</button>
+                  <button type="button" onClick={() => pickVoice(v)} disabled={current || voicesBusy} className="text-xs bg-nwbus-primary text-white rounded px-3 py-1 disabled:opacity-40 shrink-0">اعتماد</button>
+                </div>
+              )
+            })}
+            {voices.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">لا توجد أصوات في حسابك</p>}
+          </div>
+        )}
+        <button type="button" onClick={() => setShowClone(o => !o)} className="mt-3 text-xs text-nwbus-primary font-semibold underline">{showClone ? 'إخفاء' : 'إضافة صوتي الخاص (استنساخ الصوت واللهجة)'}</button>
+        {showClone && (
+          <div className="mt-2 border border-gray-200 rounded p-3 space-y-2.5">
+            <p className="text-xs text-gray-600 leading-relaxed">ارفع تسجيلاً واضحاً للصوت المطلوب بلهجته (دقيقة إلى 3 دقائق، شخص واحد، بدون موسيقى أو ضجيج). يُنشأ منه صوت جديد يُعتمد للنداء على كل المحطات. يحتاج باقة ElevenLabs تدعم الاستنساخ ومفتاحاً بصلاحية Voices = Write.</p>
+            <input value={cloneName} onChange={e => setCloneName(e.target.value)} placeholder="اسم الصوت (مثال: مذيع النداء)" className="w-full border border-gray-200 rounded px-3 py-2 text-sm" />
+            <label className="block text-xs text-gray-600">ملف العيّنة الصوتية (mp3 أو m4a أو wav، أقل من 8 ميجا)
+              <input type="file" accept="audio/*" onChange={e => setCloneFile(e.target.files?.[0] || null)} className="block mt-1 text-xs w-full" />
+            </label>
+            <label className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+              <input type="checkbox" className="accent-nwbus-primary mt-0.5" checked={cloneOk} onChange={e => setCloneOk(e.target.checked)} />
+              أؤكد أن الصوت صوتي أنا، أو لدي موافقة صاحبه على استخدامه في نداء الركاب.
+            </label>
+            <button type="button" onClick={doClone} disabled={cloning || busy || !cloneFile || !cloneName.trim() || !cloneOk} className="px-4 py-2 bg-nwbus-primary text-white rounded-lg text-sm font-bold disabled:opacity-40">{cloning ? 'جارٍ إنشاء الصوت...' : 'إنشاء واعتماد الصوت'}</button>
+          </div>
+        )}
+        {voices && <p className="text-[11px] text-gray-400 mt-2">«عينة» تسمع الصوت بالإنجليزية مجاناً. «تجربة بالعربي» تنطق جملة نداء بالعربي وتستهلك رصيداً بسيطاً.</p>}
       </div>
 
       {/* مراجعة الأسماء */}
