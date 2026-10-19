@@ -2225,6 +2225,7 @@ function UsersPageFull() {
   const [bulkModule,  setBulkModule]  = useState('')
   const [bulkSupervisor, setBulkSupervisor] = useState('')
   const [bulkSaving,  setBulkSaving]  = useState(false)
+  const [bulkMsg,     setBulkMsg]     = useState('')   // نتيجة آخر عملية جماعية
 
   function toggleSelect(id) {
     setSelectedIds(prev => {
@@ -2234,29 +2235,44 @@ function UsersPageFull() {
     })
   }
 
+  // allowed_modules = null يعني «كل الأقسام»: نحوّله لقائمة صريحة عند الإزالة (وبدونها ما كانت الإزالة تؤثر عليهم)
+  const modulesOf = u => u.allowed_modules ?? MODULES.map(m => m.value)
+  const modName = v => { const m = MODULES.find(x => x.value === v); return m ? (isAr ? m.ar : m.en) : v }
+
   async function handleBulkAddModule() {
     if (!bulkModule || selectedIds.size === 0) return
-    setBulkSaving(true)
-    const targets = users.filter(u => selectedIds.has(u.id) && u.allowed_modules !== null && !u.allowed_modules.includes(bulkModule))
-    await Promise.all(targets.map(u =>
+    setBulkSaving(true); setBulkMsg('')
+    const chosen = users.filter(u => selectedIds.has(u.id))
+    const alreadyAll = chosen.filter(u => u.allowed_modules === null).length   // عندهم كل الأقسام أصلاً
+    const targets = chosen.filter(u => u.allowed_modules !== null && !u.allowed_modules.includes(bulkModule))
+    const res = await Promise.all(targets.map(u =>
       supabase.from('users').update({ allowed_modules: [...u.allowed_modules, bulkModule] }).eq('id', u.id)
     ))
+    const failed = res.filter(r => r.error).length
     setBulkSaving(false)
+    setBulkMsg(isAr
+      ? `إضافة «${modName(bulkModule)}»: تمت لـ ${targets.length - failed}${failed ? `، فشلت ${failed}` : ''}${alreadyAll ? `، و${alreadyAll} عندهم كل الأقسام أصلاً` : ''}. ملاحظة: القسم يظهر للموظف فقط إذا كان دوره يسمح به من «إدارة الصلاحيات».`
+      : `Add "${modName(bulkModule)}": done for ${targets.length - failed}${failed ? `, failed ${failed}` : ''}${alreadyAll ? `, ${alreadyAll} already have all sections` : ''}.`)
     setSelectedIds(new Set())
     setBulkModule('')
     fetchAll(true)
   }
 
-  // إزالة قسم من المحدد — نتجاهل من عنده allowed_modules=null (يعني كل الأقسام مسموحة
-  // بدون قائمة صريحة)، لأن تحويله فجأة لقائمة مقيّدة يغيّر صلاحياته لأقسام ثانية ما قصدنا نلمسها
+  // إزالة قسم من المحدد
   async function handleBulkRemoveModule() {
     if (!bulkModule || selectedIds.size === 0) return
-    setBulkSaving(true)
-    const targets = users.filter(u => selectedIds.has(u.id) && u.allowed_modules !== null && u.allowed_modules.includes(bulkModule))
-    await Promise.all(targets.map(u =>
-      supabase.from('users').update({ allowed_modules: u.allowed_modules.filter(m => m !== bulkModule) }).eq('id', u.id)
+    setBulkSaving(true); setBulkMsg('')
+    const chosen = users.filter(u => selectedIds.has(u.id))
+    const targets = chosen.filter(u => modulesOf(u).includes(bulkModule))
+    const res = await Promise.all(targets.map(u =>
+      supabase.from('users').update({ allowed_modules: modulesOf(u).filter(m => m !== bulkModule) }).eq('id', u.id)
     ))
+    const failed = res.filter(r => r.error).length
+    const unchanged = chosen.length - targets.length
     setBulkSaving(false)
+    setBulkMsg(isAr
+      ? `إزالة «${modName(bulkModule)}»: تمت لـ ${targets.length - failed}${failed ? `، فشلت ${failed}` : ''}${unchanged ? `، و${unchanged} ما عندهم القسم أصلاً` : ''}.`
+      : `Remove "${modName(bulkModule)}": done for ${targets.length - failed}${failed ? `, failed ${failed}` : ''}${unchanged ? `, ${unchanged} did not have it` : ''}.`)
     setSelectedIds(new Set())
     setBulkModule('')
     fetchAll(true)
@@ -2828,6 +2844,12 @@ function UsersPageFull() {
         </div>
       </div>
 
+      {isGeneralAdmin && bulkMsg && (
+        <div className="flex items-start justify-between gap-3 bg-green-50 border border-green-200 text-green-800 rounded-xl p-3 mb-3 text-xs font-semibold">
+          <span>{bulkMsg}</span>
+          <button type="button" onClick={() => setBulkMsg('')} className="text-green-700 hover:text-green-900 shrink-0">✕</button>
+        </div>
+      )}
       {isGeneralAdmin && selectedIds.size > 0 && (
         <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex-wrap">
           <span className="text-xs font-semibold text-nwbus-primary shrink-0">
