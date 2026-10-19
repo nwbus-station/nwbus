@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { matchesSearch } from '../utils/digits'
 import { arabizeStation, hasLatin } from '../utils/arabizeStation'
+import { vocalize } from '../utils/arabicVocalize'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import SelectField from '../components/shared/SelectField'
 
@@ -87,12 +88,15 @@ async function generateClip(text, savePath, isAr) {
       'Authorization': `Bearer ${session.access_token}`,
       'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify({ text, savePath }),
+    body: JSON.stringify({ text: speakable(text), savePath }),
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error || (isAr ? 'تعذّر توليد المقطع' : 'Failed to generate the clip'))
   return body.url
 }
+
+// النص المرسل للصوت البشري: مشكَّل لنطق أدق (وإن زاد الطول عن حد الخادم 500 حرف نرسل النص الأصلي)
+const speakable = text => { const v = vocalize(text); return v.length <= 480 ? v : text }
 
 // صوت بشري واقعي عبر Edge Function (ElevenLabs) — المفتاح بالخادم فقط، ما يوصل للمتصفح
 async function speakElevenLabs(text, controller, isAr) {
@@ -106,7 +110,7 @@ async function speakElevenLabs(text, controller, isAr) {
       'Authorization': `Bearer ${session.access_token}`,
       'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text: speakable(text) }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -272,6 +276,21 @@ export default function CallPage() {
     setNameDrafts(prev => { const n = { ...prev }; done.forEach(d => delete n[d.id]); return n })
     if (done.length) setNamesVersion(v => v + 1)
     setRenaming('')
+  }
+
+  // إعادة توليد كل المقاطع الموجودة بالنطق المشكَّل (بعد تحسين التشكيل أو تغيير الصوت)
+  async function regenerateAll() {
+    const have = allStations.filter(s => clipsIndex.has(s.id))
+    if (!have.length) return
+    setCallError('')
+    setBulkProgress({ done: 0, total: have.length })
+    for (let i = 0; i < have.length; i++) {
+      try { await generateClip(have[i].name_ar, `stations/${have[i].id}.mp3`, isAr) }
+      catch (err) { setCallError(isAr ? `توقفت إعادة التوليد عند "${have[i].name_ar}": ${err.message}` : `Regeneration stopped at "${have[i].name_ar}": ${err.message}`); break }
+      setBulkProgress({ done: i + 1, total: have.length })
+      await new Promise(r => setTimeout(r, 350))
+    }
+    setBulkProgress(null)
   }
 
   async function generateAllMissing() {
@@ -650,6 +669,11 @@ export default function CallPage() {
                   className="text-xs px-3 py-2 bg-nwbus-primary text-white rounded-lg disabled:opacity-40 shrink-0 whitespace-nowrap">
                   {bulkProgress ? (isAr ? `جارٍ التوليد ${bulkProgress.done}/${bulkProgress.total}...` : `Generating ${bulkProgress.done}/${bulkProgress.total}...`) : (isAr ? 'توليد كل الناقص' : 'Generate all missing')}
                 </button>
+                <button type="button" onClick={() => { if (window.confirm(isAr ? 'إعادة توليد كل مقاطع المحطات بالنطق المشكَّل؟ تستهلك من حد حسابك في ElevenLabs.' : 'Regenerate all station clips with vocalized pronunciation? This uses your ElevenLabs quota.')) regenerateAll() }}
+                  disabled={!!bulkProgress || clipsIndex.size === 0}
+                  className="text-xs px-3 py-1.5 bg-white border border-nwbus-primary text-nwbus-primary rounded-lg font-semibold disabled:opacity-40">
+                  {isAr ? 'إعادة توليد الكل بالتشكيل' : 'Regenerate all (vocalized)'}
+                </button>
               </div>
               {(() => {
                 const latin = allStations.filter(s => hasLatin(s.name_ar))
@@ -683,7 +707,10 @@ export default function CallPage() {
                           className="text-xs px-2.5 py-1.5 bg-amber-600 text-white rounded-lg disabled:opacity-40 shrink-0">{isAr ? 'حفظ الاسم' : 'Save name'}</button>
                       </div>
                     ) : (
-                    <span className="flex-1 text-sm text-gray-700 truncate">{s.name_ar}</span>
+                    <span className="flex-1 min-w-0 text-sm text-gray-700">
+                      <span className="block truncate">{s.name_ar}</span>
+                      {vocalize(s.name_ar) !== s.name_ar && <span className="block truncate text-[11px] text-gray-400" title={isAr ? 'النطق بالتشكيل' : 'Spoken form'}>{vocalize(s.name_ar)}</span>}
+                    </span>
                     )}
                     <span className={`text-[10px] shrink-0 ${clipsIndex.has(s.id) ? 'text-green-600' : 'text-gray-400'}`}>
                       {clipsIndex.has(s.id) ? '✓' : '—'}

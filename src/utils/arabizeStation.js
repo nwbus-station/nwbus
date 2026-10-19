@@ -10,8 +10,14 @@ const CITIES = {
   unaizah: 'عنيزة', onaiza: 'عنيزة', majmaah: 'المجمعة', zulfi: 'الزلفي', dawadmi: 'الدوادمي', afif: 'عفيف', khaybar: 'خيبر',
   mahd: 'مهد الذهب', yanbuindustrial: 'ينبع الصناعية', sharma: 'شرما', neom: 'نيوم', amaala: 'أمالا', diriyah: 'الدرعية',
   haramain: 'الحرمين', jarwal: 'جروال', kaec: 'مدينة الملك عبدالله الاقتصادية',
+  jumum: 'الجموم', ruwaidhah: 'الرويضة', ruwaidah: 'الرويضة', muwayh: 'المويه', baljurashi: 'بلجرشي', sabya: 'صبيا', shaqra: 'شقراء',
+  rass: 'الرس', khurma: 'الخرمة', quwaiiyah: 'القويعية', quwayiyah: 'القويعية', atawilah: 'العطاولة', ghat: 'الغاط', bahah: 'الباحة',
+  muzahmiyya: 'المزاحمية', muzahmiyyah: 'المزاحمية', muthallth: 'المثلث', baqaa: 'بقعاء', dhurma: 'ضرما', linah: 'لينة', halaban: 'حلبان',
+  shihiya: 'الشحية', turbah: 'تربة', trubah: 'تربة', mastorah: 'مستورة', shuqaiq: 'الشقيق', nabhaniyah: 'النبهانية', badayea: 'البدائع',
+  henakiah: 'الحناكية', ghazalah: 'الغزالة', hulayfah: 'الحليفة', baish: 'بيش', marat: 'مرات', radwan: 'رضوان', hawiyah: 'الحوية',
+  suwaydrah: 'صويدرة', halat: 'حالة', ammar: 'عمار', sir: 'السر', balad: 'البلد', khomrah: 'الخمرة', petra: 'البتراء', hirmas: 'حرمس',
 }
-const WORDS = { terminal: 'الصالة', north: 'الشمالية', south: 'الجنوبية', east: 'الشرقية', west: 'الغربية', central: 'المركزية', main: 'الرئيسية', new: 'الجديدة', old: 'القديمة', international: 'الدولي', industrial: 'الصناعية', city: 'المدينة', royal: 'الملكية', commission: 'الهيئة', kilo: 'كيلو', km: 'كم', and: 'و' }
+const WORDS = { abu: 'أبو', arish: 'عريش', bir: 'بئر', ibn: 'ابن', terminal: 'الصالة', north: 'الشمالية', south: 'الجنوبية', east: 'الشرقية', west: 'الغربية', central: 'المركزية', main: 'الرئيسية', new: 'الجديدة', old: 'القديمة', international: 'الدولي', industrial: 'الصناعية', city: 'المدينة', royal: 'الملكية', commission: 'الهيئة', kilo: 'كيلو', km: 'كم', and: 'و' }
 
 const norm = w => w.toLowerCase().replace(/[^a-z0-9]/g, '')
 const tr = w => { const k = norm(w); return CITIES[k] ?? WORDS[k] ?? (/^\d+$/.test(w) ? w : w) }
@@ -40,6 +46,7 @@ export function arabizeStation(name) {
     const m = lower.match(/(.*?)\s*royal commission station/); const city = m?.[1] ? words(m[1]).map(tr).join(' ') : ''
     return ('محطة الهيئة الملكية' + (city ? ' ب' + city : '') + paren).trim()
   }
+  if (/red sea welcome center/.test(lower)) return 'مركز استقبال البحر الأحمر' + paren
   cut(/\btrain station\b/, 'محطة قطار')
   if (!kind) cut(/\bbus station\b/, 'محطة')
   if (!kind) cut(/\bairport\b/, 'مطار')
