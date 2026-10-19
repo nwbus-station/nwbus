@@ -42,62 +42,7 @@ serve(async (req) => {
     }
     if (!allowed) return json({ error: 'Forbidden' }, 403)
 
-    const { text, savePath, voiceId: reqVoice, voiceName, action, config: cfgIn, audio: cloneAudio, mime: cloneMime, filename: cloneFile } = await req.json()
-    const validVoice = (v: unknown) => typeof v === 'string' && /^[A-Za-z0-9]{10,40}$/.test(v)
-
-    // قائمة أصوات الحساب (للاختيار من واجهة الإعداد)
-    if (action === 'voices') {
-      const key = Deno.env.get('ELEVENLABS_API_KEY')
-      if (!key) return json({ error: 'TTS not configured' }, 500)
-      const r = await fetch('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': key } })
-      if (!r.ok) return json({ error: `ElevenLabs: ${await r.text()}` }, 502)
-      const j = await r.json()
-      const voices = (j.voices ?? []).map((v: any) => ({
-        voice_id: v.voice_id, name: v.name, category: v.category, preview_url: v.preview_url, labels: v.labels ?? {},
-      }))
-      return json({ voices })
-    }
-    // إعدادات النداء: نصوص العبارات الثابتة (الفارغ = محذوفة) وتصحيح نطق المحطات
-    if (action === 'setConfig') {
-      const str = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : undefined)
-      const phrases: Record<string, string> = {}
-      for (const k of ['intro', 'via']) { const v = str(cfgIn?.phrases?.[k], 200); if (v !== undefined) phrases[k] = v }
-      const pron: Record<string, string> = {}
-      for (const [k, v] of Object.entries(cfgIn?.pron ?? {}).slice(0, 600)) {
-        const t = str(v, 100)
-        if (t?.trim() && /^[\w-]{1,60}$/.test(k)) pron[k] = t.trim()
-      }
-      const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } })
-      const { error: cfgErr } = await admin.storage.from('audio-clips').upload('config/call.json', new Blob([JSON.stringify({ phrases, pron })], { type: 'application/json' }), { contentType: 'application/json', upsert: true, cacheControl: '0' })
-      if (cfgErr) return json({ error: cfgErr.message }, 500)
-      return json({ ok: true })
-    }
-    // استنساخ صوت من عيّنة صوتية (Instant Voice Cloning) — يتطلب خطة ElevenLabs تدعمه ومفتاحاً بصلاحية Voices = Write
-    if (action === 'cloneVoice') {
-      const key = Deno.env.get('ELEVENLABS_API_KEY')
-      if (!key) return json({ error: 'TTS not configured' }, 500)
-      if (typeof voiceName !== 'string' || !voiceName.trim() || typeof cloneAudio !== 'string' || !cloneAudio) return json({ error: 'Missing sample' }, 400)
-      if (cloneAudio.length > 12_000_000) return json({ error: 'Sample too large' }, 400)
-      const bytes = Uint8Array.from(atob(cloneAudio), (c) => c.charCodeAt(0))
-      const form = new FormData()
-      form.append('name', voiceName.trim().slice(0, 60))
-      form.append('remove_background_noise', 'true')
-      form.append('files', new Blob([bytes], { type: typeof cloneMime === 'string' && cloneMime ? cloneMime : 'audio/mpeg' }), typeof cloneFile === 'string' && cloneFile ? cloneFile.slice(0, 80) : 'sample.mp3')
-      const r = await fetch('https://api.elevenlabs.io/v1/voices/add', { method: 'POST', headers: { 'xi-api-key': key }, body: form })
-      if (!r.ok) return json({ error: `ElevenLabs: ${await r.text()}` }, 502)
-      const j = await r.json()
-      return json({ voice_id: j.voice_id })
-    }
-    // حفظ الصوت المعتمد للنداء (ملف إعداد بمكتبة الصوتيات)
-    if (action === 'setVoice') {
-      if (!validVoice(reqVoice)) return json({ error: 'Invalid voice' }, 400)
-      const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } })
-      const body = JSON.stringify({ voiceId: reqVoice, name: typeof voiceName === 'string' ? voiceName.slice(0, 80) : '' })
-      const { error: cfgErr } = await admin.storage.from('audio-clips').upload('config/voice.json', new Blob([body], { type: 'application/json' }), { contentType: 'application/json', upsert: true, cacheControl: '0' })
-      if (cfgErr) return json({ error: cfgErr.message }, 500)
-      return json({ ok: true })
-    }
-
+    const { text, savePath } = await req.json()
     if (!text || typeof text !== 'string' || !text.trim()) return json({ error: 'Missing text' }, 400)
     if (text.length > 500) return json({ error: 'Text too long' }, 400)
     // savePath: لتوليد مقطع ثابت وحفظه بمكتبة النداء — يُقيَّد بمجلدين محدّدين لمنع الكتابة بأي مسار آخر
@@ -108,7 +53,7 @@ serve(async (req) => {
     const apiKey = Deno.env.get('ELEVENLABS_API_KEY')
     if (!apiKey) return json({ error: 'TTS not configured' }, 500)
     // Adam — صوت رجالي يدعم العربي عبر النموذج متعدد اللغات، قابل للتغيير بمتغيّر بيئة
-    const voiceId = validVoice(reqVoice) ? reqVoice : (Deno.env.get('ELEVENLABS_VOICE_ID') || 'pNInz6obpgDQGcFmaJgB')
+    const voiceId = Deno.env.get('ELEVENLABS_VOICE_ID') || 'pNInz6obpgDQGcFmaJgB'
 
     const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
