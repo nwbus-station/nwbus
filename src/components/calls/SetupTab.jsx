@@ -1,0 +1,336 @@
+import { useState, useRef, useMemo } from 'react'
+import { supabase } from '../../lib/supabase'
+import { matchesSearch } from '../../utils/digits'
+import { arabizeStation, hasLatin } from '../../utils/arabizeStation'
+import { vocalize, cityOnly } from '../../utils/arabicVocalize'
+import { AUDIO_BUCKET, PHRASE_DEFS, clipUrl, generateClip, speakLive, friendlyError } from '../../utils/callAudio'
+import ConfirmDialog from '../shared/ConfirmDialog'
+import StatStrip from '../shared/StatStrip'
+
+// أخطاء تُوقف التجهيز كله (إعادة المحاولة لباقي العناصر لا فائدة منها)
+const isFatal = msg => /مفتاح|انتهى حدّ|ما عندك صلاحية|انتهت جلسة|غير مضبوط/.test(msg)
+const pause = ms => new Promise(r => setTimeout(r, ms))
+const preview = path => { const a = new Audio(`${clipUrl(path)}?t=${Date.now()}`); a.play().catch(() => {}) }
+
+function Badge({ ok, okText = 'جاهز', noText = 'ناقص' }) {
+  return <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border shrink-0 ${ok ? 'text-green-700 bg-green-50 border-green-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>{ok ? okText : noText}</span>
+}
+
+export default function SetupTab({ lib }) {
+  const { stations, clipsIndex, phraseClips, stats, refresh, markClip, markPhrase, renameLocal } = lib
+  const [drafts, setDrafts] = useState({})          // { stationId: اسم عربي معدّل }
+  const [run, setRun] = useState(null)              // { label, item, done, total } أثناء التجهيز
+  const [failed, setFailed] = useState([])          // [{ key, label, error }]
+  const [fatal, setFatal] = useState('')
+  const [summary, setSummary] = useState('')
+  const [confirm, setConfirm] = useState(null)      // { message, onYes }
+  const [testState, setTestState] = useState({ busy: false, ok: false, error: '' })
+  const [search, setSearch] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [rowBusy, setRowBusy] = useState('')
+  const [rowError, setRowError] = useState('')
+  const stopRef = useRef(false)
+  const uploadTarget = useRef(null)
+  const fileRef = useRef(null)
+
+  const latin = useMemo(() => stations.filter(s => hasLatin(s.name_ar)), [stations])
+  const suggestion = s => (drafts[s.id] ?? arabizeStation(s.name_ar)).trim()
+  const renameList = useMemo(
+    () => latin.map(s => ({ id: s.id, name: (drafts[s.id] ?? arabizeStation(s.name_ar)).trim() })).filter(x => x.name && !hasLatin(x.name)),
+    [latin, drafts],
+  )
+  const missingPhrases = PHRASE_DEFS.filter(p => !phraseClips[p.key])
+  const missingClips = stations.filter(s => !clipsIndex.has(s.id))
+  const busy = !!run || !!rowBusy
+  const allReady = stats.total > 0 && !latin.length && !missingPhrases.length && !missingClips.length
+
+  // ── التجهيز التلقائي الكامل: ترجمة الأسماء ← العبارات ← أصوات المحطات ──
+  async function prepareAll() {
+    stopRef.current = false
+    setFailed([]); setFatal(''); setSummary('')
+    const fails = []
+    const total = renameList.length + missingPhrases.length + missingClips.length + renameList.filter(r => clipsIndex.has(r.id)).length
+    let done = 0
+    const step = (label, item) => setRun({ label, item, done, total })
+    try {
+      // 1) حفظ الأسماء العربية
+      const renamed = new Set()
+      for (const r of renameList) {
+        if (stopRef.current) throw new Error('__stopped__')
+        step('حفظ الأسماء العربية', r.name)
+        const { error } = await supabase.from('stations').update({ name_ar: r.name }).eq('id', r.id)
+        if (error) { fails.push({ key: `n${r.id}`, label: r.name, error: error.message }); done++; continue }
+        renameLocal(r.id, r.name); renamed.add(r.id); done++
+      }
+      // 2) العبارتان الثابتتان
+      for (const p of missingPhrases) {
+        if (stopRef.current) throw new Error('__stopped__')
+        step('العبارات الثابتة', p.text)
+        try { await generateClip(p.text, `phrases/${p.key}.mp3`); markPhrase(p.key) }
+        catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: `p${p.key}`, label: p.text, error: m }) }
+        done++; await pause(350)
+      }
+      // 3) أصوات المحطات: الناقصة + التي أُعيدت تسميتها
+      const todo = stations
+        .map(s => ({ ...s, name_ar: renamed.has(s.id) ? renameList.find(r => r.id === s.id).name : s.name_ar }))
+        .filter(s => !clipsIndex.has(s.id) || renamed.has(s.id))
+      for (const s of todo) {
+        if (stopRef.current) throw new Error('__stopped__')
+        step('أصوات المحطات', cityOnly(s.name_ar))
+        try { await generateClip(cityOnly(s.name_ar), `stations/${s.id}.mp3`); markClip(s.id) }
+        catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: `s${s.id}`, label: s.name_ar, error: m }) }
+        done++; await pause(350)
+      }
+      setSummary(fails.length ? `اكتمل التجهيز مع ${fails.length} إخفاق.` : 'اكتمل التجهيز. كل الأصوات جاهزة للنداء.')
+    } catch (e) {
+      if (e.message === '__stopped__') setSummary('أُوقف التجهيز. ما تم حفظه يبقى، وتقدر تكمل لاحقاً.')
+      else setFatal(friendlyError(e))
+    }
+    setFailed(fails)
+    setRun(null)
+    await refresh()
+  }
+  function askPrepare() {
+    const parts = []
+    if (renameList.length) parts.push(`ترجمة وحفظ ${renameList.length} اسم`)
+    if (missingPhrases.length) parts.push(`${missingPhrases.length} عبارة ثابتة`)
+    const clips = missingClips.length + renameList.filter(r => clipsIndex.has(r.id)).length
+    if (clips) parts.push(`${clips} صوت محطة`)
+    setConfirm({
+      message: `سيتم: ${parts.join('، ')}. هذا يستهلك من رصيد حسابك في ElevenLabs. متابعة؟`,
+      onYes: prepareAll,
+    })
+  }
+
+  // ── عمليات المحطة الواحدة ──
+  async function regenerateStation(s) {
+    setRowBusy(s.id); setRowError('')
+    try { await generateClip(cityOnly(s.name_ar), `stations/${s.id}.mp3`); markClip(s.id) }
+    catch (e) { setRowError(`${s.name_ar}: ${friendlyError(e)}`) }
+    setRowBusy('')
+  }
+  async function saveName(s) {
+    const name = suggestion(s)
+    if (!name || hasLatin(name)) return
+    setRowBusy(s.id); setRowError('')
+    try {
+      const { error } = await supabase.from('stations').update({ name_ar: name }).eq('id', s.id)
+      if (error) throw error
+      renameLocal(s.id, name)
+      setDrafts(p => { const n = { ...p }; delete n[s.id]; return n })
+      if (clipsIndex.has(s.id)) await generateClip(cityOnly(name), `stations/${s.id}.mp3`)
+    } catch (e) { setRowError(`${s.name_ar}: ${friendlyError(e)}`) }
+    setRowBusy('')
+  }
+  async function regeneratePhrase(p) {
+    setRowBusy(p.key); setRowError('')
+    try { await generateClip(p.text, `phrases/${p.key}.mp3`); markPhrase(p.key) }
+    catch (e) { setRowError(friendlyError(e)) }
+    setRowBusy('')
+  }
+  async function uploadRecording(file) {
+    const target = uploadTarget.current
+    if (!file || !target) return
+    setRowBusy(target.id); setRowError('')
+    try {
+      const { error } = await supabase.storage.from(AUDIO_BUCKET).upload(target.path, file, { upsert: true, contentType: file.type || 'audio/mpeg' })
+      if (error) throw error
+      await refresh()
+    } catch (e) { setRowError(friendlyError(e)) }
+    setRowBusy('')
+  }
+  function pickRecording(id, path) { uploadTarget.current = { id, path }; fileRef.current?.click() }
+
+  async function testConnection() {
+    setTestState({ busy: true, ok: false, error: '' })
+    try { await speakLive('تجربة صوت النداء. نداء على الركاب المسافرين إلى الرياض.'); setTestState({ busy: false, ok: true, error: '' }) }
+    catch (e) { setTestState({ busy: false, ok: false, error: friendlyError(e) }) }
+  }
+  function askRegenerateAll() {
+    const have = stations.filter(s => clipsIndex.has(s.id))
+    setConfirm({
+      message: `إعادة توليد ${have.length} صوت محطة وعبارتين؟ هذا يستبدل الأصوات الحالية (بما فيها التسجيلات المرفوعة يدوياً) ويستهلك من رصيد ElevenLabs.`,
+      onYes: async () => {
+        stopRef.current = false; setFailed([]); setFatal(''); setSummary('')
+        const fails = []; let done = 0; const total = have.length + PHRASE_DEFS.length
+        try {
+          for (const p of PHRASE_DEFS) {
+            if (stopRef.current) throw new Error('__stopped__')
+            setRun({ label: 'العبارات الثابتة', item: p.text, done, total })
+            try { await generateClip(p.text, `phrases/${p.key}.mp3`); markPhrase(p.key) } catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: p.key, label: p.text, error: m }) }
+            done++; await pause(350)
+          }
+          for (const s of have) {
+            if (stopRef.current) throw new Error('__stopped__')
+            setRun({ label: 'أصوات المحطات', item: cityOnly(s.name_ar), done, total })
+            try { await generateClip(cityOnly(s.name_ar), `stations/${s.id}.mp3`) } catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: s.id, label: s.name_ar, error: m }) }
+            done++; await pause(350)
+          }
+          setSummary(fails.length ? `اكتملت إعادة التوليد مع ${fails.length} إخفاق.` : 'اكتملت إعادة التوليد.')
+        } catch (e) { if (e.message === '__stopped__') setSummary('أُوقفت إعادة التوليد.'); else setFatal(friendlyError(e)) }
+        setFailed(fails); setRun(null); await refresh()
+      },
+    })
+  }
+
+  const shown = stations.filter(s => matchesSearch(s.name_ar, search))
+  const pct = run && run.total ? Math.round((run.done / run.total) * 100) : 0
+
+  return (
+    <div className="space-y-4">
+      <StatStrip items={[
+        { label: 'أسماء عربية', val: `${stats.arabic}/${stats.total}`, tone: stats.total && stats.arabic === stats.total ? 'text-green-600' : undefined },
+        { label: 'عبارات ثابتة', val: `${stats.phrases}/${PHRASE_DEFS.length}`, tone: stats.phrases === PHRASE_DEFS.length ? 'text-green-600' : undefined },
+        { label: 'أصوات المحطات', val: `${stats.clips}/${stats.total}`, tone: stats.total && stats.clips === stats.total ? 'text-green-600' : undefined },
+      ]} />
+
+      {/* البطاقة الرئيسية: زر واحد يجهّز كل شيء */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        {run ? (
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-gray-800">{run.label}</p>
+                <p className="text-xs text-gray-500 truncate">{run.item}</p>
+              </div>
+              <span className="font-mono text-sm text-gray-700 shrink-0">{run.done}/{run.total}</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded overflow-hidden"><div className="h-full bg-nwbus-primary transition-all" style={{ width: `${pct}%` }} /></div>
+            <button type="button" onClick={() => { stopRef.current = true }} className="mt-3 text-xs px-3 py-1.5 border border-red-200 text-red-600 bg-red-50 rounded font-semibold">إيقاف بعد العنصر الحالي</button>
+          </div>
+        ) : allReady ? (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-sm font-bold text-green-700">كل شيء جاهز</p>
+              <p className="text-xs text-gray-500 mt-0.5">أسماء المحطات بالعربية والعبارات وأصوات كل المحطات مولّدة. اذهب إلى تبويب «النداء».</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-gray-800">تجهيز الأصوات تلقائياً</p>
+              <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                زر واحد ينفّذ بالترتيب: {latin.length > 0 && 'ترجمة أسماء المحطات الإنجليزية ثم '}توليد العبارتين الثابتتين ثم صوت كل محطة ناقصة. يمكن إيقافه وإكماله لاحقاً.
+              </p>
+            </div>
+            <button type="button" onClick={askPrepare} disabled={busy || stats.total === 0}
+              className="px-5 py-2.5 bg-nwbus-primary text-white rounded-lg text-sm font-bold disabled:opacity-40 shrink-0">تجهيز كل شيء</button>
+          </div>
+        )}
+
+        {fatal && <div className="mt-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded p-3 leading-relaxed">{fatal}</div>}
+        {summary && !run && <p className={`mt-3 text-sm ${failed.length ? 'text-amber-700' : 'text-green-700'}`}>{summary}</p>}
+        {failed.length > 0 && !run && (
+          <div className="mt-2 border border-amber-200 bg-amber-50 rounded p-3">
+            <p className="text-xs font-semibold text-amber-800 mb-1">تعذّر تجهيز:</p>
+            <ul className="text-xs text-amber-900 space-y-0.5">{failed.slice(0, 8).map(f => <li key={f.key}>{f.label} — {f.error}</li>)}{failed.length > 8 && <li>و{failed.length - 8} أخرى</li>}</ul>
+            <button type="button" onClick={askPrepare} disabled={busy} className="mt-2 text-xs px-3 py-1.5 bg-amber-600 text-white rounded font-semibold disabled:opacity-40">إعادة المحاولة للناقص</button>
+          </div>
+        )}
+      </div>
+
+      {/* فحص الاتصال */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-gray-800">فحص الصوت</p>
+          <p className="text-xs text-gray-500 mt-0.5">يتأكد أن مفتاح ElevenLabs يعمل وتسمع الصوت المستخدم في النداء.</p>
+        </div>
+        <button type="button" onClick={testConnection} disabled={testState.busy || busy}
+          className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 shrink-0">{testState.busy ? 'جارٍ الفحص...' : 'تجربة الصوت'}</button>
+        {testState.ok && <p className="w-full text-sm text-green-700">الاتصال سليم.</p>}
+        {testState.error && <p className="w-full text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3 leading-relaxed">{testState.error}</p>}
+      </div>
+
+      {/* مراجعة الأسماء */}
+      {latin.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <p className="text-sm font-bold text-gray-800">أسماء محطات تحتاج ترجمة ({latin.length})</p>
+          <p className="text-xs text-gray-500 mt-0.5 mb-3 leading-relaxed">هذه المحطات مكتوبة بالإنجليزية فينطقها الصوت بشكل سيئ. الترجمة المقترحة تُحفظ تلقائياً عند «تجهيز كل شيء»، ويمكنك تعديل أي اسم قبل ذلك.</p>
+          <div className="border border-gray-200 rounded divide-y divide-gray-100 max-h-80 overflow-y-auto">
+            {latin.map(s => {
+              const val = drafts[s.id] ?? arabizeStation(s.name_ar)
+              const invalid = hasLatin(val)
+              return (
+                <div key={s.id} className="flex items-center gap-2 px-3 py-2 flex-wrap">
+                  <span className="text-xs text-gray-400 w-full sm:w-1/3 truncate" dir="ltr">{s.name_ar}</span>
+                  <input dir="rtl" value={val} onChange={e => setDrafts(p => ({ ...p, [s.id]: e.target.value }))}
+                    className={`flex-1 min-w-[140px] border rounded px-2.5 py-1.5 text-sm ${invalid ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`} />
+                  <button type="button" onClick={() => saveName(s)} disabled={busy || invalid || !val.trim()}
+                    className="text-xs px-3 py-1.5 border border-nwbus-primary text-nwbus-primary rounded font-semibold disabled:opacity-40 shrink-0">حفظ الآن</button>
+                </div>
+              )
+            })}
+          </div>
+          {latin.some(s => hasLatin(drafts[s.id] ?? arabizeStation(s.name_ar))) && <p className="text-xs text-amber-700 mt-2">اسم يحتوي أحرفاً لاتينية لن يُحفظ؛ اكتبه بالعربية.</p>}
+        </div>
+      )}
+
+      {/* العبارات والمحطات */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <p className="text-sm font-bold text-gray-800 mb-2">العبارات الثابتة</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+          {PHRASE_DEFS.map(p => (
+            <div key={p.key} className="border border-gray-200 rounded px-3 py-2 flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-800 truncate">{p.text}</p>
+                <p className="text-[11px] text-gray-400">{p.ar}</p>
+              </div>
+              <Badge ok={phraseClips[p.key]} />
+              {phraseClips[p.key] && <button type="button" onClick={() => preview(`phrases/${p.key}.mp3`)} className="text-xs text-nwbus-primary font-semibold shrink-0">استماع</button>}
+              <button type="button" onClick={() => regeneratePhrase(p)} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">{phraseClips[p.key] ? 'إعادة' : 'توليد'}</button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 mb-2">
+          <p className="text-sm font-bold text-gray-800">أصوات المحطات</p>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحث عن محطة..." className="flex-1 border border-gray-200 rounded px-3 py-1.5 text-sm" />
+        </div>
+        {rowError && <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded p-2.5 mb-2 leading-relaxed">{rowError}</div>}
+        <div className="border border-gray-200 rounded divide-y divide-gray-100 max-h-96 overflow-y-auto">
+          {shown.map(s => {
+            const has = clipsIndex.has(s.id)
+            return (
+              <div key={s.id} className="flex items-center gap-2 px-3 py-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-800 truncate">{s.name_ar}</p>
+                  {!hasLatin(s.name_ar) && <p className="text-[11px] text-gray-400 truncate" title="كما يُنطق في النداء">{vocalize(cityOnly(s.name_ar))}</p>}
+                </div>
+                <Badge ok={has} />
+                {has && <button type="button" onClick={() => preview(`stations/${s.id}.mp3`)} className="text-xs text-nwbus-primary font-semibold shrink-0">استماع</button>}
+                <button type="button" onClick={() => regenerateStation(s)} disabled={busy || hasLatin(s.name_ar)} title={hasLatin(s.name_ar) ? 'ترجم الاسم أولاً' : ''}
+                  className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">{rowBusy === s.id ? '...' : has ? 'إعادة' : 'توليد'}</button>
+                {showAdvanced && <button type="button" onClick={() => pickRecording(s.id, `stations/${s.id}.mp3`)} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">رفع تسجيل</button>}
+              </div>
+            )
+          })}
+          {shown.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">لا توجد محطات</p>}
+        </div>
+      </div>
+
+      {/* خيارات متقدمة */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <button type="button" onClick={() => setShowAdvanced(o => !o)} className="flex items-center justify-between w-full text-start">
+          <span className="text-sm font-bold text-gray-800">خيارات متقدمة</span>
+          <span className="text-xs text-gray-400">{showAdvanced ? 'إخفاء' : 'إظهار'}</span>
+        </button>
+        {showAdvanced && (
+          <div className="mt-3 space-y-3 text-xs text-gray-600 leading-relaxed">
+            <p><span className="font-semibold">رفع تسجيل صوتي:</span> إذا أردت صوتاً مسجّلاً بصوتك أو صوت آخر لمحطة معينة بدل الصوت الآلي، اضغط «رفع تسجيل» بجانبها واختر ملف صوت (mp3). يستبدل الصوت الحالي لتلك المحطة فقط.</p>
+            <p><span className="font-semibold">إعادة توليد الكل:</span> استخدمها بعد تغيير صوت ElevenLabs أو تحسين التشكيل. تستبدل كل الأصوات الحالية.</p>
+            <button type="button" onClick={askRegenerateAll} disabled={busy || !clipsIndex.size}
+              className="px-4 py-2 border border-nwbus-primary text-nwbus-primary rounded font-semibold disabled:opacity-40">إعادة توليد كل الأصوات</button>
+          </div>
+        )}
+      </div>
+
+      <input ref={fileRef} type="file" accept="audio/*" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadRecording(f) }} />
+
+      {confirm && (
+        <ConfirmDialog danger={false} message={confirm.message} confirmLabel="متابعة" cancelLabel="إلغاء"
+          onConfirm={() => { const fn = confirm.onYes; setConfirm(null); fn() }} onCancel={() => setConfirm(null)} />
+      )}
+    </div>
+  )
+}
