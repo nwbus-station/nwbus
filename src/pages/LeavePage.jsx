@@ -1197,12 +1197,13 @@ function EmployeeStatsModal({ leave, onClose, isAr = true }) {
   )
 }
 
-function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onProofUploaded, onDelete, history, isAr = true }) {
+function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onProofUploaded, onDelete, onEditOwn, onCancelOwn, history, isAr = true }) {
   const leave = decodeLeaveNotes(rawLeave)
   const [showNotes, setShowNotes]  = useState(false)
   const [actionNotes, setActionNotes] = useState('')
   const [uploadingProof, setUploadingProof] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmCancel, setConfirmCancel] = useState(false)
   const proofInputRef = useRef(null)
 
   const role        = profile?.role
@@ -1232,6 +1233,9 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
   const didSupervisorStage = isAssistant && leave.supervisor_status !== 'pending' && leave.supervisor_by === profile?.full_name_ar
   const canActManager    = isAdmin && leave.manager_status === 'pending' && !didSupervisorStage && allowCap('leaves_final_approve')
   const canAct           = canActSupervisor || canActManager
+  // صاحب الطلب: يعدّل أو يلغي طلبه (أي نوع حتى الاستئذان) ما دام المشرف/المدير ما وافقوا بعد
+  const canEditOwn = isOwn && leave.status === 'pending' && leave.manager_status === 'pending'
+    && (leave.supervisor_status === 'pending' || leave.supervisor_by === profile?.full_name_ar)
   const fullyApproved    = leave.status === 'approved' && leave.supervisor_status === 'approved' && leave.manager_status === 'approved'
 
   async function act(decision) {
@@ -1421,6 +1425,12 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
           {!canAct && !isOwn && !inMySupervisedStations && !isAdmin && jobsFor('view').includes(leave.cur_job ?? leave.job_title) && (
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 12px' }}>{isAr ? 'اطلاع فقط' : 'View only'}</span>
           )}
+          {canEditOwn && (
+            <>
+              <button onClick={() => onEditOwn?.(leave)} style={{ ...sbtn, fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? 'تعديل الطلب' : 'Edit request'}</button>
+              <button onClick={() => setConfirmCancel(true)} style={{ ...sbtn, color: '#dc2626', borderColor: 'rgba(220,38,38,0.45)', fontWeight: 800 }}>{isAr ? 'إلغاء الطلب' : 'Cancel request'}</button>
+            </>
+          )}
           <span style={{ flex: 1 }} />
           <button onClick={() => onStats?.(leave)} style={sbtn}>{isAr ? 'سجل الموظف' : 'Record'}</button>
           {(fullyApproved || isOwn) && allowCap('leaves_print') && <button onClick={() => onPrint(leave)} style={sbtn}>{isAr ? 'طباعة' : 'Print'}</button>}
@@ -1428,6 +1438,14 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
         </div>
       </div>
 
+      {confirmCancel && (
+        <ConfirmDialog
+          message={isAr ? 'إلغاء هذا الطلب نهائياً؟ يُحذف ولا يمكن استرجاعه، ويُشعَر المشرف.' : 'Cancel this request permanently?'}
+          confirmLabel={isAr ? 'إلغاء الطلب' : 'Cancel request'} cancelLabel={isAr ? 'رجوع' : 'Back'}
+          onConfirm={() => { setConfirmCancel(false); onCancelOwn?.(leave) }}
+          onCancel={() => setConfirmCancel(false)}
+        />
+      )}
       {confirmDelete && (
         <ConfirmDialog
           message={isAr ? 'حذف هذه الإجازة نهائياً؟' : 'Permanently delete this leave request?'}
@@ -1487,6 +1505,7 @@ export default function LeavePage() {
   const [leaves, setLeaves] = useState([])
   const [loading, setLoading] = useState(false)
   const [saved, setSaved]   = useState(false)
+  const [editLeave, setEditLeave] = useState(null)   // الطلب اللي يعدّله صاحبه
   const [statsFor, setStatsFor] = useState(null)   // طلب نعرض سجل صاحبه
   const [historyMap, setHistoryMap] = useState({})   // employee_id → طلباته السابقة
   const [filterStatus, setFilterStatus] = useState('all')
@@ -1668,6 +1687,24 @@ export default function LeavePage() {
     load()
   }
 
+  // إشعار المشرف والأدمن بتعديل/إلغاء طلب
+  async function notifyOwnerChange(leave, kind) {
+    try {
+      const supervisorIds = (await findSupervisorIds(profile.station_id, profile.supervisor_id, profile.id, profile.job_title)).filter(id => id !== profile.id)
+      const { data: admins } = await supabase.from('users').select('id').in('role', ADMIN_ROLE_VALUES).eq('is_active', true)
+      const ids = [...new Set([...supervisorIds, ...(admins ?? []).map(a => a.id)])].filter(id => id !== profile.id)
+      const typeLabel = LEAVE_TYPES.find(t => t.id === leave.leave_type)?.ar ?? leave.leave_type
+      await notifyMany(ids, { title: `${kind === 'cancel' ? 'ألغى' : 'عدّل'} ${profile.full_name_ar} طلبه (${typeLabel})`, body: kind === 'cancel' ? 'تم إلغاء الطلب من صاحبه قبل الموافقة' : 'تم تعديل الطلب — راجع التفاصيل الجديدة', type: 'info', refType: 'leave', refId: leave.id })
+    } catch { /* الإشعار لا يمنع العملية */ }
+  }
+  async function handleCancelOwn(leave) {
+    const { data, error } = await supabase.from('leaves').delete().eq('id', leave.id).eq('employee_id', profile.id).eq('status', 'pending').select('id')
+    if (error || !data?.length) { alert('تعذّر إلغاء الطلب — ربما تم البت فيه. حدّث الصفحة وحاول مرة ثانية.'); load(); return }
+    notifyOwnerChange(leave, 'cancel')
+    clearCached(`leaves_mine_${profile?.id}`)
+    load()
+  }
+
   async function handleDelete(id) {
     await supabase.from('leaves').delete().eq('id', id)
     load()
@@ -1840,10 +1877,109 @@ export default function LeavePage() {
             ) : filtered.length === 0 ? (
               <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: 40 }}>{isAr ? 'لا توجد طلبات' : 'No requests found'}</p>
             ) : filtered.map(l => (
-              <LeaveCard key={l.id} leave={l} profile={profile} isAr={isAr} onAction={handleAction} onPrint={handlePrint} onStats={setStatsFor} onProofUploaded={load} onDelete={handleDelete} history={historyMap[l.employee_id]} />
+              <LeaveCard key={l.id} leave={l} profile={profile} isAr={isAr} onAction={handleAction} onPrint={handlePrint} onStats={setStatsFor} onProofUploaded={load} onDelete={handleDelete} onEditOwn={setEditLeave} onCancelOwn={handleCancelOwn} history={historyMap[l.employee_id]} />
             ))}
           </div>
         )}
+      </div>
+      {editLeave && (
+        <EditLeaveModal leave={editLeave} profile={profile} isAr={isAr}
+          onClose={() => setEditLeave(null)}
+          onSaved={() => { notifyOwnerChange(editLeave, 'edit'); setEditLeave(null); clearCached(`leaves_mine_${profile?.id}`); load() }} />
+      )}
+    </div>
+  )
+}
+
+// تعديل طلب قيد المراجعة (من صاحبه فقط): التواريخ/الوقت والسبب؛ نوع الطلب ثابت (لتغييره: إلغاء وإعادة رفع)
+function EditLeaveModal({ leave, profile, isAr = true, onClose, onSaved }) {
+  const { settings } = useAppSettings()
+  const quota = readQuota(settings)
+  const type = leave.leave_type
+  const isCasual = type === 'casual'
+  const [startDate, setStartDate] = useState(leave.start_date || '')
+  const [endDate, setEndDate] = useState(leave.end_date || leave.start_date || '')
+  const [timeFrom, setTimeFrom] = useState(leave.time_from || '')
+  const [timeTo, setTimeTo] = useState(leave.time_to || '')
+  const [notes, setNotes] = useState(leave.notes || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const days = dateDiff(startDate, endDate)
+  const casualHours = isCasual ? timeDiffHours(startDate, timeFrom, startDate, timeTo) : 0
+  const maxDays = type === 'bereavement' ? (BEREAVEMENT_RELS.find(r => r.id === leave.bereavement_rel)?.days ?? 5) : LEAVE_MAX[type]
+  const typeLabel = LEAVE_TYPES.find(t => t.id === type)?.ar ?? type
+  const lbl = { display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }
+
+  async function save() {
+    setError('')
+    if (!startDate) { setError('حدّد التاريخ'); return }
+    if (!isCasual && days < 1) { setError('تاريخ النهاية يجب أن يكون بعد تاريخ البداية'); return }
+    if (isCasual && casualHours <= 0) { setError('وقت الانتهاء يجب أن يكون بعد وقت البداية'); return }
+    if (REASON_TYPES[type] && !notes.trim()) { setError(`${REASON_TYPES[type].label} إلزامي`); return }
+    if (maxDays && days > maxDays) { setError(`هذه الإجازة لا تتجاوز ${maxDays} أيام`); return }
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const startD = new Date(startDate); startD.setHours(0, 0, 0, 0)
+    const ahead = Math.round((startD - today) / 86400000)
+    if (type === 'compensatory' && ahead < 2) { setError('الإجازة التعويضية يجب أن تكون بعد يومين على الأقل من اليوم'); return }
+    if (type === 'annual' && ahead < 10) { setError('الإجازة السنوية يجب أن تكون بعد 10 أيام على الأقل من اليوم'); return }
+    if (isCasual && quota.hours > 0) {
+      const qb = periodBounds(startDate, quota.period)
+      const { data: rows } = await supabase.from('leaves').select('id, days_count').eq('employee_id', profile.id).eq('leave_type', 'casual')
+        .in('status', ['approved', 'pending']).gte('start_date', qb.from).lte('start_date', qb.to)
+      const used = (rows ?? []).filter(r => r.id !== leave.id).reduce((a, r) => a + (Number(r.days_count) || 0) * 24, 0)
+      if (casualHours > Math.max(0, quota.hours - used) + 1e-6) { setError(`تجاوزت حدّ الاستئذان: المتبقي ${formatHoursAr(Math.max(0, quota.hours - used))} من ${quota.hours} ساعة`); return }
+    }
+    setSaving(true)
+    const end = isCasual ? startDate : endDate
+    const compReason = leave.compensatory_reason || null
+    const { error: err } = await supabase.rpc('edit_my_leave', {
+      p_id: leave.id, p_start_date: startDate, p_end_date: end, p_return_date: addDays(end, 1),
+      p_days_count: isCasual ? casualHours / 24 : days,
+      p_notes: encodeLeaveNotes({ timeFrom, timeTo, compReason, userNotes: notes.trim(), leaveType: type }),
+    })
+    setSaving(false)
+    if (err) {
+      setError(/edit_my_leave|function|does not exist/i.test(err.message) ? 'ميزة التعديل غير مفعّلة بعد في قاعدة البيانات — اطلب من الأدمن تشغيل أمر SQL الخاص بها.' : (err.message || 'تعذّر الحفظ — ربما تم البت في الطلب'))
+      return
+    }
+    onSaved?.()
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }} dir={isAr ? 'rtl' : 'ltr'} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(480px, 100%)', maxHeight: '92vh', overflow: 'auto', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <div style={{ fontWeight: 900, fontSize: '1.05rem', color: 'var(--text-1)' }}>{isAr ? 'تعديل الطلب' : 'Edit request'}</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 3 }}>{typeLabel} — {isAr ? 'يمكن التعديل حتى موافقة المشرف' : 'editable until the supervisor approves'}</div>
+        </div>
+        {isCasual ? (
+          <>
+            <div><label style={lbl}>{isAr ? 'تاريخ الاستئذان' : 'Date'}</label><DatePicker isAr={isAr} value={startDate} onChange={v => { setStartDate(v); setEndDate(v) }} style={inp} /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div><label style={lbl}>{isAr ? 'من' : 'From'}</label><TimePicker value={timeFrom} onChange={setTimeFrom} style={{ ...inp }} /></div>
+              <div><label style={lbl}>{isAr ? 'إلى' : 'To'}</label><TimePicker value={timeTo} onChange={setTimeTo} style={{ ...inp }} /></div>
+            </div>
+            {casualHours > 0 && <div style={{ fontSize: '0.74rem', color: 'var(--text-2)', fontWeight: 700 }}>{isAr ? 'المدة: ' : 'Duration: '}{formatHoursAr(casualHours)}</div>}
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div><label style={lbl}>{isAr ? 'من تاريخ' : 'From'}</label><DatePicker isAr={isAr} value={startDate} onChange={v => { setStartDate(v); if (endDate && v > endDate) setEndDate(v) }} style={inp} /></div>
+              <div><label style={lbl}>{isAr ? 'إلى تاريخ' : 'To'}</label><DatePicker isAr={isAr} value={endDate} onChange={setEndDate} style={inp} /></div>
+            </div>
+            {days > 0 && <div style={{ fontSize: '0.74rem', color: 'var(--text-2)', fontWeight: 700 }}>{isAr ? `المدة: ${days} أيام` : `Duration: ${days} days`}</div>}
+          </>
+        )}
+        <div>
+          <label style={lbl}>{REASON_TYPES[type]?.label || (isAr ? 'ملاحظات' : 'Notes')}</label>
+          <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder={REASON_TYPES[type]?.ph || ''} style={{ ...inp, resize: 'none' }} />
+        </div>
+        {error && <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#dc2626' }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={save} disabled={saving} style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.88rem', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>{saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ التعديل' : 'Save changes')}</button>
+          <button type="button" onClick={onClose} style={{ padding: '11px 18px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'إغلاق' : 'Close'}</button>
+        </div>
       </div>
     </div>
   )
