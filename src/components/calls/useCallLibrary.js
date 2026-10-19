@@ -30,7 +30,7 @@ export default function useCallLibrary() {
     const total = stations.length
     return {
       total,
-      arabic: stations.filter(s => !hasLatin(s.name_ar)).length,
+      arabic: stations.filter(s => !hasLatin(s.name_ar) || (config.pron[s.id] || '').trim()).length,
       phrases: activePhrases().filter(p => phraseClips[p.key]).length,
       phraseTotal: activePhrases().length,
       clips: stations.filter(s => clipsIndex.has(s.id)).length,

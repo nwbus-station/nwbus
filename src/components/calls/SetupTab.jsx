@@ -17,7 +17,7 @@ function Badge({ ok, okText = 'جاهز', noText = 'ناقص' }) {
 }
 
 export default function SetupTab({ lib }) {
-  const { stations, clipsIndex, phraseClips, stats, refresh, markClip, markPhrase, renameLocal, voice, setVoice, config, saveConfig } = lib
+  const { stations, clipsIndex, phraseClips, stats, refresh, markClip, markPhrase, voice, setVoice, config, saveConfig } = lib
   const [drafts, setDrafts] = useState({})          // { stationId: اسم عربي معدّل }
   const [run, setRun] = useState(null)              // { label, item, done, total } أثناء التجهيز
   const [failed, setFailed] = useState([])          // [{ key, label, error }]
@@ -45,34 +45,35 @@ export default function SetupTab({ lib }) {
   const uploadTarget = useRef(null)
   const fileRef = useRef(null)
 
+  // محطات اسمها بالإنجليزية: تُترجم للنطق في النداء فقط، واسمها في النظام لا يتغيّر
   const latin = useMemo(() => stations.filter(s => hasLatin(s.name_ar)), [stations])
-  const suggestion = s => (drafts[s.id] ?? arabizeStation(s.name_ar)).trim()
-  const renameList = useMemo(
-    () => latin.map(s => ({ id: s.id, name: (drafts[s.id] ?? arabizeStation(s.name_ar)).trim() })).filter(x => x.name && !hasLatin(x.name)),
-    [latin, drafts],
+  const needPron = useMemo(() => latin.filter(s => !(config.pron[s.id] || '').trim()), [latin, config])
+  const pronList = useMemo(
+    () => needPron.map(s => ({ id: s.id, name: (drafts[s.id] ?? arabizeStation(s.name_ar)).trim() })).filter(x => x.name && !hasLatin(x.name)),
+    [needPron, drafts],
   )
   const missingPhrases = activePhrases().filter(p => !phraseClips[p.key])
   const missingClips = stations.filter(s => !clipsIndex.has(s.id))
   const busy = !!run || !!rowBusy
-  const allReady = stats.total > 0 && !latin.length && !missingPhrases.length && !missingClips.length
+  const allReady = stats.total > 0 && !needPron.length && !missingPhrases.length && !missingClips.length
 
   // ── التجهيز التلقائي الكامل: ترجمة الأسماء ← العبارات ← أصوات المحطات ──
   async function prepareAll() {
     stopRef.current = false
     setFailed([]); setFatal(''); setSummary('')
     const fails = []
-    const total = renameList.length + missingPhrases.length + missingClips.length + renameList.filter(r => clipsIndex.has(r.id)).length
+    const total = pronList.length + missingPhrases.length + missingClips.length
     let done = 0
     const step = (label, item) => setRun({ label, item, done, total })
     try {
-      // 1) حفظ الأسماء العربية
-      const renamed = new Set()
-      for (const r of renameList) {
-        if (stopRef.current) throw new Error('__stopped__')
-        step('حفظ الأسماء العربية', r.name)
-        const { error } = await supabase.from('stations').update({ name_ar: r.name }).eq('id', r.id)
-        if (error) { fails.push({ key: `n${r.id}`, label: r.name, error: error.message }); done++; continue }
-        renameLocal(r.id, r.name); renamed.add(r.id); done++
+      // 1) ترجمة أسماء المحطات الإنجليزية للنطق (تُحفظ في إعدادات النداء فقط)
+      const newPron = new Set()
+      if (pronList.length) {
+        step('ترجمة الأسماء للنطق', `${pronList.length} محطة`)
+        const pron = { ...config.pron }
+        pronList.forEach(r => { pron[r.id] = r.name; newPron.add(r.id) })
+        await saveConfig({ ...config, pron })
+        done += pronList.length
       }
       // 2) العبارتان الثابتتان
       for (const p of missingPhrases) {
@@ -82,14 +83,13 @@ export default function SetupTab({ lib }) {
         catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: `p${p.key}`, label: p.text, error: m }) }
         done++; await pause(350)
       }
-      // 3) أصوات المحطات: الناقصة + التي أُعيدت تسميتها
-      const todo = stations
-        .map(s => ({ ...s, name_ar: renamed.has(s.id) ? renameList.find(r => r.id === s.id).name : s.name_ar }))
-        .filter(s => !clipsIndex.has(s.id) || renamed.has(s.id))
+      // 3) أصوات المحطات: الناقصة + التي تغيّر نطقها
+      const todo = stations.filter(s => !clipsIndex.has(s.id) || newPron.has(s.id)).map(s => (newPron.has(s.id) ? { ...s, _pron: pronList.find(r => r.id === s.id).name } : s))
       for (const s of todo) {
         if (stopRef.current) throw new Error('__stopped__')
-        step('أصوات المحطات', stationSpoken(s))
-        try { await generateClip(stationSpoken(s), `stations/${s.id}.mp3`); markClip(s.id) }
+        const spoken = s._pron || stationSpoken(s)
+        step('أصوات المحطات', spoken)
+        try { await generateClip(spoken, `stations/${s.id}.mp3`); markClip(s.id) }
         catch (e) { const m = friendlyError(e); if (isFatal(m)) throw new Error(m); fails.push({ key: `s${s.id}`, label: s.name_ar, error: m }) }
         done++; await pause(350)
       }
@@ -104,9 +104,9 @@ export default function SetupTab({ lib }) {
   }
   function askPrepare() {
     const parts = []
-    if (renameList.length) parts.push(`ترجمة وحفظ ${renameList.length} اسم`)
+    if (pronList.length) parts.push(`ترجمة ${pronList.length} اسم للنطق (أسماء المحطات في النظام لا تتغيّر)`)
     if (missingPhrases.length) parts.push(`${missingPhrases.length} عبارة ثابتة`)
-    const clips = missingClips.length + renameList.filter(r => clipsIndex.has(r.id)).length
+    const clips = missingClips.length + pronList.filter(r => clipsIndex.has(r.id)).length
     if (clips) parts.push(`${clips} صوت محطة`)
     setConfirm({
       message: `سيتم: ${parts.join('، ')}. هذا يستهلك من رصيد حسابك في ElevenLabs. متابعة؟`,
@@ -119,19 +119,6 @@ export default function SetupTab({ lib }) {
     setRowBusy(s.id); setRowError('')
     try { await generateClip(stationSpoken(s), `stations/${s.id}.mp3`); markClip(s.id) }
     catch (e) { setRowError(`${s.name_ar}: ${friendlyError(e)}`) }
-    setRowBusy('')
-  }
-  async function saveName(s) {
-    const name = suggestion(s)
-    if (!name || hasLatin(name)) return
-    setRowBusy(s.id); setRowError('')
-    try {
-      const { error } = await supabase.from('stations').update({ name_ar: name }).eq('id', s.id)
-      if (error) throw error
-      renameLocal(s.id, name)
-      setDrafts(p => { const n = { ...p }; delete n[s.id]; return n })
-      if (clipsIndex.has(s.id)) await generateClip(stationSpoken({ id: s.id, name_ar: name }), `stations/${s.id}.mp3`)
-    } catch (e) { setRowError(`${s.name_ar}: ${friendlyError(e)}`) }
     setRowBusy('')
   }
   async function savePhrase(key, text) {
@@ -360,24 +347,24 @@ export default function SetupTab({ lib }) {
       {/* مراجعة الأسماء */}
       {latin.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <p className="text-sm font-bold text-gray-800">أسماء محطات تحتاج ترجمة ({latin.length})</p>
-          <p className="text-xs text-gray-500 mt-0.5 mb-3 leading-relaxed">هذه المحطات مكتوبة بالإنجليزية فينطقها الصوت بشكل سيئ. الترجمة المقترحة تُحفظ تلقائياً عند «تجهيز كل شيء»، ويمكنك تعديل أي اسم قبل ذلك.</p>
+          <p className="text-sm font-bold text-gray-800">محطات اسمها بالإنجليزية ({latin.length})</p>
+          <p className="text-xs text-gray-500 mt-0.5 mb-3 leading-relaxed">هذه المحطات اسمها بالإنجليزية فينطقها الصوت بشكل سيئ. الترجمة هنا للنطق في النداء فقط، واسم المحطة في بقية النظام (الترحيل والتقارير) يبقى كما هو. تُحفظ المقترحات عند «تجهيز كل شيء»، ويمكنك تعديل أي كلمة قبل ذلك.</p>
           <div className="border border-gray-200 rounded divide-y divide-gray-100 max-h-80 overflow-y-auto">
             {latin.map(s => {
-              const val = drafts[s.id] ?? arabizeStation(s.name_ar)
+              const val = drafts[s.id] ?? ((config.pron[s.id] || '').trim() || arabizeStation(s.name_ar))
               const invalid = hasLatin(val)
               return (
                 <div key={s.id} className="flex items-center gap-2 px-3 py-2 flex-wrap">
                   <span className="text-xs text-gray-400 w-full sm:w-1/3 truncate" dir="ltr">{s.name_ar}</span>
                   <input dir="rtl" value={val} onChange={e => setDrafts(p => ({ ...p, [s.id]: e.target.value }))}
                     className={`flex-1 min-w-[140px] border rounded px-2.5 py-1.5 text-sm ${invalid ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`} />
-                  <button type="button" onClick={() => saveName(s)} disabled={busy || invalid || !val.trim()}
-                    className="text-xs px-3 py-1.5 border border-nwbus-primary text-nwbus-primary rounded font-semibold disabled:opacity-40 shrink-0">حفظ الآن</button>
+                  <button type="button" onClick={() => savePron(s, val)} disabled={busy || invalid || !val.trim()}
+                    className="text-xs px-3 py-1.5 border border-nwbus-primary text-nwbus-primary rounded font-semibold disabled:opacity-40 shrink-0">حفظ</button>
                 </div>
               )
             })}
           </div>
-          {latin.some(s => hasLatin(drafts[s.id] ?? arabizeStation(s.name_ar))) && <p className="text-xs text-amber-700 mt-2">اسم يحتوي أحرفاً لاتينية لن يُحفظ؛ اكتبه بالعربية.</p>}
+          {latin.some(s => hasLatin(drafts[s.id] ?? arabizeStation(s.name_ar))) && <p className="text-xs text-amber-700 mt-2">كلمة تحتوي أحرفاً لاتينية لن تُحفظ؛ اكتبها بالعربية.</p>}
         </div>
       )}
 
@@ -422,13 +409,13 @@ export default function SetupTab({ lib }) {
               <div className="flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-800 truncate">{s.name_ar}</p>
-                  {!hasLatin(s.name_ar) && <p className="text-[11px] text-gray-400 truncate" title="كما يُنطق في النداء">{config.pron[s.id] ? 'نطق مخصص: ' : ''}{vocalize(stationSpoken(s))}</p>}
+                  <p className="text-[11px] text-gray-400 truncate" title="كما يُنطق في النداء">{config.pron[s.id] ? 'نطق مخصص: ' : ''}{vocalize(stationSpoken(s))}</p>
                 </div>
                 <Badge ok={has} />
                 {has && <button type="button" onClick={() => preview(`stations/${s.id}.mp3`)} className="text-xs text-nwbus-primary font-semibold shrink-0">استماع</button>}
-                <button type="button" onClick={() => regenerateStation(s)} disabled={busy || hasLatin(s.name_ar)} title={hasLatin(s.name_ar) ? 'ترجم الاسم أولاً' : ''}
+                <button type="button" onClick={() => regenerateStation(s)} disabled={busy || hasLatin(stationSpoken(s))}
                   className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">{rowBusy === s.id ? '...' : has ? 'إعادة' : 'توليد'}</button>
-                {!hasLatin(s.name_ar) && <button type="button" onClick={() => setEditPron(e => (e?.id === s.id ? null : { id: s.id, val: config.pron[s.id] || '' }))} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">نطق</button>}
+                <button type="button" onClick={() => setEditPron(e => (e?.id === s.id ? null : { id: s.id, val: config.pron[s.id] || '' }))} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">نطق</button>
                 {showAdvanced && <button type="button" onClick={() => pickRecording(s.id, `stations/${s.id}.mp3`)} disabled={busy} className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 disabled:opacity-40 shrink-0">رفع تسجيل</button>}
               </div>
               {editPron?.id === s.id && (

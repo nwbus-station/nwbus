@@ -1,6 +1,7 @@
 // صوتيات نداء الركاب: نغمة، تشغيل مقاطع، صوت الجهاز، توليد ElevenLabs، ورسائل أخطاء مفهومة
 import { supabase } from '../lib/supabase'
 import { vocalize, cityOnly } from './arabicVocalize'
+import { arabizeStation, hasLatin } from './arabizeStation'
 
 export const AUDIO_BUCKET = 'audio-clips'
 // العبارتان الثابتتان في النداء
@@ -18,7 +19,13 @@ export const getCallConfig = () => callCfg
 export const phraseText = key => (callCfg.phrases[key] ?? DEFAULT_PHRASES[key]).trim()
 export const activePhrases = () => PHRASE_DEFS.map(p => ({ ...p, text: phraseText(p.key) })).filter(p => p.text)
 // الكلمة التي تُنطق للمحطة: التصحيح المخصص إن وُجد وإلا اسم المدينة
-export const stationSpoken = s => (callCfg.pron[s.id] || '').trim() || cityOnly(s.name_ar ?? s.name ?? '')
+// الاسم الإنجليزي يُترجم للنطق فقط (اسم المحطة في النظام لا يتغيّر أبداً)
+export const stationSpoken = s => {
+  const saved = (callCfg.pron[s.id] || '').trim()
+  if (saved) return saved
+  const name = s.name_ar ?? s.name ?? ''
+  return hasLatin(name) ? arabizeStation(name) : cityOnly(name)
+}
 
 // جملة النداء: السفر إلى المدينة، مروراً بالمدن
 export function buildAnnouncement(destName, viaNames) {
