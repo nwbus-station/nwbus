@@ -56,3 +56,13 @@ export function vocalize(text) {
   for (const [re, v] of COMPILED) out = out.replace(re, v)
   return out
 }
+
+// اسم المكان للنداء: «السفر إلى حائل» لا «محطة حائل» — نحذف كلمة محطة (باص/قطار) وما بين الأقواس؛ المطار يبقى مطاراً
+export function cityOnly(name) {
+  let n = String(name ?? '').trim()
+  if (!n) return n
+  n = n.replace(/\s*\([^)]*\)/g, '')                                  // (جروال) ونحوها
+  n = n.replace(/^محطة\s+الهيئة\s+الملكية\s*ب?/, '')                    // محطة الهيئة الملكية بينبع ← ينبع
+  n = n.replace(/^محطة\s+قطار\s+/, '').replace(/^محطة\s+/, '')          // محطة قطار حائل / محطة جدة ← حائل / جدة
+  return n.replace(/\s+/g, ' ').trim() || String(name).trim()
+}

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { matchesSearch } from '../utils/digits'
 import { arabizeStation, hasLatin } from '../utils/arabizeStation'
-import { vocalize } from '../utils/arabicVocalize'
+import { vocalize, cityOnly } from '../utils/arabicVocalize'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import SelectField from '../components/shared/SelectField'
 
@@ -256,7 +256,7 @@ export default function CallPage() {
   async function generateStationClip(station) {
     setUploadingId(station.id); setCallError('')
     try {
-      await generateClip(station.name_ar, `stations/${station.id}.mp3`, isAr)
+      await generateClip(cityOnly(station.name_ar), `stations/${station.id}.mp3`, isAr)
       await refreshClipsIndex()
     } catch (err) { setCallError(err.message || (isAr ? 'تعذّر توليد المقطع' : 'Failed to generate the clip')) }
     setUploadingId('')
@@ -270,7 +270,7 @@ export default function CallPage() {
       const { error } = await supabase.from('stations').update({ name_ar: name }).eq('id', id)
       if (error) { setCallError((isAr ? 'تعذّر حفظ الاسم: ' : 'Could not save the name: ') + error.message); break }
       done.push({ id, name })
-      if (clipsIndex.has(id)) { try { await generateClip(name, `stations/${id}.mp3`, isAr) } catch { /* يُعاد التوليد يدوياً */ } }
+      if (clipsIndex.has(id)) { try { await generateClip(cityOnly(name), `stations/${id}.mp3`, isAr) } catch { /* يُعاد التوليد يدوياً */ } }
     }
     setAllStations(prev => prev.map(s => { const d = done.find(x => x.id === s.id); return d ? { ...s, name_ar: d.name } : s }))
     setNameDrafts(prev => { const n = { ...prev }; done.forEach(d => delete n[d.id]); return n })
@@ -285,7 +285,7 @@ export default function CallPage() {
     setCallError('')
     setBulkProgress({ done: 0, total: have.length })
     for (let i = 0; i < have.length; i++) {
-      try { await generateClip(have[i].name_ar, `stations/${have[i].id}.mp3`, isAr) }
+      try { await generateClip(cityOnly(have[i].name_ar), `stations/${have[i].id}.mp3`, isAr) }
       catch (err) { setCallError(isAr ? `توقفت إعادة التوليد عند "${have[i].name_ar}": ${err.message}` : `Regeneration stopped at "${have[i].name_ar}": ${err.message}`); break }
       setBulkProgress({ done: i + 1, total: have.length })
       await new Promise(r => setTimeout(r, 350))
@@ -300,7 +300,7 @@ export default function CallPage() {
     setBulkProgress({ done: 0, total: missing.length })
     for (let i = 0; i < missing.length; i++) {
       try {
-        await generateClip(missing[i].name_ar, `stations/${missing[i].id}.mp3`, isAr)
+        await generateClip(cityOnly(missing[i].name_ar), `stations/${missing[i].id}.mp3`, isAr)
         setClipsIndex(prev => new Set(prev).add(missing[i].id))
       } catch (err) {
         setCallError(isAr ? `توقف التوليد عند "${missing[i].name_ar}": ${err.message}` : `Generation stopped at "${missing[i].name_ar}": ${err.message}`)
@@ -378,7 +378,7 @@ export default function CallPage() {
 
   useEffect(() => {
     if (mode !== 'trip' || !destStop) return
-    setText(buildAnnouncement(destStop.name, viaChosen.map(s => s.name)))
+    setText(buildAnnouncement(cityOnly(destStop.name), viaChosen.map(s => cityOnly(s.name))))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [destStop, stopOff, stops, mode])
 
@@ -709,7 +709,7 @@ export default function CallPage() {
                     ) : (
                     <span className="flex-1 min-w-0 text-sm text-gray-700">
                       <span className="block truncate">{s.name_ar}</span>
-                      {vocalize(s.name_ar) !== s.name_ar && <span className="block truncate text-[11px] text-gray-400" title={isAr ? 'النطق بالتشكيل' : 'Spoken form'}>{vocalize(s.name_ar)}</span>}
+                      <span className="block truncate text-[11px] text-gray-400" title={isAr ? 'كما يُنطق في النداء' : 'Spoken form'}>{vocalize(cityOnly(s.name_ar))}</span>
                     </span>
                     )}
                     <span className={`text-[10px] shrink-0 ${clipsIndex.has(s.id) ? 'text-green-600' : 'text-gray-400'}`}>
