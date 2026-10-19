@@ -69,6 +69,11 @@ function speak(text, voice, controller) {
   })
 }
 
+// العبارتان الثابتتان في النداء
+const PHRASE_DEFS = [
+  { key: 'intro', ar: 'عبارة المقدمة', en: 'Intro phrase', text: 'نداء على الركاب المسافرين إلى' },
+  { key: 'via', ar: 'عبارة "مروراً بـ"', en: '"Via" phrase', text: 'مروراً بـ' },
+]
 const ELEVENLABS_VOICE_ID = '__elevenlabs__'
 const CLIPS_VOICE_ID = '__clips__'
 const AUDIO_BUCKET = 'audio-clips'
@@ -185,7 +190,8 @@ export default function CallPage() {
   const controllerRef = useRef(null)
 
   // مكتبة المقاطع الصوتية الجاهزة
-  const [showClipsLibrary, setShowClipsLibrary] = useState(false)
+  const [showClipsLibrary, setShowClipsLibrary] = useState(true)
+  const [prep, setPrep] = useState(null)   // { label, done, total } أثناء «تجهيز النداء تلقائياً»
   const [clipsIndex, setClipsIndex] = useState(new Set())
   const [phraseClips, setPhraseClips] = useState({ intro: false, via: false })
   const [allStations, setAllStations] = useState([])
@@ -293,8 +299,8 @@ export default function CallPage() {
     setBulkProgress(null)
   }
 
-  async function generateAllMissing() {
-    const missing = allStations.filter(s => !clipsIndex.has(s.id))
+  async function generateAllMissing(list = allStations) {
+    const missing = list.filter(s => !clipsIndex.has(s.id))
     if (!missing.length) return
     setCallError('')
     setBulkProgress({ done: 0, total: missing.length })
@@ -310,6 +316,45 @@ export default function CallPage() {
       await new Promise(r => setTimeout(r, 350)) // تجنّب تجاوز حد الطلبات بـElevenLabs
     }
     setBulkProgress(null)
+  }
+
+  // تجهيز النداء بضغطة واحدة: ترجمة الأسماء الإنجليزية وحفظها، ثم العبارتان الثابتتان، ثم صوت كل محطة ناقصة
+  async function prepareAll() {
+    const latin = allStations.filter(s => hasLatin(s.name_ar))
+    const names = latin.map(s => ({ id: s.id, name: (nameDrafts[s.id] ?? arabizeStation(s.name_ar)).trim() })).filter(x => x.name && !hasLatin(x.name))
+    const stations = allStations.map(s => { const d = names.find(x => x.id === s.id); return d ? { ...s, name_ar: d.name } : s })
+    const needClips = stations.filter(s => !clipsIndex.has(s.id)).length + names.filter(x => clipsIndex.has(x.id)).length   // الناقصة + إعادة توليد المعاد تسميتها
+    const needPhrases = PHRASE_DEFS.filter(p => !phraseClips[p.key]).length
+    if (!names.length && !needClips && !needPhrases) return
+    const msg = isAr
+      ? `سيتم: ${names.length ? `ترجمة وحفظ ${names.length} اسم محطة، ` : ''}${needPhrases ? `توليد ${needPhrases} عبارة، ` : ''}توليد صوت ${needClips} محطة. يستهلك من حد حسابك في ElevenLabs. متابعة؟`
+      : `This will ${names.length ? `translate & save ${names.length} names, ` : ''}generate ${needPhrases} phrases and ${needClips} station clips, using your ElevenLabs quota. Continue?`
+    if (!window.confirm(msg)) return
+    setCallError('')
+    try {
+      if (names.length) {
+        setPrep({ label: isAr ? 'ترجمة وحفظ الأسماء' : 'Translating names', done: 0, total: names.length })
+        await renameStations(names)
+      }
+      for (let i = 0; i < PHRASE_DEFS.length; i++) {
+        const p = PHRASE_DEFS[i]
+        if (phraseClips[p.key]) continue
+        setPrep({ label: isAr ? 'توليد العبارات الثابتة' : 'Generating phrases', done: i, total: PHRASE_DEFS.length })
+        await generateClip(p.text, `phrases/${p.key}.mp3`, isAr)
+      }
+      await refreshClipsIndex()
+      const todo = stations.filter(s => !clipsIndex.has(s.id))   // المعاد تسميتها وعندها مقطع أُعيد توليدها داخل renameStations
+      for (let i = 0; i < todo.length; i++) {
+        setPrep({ label: isAr ? 'توليد أصوات المحطات' : 'Generating station voices', done: i, total: todo.length })
+        await generateClip(cityOnly(todo[i].name_ar), `stations/${todo[i].id}.mp3`, isAr)
+        setClipsIndex(prev => new Set(prev).add(todo[i].id))
+        await new Promise(r => setTimeout(r, 350))
+      }
+      await refreshClipsIndex()
+    } catch (err) {
+      setCallError((isAr ? 'توقف التجهيز: ' : 'Preparation stopped: ') + (err.message || ''))
+    }
+    setPrep(null)
   }
 
   useEffect(() => {
@@ -632,11 +677,46 @@ export default function CallPage() {
                 : 'Click "Generate" to create the audio automatically via ElevenLabs and save it directly (same voice as the announcement page) — or upload a ready-made mp3 file yourself to replace it with a manual recording. Two fixed phrases + each station name, once only, always used at the same quality.'}
             </p>
 
+            {(() => {
+              const total = allStations.length
+              const arabicN = allStations.filter(x => !hasLatin(x.name_ar)).length
+              const phrasesN = PHRASE_DEFS.filter(p => phraseClips[p.key]).length
+              const clipsN = allStations.filter(x => clipsIndex.has(x.id)).length
+              const stat = (title, n, of, hint) => (
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs font-semibold text-gray-600">{title}</span>
+                    <span className={`text-sm font-bold ${of > 0 && n === of ? 'text-green-600' : 'text-gray-800'}`}>{n}/{of}{of > 0 && n === of ? ' ✓' : ''}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-gray-100 mt-2 overflow-hidden"><div className={`h-full rounded-full ${of > 0 && n === of ? 'bg-green-500' : 'bg-nwbus-primary'}`} style={{ width: `${of ? Math.round((n / of) * 100) : 0}%` }} /></div>
+                  <p className="text-[11px] text-gray-400 mt-1.5">{hint}</p>
+                </div>
+              )
+              const allDone = total > 0 && arabicN === total && phrasesN === PHRASE_DEFS.length && clipsN === total
+              return (
+                <div className="rounded-xl border border-nwbus-primary/20 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <h3 className="font-bold text-gray-800">{isAr ? 'جاهزية النداء' : 'Announcement readiness'}</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">{allDone ? (isAr ? 'كل شيء جاهز: الأسماء العربية والعبارات وأصوات كل المحطات.' : 'Everything is ready.') : (isAr ? 'زر واحد يترجم الأسماء الإنجليزية ويولّد الأصوات الناقصة.' : 'One button translates English names and generates missing voices.')}</p>
+                    </div>
+                    <button type="button" onClick={prepareAll} disabled={!!prep || !!bulkProgress || !!renaming || total === 0 || allDone}
+                      className="px-4 py-2.5 bg-nwbus-primary text-white rounded-lg text-sm font-bold disabled:opacity-40">
+                      {prep ? `${prep.label} ${prep.done}/${prep.total}` : (isAr ? 'تجهيز النداء تلقائياً' : 'Prepare automatically')}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                    {stat(isAr ? 'الأسماء بالعربية' : 'Arabic names', arabicN, total, isAr ? 'المحطات اللي اسمها عربي (لنطق صحيح)' : 'Stations with Arabic names')}
+                    {stat(isAr ? 'العبارات الثابتة' : 'Fixed phrases', phrasesN, PHRASE_DEFS.length, isAr ? 'المقدمة و«مروراً بـ»' : 'Intro and "via"')}
+                    {stat(isAr ? 'أصوات المحطات' : 'Station voices', clipsN, total, isAr ? 'مقاطع مولّدة بالتشكيل جاهزة للنداء' : 'Generated clips')}
+                  </div>
+                  {prep && <div className="h-2 rounded-full bg-gray-200 mt-3 overflow-hidden"><div className="h-full bg-nwbus-primary transition-all" style={{ width: `${prep.total ? Math.round((prep.done / prep.total) * 100) : 0}%` }} /></div>}
+                </div>
+              )
+            })()}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                { key: 'intro', label: isAr ? 'عبارة المقدمة' : 'Intro phrase', text: 'نداء على الركاب المسافرين إلى' },
-                { key: 'via', label: isAr ? 'عبارة "مروراً بـ"' : '"Via" phrase', text: 'مروراً بـ' },
-              ].map(p => (
+              {PHRASE_DEFS.map(d => ({ ...d, label: isAr ? d.ar : d.en })).map(p => (
                 <div key={p.key} className="border rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1.5 gap-2">
                     <span className="text-xs text-gray-600">{p.label} ("{p.text}")</span>
