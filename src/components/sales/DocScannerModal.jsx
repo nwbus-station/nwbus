@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getEngine } from '../../utils/docScan'
 
-const STABLE_MS = 1100       // مدة بقاء كل الشروط متحققة قبل الالتقاط التلقائي
+const STABLE_MS = 900       // مدة بقاء كل الشروط متحققة قبل الالتقاط التلقائي
 const DET_W = 480            // عرض إطار الكشف
 const LOST_HOLD_MS = 450
 const lerp = (a, b, t) => a + (b - a) * t
@@ -20,6 +20,8 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   const lastSeenRef = useRef(0)
   const stableSinceRef = useRef(0)
   const jumpRef = useRef(0)
+  const badSinceRef = useRef(0)
+  const lastFlagsRef = useRef(null)
   const sharpMaxRef = useRef(0)
   const checksKeyRef = useRef('')
   const autoRef = useRef(true)
@@ -125,7 +127,7 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
         if (!alive || capturedRef.current) break
         const now = performance.now(), k = v.videoWidth / DET_W
         const q = res?.quad, m = res?.metrics
-        const f = { found: !!q, full: false, sharp: false, light: false, steady: false }
+        const f = { found: !!q || (targetRef.current && now - lastSeenRef.current < LOST_HOLD_MS), full: false, sharp: false, light: false, steady: false }
         let why = '', dev = 0
         if (q && m) {
           const raw = q.map(p => ({ x: p.x * k, y: p.y * k }))
@@ -139,21 +141,26 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
           }
           lastSeenRef.current = now
           sharpMaxRef.current = Math.max(sharpMaxRef.current * 0.995, m.sharp)
-          f.full = m.full && m.areaFrac >= 0.3
-          f.sharp = m.sharp >= 25 && m.sharp >= sharpMaxRef.current * 0.55
+          f.full = m.full && m.areaFrac >= 0.12
+          f.sharp = m.sharp >= 6 && m.sharp >= sharpMaxRef.current * 0.5
           f.light = m.bright >= 70 && m.glare <= 0.1
           f.steady = dev < v.videoWidth * 0.015
+          lastFlagsRef.current = { full: f.full, sharp: f.sharp, light: f.light, steady: f.steady }
           why = !f.full ? (m.full ? (isAr ? 'قرّب الكاميرا من الورقة' : 'Move closer to the page') : (isAr ? 'اجعل الورقة كاملة داخل الإطار' : 'Keep the whole page inside the frame'))
             : m.bright < 70 ? (isAr ? 'الإضاءة ضعيفة، شغّل الإضاءة أو انتقل لمكان أفتح' : 'Too dark, turn on the light')
             : m.glare > 0.1 ? (isAr ? 'يوجد انعكاس ضوء، غيّر زاوية الكاميرا' : 'Glare detected, change the angle')
             : !f.sharp ? (isAr ? 'الصورة غير واضحة، ثبّت الجهاز وانتظر التركيز' : 'Image not sharp, hold steady for focus')
             : !f.steady ? (isAr ? 'ثبّت الجهاز' : 'Hold steady') : ''
+        } else if (now - lastSeenRef.current <= LOST_HOLD_MS && lastFlagsRef.current) {
+          Object.assign(f, lastFlagsRef.current, { found: true })   // غياب لحظي للكشف: نُبقي آخر حالة بدل التذبذب
         } else if (now - lastSeenRef.current > LOST_HOLD_MS) {
-          targetRef.current = null; jumpRef.current = 0
+          targetRef.current = null; jumpRef.current = 0; lastFlagsRef.current = null
           why = isAr ? 'لم أجد الورقة. ضعها على سطح بلون مغاير وأظهرها كاملة' : 'Page not found. Use a contrasting surface, fully in view'
         }
         const good = f.found && f.full && f.sharp && f.light && f.steady
-        if (good) { if (!stableSinceRef.current) stableSinceRef.current = now } else stableSinceRef.current = 0
+        // فترة سماح: انقطاع لحظي (<350ms) لا يصفّر العدّاد
+        if (good) { badSinceRef.current = 0; if (!stableSinceRef.current) stableSinceRef.current = now }
+        else { if (!badSinceRef.current) badSinceRef.current = now; if (now - badSinceRef.current > 350) stableSinceRef.current = 0 }
         const held = stableSinceRef.current ? now - stableSinceRef.current : 0
         if (progressRef.current) progressRef.current.style.width = autoRef.current ? `${Math.min(100, Math.round((held / STABLE_MS) * 100))}%` : '0%'
         const key = `${+f.found}${+f.full}${+f.sharp}${+f.light}${+f.steady}`
