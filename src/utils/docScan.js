@@ -22,8 +22,8 @@ class ScanEngine {
     return new Promise((res, rej) => { this.pending.set(id, { res, rej }); this.worker.postMessage({ ...msg, id }, transfer) })
   }
   warmup() { return this.call({ type: 'ping' }).catch(() => null) }
-  async detect(bitmap) { return (await this.call({ type: 'detect', bitmap }, [bitmap])).quad }
-  capture(bitmap, hint, mode) { return this.call({ type: 'capture', bitmap, hint, mode }, [bitmap]) }
+  detect(bitmap) { return this.call({ type: 'detect', bitmap }, [bitmap]) }   // { quad, metrics }
+  capture(bitmaps, hint, mode) { return this.call({ type: 'capture', bitmaps, hint, mode }, bitmaps) }
   render(mode, crop) { return this.call({ type: 'render', mode, crop }) }
 }
 

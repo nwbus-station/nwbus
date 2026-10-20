@@ -124,3 +124,43 @@ export function warp(cv, img, quad, mode = 'color') {
     return { width: dst.cols, height: dst.rows, data: new Uint8ClampedArray(dst.data) }
   } finally { src.delete(); dst.delete() }
 }
+
+// جودة الإطار داخل حدود الورقة: حدّة (تباين لابلاس)، سطوع، انعكاس، اكتمال الورقة داخل الإطار
+export function quality(cv, img, quad) {
+  const src = cv.matFromImageData(img), gray = new cv.Mat()
+  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
+  const xs = quad.map(p => p.x), ys = quad.map(p => p.y)
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys)
+  const bw = maxX - minX, bh = maxY - minY
+  const x = Math.max(0, Math.round(minX + bw * 0.12)), y = Math.max(0, Math.round(minY + bh * 0.12))
+  const w = Math.max(8, Math.min(img.width - x, Math.round(bw * 0.76))), h = Math.max(8, Math.min(img.height - y, Math.round(bh * 0.76)))
+  const roi = gray.roi(new cv.Rect(x, y, w, h))
+  const lap = new cv.Mat(), mean = new cv.Mat(), std = new cv.Mat(), hi = new cv.Mat()
+  let sharp = 0, bright = 0, glare = 0
+  try {
+    cv.Laplacian(roi, lap, cv.CV_64F)
+    cv.meanStdDev(lap, mean, std)
+    sharp = std.data64F[0] * std.data64F[0]
+    bright = cv.mean(roi)[0]
+    cv.threshold(roi, hi, 250, 255, cv.THRESH_BINARY)
+    glare = cv.countNonZero(hi) / (w * h)
+  } finally { src.delete(); gray.delete(); roi.delete(); lap.delete(); mean.delete(); std.delete(); hi.delete() }
+  const m = 0.012
+  const full = minX > img.width * m && minY > img.height * m && maxX < img.width * (1 - m) && maxY < img.height * (1 - m)
+  let area = 0
+  for (let i = 0; i < 4; i++) { const a = quad[i], b = quad[(i + 1) % 4]; area += a.x * b.y - b.x * a.y }
+  return { sharp, bright, glare, full, areaFrac: Math.abs(area / 2) / (img.width * img.height) }
+}
+
+// حدّة إطار كامل (لاختيار الأوضح بين عدة لقطات)
+export function sharpness(cv, img) {
+  const full = cv.matFromImageData(img), small = new cv.Mat(), gray = new cv.Mat(), lap = new cv.Mat(), mean = new cv.Mat(), std = new cv.Mat()
+  try {
+    const k = Math.min(1, 640 / img.width)
+    cv.resize(full, small, new cv.Size(Math.round(img.width * k), Math.round(img.height * k)), 0, 0, cv.INTER_AREA)
+    cv.cvtColor(small, gray, cv.COLOR_RGBA2GRAY)
+    cv.Laplacian(gray, lap, cv.CV_64F)
+    cv.meanStdDev(lap, mean, std)
+    return std.data64F[0] * std.data64F[0]
+  } finally { full.delete(); small.delete(); gray.delete(); lap.delete(); mean.delete(); std.delete() }
+}

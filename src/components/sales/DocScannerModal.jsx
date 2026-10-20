@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getEngine } from '../../utils/docScan'
 
-const STABLE_MS = 700        // مدة ثبات الإطار قبل الالتقاط التلقائي
+const STABLE_MS = 1100       // مدة بقاء كل الشروط متحققة قبل الالتقاط التلقائي
+const DET_W = 480            // عرض إطار الكشف (أعلى = قراءة حدّة أدق)
 const LOST_HOLD_MS = 450     // نُبقي الإطار ظاهراً لحظة بعد فقدان الكشف لتجنّب الوميض
 
 const lerp = (a, b, t) => a + (b - a) * t
@@ -29,6 +30,9 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   const [torch, setTorch] = useState({ supported: false, on: false })
   const [flash, setFlash] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [checks, setChecks] = useState({ found: false, full: false, sharp: false, light: false, steady: false })
+  const sharpMaxRef = useRef(0)     // أعلى حدّة شوهدت (معيار نسبي مستقل عن الجهاز)
+  const checksKeyRef = useRef('')
 
   const stopStream = useCallback(() => { streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null }, [])
 
@@ -73,56 +77,78 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
     const v = videoRef.current
     if (!v || !v.videoWidth || capturedRef.current) return
     capturedRef.current = true
-    const frame = document.createElement('canvas')
-    frame.width = v.videoWidth; frame.height = v.videoHeight
-    frame.getContext('2d').drawImage(v, 0, 0)
-    const hint = targetRef.current
-    stopStream()
+    const hintQuad = targetRef.current
     setFlash(true); setTimeout(() => setFlash(false), 160)
     setStage('processing')
     try {
-      const bmp = await createImageBitmap(frame)
-      const r = await getEngine().capture(bmp, hint, mode)
+      // 3 لقطات متتالية؛ يختار المحرك أوضحها
+      const bitmaps = []
+      for (let i = 0; i < 3; i++) {
+        const frame = document.createElement('canvas')
+        frame.width = v.videoWidth; frame.height = v.videoHeight
+        frame.getContext('2d').drawImage(v, 0, 0)
+        bitmaps.push(await createImageBitmap(frame))
+        if (i < 2) await new Promise(r => setTimeout(r, 90))
+      }
+      stopStream()
+      const r = await getEngine().capture(bitmaps, hintQuad, mode)
       if (!aliveRef.current) return
       setHasQuad(r.hasQuad); setCrop(r.hasQuad)
       showBlob(r.blob)
       setStage('review')
     } catch {
+      stopStream()
       setError(isAr ? 'تعذّرت معالجة الصورة. أعد المحاولة.' : 'Could not process the image. Try again.')
       setStage('error')
     }
   }, [mode, isAr, showBlob, stopStream])
 
-  // حلقة الكشف: كل دورة تلتقط إطاراً صغيراً وترسله للـWorker ثم تحدّد الثبات
+  // حلقة الكشف: تتحقق من اكتمال الورقة ووضوحها وإضاءتها وثباتها، ولا تلتقط إلا حين تتحقق كلها لمدة كافية
   useEffect(() => {
     if (stage !== 'camera') return
     let alive = true
     const small = document.createElement('canvas')
+    sharpMaxRef.current = 0
     ;(async () => {
       while (alive && !capturedRef.current) {
         const v = videoRef.current
         if (!v || !v.videoWidth) { await new Promise(r => setTimeout(r, 60)); continue }
-        small.width = 320; small.height = Math.round(320 * v.videoHeight / v.videoWidth)
+        small.width = DET_W; small.height = Math.round(DET_W * v.videoHeight / v.videoWidth)
         small.getContext('2d').drawImage(v, 0, 0, small.width, small.height)
-        let q = null
-        try { q = await getEngine().detect(await createImageBitmap(small)) } catch { q = null }
+        let res = null
+        try { res = await getEngine().detect(await createImageBitmap(small)) } catch { res = null }
         if (!alive || capturedRef.current) break
-        const now = performance.now(), k = v.videoWidth / 320
-        if (q) {
+        const now = performance.now(), k = v.videoWidth / DET_W
+        const q = res?.quad, m = res?.metrics
+        let moving = true, f = { found: !!q, full: false, sharp: false, light: false, steady: false }, why = ''
+        if (q && m) {
           const full = q.map(p => ({ x: p.x * k, y: p.y * k }))
           const prev = targetRef.current
           const move = prev ? full.reduce((s, p, i) => s + Math.hypot(p.x - prev[i].x, p.y - prev[i].y), 0) / 4 : 1e9
           targetRef.current = full; lastSeenRef.current = now
-          if (move < v.videoWidth * 0.014) { if (!stableSinceRef.current) stableSinceRef.current = now } else stableSinceRef.current = 0
-          const held = stableSinceRef.current ? now - stableSinceRef.current : 0
-          if (progressRef.current) progressRef.current.style.width = `${Math.min(100, Math.round((held / STABLE_MS) * 100))}%`
-          setHint(held > 150 ? (isAr ? 'ثبّت الجهاز...' : 'Hold steady...') : (isAr ? 'تم تحديد الورقة' : 'Page detected'))
-          if (held >= STABLE_MS) { capture(); break }
+          moving = move >= v.videoWidth * 0.012
+          sharpMaxRef.current = Math.max(sharpMaxRef.current * 0.995, m.sharp)   // سقف يتناقص ببطء
+          f.full = m.full && m.areaFrac >= 0.3
+          f.sharp = m.sharp >= 25 && m.sharp >= sharpMaxRef.current * 0.55
+          f.light = m.bright >= 70 && m.glare <= 0.1
+          f.steady = !moving
+          why = !f.full ? (m.full ? (isAr ? 'قرّب الكاميرا من الورقة' : 'Move closer to the page') : (isAr ? 'اجعل الورقة كاملة داخل الإطار' : 'Keep the whole page inside the frame'))
+            : m.bright < 70 ? (isAr ? 'الإضاءة ضعيفة، شغّل الإضاءة أو انتقل لمكان أفتح' : 'Too dark, turn on the light')
+            : m.glare > 0.1 ? (isAr ? 'يوجد انعكاس ضوء، غيّر زاوية الكاميرا' : 'Glare detected, change the angle')
+            : !f.sharp ? (isAr ? 'الصورة غير واضحة، ثبّت الجهاز وانتظر التركيز' : 'Image not sharp, hold steady for focus')
+            : moving ? (isAr ? 'ثبّت الجهاز' : 'Hold steady') : ''
         } else if (now - lastSeenRef.current > LOST_HOLD_MS) {
-          targetRef.current = null; stableSinceRef.current = 0
-          if (progressRef.current) progressRef.current.style.width = '0%'
-          setHint(isAr ? 'لم أجد الورقة. ضعها على سطح بلون مغاير وأظهرها كاملة' : 'Page not found. Place it on a contrasting surface, fully in view')
+          targetRef.current = null
+          why = isAr ? 'لم أجد الورقة. ضعها على سطح بلون مغاير وأظهرها كاملة' : 'Page not found. Use a contrasting surface, fully in view'
         }
+        const good = f.found && f.full && f.sharp && f.light && f.steady
+        if (good) { if (!stableSinceRef.current) stableSinceRef.current = now } else stableSinceRef.current = 0
+        const held = stableSinceRef.current ? now - stableSinceRef.current : 0
+        if (progressRef.current) progressRef.current.style.width = `${Math.min(100, Math.round((held / STABLE_MS) * 100))}%`
+        const key = `${+f.found}${+f.full}${+f.sharp}${+f.light}${+f.steady}`
+        if (key !== checksKeyRef.current) { checksKeyRef.current = key; setChecks(f) }
+        setHint(good ? (isAr ? 'البيانات واضحة... جارٍ التصوير' : 'Clear... capturing') : why)
+        if (held >= STABLE_MS) { capture(); break }
       }
     })()
     return () => { alive = false }
@@ -195,8 +221,19 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
       <div className="px-4 py-4 text-white">
         {stage === 'camera' && (
           <div className="flex flex-col items-center gap-3">
-            <p className="text-xs text-white/85 text-center min-h-[1rem]">{hint}</p>
-            <div className="w-40 h-1 rounded bg-white/20 overflow-hidden"><div ref={progressRef} className="h-full bg-emerald-400" style={{ width: '0%' }} /></div>
+            <p className="text-xs text-white/90 text-center min-h-[1.2rem] leading-relaxed">{hint}</p>
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              {[
+                { k: 'found', l: isAr ? 'الورقة' : 'Page' },
+                { k: 'full', l: isAr ? 'كاملة' : 'Full' },
+                { k: 'sharp', l: isAr ? 'واضحة' : 'Sharp' },
+                { k: 'light', l: isAr ? 'الإضاءة' : 'Light' },
+                { k: 'steady', l: isAr ? 'ثابتة' : 'Steady' },
+              ].map(c => (
+                <span key={c.k} className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${checks[c.k] ? 'bg-emerald-500 text-white' : 'bg-white/15 text-white/70'}`}>{c.l}</span>
+              ))}
+            </div>
+            <div className="w-48 h-1.5 rounded bg-white/20 overflow-hidden"><div ref={progressRef} className="h-full bg-emerald-400 transition-[width] duration-100" style={{ width: '0%' }} /></div>
             <button type="button" onClick={capture} aria-label={isAr ? 'التقاط' : 'Capture'} className="w-16 h-16 rounded-full border-4 border-white bg-white/20 active:bg-white/50" />
           </div>
         )}

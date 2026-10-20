@@ -1,6 +1,6 @@
 // معالج رسائل الماسح: يُستخدم داخل الـWorker (الأسرع) أو على الخيط الرئيسي كاحتياط
 import { getRawCV } from './cvLoader'
-import { detectQuad, warp } from './docScanCore'
+import { detectQuad, warp, quality, sharpness } from './docScanCore'
 
 const mkCanvas = (w, h) => (typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h }))
 const toBlob = (c, q) => (c.convertToBlob ? c.convertToBlob({ type: 'image/jpeg', quality: q }) : new Promise(res => c.toBlob(res, 'image/jpeg', q)))
@@ -41,9 +41,20 @@ const state = { img: null, quad: null }
 export async function handle(data) {
   const { cv } = await initCV()
   if (data.type === 'ping') return { ready: true }
-  if (data.type === 'detect') return { quad: detectQuad(cv, toImageData(data.bitmap), 320) }
+  if (data.type === 'detect') {
+    const img = toImageData(data.bitmap)
+    const quad = detectQuad(cv, img, 320)
+    return { quad, metrics: quad ? quality(cv, img, quad) : null }
+  }
   if (data.type === 'capture') {
-    state.img = toImageData(data.bitmap)
+    // نختار أوضح لقطة من عدة لقطات متتالية
+    let best = null, bestS = -1
+    for (const b of data.bitmaps) {
+      const img = toImageData(b)
+      const s = sharpness(cv, img)
+      if (s > bestS) { bestS = s; best = img }
+    }
+    state.img = best
     state.quad = detectQuad(cv, state.img, 900) ?? data.hint ?? null  // إعادة كشف بدقة أعلى على الإطار الكامل
     return render(cv, state, data.mode, !!state.quad)
   }
