@@ -8,6 +8,7 @@ import DatePicker from '../components/shared/DatePicker'
 import StatStrip from '../components/shared/StatStrip'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import PrintAccessModal from '../components/sales/PrintAccessModal'
+import BalanceDocScan, { openBalanceDoc } from '../components/sales/BalanceDocScan'
 import { useAppSettings } from '../context/AppSettingsContext'
 import { PRINT_ACCESS_KEY, parseAccess, accountState } from '../utils/printAccess'
 import { todayStr, toLocalDateStr } from '../utils/dates'
@@ -355,6 +356,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     shift:             sale?.shift ?? initialSuggest.shift,
     station_id:        sale?.station_id ?? (multi ? '' : (profile.station_id ?? '')),
     employee_name:     sale?.employee_name      ?? profile?.full_name_ar          ?? '',
+    balance_doc_path:  sale?.balance_doc_path ?? null,
     cashier_ref:       sale ? (parseInitialRefs(sale.balance_ref)[0] ?? '') : savedCashier,
     balance_refs:      sale ? (parseInitialRefs(sale.balance_ref).slice(1).length > 0 ? parseInitialRefs(sale.balance_ref).slice(1) : ['']) : [''],
     cash_amount:       sale?.cash_amount ?? 0,
@@ -390,7 +392,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   const [error,  setError]  = useState('')
   const [totalMissing, setTotalMissing] = useState(false)
   // الحقول التي تعتبر تغييراً حقيقياً للبيانات (لا تشمل is_confirmed والملاحظات فقط)
-  const DATA_FIELDS = ['sale_date','shift','station_id','employee_name','cashier_ref','balance_refs','cash_amount','mada_amount','mada_network_ref','visa_amount','mastercard_amount','other_amount','other_type','total_sales']
+  const DATA_FIELDS = ['sale_date','shift','station_id','employee_name','cashier_ref','balance_refs','cash_amount','mada_amount','mada_network_ref','visa_amount','mastercard_amount','other_amount','other_type','total_sales','balance_doc_path']
   const set = (k, v) => { if (k === 'shift') shiftTouched.current = true; setForm(f => ({
     ...f, [k]: v,
     ...(DATA_FIELDS.includes(k) && sale ? { _dataChanged: true } : {}),
@@ -452,6 +454,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       other_type:         form.other_type || null,
       total_expected:     Number(form.total_sales),
       balance_ref:        balanceRefStr,
+      ...(form.balance_doc_path !== (sale?.balance_doc_path ?? null) ? { balance_doc_path: form.balance_doc_path } : {}),
       bank_deposit_amount: 0,
       bank_deposit_ref:   null,
       // created_by يُضاف فقط عند الإنشاء الجديد، لا عند التعديل
@@ -505,7 +508,11 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         ? (isAr ? 'يوجد سجل مطابق لنفس الموظف والمحطة والتاريخ والوردية. افتحه وعدّله من القائمة، أو غيّر الوردية/التاريخ.' : 'A matching record already exists for this employee, station, date and shift. Edit it from the list, or change the shift/date.')
         : res.error.message)
     }
-    else { localStorage.removeItem(DRAFT_KEY); onSaved(); onClose() }
+    else {
+      // صورة قديمة استُبدلت أو أُزيلت: تُحذف من المخزن بعد نجاح الحفظ
+      if (sale?.balance_doc_path && form.balance_doc_path !== sale.balance_doc_path) await supabase.storage.from('sales-docs').remove([sale.balance_doc_path])
+      localStorage.removeItem(DRAFT_KEY); onSaved(); onClose()
+    }
     setSaving(false)
   }
 
@@ -684,6 +691,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                     </div>
                   ))}
                 </div>
+                <BalanceDocScan path={form.balance_doc_path} onChange={v => set('balance_doc_path', v)} isAr={isAr} />
               </div>
             </SectionCard>
 
@@ -1297,6 +1305,13 @@ export default function SalesPage() {
                                     <button onClick={() => setAudit(r)}
                                       className="text-xs border border-gray-200 text-gray-500 rounded-lg px-2 py-1 hover:bg-gray-50"
                                       title={isAr ? 'سجل التعديلات' : 'Audit History'}>{isAr ? 'السجل' : 'Log'}</button>
+                                    {r.balance_doc_path && (
+                                      <button type="button" onClick={() => openBalanceDoc(r.balance_doc_path)}
+                                        className="border border-gray-200 text-gray-600 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors"
+                                        title={isAr ? 'عرض ورقة الموازنة' : 'View balance document'} aria-label={isAr ? 'عرض ورقة الموازنة' : 'View balance document'}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /></svg>
+                                      </button>
+                                    )}
                                     {canPrintRecord(r) && (
                                       <button type="button" onClick={() => printSaleRecord({ sale: r, isAr, profile })}
                                         className="border border-gray-200 text-gray-600 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors"
