@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { supabase } from '../../lib/supabase'
 import ConfirmDialog from '../shared/ConfirmDialog'
+
+// الماسح (مع OpenCV) يُحمَّل عند أول فتح فقط
+const DocScannerModal = lazy(() => import('./DocScannerModal'))
 
 const BUCKET = 'sales-docs'
 
@@ -26,6 +29,7 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled }) {
   const [error, setError] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
   const [localUrl, setLocalUrl] = useState('')
+  const [scanning, setScanning] = useState(false)
 
   useEffect(() => {
     let off = false
@@ -40,12 +44,12 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled }) {
     if (p && sessionPaths.current.has(p)) { sessionPaths.current.delete(p); await supabase.storage.from(BUCKET).remove([p]) }
   }
 
-  async function onPick(file) {
+  async function onPick(file, processed = false) {
     if (!file) return
     setBusy(true); setError('')
     try {
       if (!file.type.startsWith('image/')) throw new Error(isAr ? 'اختر صورة (JPG أو PNG).' : 'Choose an image (JPG or PNG).')
-      const blob = await compress(file)
+      const blob = processed ? file : await compress(file)
       const np = `docs/${crypto.randomUUID()}.jpg`
       const { error: upErr } = await supabase.storage.from(BUCKET).upload(np, blob, { contentType: 'image/jpeg', upsert: false })
       if (upErr) throw upErr
@@ -79,18 +83,24 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled }) {
             <img src={preview} alt={isAr ? 'ورقة الموازنة' : 'Balance document'} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
           </a>
         )}
-        <button type="button" onClick={() => inputRef.current?.click()} disabled={busy || disabled}
+        <button type="button" onClick={() => setScanning(true)} disabled={busy || disabled}
           className="flex items-center gap-2 border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
           {busy ? (isAr ? 'جارٍ الرفع...' : 'Uploading...') : path ? (isAr ? 'استبدال الصورة' : 'Replace scan') : 'Scan document'}
         </button>
+        <button type="button" onClick={() => inputRef.current?.click()} disabled={busy || disabled} className="text-xs text-gray-500 hover:text-gray-700 underline">{isAr ? 'رفع صورة جاهزة' : 'Upload a photo'}</button>
         {path && !busy && (
           <button type="button" onClick={() => setConfirmDel(true)} className="text-xs text-red-500 hover:text-red-700 font-semibold">{isAr ? 'إزالة' : 'Remove'}</button>
         )}
       </div>
-      <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden"
+      <input ref={inputRef} type="file" accept="image/*" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; onPick(f) }} />
       {error && <p className="text-xs text-red-600 mt-1.5">{error}</p>}
+      {scanning && (
+        <Suspense fallback={null}>
+          <DocScannerModal isAr={isAr} onClose={() => setScanning(false)} onDone={blob => { setScanning(false); onPick(blob, true) }} />
+        </Suspense>
+      )}
       {confirmDel && (
         <ConfirmDialog message={isAr ? 'إزالة صورة ورقة الموازنة من هذه اليومية؟ لا يمكن التراجع بعد الحفظ.' : 'Remove the balance document image from this record? This cannot be undone after saving.'}
           confirmLabel={isAr ? 'إزالة' : 'Remove'} cancelLabel={isAr ? 'إلغاء' : 'Cancel'} onConfirm={remove} onCancel={() => setConfirmDel(false)} />
