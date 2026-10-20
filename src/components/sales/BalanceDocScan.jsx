@@ -55,14 +55,16 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled }) {
     if (!file) return
     setBusy(true); setError('')
     try {
-      if (!file.type.startsWith('image/')) throw new Error(isAr ? 'اختر صورة (JPG أو PNG).' : 'Choose an image (JPG or PNG).')
-      const blob = processed ? file : await compress(file)
-      const np = `docs/${crypto.randomUUID()}.jpg`
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(np, blob, { contentType: 'image/jpeg', upsert: false })
+      const isPdf = file.type === 'application/pdf'
+      if (!isPdf && !file.type.startsWith('image/')) throw new Error(isAr ? 'اختر صورة أو ملف PDF.' : 'Choose an image or a PDF.')
+      if (isPdf && file.size > 10 * 1024 * 1024) throw new Error(isAr ? 'ملف PDF كبير (الحد 10 ميجا).' : 'PDF is too large (10 MB max).')
+      const blob = isPdf || processed ? file : await compress(file)   // PDF من ماسح الجوال يُرفع كما هو
+      const np = `docs/${crypto.randomUUID()}.${isPdf ? 'pdf' : 'jpg'}`
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(np, blob, { contentType: isPdf ? 'application/pdf' : 'image/jpeg', upsert: false })
       if (upErr) throw upErr
       await drop(path)
       sessionPaths.current.add(np)
-      setLocalUrl(URL.createObjectURL(blob))
+      setLocalUrl(isPdf ? '' : URL.createObjectURL(blob))
       onChange(np)
     } catch (e) {
       setError(e.message === 'compress' ? (isAr ? 'تعذّر معالجة الصورة.' : 'Could not process the image.') : (e.message || (isAr ? 'تعذّر رفع الصورة.' : 'Upload failed.')))
@@ -85,7 +87,11 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled }) {
         </label>
       </div>
       <div className="flex items-center gap-3 flex-wrap">
-        {path && preview && (
+        {path && /\.pdf$/i.test(path) && (
+          <button type="button" onClick={() => openBalanceDoc(path)} title={isAr ? 'عرض الملف' : 'View file'}
+            className="w-16 h-16 rounded-lg border border-gray-200 bg-gray-50 flex flex-col items-center justify-center text-[11px] font-bold text-red-600">PDF<span className="text-[9px] font-normal text-gray-500">{isAr ? 'عرض' : 'View'}</span></button>
+        )}
+        {path && !/\.pdf$/i.test(path) && preview && (
           <a href={preview} target="_blank" rel="noreferrer" title={isAr ? 'عرض الصورة' : 'View image'}>
             <img src={preview} alt={isAr ? 'ورقة الموازنة' : 'Balance document'} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
           </a>
@@ -95,13 +101,15 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled }) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
           {busy ? (isAr ? 'جارٍ الرفع...' : 'Uploading...') : path ? (isAr ? 'استبدال الصورة' : 'Replace scan') : 'Scan document'}
         </button>
-        <button type="button" onClick={() => inputRef.current?.click()} disabled={busy || disabled} className="text-xs text-gray-500 hover:text-gray-700 underline">{isAr ? 'رفع صورة جاهزة' : 'Upload a photo'}</button>
+        <button type="button" onClick={() => inputRef.current?.click()} disabled={busy || disabled}
+          className="border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">{isAr ? 'ماسح الجوال / رفع ملف' : 'Phone scanner / upload'}</button>
         {path && !busy && (
           <button type="button" onClick={() => setConfirmDel(true)} className="text-xs text-red-500 hover:text-red-700 font-semibold">{isAr ? 'إزالة' : 'Remove'}</button>
         )}
       </div>
-      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+      <input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; onPick(f) }} />
+      <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">{isAr ? 'ماسح الجوال: على الآيفون اختر «اختيار ملف» ثم ⋯ ← «مسح المستندات» (Scan Documents)، وعلى الأندرويد اختر ماسح المستندات من الكاميرا. يُقبل صورة أو PDF.' : 'Phone scanner: on iPhone choose "Choose File" then ⋯ > Scan Documents. Images or PDF accepted.'}</p>
       {error && <p className="text-xs text-red-600 mt-1.5">{error}</p>}
       {scanning && (
         <Suspense fallback={null}>
