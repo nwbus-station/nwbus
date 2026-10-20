@@ -18,8 +18,25 @@ function angleOk(q) {
   return true
 }
 
+// عتبة Otsu من الهستوغرام ابتداءً من مستوى lo
+function otsuHist(hist, lo) {
+  let total = 0, sum = 0
+  for (let i = lo; i < 256; i++) { total += hist[i]; sum += i * hist[i] }
+  if (total < 50) return lo
+  let wB = 0, sB = 0, best = lo, bestV = -1
+  for (let t = lo; t < 256; t++) {
+    wB += hist[t]; if (!wB) continue
+    const wF = total - wB; if (!wF) break
+    sB += t * hist[t]
+    const mB = sB / wB, mF = (sum - sB) / wF
+    const v = wB * wF * (mB - mF) * (mB - mF)
+    if (v > bestV) { bestV = v; best = t }
+  }
+  return best
+}
+
 // مستطيلات مرشّحة من قناع ثنائي (الورقة = أبيض). الثقوب (النص) تُهمَل بـ RETR_EXTERNAL
-function quadsFromMask(cv, mask, w, h, out) {
+function quadsFromMask(cv, mask, w, h, out, gray, grad) {
   const contours = new cv.MatVector(), hier = new cv.Mat()
   try {
     cv.findContours(mask, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
@@ -50,8 +67,18 @@ function quadsFromMask(cv, mask, w, h, out) {
             q = orderQuad(cv.RotatedRect.points(r).map(p => ({ x: p.x, y: p.y })))
           } else q = null
         }
-        if (q && angleOk(q)) out.push({ q, area: hullArea * solidity * solidity })
-        hull.delete()
+        if (q && angleOk(q)) {
+          // قوة الحواف على محيط المرشّح: حدود الورقة الحقيقية فيها تدرّج لوني قوي على أضلاعها الأربعة، أما المنطقة الخاطئة فأضلاعها على فراغ/حافة الإطار
+          const tmp = cv.Mat.zeros(h, w, cv.CV_8U)
+          for (let k = 0; k < 4; k++) cv.line(tmp, new cv.Point(q[k].x, q[k].y), new cv.Point(q[(k + 1) % 4].x, q[(k + 1) % 4].y), new cv.Scalar(255), 5)
+          const edge = cv.mean(grad, tmp)[0]
+          cv.fillConvexPoly(tmp, hull, new cv.Scalar(255))
+          tmp.setTo(new cv.Scalar(0)); cv.fillConvexPoly(tmp, hull, new cv.Scalar(255))
+          const mb = cv.mean(gray, tmp)[0]
+          tmp.delete()
+          const score = Math.pow(edge + 2, 1.6) * Math.sqrt(hullArea) * solidity * solidity * (0.5 + mb / 510)
+          out.push({ q, area: score, dbg: { a: Math.round(hullArea), sol: +solidity.toFixed(2), mb: Math.round(mb), edge: +edge.toFixed(1), t: out.tag } })
+        }
       }
       cnt.delete()
     }
@@ -66,17 +93,29 @@ export function detectQuad(cv, img, maxW = 320) {
   if (scale < 1) cv.resize(full, src, new cv.Size(Math.round(img.width * scale), Math.round(img.height * scale)), 0, 0, cv.INTER_AREA)
   else full.copyTo(src)
   full.delete()
-  const gray = new cv.Mat(), blur = new cv.Mat(), maskA = new cv.Mat(), maskB = new cv.Mat(), rgb = new cv.Mat(), hsv = new cv.Mat()
+  const gray = new cv.Mat(), blur = new cv.Mat(), maskA = new cv.Mat(), maskB = new cv.Mat(), rgb = new cv.Mat(), hsv = new cv.Mat(), grad = new cv.Mat()
   const k5 = cv.Mat.ones(5, 5, cv.CV_8U), k9 = cv.Mat.ones(9, 9, cv.CV_8U)
   const found = []
   const clean = m => { cv.morphologyEx(m, m, cv.MORPH_OPEN, k5); cv.morphologyEx(m, m, cv.MORPH_CLOSE, k9) }
   try {
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
     cv.GaussianBlur(gray, blur, new cv.Size(7, 7), 0)
+    { // خريطة التدرّج (حدّة الحواف) من نسخة خفيفة التنعيم
+      const g3 = new cv.Mat(), dx = new cv.Mat(), dy = new cv.Mat(), ax = new cv.Mat(), ay = new cv.Mat()
+      cv.GaussianBlur(gray, g3, new cv.Size(3, 3), 0)
+      cv.Sobel(g3, dx, cv.CV_16S, 1, 0, 3); cv.Sobel(g3, dy, cv.CV_16S, 0, 1, 3)
+      cv.convertScaleAbs(dx, ax); cv.convertScaleAbs(dy, ay)
+      cv.addWeighted(ax, 0.5, ay, 0.5, 0, grad)
+      g3.delete(); dx.delete(); dy.delete(); ax.delete(); ay.delete()
+    }
     // أ) عتبة Otsu: الورقة الفاتحة على خلفية أغمق
     cv.threshold(blur, maskA, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
     clean(maskA)
-    quadsFromMask(cv, maskA, src.cols, src.rows, found)
+    found.tag = 'otsu'; quadsFromMask(cv, maskA, src.cols, src.rows, found, gray, grad)
+    // أ2) مستوى ثانٍ: أفتح منطقة داخل الأفتح (الورقة فوق سطح فاتح/رمادي)
+    const hist = new Array(256).fill(0); const bd = blur.data; for (let i = 0; i < bd.length; i++) hist[bd[i]]++
+    const t0 = otsuHist(hist, 0), t1 = otsuHist(hist, t0 + 1)
+    if (t1 > t0 + 8) { found.tag = 't1=' + t1; const m2 = new cv.Mat(); cv.threshold(blur, m2, t1, 255, cv.THRESH_BINARY); clean(m2); quadsFromMask(cv, m2, src.cols, src.rows, found, gray, grad); m2.delete() }
     // ب) أبيض منخفض التشبّع: يفصل الورقة عن سجاد/خشب ملوّن حتى لو كان فاتحاً
     cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB)
     cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV)
@@ -87,7 +126,7 @@ export function detectQuad(cv, img, maxW = 320) {
     cv.threshold(sat, sLow, 70, 255, cv.THRESH_BINARY_INV)
     cv.bitwise_and(vThr, sLow, maskB)
     clean(maskB)
-    quadsFromMask(cv, maskB, src.cols, src.rows, found)
+    found.tag = 'hsv'; quadsFromMask(cv, maskB, src.cols, src.rows, found, gray, grad)
     ch.delete(); sat.delete(); val.delete(); vBlur.delete(); vThr.delete(); sLow.delete()
     // ج) حواف Canny (احتياط عند فشل ما سبق)
     if (!found.length) {
@@ -95,12 +134,13 @@ export function detectQuad(cv, img, maxW = 320) {
       const m = cv.mean(blur)[0]
       cv.Canny(blur, edges, Math.max(20, 0.66 * m), Math.min(255, Math.max(70, 1.33 * m)))
       cv.dilate(edges, edges, k3); cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, k9)
-      quadsFromMask(cv, edges, src.cols, src.rows, found)
+      quadsFromMask(cv, edges, src.cols, src.rows, found, gray, grad)
       edges.delete(); k3.delete()
     }
-  } finally { src.delete(); gray.delete(); blur.delete(); maskA.delete(); maskB.delete(); rgb.delete(); hsv.delete(); k5.delete(); k9.delete() }
+  } finally { src.delete(); gray.delete(); blur.delete(); maskA.delete(); maskB.delete(); rgb.delete(); hsv.delete(); grad.delete(); k5.delete(); k9.delete() }
   if (!found.length) return null
   found.sort((a, b) => b.area - a.area)
+  detectQuad.last = found.map(f => f.dbg)
   return found[0].q.map(p => ({ x: p.x / scale, y: p.y / scale }))
 }
 

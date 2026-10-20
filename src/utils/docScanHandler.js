@@ -43,8 +43,12 @@ export async function handle(data) {
   if (data.type === 'ping') return { ready: true }
   if (data.type === 'detect') {
     const img = toImageData(data.bitmap)
-    const quad = detectQuad(cv, img, 320)
-    return { quad, metrics: quad ? quality(cv, img, quad) : null }
+    const quad = detectQuad(cv, img, 480)
+    // بدون ورقة مكتشفة نقيس الجودة على منتصف الإطار (الالتقاط لا يتوقف على نجاح الكشف الحي)
+    const W = img.width, H = img.height
+    const metrics = quad ? quality(cv, img, quad)
+      : { ...quality(cv, img, [{ x: W * 0.1, y: H * 0.1 }, { x: W * 0.9, y: H * 0.1 }, { x: W * 0.9, y: H * 0.9 }, { x: W * 0.1, y: H * 0.9 }]), full: false, areaFrac: 0, noQuad: true }
+    return { quad, metrics }
   }
   if (data.type === 'capture') {
     // نختار أوضح لقطة من عدة لقطات متتالية

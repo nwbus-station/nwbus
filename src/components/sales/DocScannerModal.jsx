@@ -21,6 +21,8 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   const stableSinceRef = useRef(0)
   const jumpRef = useRef(0)
   const badSinceRef = useRef(0)
+  const prevTiny = useRef(null)
+  const diffsRef = useRef([])
   const lastFlagsRef = useRef(null)
   const sharpMaxRef = useRef(0)
   const checksKeyRef = useRef('')
@@ -38,6 +40,7 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   const [torch, setTorch] = useState({ supported: false, on: false })
   const [flash, setFlash] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [manualHint, setManualHint] = useState(false)   // بعد 7 ثوانٍ بلا التقاط: نلفت النظر لزر التصوير اليدوي
   const [checks, setChecks] = useState({ found: false, full: false, sharp: false, light: false, steady: false })
   const [cap, setCap] = useState(null)           // { url, w, h } الإطار الملتقط
   const [pts, setPts] = useState(null)           // زوايا الضبط (إحداثيات الإطار الكامل)
@@ -50,7 +53,7 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   const startCamera = useCallback(async () => {
     setError(''); capturedRef.current = false
     targetRef.current = null; shownRef.current = null; stableSinceRef.current = 0; jumpRef.current = 0; lastFlagsRef.current = null
-    setCap(c => { if (c) URL.revokeObjectURL(c.url); return null }); setPts(null); setRot(0)
+    setCap(c => { if (c) URL.revokeObjectURL(c.url); return null }); setPts(null); setRot(0); setManualHint(false)
     setStage('loading')
     stopStream()
     if (!navigator.mediaDevices?.getUserMedia) { setError(isAr ? 'هذا المتصفح لا يدعم الكاميرا المباشرة. استخدم «التقاط بكاميرا الجهاز» أدناه.' : 'This browser has no live camera. Use the capture button below.'); setStage('error'); return }
@@ -136,8 +139,10 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   useEffect(() => {
     if (stage !== 'camera') return
     let alive = true
-    const small = document.createElement('canvas')
-    sharpMaxRef.current = 0
+    const small = document.createElement('canvas'), tiny = Object.assign(document.createElement('canvas'), { width: 40, height: 60 })
+    const startedAt = performance.now()
+    let manualHint = false
+    sharpMaxRef.current = 0; prevTiny.current = null; diffsRef.current = []
     ;(async () => {
       while (alive && !capturedRef.current) {
         const v = videoRef.current
@@ -149,37 +154,42 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
         if (!alive || capturedRef.current) break
         const now = performance.now(), k = v.videoWidth / DET_W
         const q = res?.quad, m = res?.metrics
-        const f = { found: !!q || (targetRef.current && now - lastSeenRef.current < LOST_HOLD_MS), full: false, sharp: false, light: false, steady: false }
-        let why = '', dev = 0
+        // ثبات الجهاز من فرق الإطارات (مستقل عن نجاح كشف الورقة)
+        tiny.getContext('2d').drawImage(small, 0, 0, tiny.width, tiny.height)
+        const px = tiny.getContext('2d').getImageData(0, 0, tiny.width, tiny.height).data
+        let diff = 99
+        if (prevTiny.current) { let sum = 0; for (let i = 0; i < px.length; i += 4) sum += Math.abs(px[i + 1] - prevTiny.current[i + 1]); diff = sum / (px.length / 4) }
+        prevTiny.current = px
+        diffsRef.current = [...diffsRef.current.slice(-2), diff]
+        const frameSteady = diffsRef.current.length >= 3 && diffsRef.current.every(d => d < 5)
+        const f = { found: false, full: false, sharp: false, light: false, steady: frameSteady }
+        let why = ''
         if (q && m) {
           const raw = q.map(p => ({ x: p.x * k, y: p.y * k }))
           const sm = targetRef.current
           if (!sm) { targetRef.current = raw; jumpRef.current = 0 }
           else {
-            dev = avgDist(raw, sm)
+            const dev = avgDist(raw, sm)
             if (dev < v.videoWidth * 0.006) { /* اهتزاز طفيف: نتجاهله */ }
             else if (dev > v.videoWidth * 0.12) { if (++jumpRef.current >= 3) { targetRef.current = raw; jumpRef.current = 0 } }   // قفزة: لا نقبلها إلا إذا تكررت
             else { jumpRef.current = 0; targetRef.current = sm.map((p, i) => ({ x: lerp(p.x, raw[i].x, 0.4), y: lerp(p.y, raw[i].y, 0.4) })) }
           }
           lastSeenRef.current = now
+          f.found = true; f.full = m.full && m.areaFrac >= 0.12
+        } else if (now - lastSeenRef.current > LOST_HOLD_MS) { targetRef.current = null; jumpRef.current = 0 }
+        else f.found = !!targetRef.current
+        if (m) {
           sharpMaxRef.current = Math.max(sharpMaxRef.current * 0.995, m.sharp)
-          f.full = m.full && m.areaFrac >= 0.12
           f.sharp = m.sharp >= 6 && m.sharp >= sharpMaxRef.current * 0.5
-          f.light = m.bright >= 70 && m.glare <= 0.1
-          f.steady = dev < v.videoWidth * 0.015
-          lastFlagsRef.current = { full: f.full, sharp: f.sharp, light: f.light, steady: f.steady }
-          why = !f.full ? (m.full ? (isAr ? 'قرّب الكاميرا من الورقة' : 'Move closer to the page') : (isAr ? 'اجعل الورقة كاملة داخل الإطار' : 'Keep the whole page inside the frame'))
-            : m.bright < 70 ? (isAr ? 'الإضاءة ضعيفة، شغّل الإضاءة أو انتقل لمكان أفتح' : 'Too dark, turn on the light')
-            : m.glare > 0.1 ? (isAr ? 'يوجد انعكاس ضوء، غيّر زاوية الكاميرا' : 'Glare detected, change the angle')
-            : !f.sharp ? (isAr ? 'الصورة غير واضحة، ثبّت الجهاز وانتظر التركيز' : 'Image not sharp, hold steady for focus')
-            : !f.steady ? (isAr ? 'ثبّت الجهاز' : 'Hold steady') : ''
-        } else if (now - lastSeenRef.current <= LOST_HOLD_MS && lastFlagsRef.current) {
-          Object.assign(f, lastFlagsRef.current, { found: true })   // غياب لحظي للكشف: نُبقي آخر حالة بدل التذبذب
-        } else if (now - lastSeenRef.current > LOST_HOLD_MS) {
-          targetRef.current = null; jumpRef.current = 0; lastFlagsRef.current = null
-          why = isAr ? 'لم أجد الورقة. ضعها على سطح بلون مغاير وأظهرها كاملة' : 'Page not found. Use a contrasting surface, fully in view'
+          f.light = m.bright >= 60 && m.glare <= 0.12
+          why = m.bright < 60 ? (isAr ? 'الإضاءة ضعيفة، شغّل الإضاءة أو انتقل لمكان أفتح' : 'Too dark, turn on the light')
+            : m.glare > 0.12 ? (isAr ? 'يوجد انعكاس ضوء، غيّر زاوية الكاميرا' : 'Glare detected, change the angle')
+            : !f.sharp ? (isAr ? 'الصورة غير واضحة، انتظر التركيز' : 'Not sharp yet, wait for focus')
+            : !f.steady ? (isAr ? 'ثبّت الجهاز' : 'Hold steady')
+            : (!f.found ? (isAr ? 'الصورة واضحة (ستحدَّد الحواف بعد التصوير)' : 'Clear (edges are set after capture)') : (!f.full ? (isAr ? 'تأكد أن الورقة كاملة داخل الإطار' : 'Make sure the whole page is in frame') : ''))
         }
-        const good = f.found && f.full && f.sharp && f.light && f.steady
+        // الشروط الحاكمة للتصوير: وضوح + إضاءة + ثبات. اكتشاف الحواف يُضبط بعد التصوير (ويمكن تعديله يدوياً)
+        const good = f.sharp && f.light && f.steady
         // فترة سماح: انقطاع لحظي (<350ms) لا يصفّر العدّاد
         if (good) { badSinceRef.current = 0; if (!stableSinceRef.current) stableSinceRef.current = now }
         else { if (!badSinceRef.current) badSinceRef.current = now; if (now - badSinceRef.current > 350) stableSinceRef.current = 0 }
@@ -188,6 +198,7 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
         const key = `${+f.found}${+f.full}${+f.sharp}${+f.light}${+f.steady}`
         if (key !== checksKeyRef.current) { checksKeyRef.current = key; setChecks(f) }
         setHint(good ? (autoRef.current ? (isAr ? 'البيانات واضحة... جارٍ التصوير' : 'Clear... capturing') : (isAr ? 'جاهز. اضغط زر التصوير' : 'Ready. Press the shutter')) : why)
+        if (!manualHint && now - startedAt > 7000) { manualHint = true; setManualHint(true) }
         if (autoRef.current && held >= STABLE_MS) { capture(); break }
       }
     })()
@@ -328,14 +339,14 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
       <div className="px-4 py-4 text-white">
         {stage === 'camera' && (
           <div className="flex flex-col items-center gap-3">
-            <p className="text-xs text-white/90 text-center min-h-[1.2rem] leading-relaxed">{hint}</p>
+            <p className="text-xs text-white/90 text-center min-h-[1.2rem] leading-relaxed">{manualHint && !checks.steady ? hint : manualHint ? (isAr ? 'إن لم يلتقط تلقائياً اضغط زر التصوير' : 'If it does not capture, press the shutter') : hint}</p>
             <div className="flex items-center gap-1.5 flex-wrap justify-center">
               {[{ k: 'found', l: isAr ? 'الورقة' : 'Page' }, { k: 'full', l: isAr ? 'كاملة' : 'Full' }, { k: 'sharp', l: isAr ? 'واضحة' : 'Sharp' }, { k: 'light', l: isAr ? 'الإضاءة' : 'Light' }, { k: 'steady', l: isAr ? 'ثابتة' : 'Steady' }].map(c => (
                 <span key={c.k} className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${checks[c.k] ? 'bg-emerald-500 text-white' : 'bg-white/15 text-white/70'}`}>{c.l}</span>
               ))}
             </div>
             <div className="w-48 h-1.5 rounded bg-white/20 overflow-hidden"><div ref={progressRef} className="h-full bg-emerald-400" style={{ width: '0%' }} /></div>
-            <button type="button" onClick={capture} aria-label={isAr ? 'التقاط' : 'Capture'} className="w-16 h-16 rounded-full border-4 border-white bg-white/20 active:bg-white/50" />
+            <button type="button" onClick={capture} aria-label={isAr ? 'التقاط' : 'Capture'} className={`w-16 h-16 rounded-full border-4 border-white bg-white/20 active:bg-white/50 ${manualHint ? 'animate-pulse ring-4 ring-emerald-400' : ''}`} />
           </div>
         )}
         {stage === 'crop' && (
