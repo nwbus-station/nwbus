@@ -28,6 +28,7 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   const blobRef = useRef(null)
   const detectedRef = useRef(null)   // الزوايا المكتشفة تلقائياً على الإطار الكامل
   const boxRef = useRef(null)
+  const fileRef = useRef(null)
   const [stage, setStage] = useState('loading') // loading | camera | processing | crop | rendering | review | error
   const [hint, setHint] = useState('')
   const [error, setError] = useState('')
@@ -48,33 +49,54 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
 
   const startCamera = useCallback(async () => {
     setError(''); capturedRef.current = false
-    targetRef.current = null; shownRef.current = null; stableSinceRef.current = 0; jumpRef.current = 0
+    targetRef.current = null; shownRef.current = null; stableSinceRef.current = 0; jumpRef.current = 0; lastFlagsRef.current = null
     setCap(c => { if (c) URL.revokeObjectURL(c.url); return null }); setPts(null); setRot(0)
     setStage('loading')
+    stopStream()
+    if (!navigator.mediaDevices?.getUserMedia) { setError(isAr ? 'هذا المتصفح لا يدعم الكاميرا المباشرة. استخدم «التقاط بكاميرا الجهاز» أدناه.' : 'This browser has no live camera. Use the capture button below.'); setStage('error'); return }
+    // نجرّب قيوداً متدرجة: الأفضل أولاً ثم الأبسط (بعض الأجهزة ترفض القيود المتقدمة)
+    const attempts = [
+      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: 'continuous' }] }, audio: false },
+      { video: { facingMode: { ideal: 'environment' } }, audio: false },
+      { video: true, audio: false },
+    ]
+    let stream = null, lastErr = null
+    for (const c of attempts) {
+      try { stream = await navigator.mediaDevices.getUserMedia(c); break } catch (e) { lastErr = e; if (e.name === 'NotAllowedError' || e.name === 'SecurityError') break }
+    }
+    if (!aliveRef.current) { stream?.getTracks().forEach(t => t.stop()); return }
+    if (!stream) {
+      const n = lastErr?.name || ''
+      setError(n === 'NotAllowedError' || n === 'SecurityError'
+        ? (isAr ? 'لم يُسمح للموقع باستخدام الكاميرا. من إعدادات المتصفح (Safari ← الكاميرا) اسمح للموقع ثم أعد المحاولة.' : 'Camera access was blocked. Allow it in the browser settings and retry.')
+        : n === 'NotReadableError' || n === 'AbortError'
+          ? (isAr ? 'الكاميرا مشغولة بتطبيق آخر أو لم تتحرر بعد. أغلق التطبيقات التي تستخدمها وأعد المحاولة.' : 'The camera is busy in another app. Close it and retry.')
+          : n === 'NotFoundError' ? (isAr ? 'لا توجد كاميرا متاحة على هذا الجهاز.' : 'No camera available on this device.')
+          : (isAr ? 'تعذّر تشغيل الكاميرا.' : 'Could not start the camera.') + (n ? ` (${n})` : ''))
+      setStage('error'); return
+    }
     try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('nocam')
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: 'continuous' }] }, audio: false })
-      if (!aliveRef.current) { stream.getTracks().forEach(t => t.stop()); return }
       streamRef.current = stream
-      setTorch({ supported: !!stream.getVideoTracks()[0]?.getCapabilities?.().torch, on: false })
+      const track = stream.getVideoTracks()[0]
+      track.onended = () => { if (aliveRef.current && !capturedRef.current && streamRef.current === stream) startCamera() }   // قطعها النظام (إشعار/تبديل تطبيق): نعيد التشغيل
+      setTorch({ supported: !!track?.getCapabilities?.().torch, on: false })
       const v = videoRef.current
       v.srcObject = stream
       await v.play()
       setHint(isAr ? 'وجّه الكاميرا نحو الورقة بالكامل' : 'Point the camera at the whole page')
       setStage('camera')
-    } catch (e) {
-      setError(e.message === 'nocam' || e.name === 'NotFoundError'
-        ? (isAr ? 'لا توجد كاميرا متاحة على هذا الجهاز.' : 'No camera available on this device.')
-        : (isAr ? 'تعذّر تشغيل الكاميرا. اسمح للموقع باستخدام الكاميرا من إعدادات المتصفح.' : 'Could not start the camera. Allow camera access in the browser settings.'))
-      setStage('error')
+    } catch {
+      setError(isAr ? 'تعذّر عرض الكاميرا. أعد المحاولة.' : 'Could not show the camera. Retry.'); setStage('error')
     }
-  }, [isAr])
+  }, [isAr, stopStream])
 
   useEffect(() => {
     aliveRef.current = true
     getEngine().warmup()
     startCamera()
-    return () => { aliveRef.current = false; stopStream() }
+    const onVis = () => { if (document.visibilityState === 'visible' && aliveRef.current && !capturedRef.current && streamRef.current && streamRef.current.getVideoTracks()[0]?.readyState === 'ended') startCamera() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { aliveRef.current = false; document.removeEventListener('visibilitychange', onVis); stopStream() }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── الالتقاط: 3 لقطات، المحرك يختار الأوضح ثم تُعرض شاشة ضبط الحواف ──
@@ -211,6 +233,24 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   const onMove = e => { if (!drag) return; const p = toImgCoords(e); setPts(prev => prev.map((q, j) => (j === drag.i ? p : q))) }
   const onUp = () => setDrag(null)
 
+  // احتياط: التقاط بتطبيق كاميرا الجهاز (أو اختيار صورة) ثم الكشف وضبط الحواف تلقائياً
+  async function onFile(file) {
+    if (!file) return
+    capturedRef.current = true; stopStream(); setStage('processing')
+    try {
+      const bmp = await createImageBitmap(file)
+      const k = Math.min(1, 2200 / Math.max(bmp.width, bmp.height))
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k)
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height)
+      const r = await getEngine().capture([await createImageBitmap(c)], null, mode)
+      const W = r.width, H = r.height
+      detectedRef.current = r.quad
+      setCap({ url: URL.createObjectURL(r.preview), w: W, h: H })
+      setPts(r.quad ?? [{ x: W * 0.1, y: H * 0.1 }, { x: W * 0.9, y: H * 0.1 }, { x: W * 0.9, y: H * 0.9 }, { x: W * 0.1, y: H * 0.9 }])
+      setStage('crop')
+    } catch { setError(isAr ? 'تعذّرت قراءة الصورة.' : 'Could not read the image.'); setStage('error') }
+  }
+
   async function renderResult(opts) {
     setBusy(true)
     try { const r = await getEngine().render(opts); if (r) { setBlobUrl(r.blob); return true } } catch { /* تبقى الحالية */ }
@@ -323,7 +363,15 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
             </div>
           </div>
         )}
-        {stage === 'error' && <div className="flex justify-center"><button type="button" onClick={startCamera} className="px-5 py-2.5 rounded-lg bg-white/15 font-bold text-sm">{isAr ? 'إعادة المحاولة' : 'Try again'}</button></div>}
+        {stage === 'error' && (
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex gap-3 justify-center flex-wrap">
+              <button type="button" onClick={startCamera} className="px-5 py-2.5 rounded-lg bg-white/15 font-bold text-sm">{isAr ? 'إعادة المحاولة' : 'Try again'}</button>
+              <button type="button" onClick={() => fileRef.current?.click()} className="px-5 py-2.5 rounded-lg bg-emerald-500 font-bold text-sm">{isAr ? 'التقاط بكاميرا الجهاز' : 'Use device camera'}</button>
+            </div>
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; onFile(f) }} />
       </div>
     </div>
   )
