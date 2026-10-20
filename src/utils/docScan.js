@@ -24,7 +24,7 @@ class ScanEngine {
   warmup() { return this.call({ type: 'ping' }).catch(() => null) }
   detect(bitmap) { return this.call({ type: 'detect', bitmap }, [bitmap]) }   // { quad, metrics }
   capture(bitmaps, hint, mode) { return this.call({ type: 'capture', bitmaps, hint, mode }, bitmaps) }
-  render(mode, crop) { return this.call({ type: 'render', mode, crop }) }
+  render(opts) { return this.call({ type: 'render', ...opts }) }   // { mode, crop, quad?, rot }
 }
 
 export const getEngine = () => (engine ??= new ScanEngine())

@@ -88,7 +88,7 @@ function illumination(cv, m, sigmaFrac) {
 }
 
 // تسوية الورقة + تحسين: mode = 'color' (تباين) أو 'bw' (تسوية الإضاءة ثم أبيض وأسود كالماسح)
-export function warp(cv, img, quad, mode = 'color') {
+export function warp(cv, img, quad, mode = 'color', rot = 0) {
   const src = cv.matFromImageData(img)
   const dst = new cv.Mat()
   try {
@@ -121,6 +121,7 @@ export function warp(cv, img, quad, mode = 'color') {
       cv.cvtColor(out, dst, cv.COLOR_RGB2RGBA)
       rgb.delete(); bg.delete(); out.delete()
     }
+    for (let i = 0; i < (rot % 4 + 4) % 4; i++) { const t = new cv.Mat(); cv.rotate(dst, t, cv.ROTATE_90_CLOCKWISE); t.copyTo(dst); t.delete() }
     return { width: dst.cols, height: dst.rows, data: new Uint8ClampedArray(dst.data) }
   } finally { src.delete(); dst.delete() }
 }

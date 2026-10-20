@@ -29,8 +29,8 @@ function toImageData(bitmap) {
   return d
 }
 
-async function render(cv, state, mode, crop) {
-  const out = warp(cv, state.img, crop ? state.quad : null, mode)
+async function render(cv, state, mode, crop, rot = 0) {
+  const out = warp(cv, state.img, crop ? state.quad : null, mode, rot)
   const c = mkCanvas(out.width, out.height)
   c.getContext('2d').putImageData(new ImageData(out.data, out.width, out.height), 0, 0)
   return { blob: await toBlob(c, 0.88), width: out.width, height: out.height, hasQuad: !!state.quad }
@@ -55,9 +55,19 @@ export async function handle(data) {
       if (s > bestS) { bestS = s; best = img }
     }
     state.img = best
-    state.quad = detectQuad(cv, state.img, 900) ?? data.hint ?? null  // إعادة كشف بدقة أعلى على الإطار الكامل
-    return render(cv, state, data.mode, !!state.quad)
+    state.quad = detectQuad(cv, best, 900) ?? data.hint ?? null  // إعادة كشف بدقة أعلى على الإطار الكامل
+    // معاينة الإطار الكامل لشاشة ضبط الحواف
+    const k = Math.min(1, 1280 / best.width)
+    const pc = mkCanvas(Math.round(best.width * k), Math.round(best.height * k))
+    const full = mkCanvas(best.width, best.height)
+    full.getContext('2d').putImageData(best, 0, 0)
+    pc.getContext('2d').drawImage(full, 0, 0, pc.width, pc.height)
+    return { preview: await toBlob(pc, 0.82), width: best.width, height: best.height, quad: state.quad }
   }
-  if (data.type === 'render') return state.img ? render(cv, state, data.mode, data.crop) : null
+  if (data.type === 'render') {
+    if (!state.img) return null
+    if (data.quad) state.quad = data.quad
+    return render(cv, state, data.mode, !!data.crop && !!state.quad, data.rot || 0)
+  }
   return null
 }
