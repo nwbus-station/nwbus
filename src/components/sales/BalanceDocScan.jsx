@@ -31,6 +31,13 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled }) {
   const [localUrl, setLocalUrl] = useState('')
   const [scanning, setScanning] = useState(false)
 
+  // تسخين الماسح بالخلفية (تحميل OpenCV مرة واحدة) ليفتح فورياً عند الضغط
+  useEffect(() => {
+    if (disabled) return
+    const t = setTimeout(() => { import('../../utils/docScan').then(m => m.getEngine().warmup()).catch(() => {}) }, 1200)
+    return () => clearTimeout(t)
+  }, [disabled])
+
   useEffect(() => {
     let off = false
     setPreview('')

@@ -18,6 +18,7 @@ const emitVersion = () => ({
 })
 
 export default defineConfig({
+  worker: { format: 'es' }, // ماسح المستندات يعمل داخل Worker
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
