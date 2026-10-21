@@ -17,6 +17,7 @@ import { usePresence } from '../lib/presence'
 import { leaveRemaining } from '../utils/leaveBalance'
 import SelectField from '../components/shared/SelectField'
 import { brandHeader, brandLogo, previewBar, PAPER_CSS } from '../utils/printDoc'
+import ShiftSupervisorsReport from '../components/users/ShiftSupervisorsReport'
 const XL_GREEN = 'FF15803D', XL_RED = 'FFB91C1C'
 
 function RatingActivationAdmin({ userId, isAr }) {
@@ -2172,6 +2173,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
 function UsersPageFull() {
   const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds } = useAuth()
   const canManageAccounts = isGeneralAdmin && allowCap('users_manage')
+  const [showSupReport, setShowSupReport] = useState(false)
   const scopedIds = grantCap('scope_assigned_stations') && supervisedStationIds?.length ? supervisedStationIds : null
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -2686,6 +2688,12 @@ function UsersPageFull() {
                 : `🖨 ${isAr ? 'طباعة / PDF' : 'Print / PDF'}`}
           </button>}
           {isGeneralAdmin && (
+            <button onClick={() => setShowSupReport(true)}
+              className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap">
+              {isAr ? 'تقرير مشرفي الورديات' : 'Shift supervisors report'}
+            </button>
+          )}
+          {isGeneralAdmin && (
             <button onClick={() => setShowTitles(true)}
               className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors whitespace-nowrap">
               {isAr ? 'إدارة الصلاحيات' : 'Permissions'}
@@ -3032,6 +3040,7 @@ function UsersPageFull() {
         />
       )}
 
+      {showSupReport && <ShiftSupervisorsReport onClose={() => setShowSupReport(false)} />}
       {confirmDlg && (
         <ConfirmDialog
           message={confirmDlg.message}
