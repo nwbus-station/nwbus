@@ -1209,9 +1209,8 @@ export default function EvaluationPage() {
               <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
                 <span style={{ width:7, height:7, borderRadius:'50%', background:'#1C2B4A', flexShrink:0 }} />
                 <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>
-                  {isEvalAdmin
-                    ? <>{filteredEmployees.filter(e => computeFinalScore(empEvals.filter(x => x.employee_id === e.id)).complete).length} {isAr ? 'مكتمل التقييم من' : 'Fully evaluated of'} {filteredEmployees.length}</>
-                    : <>{filteredEmployees.filter(e => empEvals.find(ev => ev.employee_id === e.id)).length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {filteredEmployees.length}</>}
+                  <>{filteredEmployees.filter(e => empEvals.find(ev => ev.employee_id === e.id)).length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {filteredEmployees.length}
+                    {isEvalAdmin && <span style={{ color: 'var(--text-3)', fontWeight: 600 }}> · {filteredEmployees.filter(e => computeFinalScore(empEvals.filter(x => x.employee_id === e.id)).complete).length} {isAr ? 'مكتمل (3 من 3)' : 'complete (3 of 3)'}</span>}</>
                 </span>
               </div>
             </div>
@@ -1397,9 +1396,8 @@ export default function EvaluationPage() {
               <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:20, background:'var(--card)', border:'1px solid var(--border)' }}>
                 <span style={{ width:7, height:7, borderRadius:'50%', background:'#1C2B4A', flexShrink:0 }} />
                 <span style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-1)', fontFamily:MONO }}>
-                  {isEvalAdmin
-                    ? <>{supervisors.filter(s => computeSupFinalScore(s.role, supEvals.filter(x => x.supervisor_id === s.id)).complete).length} {isAr ? 'مكتمل التقييم من' : 'Fully evaluated of'} {supervisors.length}</>
-                    : <>{supervisors.filter(s => supEvals.find(ev => ev.supervisor_id === s.id)).length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {supervisors.length}</>}
+                  <>{supervisors.filter(s => supEvals.find(ev => ev.supervisor_id === s.id)).length} {isAr ? 'مُقيَّم من' : 'Evaluated of'} {supervisors.length}
+                    {isEvalAdmin && <span style={{ color: 'var(--text-3)', fontWeight: 600 }}> · {supervisors.filter(s => computeSupFinalScore(s.role, supEvals.filter(x => x.supervisor_id === s.id)).complete).length} {isAr ? 'مكتمل' : 'complete'}</span>}</>
                 </span>
               </div>
             </div>
