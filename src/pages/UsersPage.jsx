@@ -2174,6 +2174,18 @@ function UsersPageFull() {
   const { profile, isGeneralAdmin, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds } = useAuth()
   const canManageAccounts = isGeneralAdmin && allowCap('users_manage')
   const [showSupReport, setShowSupReport] = useState(false)
+  useEffect(() => {
+    if (!isGeneralAdmin) return
+    ;(async () => {
+      const all = []
+      for (let from = 0; ; from += 1000) {
+        const { data } = await supabase.from('shift_supervisor_assignments').select('supervisor_id, employee_id').range(from, from + 999)
+        all.push(...(data ?? []))
+        if ((data ?? []).length < 1000) break
+      }
+      setShiftAssign(all)
+    })()
+  }, [isGeneralAdmin, showSupReport])
   const scopedIds = grantCap('scope_assigned_stations') && supervisedStationIds?.length ? supervisedStationIds : null
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -2217,6 +2229,8 @@ function UsersPageFull() {
   const [moduleFilter,  setModuleFilter]  = useState('')
   const [moduleFilterExclude, setModuleFilterExclude] = useState(false) // true = "ما عندهم القسم"
   const [supervisorFilter, setSupervisorFilter] = useState('')
+  const [shiftSupFilter, setShiftSupFilter] = useState('')        // مشرف وردية (من الإسناد) | '__none__' بلا مشرف وردية
+  const [shiftAssign, setShiftAssign] = useState([])              // [{supervisor_id, employee_id}] للأدمن
   const [leaveFilter, setLeaveFilter] = useState('') // '' | 'zero' | 'low' | 'ok'
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [printingRoster, setPrintingRoster] = useState(false)
@@ -2402,6 +2416,17 @@ function UsersPageFull() {
   })
   const shiftSupervisors = users.filter(u => u.role === 'shift_supervisor')
 
+  // مشرفو الورديات بحسب الإسناد (موظف ← مشرفوه) وقائمة المشرفين بأعداد موظفيهم لفلتر «مشرف الوردية»
+  const shiftSupsOf = new Map()
+  const shiftEmpCount = new Map()
+  for (const a of shiftAssign) {
+    if (!shiftSupsOf.has(a.employee_id)) shiftSupsOf.set(a.employee_id, [])
+    shiftSupsOf.get(a.employee_id).push(a.supervisor_id)
+    shiftEmpCount.set(a.supervisor_id, (shiftEmpCount.get(a.supervisor_id) ?? 0) + 1)
+  }
+  const shiftSupOptions = users.filter(u => u.role === 'shift_supervisor' || shiftEmpCount.has(u.id))
+    .sort((a, b) => (a.full_name_ar || '').localeCompare(b.full_name_ar || '', 'ar'))
+
   // كل الفلاتر إلا فلتر المحطة — نحتاجها لوحدها عشان منتقي محطات الطباعة (متعدد) يشتغل
   // فوق نفس الفلاتر الظاهرة بدون ما يتقيّد بفلتر المحطة الأحادي بأعلى الصفحة
   function matchesNonStationFilters(u) {
@@ -2417,20 +2442,21 @@ function UsersPageFull() {
     const hasModule    = !moduleFilter || u.allowed_modules === null || (u.allowed_modules ?? []).includes(moduleFilter)
     const matchModule  = !moduleFilter || (moduleFilterExclude ? !hasModule : hasModule)
     const matchSupervisor = !supervisorFilter || u.supervisor_id === supervisorFilter
+    const matchShiftSup = !shiftSupFilter || (shiftSupFilter === '__none__' ? (u.role === 'station_employee' && !shiftSupsOf.has(u.id)) : shiftSupsOf.get(u.id)?.some(x => x === shiftSupFilter))
     const matchLeave = !leaveFilter || (
       leaveFilter === 'zero' ? (u.leaveRemaining ?? 0) <= 0 :
       leaveFilter === 'low'  ? (u.leaveRemaining ?? 0) > 0 && u.leaveRemaining < 7 :
       leaveFilter === 'ok'   ? (u.leaveRemaining ?? 0) >= 7 : true
     )
     const matchKind = listKind === 'agents' ? !!u.is_agent : !u.is_agent
-    return matchKind && matchSearch && matchRole && matchStatus && matchOnline && matchJob && matchModule && matchSupervisor && matchLeave
+    return matchKind && matchSearch && matchRole && matchStatus && matchOnline && matchJob && matchModule && matchSupervisor && matchShiftSup && matchLeave
   }
   const agentCount = users.filter(u => u.is_agent).length
   const staffCount = users.length - agentCount
 
   const filtered = users.filter(u => matchesNonStationFilters(u) && (!stationFilter || u.station_id === stationFilter))
 
-  const activeFilters = [roleFilter, stationFilter, statusFilter, onlineFilter, jobFilter, moduleFilter, supervisorFilter, leaveFilter].filter(Boolean).length
+  const activeFilters = [roleFilter, stationFilter, statusFilter, onlineFilter, jobFilter, moduleFilter, supervisorFilter, shiftSupFilter, leaveFilter].filter(Boolean).length
 
   // أولوية الطباعة/التصدير: موظفين محددين يدوياً (مربعات التحديد) > محطات مختارة من
   // منتقي محطات الطباعة (متعدد) > كل اللي ظاهر بعد الفلاتر الحالية كما كان
@@ -2830,6 +2856,19 @@ function UsersPageFull() {
             ))}
           </SelectField>
 
+          {/* مشرف الوردية: الموظفون المُسندون له (من «موظفو المشرف») أو من بلا مشرف وردية */}
+          {isGeneralAdmin && (
+            <SelectField value={shiftSupFilter} onChange={e => setShiftSupFilter(e.target.value)}
+              className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
+              style={{ fontFamily: 'inherit' }}>
+              <option value="">{isAr ? 'مشرف الوردية (تصفية)' : 'Shift supervisor'}</option>
+              <option value="__none__">{isAr ? 'بلا مشرف وردية' : 'No shift supervisor'}</option>
+              {shiftSupOptions.map(s => (
+                <option key={s.id} value={s.id}>{s.full_name_ar} ({shiftEmpCount.get(s.id) ?? 0})</option>
+              ))}
+            </SelectField>
+          )}
+
           {/* Leave balance */}
           <SelectField value={leaveFilter} onChange={e => setLeaveFilter(e.target.value)}
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
@@ -2844,7 +2883,7 @@ function UsersPageFull() {
 
           {/* Clear all */}
           {activeFilters > 0 && (
-            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setOnlineFilter(''); setJobFilter(''); setModuleFilter(''); setModuleFilterExclude(false); setSupervisorFilter(''); setLeaveFilter('') }}
+            <button onClick={() => { setRoleFilter(''); setStationFilter(''); setStatusFilter(''); setOnlineFilter(''); setJobFilter(''); setModuleFilter(''); setModuleFilterExclude(false); setSupervisorFilter(''); setShiftSupFilter(''); setLeaveFilter('') }}
               className="px-3 py-1.5 rounded-lg text-xs bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors font-medium">
               {isAr ? `مسح الفلاتر (${activeFilters})` : `Clear (${activeFilters})`}
             </button>
@@ -2972,6 +3011,7 @@ function UsersPageFull() {
                   <td className="px-4 py-3 text-xs text-gray-500">
                     <p className="text-gray-700">{u.station ? (isAr ? u.station.name_ar : u.station.name_en) : '—'}</p>
                     {supervisorName && <p className="text-gray-400 mt-0.5">{isAr ? 'يشرف عليه: ' : 'Supervised by: '}{supervisorName}</p>}
+                    {isGeneralAdmin && shiftSupsOf.has(u.id) && <p className="text-gray-400 mt-0.5">{isAr ? 'مشرف الوردية: ' : 'Shift supervisor: '}{shiftSupsOf.get(u.id).map(id => users.find(x => x.id === id)?.full_name_ar).filter(Boolean).join('، ')}</p>}
                   </td>
                   <td className="px-4 py-3">
                     {u.allowed_modules === null ? (
