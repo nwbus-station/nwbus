@@ -244,22 +244,30 @@ export default function ShiftSupervisorsReport({ onClose }) {
                 {alertCount === 0 && <p className="text-center text-green-700 py-10">لا توجد تنبيهات. كل مشرف له موظفون فعّالون وغير مكرّرين.</p>}
                 {model.stale.length > 0 && (
                   <div className="bg-white border border-red-200 rounded-lg p-4">
-                    <p className="text-sm font-bold text-gray-800">حسابات لم تعد مشرفي ورديات وما زال لها موظفون ({model.stale.length})</p>
-                    <p className="text-xs text-gray-500 mt-0.5 mb-2">صلاحية الحساب الآن ليست «مشرف وردية»، فإسناداتهم قديمة ويُنصح بإزالتها.</p>
+                    <p className="text-sm font-bold text-gray-800">حساب لم يعد مشرف وردية وما زال له موظفون ({model.stale.length})</p>
+                    <p className="text-xs text-gray-500 mt-0.5 mb-2"><b className="text-gray-800">المشكلة:</b> صلاحية الحساب الآن ليست «مشرف وردية»، لكن موظفيه القدامى ما زالوا مُسندين له.</p>
                     <ul className="text-sm text-gray-700 space-y-1 list-disc ps-5">{model.stale.map(s => <li key={s.id}>{s.full_name_ar} — {s.emps.length} موظف</li>)}</ul>
                     <button type="button" onClick={() => setConfirmClean(true)} className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold">إزالة إسناداتهم ({model.stale.reduce((n, s) => n + s.emps.length, 0)})</button>
                   </div>
                 )}
                 {[
-                  { t: 'مشرفون فعّالون بلا موظفين', d: 'لن يصلهم موظفون لتقييمهم.', list: model.emptySups.map(s => `${s.full_name_ar} (${stationName(s)})`) },
-                  { t: 'مشرفون معطّلون ما زال لهم موظفون', d: 'يلزم نقل موظفيهم لمشرف فعّال.', list: model.inactiveSupWithEmps.map(s => `${s.full_name_ar} — ${s.emps.length} موظف`) },
-                  { t: 'موظفون مُسندون لأكثر من مشرف', d: 'قد يتكرر تقييمهم عند أكثر من مشرف. (الموافقة على الإجازات تكون للمسؤول المباشر فقط).', list: model.multi.map(m => `${m.emp.full_name_ar} ← ${m.sups.map(s => s.full_name_ar).join('، ')}`) },
-                  { t: 'موظفون معطّلون ما زالوا مُسندين', d: 'تُزال أسماؤهم من قوائم المشرفين.', list: model.inactiveAssigned.map(m => `${m.emp.full_name_ar} ← ${m.sups.map(s => s.full_name_ar).join('، ')}`) },
+                  { t: 'موظف عند أكثر من مشرف وردية', bad: 'نفس الموظف مُسند لمشرفَي وردية أو أكثر، فيصل تقييمه للجميع.', fix: 'اترك الموظف عند مشرف واحد وأزله من الآخرين (من تعديل حساب المشرف ← موظفو المشرف). وإن كان مقصوداً فتجاهل التنبيه.', list: model.multi.map(m => ({ a: m.emp.full_name_ar, b: `عند: ${m.sups.map(s => s.full_name_ar).join(' و ')}` })) },
+                  { t: 'مشرف وردية بلا موظفين', bad: 'مشرف فعّال لم تُسند له أي موظف، فلن يصله شيء ليقيّمه.', fix: 'أسند له موظفيه من تعديل حسابه ← موظفو المشرف.', list: model.emptySups.map(s => ({ a: s.full_name_ar, b: stationName(s) })) },
+                  { t: 'مشرف معطّل وما زال له موظفون', bad: 'حساب المشرف معطّل لكن موظفيه ما زالوا مُسندين له، فلا أحد يقيّمهم.', fix: 'انقل موظفيه إلى مشرف فعّال.', list: model.inactiveSupWithEmps.map(s => ({ a: s.full_name_ar, b: `${s.emps.length} موظف` })) },
+                  { t: 'موظف معطّل وما زال مُسنداً', bad: 'موظف أُوقف حسابه لكنه ما زال في قائمة مشرف.', fix: 'أزله من قائمة المشرف.', list: model.inactiveAssigned.map(m => ({ a: m.emp.full_name_ar, b: `عند: ${m.sups.map(s => s.full_name_ar).join(' و ')}` })) },
                 ].filter(g => g.list.length).map(g => (
                   <div key={g.t} className="bg-white border border-amber-200 rounded-lg p-4">
-                    <p className="text-sm font-bold text-gray-800">{g.t} ({g.list.length})</p>
-                    <p className="text-xs text-gray-500 mt-0.5 mb-2">{g.d}</p>
-                    <ul className="text-sm text-gray-700 space-y-1 list-disc ps-5">{g.list.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                    <p className="text-sm font-bold text-gray-800">{g.t} <span className="text-amber-700">({g.list.length})</span></p>
+                    <p className="text-xs text-gray-600 mt-1.5"><b className="text-gray-800">المشكلة:</b> {g.bad}</p>
+                    <p className="text-xs text-gray-600 mt-1 mb-3"><b className="text-gray-800">الحل:</b> {g.fix}</p>
+                    <div className="border border-gray-200 rounded divide-y divide-gray-100">
+                      {g.list.map((x, i) => (
+                        <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                          <span className="font-semibold text-gray-800">{x.a}</span>
+                          <span className="text-gray-500 text-xs text-end">{x.b}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
