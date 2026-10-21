@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { matchesSearch } from '../../utils/digits'
 import StatStrip from '../shared/StatStrip'
+import ConfirmDialog from '../shared/ConfirmDialog'
 import SelectField from '../shared/SelectField'
 import { docHeader, docShell, openDocWindow, esc } from '../../utils/printDoc'
 
@@ -35,6 +36,7 @@ export default function ShiftSupervisorsReport({ onClose }) {
   const [emptyOnly, setEmptyOnly] = useState(false)
   const [open, setOpen] = useState({})       // { supervisorId: bool }
   const [exporting, setExporting] = useState(false)
+  const [confirmClean, setConfirmClean] = useState(false)
 
   useEffect(() => {
     let off = false
@@ -72,13 +74,14 @@ export default function ShiftSupervisorsReport({ onClose }) {
 
     const assignedIds = new Set(supsOf.keys())
     const multi = [...supsOf.entries()].filter(([, s]) => s.length > 1).map(([id, s]) => ({ emp: byId.get(id), sups: s }))
+    const stale = sups.filter(s => s.emps.length && s.role !== 'shift_supervisor' && !(s.custom_title_id && assignedTitleIds.has(s.custom_title_id)))   // لم يعودوا مشرفي ورديات
     const emptySups = sups.filter(s => s.is_active && !s.emps.length)
     const inactiveSupWithEmps = sups.filter(s => !s.is_active && s.emps.length)
     const inactiveAssigned = [...supsOf.entries()].filter(([id]) => byId.get(id)?.is_active === false).map(([id, s]) => ({ emp: byId.get(id), sups: s }))
     // موظفو محطات فيها مشرف وردية فعّال لكنهم غير مُسندين لأي مشرف
     const stationsWithSup = new Set(sups.filter(s => s.is_active && s.station_id).map(s => s.station_id))
     const gap = users.filter(u => u.is_active && u.role === 'station_employee' && !isSup(u) && !assignedIds.has(u.id) && stationsWithSup.has(u.station_id))
-    return { sups, multi, emptySups, inactiveSupWithEmps, inactiveAssigned, gap, assignedCount: assignedIds.size }
+    return { sups, stale, multi, emptySups, inactiveSupWithEmps, inactiveAssigned, gap, assignedCount: assignedIds.size }
   }, [users, assignments, titles])
 
   const stations = useMemo(() => {
@@ -93,7 +96,7 @@ export default function ShiftSupervisorsReport({ onClose }) {
     if (!q.trim()) return true
     return matchesSearch(s.full_name_ar, q) || matchesSearch(s.job_number, q) || s.emps.some(e => matchesSearch(e.full_name_ar, q) || matchesSearch(e.job_number, q))
   })
-  const alertCount = model.emptySups.length + model.multi.length + model.inactiveSupWithEmps.length + model.inactiveAssigned.length
+  const alertCount = model.stale.length + model.emptySups.length + model.multi.length + model.inactiveSupWithEmps.length + model.inactiveAssigned.length
   const today = new Date().toLocaleDateString('ar-SA-u-ca-gregory-nu-latn', { timeZone: 'Asia/Riyadh', day: 'numeric', month: 'long', year: 'numeric' })
 
   const flatRows = () => {
@@ -107,6 +110,14 @@ export default function ShiftSupervisorsReport({ onClose }) {
       }
     }
     return rows
+  }
+
+  async function cleanStale() {
+    setConfirmClean(false)
+    const ids = model.stale.map(s => s.id)
+    const { error } = await supabase.from('shift_supervisor_assignments').delete().in('supervisor_id', ids)
+    if (error) { alert('تعذّرت الإزالة: ' + error.message); return }
+    setAssignments(prev => prev.filter(a => !ids.includes(a.supervisor_id)))
   }
 
   async function exportExcel() {
@@ -196,6 +207,7 @@ export default function ShiftSupervisorsReport({ onClose }) {
                           <p className="text-xs text-gray-500 mt-0.5"><span className="font-mono">#{s.job_number || '—'}</span> · {stationName(s)}</p>
                         </div>
                         {badge(s.is_active)}
+                        {model.stale.some(x => x.id === s.id) && chip('لم يعد مشرفاً', 'text-red-700 bg-red-50 border-red-200')}
                         {s.emps.length ? chip(`${s.emps.length} موظف`, 'text-nwbus-primary bg-blue-50 border-blue-200') : chip('بلا موظفين', 'text-amber-700 bg-amber-50 border-amber-200')}
                         <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
                       </button>
@@ -230,6 +242,14 @@ export default function ShiftSupervisorsReport({ onClose }) {
             {tab === 'alerts' && (
               <div className="space-y-3">
                 {alertCount === 0 && <p className="text-center text-green-700 py-10">لا توجد تنبيهات. كل مشرف له موظفون فعّالون وغير مكرّرين.</p>}
+                {model.stale.length > 0 && (
+                  <div className="bg-white border border-red-200 rounded-lg p-4">
+                    <p className="text-sm font-bold text-gray-800">حسابات لم تعد مشرفي ورديات وما زال لها موظفون ({model.stale.length})</p>
+                    <p className="text-xs text-gray-500 mt-0.5 mb-2">صلاحية الحساب الآن ليست «مشرف وردية»، فإسناداتهم قديمة ويُنصح بإزالتها.</p>
+                    <ul className="text-sm text-gray-700 space-y-1 list-disc ps-5">{model.stale.map(s => <li key={s.id}>{s.full_name_ar} — {s.emps.length} موظف</li>)}</ul>
+                    <button type="button" onClick={() => setConfirmClean(true)} className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold">إزالة إسناداتهم ({model.stale.reduce((n, s) => n + s.emps.length, 0)})</button>
+                  </div>
+                )}
                 {[
                   { t: 'مشرفون فعّالون بلا موظفين', d: 'لن يصلهم موظفون لتقييمهم أو للموافقة على إجازاتهم.', list: model.emptySups.map(s => `${s.full_name_ar} (${stationName(s)})`) },
                   { t: 'مشرفون معطّلون ما زال لهم موظفون', d: 'يلزم نقل موظفيهم لمشرف فعّال.', list: model.inactiveSupWithEmps.map(s => `${s.full_name_ar} — ${s.emps.length} موظف`) },
@@ -263,6 +283,7 @@ export default function ShiftSupervisorsReport({ onClose }) {
           </>
         )}
       </div>
+      {confirmClean && <ConfirmDialog message={`إزالة كل الموظفين المُسندين لـ ${model.stale.length} حساب لم يعودوا مشرفي ورديات؟`} confirmLabel="إزالة" cancelLabel="إلغاء" onConfirm={cleanStale} onCancel={() => setConfirmClean(false)} />}
     </div>
   )
 }

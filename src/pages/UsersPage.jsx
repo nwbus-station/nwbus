@@ -104,6 +104,7 @@ function AssignedEmployeesPicker({ userId, isAr }) {
   const [results, setResults] = useState([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [confirm, setConfirm] = useState(null)   // { all: bool, empId? }
 
   const loadAssigned = useCallback(async () => {
     const { data: asg, error } = await supabase.from('shift_supervisor_assignments').select('employee_id').eq('supervisor_id', userId)
@@ -136,8 +137,14 @@ function AssignedEmployeesPicker({ userId, isAr }) {
     setQ('')
     loadAssigned()
   }
+  async function removeAll() {
+    setConfirm(null); setBusy(true); setErr('')
+    const { error } = await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId)
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setAssigned([])
+  }
   async function remove(empId) {
-    if (!window.confirm('إزالة هذا الموظف من القائمة؟')) return
     setBusy(true); setErr('')
     const { error } = await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId).eq('employee_id', empId)
     setBusy(false)
@@ -147,9 +154,12 @@ function AssignedEmployeesPicker({ userId, isAr }) {
 
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 mt-2">
-      <p className="text-xs font-semibold text-gray-600 mb-2">
-        {isAr ? `الموظفون اللي يقيّمهم ويوافق على إجازاتهم (${assigned.length})` : `Employees he evaluates & approves leaves for (${assigned.length})`}
-      </p>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-xs font-semibold text-gray-600">
+          {isAr ? `الموظفون اللي يقيّمهم ويوافق على إجازاتهم (${assigned.length})` : `Employees he evaluates & approves leaves for (${assigned.length})`}
+        </p>
+        {assigned.length > 0 && <button type="button" disabled={busy} onClick={() => setConfirm({ all: true })} className="text-[11px] text-red-600 font-semibold hover:underline">{isAr ? `إزالة الكل (${assigned.length})` : `Remove all (${assigned.length})`}</button>}
+      </div>
       <input value={q} onChange={e => setQ(e.target.value)}
         placeholder={isAr ? 'ابحث بالاسم أو الرقم الوظيفي...' : 'Search by name or job number...'}
         className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
@@ -173,12 +183,18 @@ function AssignedEmployeesPicker({ userId, isAr }) {
             <span key={a.id} className="inline-flex items-center gap-1.5 bg-white border rounded-full px-2.5 py-1 text-xs">
               <span className="font-semibold text-gray-800">{a.full_name_ar}</span>
               {a.job_number && <span className="text-gray-400 font-mono">{a.job_number}</span>}
-              <button type="button" disabled={busy} onClick={() => remove(a.id)} className="text-gray-400 hover:text-red-500">×</button>
+              <button type="button" disabled={busy} onClick={() => setConfirm({ all: false, empId: a.id })} className="text-gray-400 hover:text-red-500">×</button>
             </span>
           ))}
       </div>
       {err && <p className="text-xs text-red-600 mt-2">{err}</p>}
       <p className="text-[10px] text-gray-400 mt-2">{isAr ? 'بدون تحديد، ما يقيّم ولا يوافق على إجازة أي موظف.' : 'With none selected he evaluates / approves nobody.'}</p>
+      {confirm && (
+        <ConfirmDialog
+          message={confirm.all ? (isAr ? `إزالة كل الموظفين المُسندين لهذا الحساب (${assigned.length})؟` : `Remove all ${assigned.length} assigned employees?`) : (isAr ? 'إزالة هذا الموظف من القائمة؟' : 'Remove this employee from the list?')}
+          confirmLabel={isAr ? 'إزالة' : 'Remove'} cancelLabel={isAr ? 'إلغاء' : 'Cancel'}
+          onConfirm={() => { const c = confirm; setConfirm(null); c.all ? removeAll() : remove(c.empId) }} onCancel={() => setConfirm(null)} />
+      )}
     </div>
   )
 }
@@ -189,6 +205,7 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [confirm, setConfirm] = useState(null)   // { all: bool, empId? }
 
   useEffect(() => {
     if (!stationId) { setEmployees([]); setLoading(false); return }
@@ -206,9 +223,29 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
     })
   }, [userId, stationId])
 
-  async function toggle(empId) {
+  function toggle(empId) {
+    if (assigned.has(empId)) setConfirm({ all: false, empId })   // الإزالة تطلب تأكيداً داخل التطبيق
+    else doToggle(empId)
+  }
+  async function removeAll() {
+    setConfirm(null); setBusy(true); setErr('')
+    const { error } = await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId)
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setAssigned(new Set())
+  }
+  async function selectAll() {
+    setBusy(true); setErr('')
+    const rows = employees.filter(e => !assigned.has(e.id)).map(e => ({ supervisor_id: userId, employee_id: e.id }))
+    if (rows.length) {
+      const { error } = await supabase.from('shift_supervisor_assignments').insert(rows)
+      if (error) { setErr(error.message); setBusy(false); return }
+      setAssigned(prev => new Set([...prev, ...rows.map(r => r.employee_id)]))
+    }
+    setBusy(false)
+  }
+  async function doToggle(empId) {
     const has = assigned.has(empId)
-    if (has && !window.confirm('إزالة هذا الموظف من القائمة؟')) return
     setBusy(true); setErr('')
     const { error } = has
       ? await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', userId).eq('employee_id', empId)
@@ -228,9 +265,15 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
 
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 mt-2">
-      <p className="text-xs font-semibold text-gray-600 mb-2">
-        {isAr ? `الموظفون اللي يقيّمهم (${assigned.size} محدد)` : `Employees they evaluate (${assigned.size} selected)`}
-      </p>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-xs font-semibold text-gray-600">
+          {isAr ? `الموظفون اللي يقيّمهم (${assigned.size} محدد)` : `Employees they evaluate (${assigned.size} selected)`}
+        </p>
+        <div className="flex gap-3 text-[11px]">
+          {employees.length > 0 && assigned.size < employees.length && <button type="button" disabled={busy} onClick={selectAll} className="text-nwbus-primary font-semibold hover:underline">{isAr ? 'تحديد الكل' : 'Select all'}</button>}
+          {assigned.size > 0 && <button type="button" disabled={busy} onClick={() => setConfirm({ all: true })} className="text-red-600 font-semibold hover:underline">{isAr ? `إزالة الكل (${assigned.size})` : `Remove all (${assigned.size})`}</button>}
+        </div>
+      </div>
       {loading ? (
         <p className="text-xs text-gray-400">{isAr ? 'جارٍ التحميل…' : 'Loading…'}</p>
       ) : employees.length === 0 ? (
@@ -247,6 +290,12 @@ function ShiftSupervisorAssignments({ userId, stationId, isAr }) {
       )}
       {err && <p className="text-xs text-red-600 mt-2">{err}</p>}
       <p className="text-[10px] text-gray-400 mt-2">{isAr ? 'بدون تحديد، المشرف ما يقدر يقيّم أي موظف' : 'Without selection, this supervisor cannot evaluate any employee'}</p>
+      {confirm && (
+        <ConfirmDialog
+          message={confirm.all ? (isAr ? `إزالة كل الموظفين المُسندين لهذا الحساب (${assigned.size})؟` : `Remove all ${assigned.size} assigned employees?`) : (isAr ? 'إزالة هذا الموظف من القائمة؟' : 'Remove this employee from the list?')}
+          confirmLabel={isAr ? 'إزالة' : 'Remove'} cancelLabel={isAr ? 'إلغاء' : 'Cancel'}
+          onConfirm={() => { const c = confirm; setConfirm(null); c.all ? removeAll() : doToggle(c.empId) }} onCancel={() => setConfirm(null)} />
+      )}
     </div>
   )
 }
@@ -1435,6 +1484,10 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
           p_is_agent:        !!form.is_agent,
         })
         if (updErr) throw updErr
+        // لم يعد مشرف وردية (ولا مسمى يسمح بالإسناد): تُحذف الموظفون المُسندون له تلقائياً
+        if (isGeneralAdmin && user?.role === 'shift_supervisor' && form.role !== 'shift_supervisor' && !(selectedTitle?.permissions?.assigned_evaluate || selectedTitle?.permissions?.assigned_leaves)) {
+          await supabase.from('shift_supervisor_assignments').delete().eq('supervisor_id', user.id)
+        }
         if (form.role === 'station_admin' || form.role === 'area_supervisor' || isMultiStationRole) await syncStations(user.id)
         else if (isGeneralAdmin) await syncExtras(user.id)
 
@@ -1822,6 +1875,9 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
                     </optgroup>
                   )}
                 </SelectField>
+                {form.role === 'shift_supervisor' && !form.custom_title_id && form.job_title && form.job_title !== 'shift_supervisor' && (
+                  <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">{isAr ? 'الصلاحية الحالية «مشرف وردية» رغم أن المسمى الوظيفي مختلف. إن لم يعد مشرفاً غيّر «الصلاحية» من هنا، وعند الحفظ يُزال موظفوه المُسندون تلقائياً.' : 'Role is still Shift Supervisor although the job title differs. Change the role here if he is no longer one; assigned employees are removed on save.'}</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'اللغة' : 'Language'}</label>
