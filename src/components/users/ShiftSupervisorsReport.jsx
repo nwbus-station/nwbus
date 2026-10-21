@@ -160,7 +160,7 @@ export default function ShiftSupervisorsReport({ onClose }) {
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-bold text-gray-800">تقرير مشرفي الورديات</h2>
-          <p className="text-xs text-gray-500">الموظفون المُسندون لكل مشرف وردية، مع تنبيهات الجودة والتغطية</p>
+          <p className="text-xs text-gray-500">الموظفون الذين يقيّمهم كل مشرف وردية، مع تنبيهات الجودة والتغطية</p>
         </div>
         <button type="button" onClick={exportExcel} disabled={loading || exporting || !shownSups.length} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40">{exporting ? 'جارٍ التصدير...' : 'تصدير Excel'}</button>
         <button type="button" onClick={printReport} disabled={loading || !shownSups.length} className="px-4 py-2 bg-nwbus-primary text-white rounded-lg text-sm font-semibold disabled:opacity-40">طباعة / PDF</button>
@@ -251,9 +251,9 @@ export default function ShiftSupervisorsReport({ onClose }) {
                   </div>
                 )}
                 {[
-                  { t: 'مشرفون فعّالون بلا موظفين', d: 'لن يصلهم موظفون لتقييمهم أو للموافقة على إجازاتهم.', list: model.emptySups.map(s => `${s.full_name_ar} (${stationName(s)})`) },
+                  { t: 'مشرفون فعّالون بلا موظفين', d: 'لن يصلهم موظفون لتقييمهم.', list: model.emptySups.map(s => `${s.full_name_ar} (${stationName(s)})`) },
                   { t: 'مشرفون معطّلون ما زال لهم موظفون', d: 'يلزم نقل موظفيهم لمشرف فعّال.', list: model.inactiveSupWithEmps.map(s => `${s.full_name_ar} — ${s.emps.length} موظف`) },
-                  { t: 'موظفون مُسندون لأكثر من مشرف', d: 'قد يتكرر تقييمهم أو تتعارض موافقات إجازاتهم.', list: model.multi.map(m => `${m.emp.full_name_ar} ← ${m.sups.map(s => s.full_name_ar).join('، ')}`) },
+                  { t: 'موظفون مُسندون لأكثر من مشرف', d: 'قد يتكرر تقييمهم عند أكثر من مشرف. (الموافقة على الإجازات تكون للمسؤول المباشر فقط).', list: model.multi.map(m => `${m.emp.full_name_ar} ← ${m.sups.map(s => s.full_name_ar).join('، ')}`) },
                   { t: 'موظفون معطّلون ما زالوا مُسندين', d: 'تُزال أسماؤهم من قوائم المشرفين.', list: model.inactiveAssigned.map(m => `${m.emp.full_name_ar} ← ${m.sups.map(s => s.full_name_ar).join('، ')}`) },
                 ].filter(g => g.list.length).map(g => (
                   <div key={g.t} className="bg-white border border-amber-200 rounded-lg p-4">
