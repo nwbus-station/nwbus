@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import FeedbackReport from '../components/feedback/FeedbackReport'
 import SelectField from '../components/shared/SelectField'
 import { brandHeader, previewBar, PAPER_CSS } from '../utils/printDoc'
+import { buildRatingsReportHtml } from '../utils/ratingsReport'
 
 const SHIFTS = [
   { value: 'A', ar: 'الوردية أ', en: 'Shift A' },
@@ -105,6 +106,7 @@ export default function CustomerRatingsAdminPage() {
 }
 
 function RatingsTab() {
+  const { profile } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const loc = isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB'
@@ -121,6 +123,7 @@ function RatingsTab() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState(todayStr())
   const [sortBy, setSortBy] = useState('date') // 'date' | 'best' | 'worst'
+  const [printing, setPrinting] = useState(false)
 
   useEffect(() => {
     supabase.from('stations').select('id, name_ar, name_en').order('name_ar').then(({ data }) => setStations(data || []))
@@ -162,82 +165,42 @@ function RatingsTab() {
 
   const avg = rows.length ? (rows.reduce((s, r) => s + r.rating, 0) / rows.length).toFixed(1) : '—'
 
-  function printReport() {
-    const selectedEmployee = employeeFilter ? employees.find(e => e.id === employeeFilter) : null
-    const selectedStation = stationFilter ? stations.find(s => s.id === stationFilter) : null
-    const showEmpCol = !selectedEmployee
-
-    const rowsHtml = sorted.map((r, i) => `
-      <tr style="background:${i % 2 ? '#F9FAFB' : '#fff'}">
-        <td style="padding:9px 12px;text-align:center;color:#9CA3AF;font-size:11px;border:1px solid #EEF0F3">${i + 1}</td>
-        ${showEmpCol ? `<td style="padding:9px 12px;font-weight:700;color:#111827;font-size:13px;border:1px solid #EEF0F3">${escapeHtml(r.employee?.full_name_ar) || '—'}</td>` : ''}
-        <td style="padding:9px 12px;color:#6B7280;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(stationLabel(r.station, isAr)) || '—'}</td>
-        <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(r.window_number) || '—'}</td>
-        <td style="padding:9px 12px;text-align:center;border:1px solid #EEF0F3">
-          <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;${r.rating >= 4 ? 'background:#F0FDF4;color:#16A34A' : r.rating === 3 ? 'background:#FFFBEB;color:#B45309' : 'background:#FEF2F2;color:#DC2626'}">${r.rating} / 5</span>
-        </td>
-        <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#4B5563;font-size:12px;border:1px solid #EEF0F3">${escapeHtml(r.ticket_number) || '—'}</td>
-        <td style="padding:9px 12px;text-align:center;font-family:monospace;color:#9CA3AF;font-size:11px;border:1px solid #EEF0F3">${escapeHtml(r.reference_number) || '—'}</td>
-        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${r.ticket_date ? new Date(r.ticket_date).toLocaleDateString(loc) : '—'}</td>
-        <td style="padding:9px 12px;text-align:center;color:#6B7280;font-size:11px;border:1px solid #EEF0F3;white-space:nowrap">${ratedDate(r.created_at)}<br><b style="color:#374151;font-family:monospace">${ratedTime(r.created_at)}</b></td>
-        <td style="padding:9px 12px;color:#6B7280;font-size:11px;border:1px solid #EEF0F3">${escapeHtml(r.comment) || ''}</td>
-      </tr>`).join('')
-
-    // صندوق السياق — بيانات الموظف كاملة لو التقرير لموظف واحد، وإلا اسم المحطة
-    const brandHtml = brandHeader({
-      title: isAr ? 'تقرير تقييم العملاء' : 'Customer Ratings Report',
-      subtitle: selectedEmployee ? '' : (selectedStation ? escapeHtml(stationLabel(selectedStation, isAr)) : ''),
-      lines: [`${rows.length} ${isAr ? 'تقييم' : 'ratings'}`, `${isAr ? 'المتوسط' : 'Average'} <b>${avg} / 5</b>`, new Date().toLocaleDateString(loc)],
-      dir: isAr ? 'rtl' : 'ltr',
-    })
-    const contextBoxHtml = brandHtml + (selectedEmployee ? `
-      <div style="background:#1C2B36;color:#fff;padding:16px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-        <div>
-          <div style="font-size:16px;font-weight:800">${escapeHtml(selectedEmployee.full_name_ar)}</div>
-          <div style="font-size:11px;opacity:0.75;margin-top:4px">
-            ${selectedEmployee.job_number ? `${isAr ? 'الرقم الوظيفي' : 'Job No.'}: ${escapeHtml(selectedEmployee.job_number)} · ` : ''}${(isAr ? JOB_TITLE_AR : JOB_TITLE_EN)[selectedEmployee.job_title] || ''}${selectedStation ? ` · ${escapeHtml(stationLabel(selectedStation, isAr))}` : ''}
-          </div>
-        </div>
-        <div style="text-align:${isAr ? 'left' : 'right'}">
-          <div style="font-size:20px;font-weight:800;color:#F59E0B">${avg} / 5</div>
-          <div style="font-size:10px;opacity:0.7">${rows.length} ${isAr ? 'تقييم' : 'ratings'}</div>
-        </div>
-      </div>` : '')
-
-    const html = `<!DOCTYPE html><html dir="${isAr ? 'rtl' : 'ltr'}" lang="${isAr ? 'ar' : 'en'}"><head><meta charset="UTF-8"><title>${isAr ? 'تقرير تقييم العملاء' : 'Customer Ratings Report'}</title>
-      <style>
-        *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-        body{margin:0;font-family:Arial,sans-serif;background:#fff;color:#1a1a1a}
-        @page{size:A4 landscape;margin:10mm}
-        @media print{.no-print{display:none!important}}
-        ${PAPER_CSS}
-        table{width:100%;border-collapse:collapse}
-        th{background:#F9FAFB;color:#6B7280;padding:8px 12px;font-size:11px;font-weight:700;text-align:${isAr ? 'right' : 'left'};border-bottom:1.5px solid #E5E7EB}
-      </style></head><body>
-      ${previewBar(`NORTH WEST BUS — ${isAr ? 'معاينة قبل الطباعة' : 'Print preview'}`)}
-      <div class="paper" style="padding:24px 28px">
-        ${contextBoxHtml}
-        <table>
-          <thead><tr>
-            <th style="width:36px;text-align:center">#</th>
-            ${showEmpCol ? `<th>${isAr ? 'الموظف' : 'Employee'}</th>` : ''}
-            <th>${isAr ? 'المحطة' : 'Station'}</th>
-            <th style="text-align:center">${isAr ? 'الشباك' : 'Window'}</th>
-            <th style="text-align:center">${isAr ? 'التقييم' : 'Rating'}</th>
-            <th style="text-align:center">${isAr ? 'رقم التذكرة' : 'Ticket No.'}</th>
-            <th style="text-align:center">${isAr ? 'رقم المرجع' : 'Reference No.'}</th>
-            <th style="text-align:center">${isAr ? 'تاريخ التذكرة' : 'Ticket Date'}</th>
-            <th style="text-align:center">${isAr ? 'تاريخ ووقت التقييم' : 'Rated at'}</th>
-            <th>${isAr ? 'ملاحظة' : 'Comment'}</th>
-          </tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>
-    </body></html>`
-
-    const w = window.open('', '_blank')
-    w.document.write(html)
-    w.document.close()
+  // التقرير يقرأ كل التقييمات المطابقة للفلاتر (الشاشة محدودة بـ 2000) ثم يبنيه مجمّعاً بالمحطة
+  async function printReport() {
+    if (printing) return
+    setPrinting(true)
+    const win = window.open('', '_blank')
+    try {
+      const all = []
+      for (let from = 0; ; from += 1000) {
+        let q = supabase.from('customer_ratings')
+          .select('id, window_number, shift, ticket_number, reference_number, ticket_date, rating, comment, created_at, employee:employee_id(full_name_ar, job_number, job_title), station:station_id(name_ar, name_en)')
+        if (stationFilter) q = q.eq('station_id', stationFilter)
+        if (shiftFilter) q = q.eq('shift', shiftFilter)
+        if (employeeFilter) q = q.eq('employee_id', employeeFilter)
+        if (dateFrom) q = q.gte('created_at', dateFrom + 'T00:00:00+03:00')
+        if (dateTo) q = q.lte('created_at', dateTo + 'T23:59:59.999+03:00')
+        const { data, error } = await q.order('created_at', { ascending: false }).range(from, from + 999)
+        if (error) throw error
+        all.push(...(data ?? []))
+        if ((data ?? []).length < 1000) break
+      }
+      const selectedEmployee = employeeFilter ? employees.find(e => e.id === employeeFilter) : null
+      const selectedStation = stationFilter ? stations.find(s => s.id === stationFilter) : null
+      const shiftLbl = shiftFilter ? SHIFTS.find(s => s.value === shiftFilter) : null
+      const fmtD = d => new Date(d + 'T00:00:00').toLocaleDateString(loc)
+      const scopeParts = [
+        selectedStation ? stationLabel(selectedStation, isAr) : (isAr ? 'جميع المحطات' : 'All stations'),
+        shiftLbl ? (isAr ? shiftLbl.ar : shiftLbl.en) : '',
+        dateFrom || dateTo ? `${dateFrom ? (isAr ? 'من ' : 'From ') + fmtD(dateFrom) : ''} ${dateTo ? (isAr ? 'إلى ' : 'to ') + fmtD(dateTo) : ''}`.trim() : (isAr ? 'كل الفترات' : 'All periods'),
+      ]
+      const html = buildRatingsReportHtml({ rows: all, isAr, loc, stationLabel: st => stationLabel(st, isAr), ratedDate, ratedTime, scopeParts, printedBy: profile?.full_name_ar, selectedEmployee, withDetails: true })
+      if (win) { win.document.open(); win.document.write(html); win.document.close() }
+    } catch (e) {
+      win?.close()
+      alert((isAr ? 'تعذّر إنشاء التقرير: ' : 'Could not build the report: ') + (e.message || ''))
+    }
+    setPrinting(false)
   }
 
   return (
@@ -261,8 +224,8 @@ function RatingsTab() {
           <option value="best">{isAr ? 'الأعلى تقييماً' : 'Highest rated'}</option>
           <option value="worst">{isAr ? 'الأقل تقييماً' : 'Lowest rated'}</option>
         </SelectField>
-        <button onClick={printReport} className="ms-auto bg-nwbus-primary text-white rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90">
-          🖨 {employeeFilter ? (isAr ? 'طباعة تقرير الموظف' : 'Print employee report') : stationFilter ? (isAr ? 'طباعة تقرير المحطة' : 'Print station report') : (isAr ? 'طباعة التقرير' : 'Print report')}
+        <button onClick={printReport} disabled={printing} className="ms-auto bg-nwbus-primary text-white rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
+          🖨 {printing ? (isAr ? 'جارٍ إعداد التقرير...' : 'Preparing report...') : employeeFilter ? (isAr ? 'طباعة تقرير الموظف' : 'Print employee report') : stationFilter ? (isAr ? 'طباعة تقرير المحطة' : 'Print station report') : (isAr ? 'طباعة التقرير' : 'Print report')}
         </button>
       </div>
 
