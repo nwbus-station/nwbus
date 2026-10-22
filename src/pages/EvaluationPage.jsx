@@ -1092,7 +1092,7 @@ export default function EvaluationPage() {
         const evRows = empEvals.filter(x => x.employee_id === e.id)
         const { bySource, complete, final } = computeFinalScore(evRows)
         const evaluatorNames = EVAL_SOURCE_ORDER.filter(r => bySource[r]).map(r => `${EVAL_SOURCE_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join('\n')
-        return { name: e.full_name_ar, station: e.station?.name_ar, score: final, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
+        return { name: e.full_name_ar, job_number: e.job_number, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: final, complete, srcCount: EVAL_SOURCE_ORDER.filter(r => bySource[r]).length, srcTotal: EVAL_SOURCE_ORDER.length, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
       })
     const html = buildReportHtml(rows, selMonth, selYear, filterStation, stations, profile?.full_name_ar)
     const w = window.open('', '_blank')
@@ -1948,7 +1948,7 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
       const evRows = empEvals.filter(x => x.employee_id === e.id)
       const { bySource, complete, final } = computeFinalScore(evRows)
       const evaluatorNames = EVAL_SOURCE_ORDER.filter(r => bySource[r]).map(r => `${EVAL_SOURCE_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join('\n')
-      return { name: e.full_name_ar, job_number: e.job_number, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: final, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
+      return { name: e.full_name_ar, job_number: e.job_number, station: e.station?.name_ar, role: ROLE_LABELS[e.role], score: final, complete, srcCount: EVAL_SOURCE_ORDER.filter(r => bySource[r]).length, srcTotal: EVAL_SOURCE_ORDER.length, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
     })
     printHtml(buildReportHtml(rows, selMonth, selYear, [...selStations], stations, profile?.full_name_ar))
   }
@@ -1961,9 +1961,9 @@ function PrintModal({ type, employees, supervisors = [], stations, empEvals, sup
       const { bySource, complete, final } = computeSupFinalScore(s.role, evRows)
       const roleLabel = s.role === 'area_supervisor' ? 'مشرف المنطقة' : s.role === 'shift_supervisor' ? 'مشرف وردية' : 'مشرف المحطة'
       const evaluatorNames = supEvalSources(s.role).filter(r => bySource[r]).map(r => `${SUP_EVAL_SHORT[r]}: ${bySource[r].evaluator?.full_name_ar || '—'}`).join(' · ')
-      return { name: s.full_name_ar, job_number: s.job_number, station: s.station?.name_ar, role: roleLabel, score: final, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
+      return { name: s.full_name_ar, job_number: s.job_number, station: s.station?.name_ar, role: roleLabel, score: final, complete, srcCount: supEvalSources(s.role).filter(r => bySource[r]).length, srcTotal: supEvalSources(s.role).length, has_star: complete && final >= STAR_THRESHOLD, evaluator: evaluatorNames || null }
     })
-    printHtml(buildReportHtml(rows, selMonth, selYear, [], stations, profile?.full_name_ar))
+    printHtml(buildReportHtml(rows, selMonth, selYear, [], stations, profile?.full_name_ar, { title: 'تقرير تقييم المشرفين', noun: 'المشرفين' }))
   }
 
   function printStations() {
@@ -2402,24 +2402,128 @@ function scoreBarHtml(s) {
   </div>`
 }
 
-// ── HTML تقرير الموظفين ───────────────────────────────────────
-function buildReportHtml(rows, month, year, selStationIds, stations, printedBy) {
+// ── HTML تقرير الموظفين / المشرفين ─────────────────────────────
+// تقدير النتيجة: النجمة «متميز ★» لا تُمنح إلا لتقييم مكتمل (كل المصادر)؛ نتيجة ≥ 98 بتقييم جزئي تظهر «متميز · جزئي»
+function tierOf(r) {
+  if (r.score == null) return { key: 'none', label: 'لم يُقيَّم', cls: 'badge-none', color: '#9CA3AF' }
+  if (r.score >= STAR_THRESHOLD) return r.complete ? { key: 'star', label: 'متميز ★', cls: 'badge-star', color: '#7C3AED' } : { key: 'star_partial', label: 'متميز · جزئي', cls: 'badge-star-partial', color: '#7C3AED' }
+  if (r.score >= 85) return { key: 'great', label: 'ممتاز', cls: 'badge-good', color: '#059669' }
+  if (r.score >= 70) return { key: 'vgood', label: 'جيد جداً', cls: 'badge-ok', color: '#3B82F6' }
+  if (r.score >= 50) return { key: 'good', label: 'جيد', cls: 'badge-avg', color: '#F59E0B' }
+  return { key: 'low', label: 'يحتاج تحسين', cls: 'badge-low', color: '#EF4444' }
+}
+const dotsHtml = (n, total) => `<span class="dots" title="${n} من ${total}">${Array.from({ length: total }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`
+const avgOf = list => { const v = list.filter(r => r.score != null).map(r => r.score); return v.length ? v.reduce((a, c) => a + c, 0) / v.length : null }
+const sortRows = list => [...list].sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || (a.name || '').localeCompare(b.name || '', 'ar'))
+
+export function buildReportHtml(rows, month, year, selStationIds, stations, printedBy, opts = {}) {
   const MN = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
+  const title = opts.title || 'تقرير تقييم الموظفين'
+  const noun = opts.noun || 'الموظفين'
   const stnName = (!selStationIds || selStationIds.length === stations.length) ? 'جميع المحطات'
-    : selStationIds.map(id => stations.find(s => s.id === id)?.name_ar).filter(Boolean).join('، ')
-  const evaluated = rows.filter(r => r.score != null).length
-  const stars = rows.filter(r => r.has_star).length
+    : (selStationIds.map(id => stations.find(s => s.id === id)?.name_ar).filter(Boolean).join('، ') || 'جميع المحطات')
+
+  const total = rows.length
+  const evaluatedRows = rows.filter(r => r.score != null)
+  const completeRows = rows.filter(r => r.complete)
+  const partialRows = rows.filter(r => r.score != null && !r.complete)
+  const stars = rows.filter(r => r.has_star)
+  const starsPartial = rows.filter(r => r.score != null && r.score >= STAR_THRESHOLD && !r.complete)
+  const avg = avgOf(rows)
+  const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0)
+
+  // توزيع التقديرات
+  const tierDefs = [
+    { key: 'star', label: 'متميز ★', color: '#7C3AED' }, { key: 'star_partial', label: 'متميز · جزئي', color: '#A78BFA' },
+    { key: 'great', label: 'ممتاز', color: '#059669' }, { key: 'vgood', label: 'جيد جداً', color: '#3B82F6' },
+    { key: 'good', label: 'جيد', color: '#F59E0B' }, { key: 'low', label: 'يحتاج تحسين', color: '#EF4444' }, { key: 'none', label: 'لم يُقيَّم', color: '#D1D5DB' },
+  ]
+  const counts = Object.fromEntries(tierDefs.map(t => [t.key, 0]))
+  rows.forEach(r => { counts[tierOf(r).key]++ })
+  const distBar = tierDefs.filter(t => counts[t.key]).map(t => `<div style="width:${(counts[t.key] / (total || 1)) * 100}%;background:${t.color}" title="${t.label}: ${counts[t.key]}"></div>`).join('')
+  const distLegend = tierDefs.filter(t => counts[t.key]).map(t => `<span class="lg"><i style="background:${t.color}"></i>${t.label} <b>${counts[t.key]}</b></span>`).join('')
+
+  // تجميع حسب المحطة (أبجدياً)، وداخل كل محطة الأعلى نتيجة أولاً
+  const groups = new Map()
+  rows.forEach(r => { const k = r.station || 'بدون محطة'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r) })
+  const groupList = [...groups.entries()].map(([name, list]) => ({ name, list: sortRows(list), avg: avgOf(list), evaluated: list.filter(r => r.score != null).length, stars: list.filter(r => r.has_star).length }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ar'))
+
+  // ترتيب المحطات بمتوسط التقييم (فقط لو أكثر من محطة)
+  const ranking = [...groupList].filter(g => g.avg != null).sort((a, b) => b.avg - a.avg)
+  const medal = i => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1))
+  const rankingHtml = groupList.length > 1 ? `
+  <div class="sec"><div class="sec-title">ترتيب المحطات بمتوسط التقييم</div>
+    <table class="mini"><thead><tr><th style="width:44px">#</th><th>المحطة</th><th>الموظفون</th><th>المُقيَّمون</th><th>المتوسط</th><th>متميزون ★</th></tr></thead><tbody>
+    ${ranking.map((g, i) => `<tr><td>${medal(i)}</td><td><b>${escapeHtml(g.name)}</b></td><td>${g.list.length}</td><td>${g.evaluated} <span class="muted">(${pct(g.evaluated, g.list.length)}%)</span></td><td><b style="color:#264673">${(g.avg / 10).toFixed(1)}</b><span class="muted">/10</span></td><td>${g.stars ? `<b style="color:#7C3AED">${g.stars} ★</b>` : '<span class="muted">—</span>'}</td></tr>`).join('')}
+    </tbody></table></div>` : ''
+
+  // لوحة الشرف: المتميزون (تقييم مكتمل) ثم من وصلوا 98%+ ولم يكتمل تقييمهم
+  const honor = (list, label, color, note) => list.length ? `
+    <div class="honor-block"><div class="honor-lbl" style="color:${color}">${label} <b>${list.length}</b>${note ? `<span class="muted"> — ${note}</span>` : ''}</div>
+    <div class="honor-grid">${sortRows(list).map(r => `<div class="honor-card" style="border-color:${color}"><div class="hn">${escapeHtml(r.name) || '—'}</div><div class="hs">${escapeHtml(r.station) || '—'}</div><div class="hv" style="color:${color}">${(r.score / 10).toFixed(1)}<span>/10</span></div></div>`).join('')}</div></div>` : ''
+  const honorHtml = `<div class="sec"><div class="sec-title">لوحة الشرف</div>
+    ${stars.length ? honor(stars, 'متميزون ★ (تقييم مكتمل)', '#7C3AED', '') : '<div class="empty">لا يوجد متميزون بتقييم مكتمل هذا الشهر — النجمة تُمنح عند اكتمال تقييم كل المصادر وبلوغ 98% فأكثر.</div>'}
+    ${honor(starsPartial, 'وصلوا 98%+ وتقييمهم لم يكتمل', '#A78BFA', 'تُثبَّت النجمة عند اكتمال بقية المصادر')}
+  </div>`
+
+  const tile = (cls, val, lbl, sub) => `<div class="stat ${cls}"><div class="stat-val">${val}</div><div class="stat-lbl">${lbl}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div>`
+  const rowHtml = (r, i) => {
+    const t = tierOf(r)
+    return `<tr class="${t.key === 'star' ? 'row-star' : ''}">
+      <td><span class="row-num">${i + 1}</span></td>
+      <td><div class="emp-name">${escapeHtml(r.name) || '—'}${t.key === 'star' ? ' <span style="color:#F59E0B">★</span>' : ''}</div>${r.job_number ? `<div class="emp-sub">${escapeHtml(r.job_number)}</div>` : ''}</td>
+      <td><span class="role-text">${escapeHtml(r.role) || '—'}</span></td>
+      <td>${scoreBarHtml(r.score)}</td>
+      <td><span class="badge ${t.cls}">${t.label}</span></td>
+      <td>${r.srcTotal ? dotsHtml(r.srcCount || 0, r.srcTotal) : '—'}</td>
+      <td><span class="eval-list">${escapeHtml(r.evaluator) || '—'}</span></td>
+    </tr>`
+  }
+  const stationsHtml = groupList.map(g => `
+  <div class="st-sec">
+    <div class="st-head">
+      <div class="st-name">${escapeHtml(g.name)}</div>
+      <div class="st-meta"><span>${g.list.length} ${noun === 'الموظفين' ? 'موظف' : 'مشرف'}</span><span>مُقيَّم ${g.evaluated}/${g.list.length}</span><span>المتوسط ${g.avg != null ? (g.avg / 10).toFixed(1) + '/10' : '—'}</span>${g.stars ? `<span style="color:#7C3AED;font-weight:800">${g.stars} ★</span>` : ''}</div>
+    </div>
+    <table><thead><tr><th style="width:34px">#</th><th>${noun === 'الموظفين' ? 'الموظف' : 'المشرف'}</th><th>الوظيفة</th><th>النتيجة</th><th>التقدير</th><th>الاكتمال</th><th>قيّم بواسطة</th></tr></thead>
+    <tbody>${g.list.map(rowHtml).join('')}</tbody></table>
+  </div>`).join('')
+
+  const extraCss = `
+  .stats{grid-template-columns:repeat(3,1fr)}
+  .stat-sub{font-size:11.5px;color:#9ca3af;margin-top:5px;font-weight:600}
+  .stat.rose{border-inline-start-color:#EF4444}
+  .sec{margin:0 0 20px}
+  .sec-title{font-size:14.4px;font-weight:800;color:#264673;margin-bottom:10px;padding-inline-start:10px;border-inline-start:4px solid #EE712D}
+  .dist{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#eef0f3}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:9px;font-size:12.6px;color:#4B5563}
+  .lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:5px;vertical-align:-1px}
+  .honor-block{margin-bottom:12px}.honor-lbl{font-size:13.8px;font-weight:800;margin-bottom:8px}
+  .honor-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .honor-card{background:#fff;border:1.5px solid;border-radius:10px;padding:10px 12px;position:relative}
+  .hn{font-weight:800;font-size:13.8px;color:#111827;line-height:1.3}.hs{font-size:11.5px;color:#9ca3af;margin-top:2px}.hv{font-size:20px;font-weight:900;margin-top:6px;line-height:1}.hv span{font-size:11px;opacity:.55}
+  .empty{background:#fff;border:1px dashed #d1d5db;border-radius:10px;padding:14px;font-size:13px;color:#6b7280;margin-bottom:10px}
+  .muted{color:#9ca3af;font-weight:500}
+  table.mini{border:1px solid #eceef2;border-radius:10px;overflow:hidden}table.mini td,table.mini th{padding:9px 14px;font-size:13.5px}
+  .st-sec{margin-bottom:22px;border:1px solid #eceef2;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 2px 8px rgba(17,24,39,.04)}
+  .st-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 18px;background:linear-gradient(90deg,#264673,#35609a);color:#fff}
+  .st-name{font-size:16px;font-weight:800}.st-meta{display:flex;gap:16px;font-size:12.6px;color:rgba(255,255,255,.88);font-weight:600}
+  .st-sec table{margin:0}.st-sec thead{display:table-header-group}
+  .row-star{background:#FAF5FF!important}
+  .badge-star{background:#7C3AED;color:#fff}.badge-star-partial{background:#F5F3FF;color:#6D28D9;border:1px solid #C4B5FD}
+  .dots i{display:inline-block;width:9px;height:9px;border-radius:50%;background:#e5e7eb;margin-inline-end:3px}.dots i.on{background:#059669}
+  @media print{.st-sec{break-inside:auto}.st-head{break-after:avoid;-webkit-print-color-adjust:exact}.honor-card,.stat{break-inside:avoid}}`
 
   return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
-<title>تقرير التقييم — ${MN[month-1]} ${year}</title>
-<style>${reportCss()}</style></head><body>
+<title>${title} — ${MN[month-1]} ${year}</title>
+<style>${reportCss()}${extraCss}</style></head><body>
 ${printBarHtml()}
 <div class="wrap">
   <div class="cover">
     <div class="cover-right">
-      <div class="logo-mark">Northwest Bus · تقرير رسمي</div>
-      <div class="cover-title">تقرير تقييم الموظفين</div>
-      <div class="cover-sub">${MN[month-1]} ${year} &nbsp;·&nbsp; ${stnName}</div>
+      <div class="cover-title">${title}</div>
+      <div class="cover-sub">${MN[month-1]} ${year} &nbsp;·&nbsp; ${escapeHtml(stnName)}</div>
     </div>
     <div class="cover-left">
       ${brandLogo(120)}
@@ -2428,52 +2532,21 @@ ${printBarHtml()}
   </div>
 
   <div class="stats">
-    <div class="stat purple">
-      <div class="stat-val" style="color:#5B5BD6">${rows.length}</div>
-      <div class="stat-lbl">إجمالي الموظفين</div>
-    </div>
-    <div class="stat green">
-      <div class="stat-val" style="color:#059669">${evaluated}</div>
-      <div class="stat-lbl">تم تقييمهم</div>
-    </div>
-    <div class="stat gold">
-      <div class="stat-val" style="color:#B45309">${stars}</div>
-      <div class="stat-lbl">متميز 🏅</div>
-    </div>
+    ${tile('purple', total, 'إجمالي ' + noun, '')}
+    ${tile('green', evaluatedRows.length, 'تم تقييمهم', pct(evaluatedRows.length, total) + '% من الإجمالي')}
+    ${tile('', completeRows.length, 'تقييم مكتمل', partialRows.length ? partialRows.length + ' جزئي' : 'كل المقيَّمين مكتملون')}
+    ${tile('gold', stars.length + ' ★', 'متميزون', starsPartial.length ? '+' + starsPartial.length + ' بانتظار اكتمال التقييم' : 'تقييم مكتمل بنتيجة 98% فأكثر')}
+    ${tile('', avg != null ? (avg / 10).toFixed(1) + '<span style="font-size:15px;opacity:.5">/10</span>' : '—', 'متوسط النتيجة', avg != null ? avg.toFixed(1) + '%' : '')}
+    ${tile('rose', total - evaluatedRows.length, 'لم يُقيَّموا بعد', '')}
   </div>
 
-  <div class="table-wrap">
-    <div class="table-head">
-      <div class="table-head-dot"></div>
-      <div class="table-head-title">قائمة الموظفين — ${MN[month-1]} ${year}</div>
-    </div>
-    <table>
-      <thead><tr>
-        <th style="width:36px">#</th>
-        <th>الموظف</th>
-        <th>الرقم الوظيفي</th>
-        <th>المحطة</th>
-        <th>الوظيفة</th>
-        <th>النتيجة</th>
-        <th>التقدير</th>
-        <th>قيّم بواسطة</th>
-      </tr></thead>
-      <tbody>
-      ${rows.map((r, i) => `<tr>
-        <td><span class="row-num">${i+1}</span></td>
-        <td>
-          <div class="emp-name">${escapeHtml(r.name) || '—'}${r.has_star ? ' <span style="color:#F59E0B">★</span>' : ''}</div>
-        </td>
-        <td>${r.job_number ? `<span class="job-tag">${escapeHtml(r.job_number)}</span>` : '<span style="color:#d1d5db">—</span>'}</td>
-        <td><span class="station-text">${escapeHtml(r.station) || '—'}</span></td>
-        <td><span class="role-text">${escapeHtml(r.role) || '—'}</span></td>
-        <td>${scoreBarHtml(r.score)}</td>
-        <td>${scoreBadge(r.score)}</td>
-        <td><span class="eval-list">${escapeHtml(r.evaluator) || '—'}</span></td>
-      </tr>`).join('')}
-      </tbody>
-    </table>
-  </div>
+  <div class="sec"><div class="sec-title">توزيع التقديرات</div>
+    <div class="dist">${distBar || ''}</div><div class="legend">${distLegend}</div></div>
+
+  ${honorHtml}
+  ${rankingHtml}
+  <div class="sec"><div class="sec-title">${noun === 'الموظفين' ? 'التفاصيل حسب المحطة' : 'التفاصيل حسب المحطة'}</div></div>
+  ${stationsHtml}
 
   ${footerHtml(printedBy)}
 </div></body></html>`
