@@ -323,7 +323,7 @@ export function printSaleRecord({ sale, isAr, profile }) {
 /* ─── Sales Modal ───────────────────────────────────────── */
 export function SalesModal({ sale, stations, onClose, onSaved }) {
   useEscapeKey(onClose)
-  const { profile, isAccountant, isGeneralAdmin, allowCap, workStations } = useAuth()
+  const { profile, isAccountant, isGeneralAdmin, isAreaSupervisor, allowCap, workStations } = useAuth()
   const { settings } = useAppSettings()
   SHIFTS = salesShiftsFrom(null)
   // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
@@ -501,14 +501,27 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         setSaving(false)
         return
       }
+      // الموظف لا يضيف أكثر من يومية في اليوم الواحد (الأدمن والمحاسب ومشرف المنطقة يدخلون لعدة موظفين فلا يُقيَّدون)
+      if (!isGeneralAdmin && !isAccountant && !isAreaSupervisor) {
+        const { data: sameDay } = await supabase.from('sales_records').select('id, shift')
+          .eq('created_by', profile.id).eq('sale_date', form.sale_date).limit(1)
+        if (sameDay?.length) {
+          const sh = SHIFTS.find(x => x.value === sameDay[0].shift)
+          setError(isAr ? `لديك يومية مسجلة بتاريخ ${form.sale_date}${sh ? ` (${sh.ar})` : ''}. لا يمكن إضافة يومية ثانية في نفس اليوم — افتح اليومية من القائمة وعدّلها.` : `You already have a record for ${form.sale_date}. Only one daily record per day is allowed — edit it from the list.`)
+          setSaving(false)
+          return
+        }
+      }
       res = await supabase.from('sales_records').insert(payload)
     }
 
     if (res.error) {
       const blocked = res.error.message === 'SALES_UPDATE_BLOCKED'
+      const oneDay = /sales_one_per_day/.test(res.error.message || '')
       const dup = /duplicate key|unique constraint/i.test(res.error.message || '')
       const future = /sales_future_day/.test(res.error.message || '')
-      setError(blocked ? (isAr ? 'لم يُحفظ التعديل: لا تملك صلاحية تعديل هذه اليومية الآن (غالباً لانتهاء يومها التشغيلي أو لأنها لموظف آخر). لا تُضف يومية جديدة بدلاً منها، وتواصل مع المحاسب أو الأدمن لتعديلها.' : 'The change was NOT saved: you cannot edit this record now (usually its business day has ended, or it belongs to someone else). Do not add a new one; ask the accountant or admin to edit it.')
+      setError(oneDay ? (isAr ? 'لديك يومية مسجلة بهذا التاريخ. لا يمكن إضافة يومية ثانية في نفس اليوم — افتحها من القائمة وعدّلها.' : 'You already have a record for this date. Only one daily record per day is allowed — edit it from the list.')
+        : blocked ? (isAr ? 'لم يُحفظ التعديل: لا تملك صلاحية تعديل هذه اليومية الآن (غالباً لانتهاء يومها التشغيلي أو لأنها لموظف آخر). لا تُضف يومية جديدة بدلاً منها، وتواصل مع المحاسب أو الأدمن لتعديلها.' : 'The change was NOT saved: you cannot edit this record now (usually its business day has ended, or it belongs to someone else). Do not add a new one; ask the accountant or admin to edit it.')
         : future ? (isAr ? `اليوم الجديد لم يُفتح بعد (يُفتح ${fmtCutoff(cutoffMin)}). أدخل الوردية بتاريخ أمس.` : 'The new day is not open yet. Use yesterday\'s date.')
         : dup
         ? (isAr ? 'يوجد سجل مطابق لنفس الموظف والمحطة والتاريخ والوردية. افتحه وعدّله من القائمة، أو غيّر الوردية/التاريخ.' : 'A matching record already exists for this employee, station, date and shift. Edit it from the list, or change the shift/date.')
