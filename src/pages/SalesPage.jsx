@@ -18,6 +18,7 @@ import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { safeImport } from '../lib/chunkReload'
 import SelectField from '../components/shared/SelectField'
+import SearchSelect from '../components/shared/SearchSelect'
 import { brandHeader, docHeader, docShell, openDocWindow, previewToolbar, TOOLBAR_CSS, esc } from '../utils/printDoc'
 
 // الورديات تتبع إعداد الأدمن (3 أو 4) من الإعدادات؛ تُحدَّث عند كل عرض من app_settings
@@ -323,7 +324,7 @@ export function printSaleRecord({ sale, isAr, profile }) {
 /* ─── Sales Modal ───────────────────────────────────────── */
 export function SalesModal({ sale, stations, onClose, onSaved }) {
   useEscapeKey(onClose)
-  const { profile, isAccountant, isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowCap, workStations } = useAuth()
+  const { profile, isAccountant, isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, allowCap, workStations } = useAuth()
   const { settings } = useAppSettings()
   SHIFTS = salesShiftsFrom(null)
   // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
@@ -332,6 +333,25 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   const isAr = i18n.language === 'ar'
 
   const [savedCashier]  = useState(() => localStorage.getItem(CASHIER_KEY)  ?? '')
+
+  // مشرف المحطة/المنطقة يضيف يومية باسم موظف من نطاقه: تُنسب للموظف نفسه وتُسجَّل «أدخلها المشرف»
+  const canProxy = !sale && !isGeneralAdmin && (isStationAdmin || isAreaSupervisor)
+  const [proxyEmps, setProxyEmps] = useState([])
+  const [proxyId, setProxyId] = useState('')
+  const proxyEmp = proxyEmps.find(e => e.id === proxyId) ?? null
+  useEffect(() => {
+    if (!canProxy) return
+    let off = false
+    ;(async () => {
+      let q = supabase.from('users').select('id, full_name_ar, job_number, station_id, station:station_id(name_ar, name_en)')
+        .eq('is_active', true).eq('role', 'station_employee').order('full_name_ar')
+      const scope = isAreaSupervisor ? allowedStationIds : (workStations?.length ? workStations.map(w => w.id) : [profile.station_id])
+      if (scope) q = q.in('station_id', scope)
+      const { data } = await q.limit(1000)
+      if (!off) setProxyEmps(data ?? [])
+    })()
+    return () => { off = true }
+  }, [canProxy]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // لا توجد مسودات: نمسح أي مسودة قديمة محفوظة بالمتصفح
   useEffect(() => { try { localStorage.removeItem(DRAFT_KEY) } catch { /* لا شي */ } }, [])
@@ -442,7 +462,12 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     }
     setSaving(true); setError('')
 
-    const stationId = (isGeneralAdmin || multi) ? form.station_id : profile.station_id
+    if (canProxy && !proxyEmp) {
+      setError(isAr ? 'اختر الموظف الذي تُدخل اليومية باسمه' : 'Select the employee you are entering this record for')
+      setSaving(false)
+      return
+    }
+    const stationId = canProxy ? proxyEmp.station_id : ((isGeneralAdmin || multi) ? form.station_id : profile.station_id)
     if (!stationId) {
       setError(isAr
         ? ((isGeneralAdmin || multi) ? 'اختر المحطة أولاً' : 'حسابك غير مرتبط بمحطة — تواصل مع الأدمن')
@@ -458,7 +483,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       station_id:         stationId,
       sale_date:          form.sale_date,
       shift:              form.shift,
-      employee_name:      form.employee_name.trim() || null,
+      employee_name:      canProxy ? proxyEmp.full_name_ar : (form.employee_name.trim() || null),
       cash_amount:        Number(form.cash_amount),
       mada_amount:        Number(form.mada_amount),
       mada_network_ref:   form.mada_network_ref || null,
@@ -472,7 +497,9 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       bank_deposit_amount: 0,
       bank_deposit_ref:   null,
       // created_by يُضاف فقط عند الإنشاء الجديد، لا عند التعديل
-      ...(!sale && { created_by: profile.id, created_by_name: profile.full_name_ar }),
+      ...(!sale && (canProxy
+        ? { created_by: proxyEmp.id, created_by_name: proxyEmp.full_name_ar, entered_by: profile.id, entered_by_name: profile.full_name_ar }
+        : { created_by: profile.id, created_by_name: profile.full_name_ar })),
     }
 
     if (isAccountant && form.is_confirmed && allowCap('sales_confirm')) {
@@ -509,19 +536,19 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       // التكرار = نفس الموظف بنفس المحطة والتاريخ والوردية (أكثر من موظف بنفس الوردية مسموح، والأدمن يدخل لعدة موظفين)
       const normName = v => String(v || '').trim().toLowerCase()
       const { data: same } = await supabase.from('sales_records').select('id, employee_name')
-        .eq('station_id', stationId).eq('sale_date', form.sale_date).eq('shift', form.shift).eq('created_by', profile.id)
+        .eq('station_id', stationId).eq('sale_date', form.sale_date).eq('shift', form.shift).eq('created_by', canProxy ? proxyEmp.id : profile.id)
       if ((same ?? []).some(r => normName(r.employee_name) === normName(payload.employee_name))) {
         setError(isAr ? `الموظف ${payload.employee_name || ''} عنده يومية مسجلة لنفس المحطة والتاريخ والوردية. افتحها وعدّلها من القائمة بدل إضافة يومية ثانية.` : 'This employee already has a record for this station, date and shift. Edit it from the list.')
         setSaving(false)
         return
       }
       // الموظف لا يضيف أكثر من يومية في اليوم الواحد (الأدمن والمحاسب ومشرف المنطقة يدخلون لعدة موظفين فلا يُقيَّدون)
-      if (!isGeneralAdmin && !isAccountant && !isAreaSupervisor && !isStationAdmin) {
+      if (canProxy || (!isGeneralAdmin && !isAccountant && !isAreaSupervisor && !isStationAdmin)) {
         const { data: sameDay } = await supabase.from('sales_records').select('id, shift')
-          .eq('created_by', profile.id).eq('sale_date', form.sale_date).limit(1)
+          .eq('created_by', canProxy ? proxyEmp.id : profile.id).eq('sale_date', form.sale_date).limit(1)
         if (sameDay?.length) {
           const sh = SHIFTS.find(x => x.value === sameDay[0].shift)
-          setError(isAr ? `لديك يومية مسجلة بتاريخ ${form.sale_date}${sh ? ` (${sh.ar})` : ''}. لا يمكن إضافة يومية ثانية في نفس اليوم — افتح اليومية من القائمة وعدّلها.` : `You already have a record for ${form.sale_date}. Only one daily record per day is allowed — edit it from the list.`)
+          setError(isAr ? `${canProxy ? 'هذا الموظف' : 'لديك'} ${canProxy ? 'لديه' : ''} يومية مسجلة بتاريخ ${form.sale_date}${sh ? ` (${sh.ar})` : ''}. لا يمكن إضافة يومية ثانية في نفس اليوم — افتح اليومية من القائمة وعدّلها.` : `You already have a record for ${form.sale_date}. Only one daily record per day is allowed — edit it from the list.`)
           setSaving(false)
           return
         }
@@ -552,12 +579,12 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   const inputCls = "w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-600 focus:outline-none transition"
 
   // الموظف: من حساب المستخدم (للسجل الجديد) أو من السجل المحفوظ؛ الرقم الوظيفي بجانبه ومربوط بالطباعة
-  const empName = sale ? (sale.employee_name || sale.created_by_name || '—') : (profile?.full_name_ar || '—')
+  const empName = sale ? (sale.employee_name || sale.created_by_name || '—') : (canProxy ? (proxyEmp?.full_name_ar || '— اختر الموظف —') : (profile?.full_name_ar || '—'))
   const empJob  = sale
     ? ((!sale.employee_name || sale.employee_name === sale.created_by_name) ? (sale.created_by_user?.job_number ?? null) : null)
-    : (profile?.job_number ?? null)
+    : (canProxy ? (proxyEmp?.job_number ?? null) : (profile?.job_number ?? null))
   const stationLabel = (() => {
-    const id = (isGeneralAdmin || multi) ? form.station_id : (sale?.station_id ?? profile.station_id)
+    const id = canProxy ? proxyEmp?.station_id : ((isGeneralAdmin || multi) ? form.station_id : (sale?.station_id ?? profile.station_id))
     // الموظف العادي لا تُحمَّل له قائمة المحطات — نرجع لمحطته من بروفايله (أو محطات عمله المتعددة)
     const st = stations.find(s => s.id === id) ?? workStations?.find(s => s.id === id) ?? sale?.station ?? (id && id === profile?.station_id ? profile.station : null)
     return st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : null
@@ -610,13 +637,23 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
 
           <fieldset disabled={isLocked} className="space-y-3.5 disabled:opacity-70 min-w-0">
 
+            {canProxy && (
+              <div>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'الموظف * (تُدخل اليومية باسمه)' : 'Employee * (record is entered for them)'}</label>
+                <SearchSelect required className={inputCls} isAr={isAr} value={proxyId} onChange={setProxyId}
+                  placeholder={isAr ? '— اختر الموظف —' : '— Select employee —'}
+                  options={proxyEmps.map(e => ({ value: e.id, label: `${e.full_name_ar}${e.job_number ? ` (${e.job_number})` : ''} — ${isAr ? e.station?.name_ar : (e.station?.name_en || e.station?.name_ar)}` }))} />
+                <p className="text-[11px] text-gray-400 mt-1">{isAr ? 'تُنسب اليومية للموظف وتظهر «أدخلها المشرف» باسمك.' : 'The record belongs to the employee and is marked as entered by you.'}</p>
+              </div>
+            )}
+
             {/* بطاقة الموظف — من الحساب */}
             <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 flex items-center gap-3">
               <div className="w-10 h-10 rounded-md bg-gray-100 text-gray-600 grid place-items-center text-base font-bold shrink-0">
                 {(empName || '؟').trim().charAt(0)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-gray-400">{isAr ? 'الموظف (من الحساب)' : 'Employee (from account)'}</p>
+                <p className="text-[11px] text-gray-400">{canProxy ? (isAr ? 'الموظف المختار' : 'Selected employee') : (isAr ? 'الموظف (من الحساب)' : 'Employee (from account)')}{sale?.entered_by_name ? (isAr ? ` · أدخلها المشرف ${sale.entered_by_name}` : ` · entered by ${sale.entered_by_name}`) : ''}</p>
                 <p className="text-sm font-bold text-gray-900 truncate" dir="auto">{empName}</p>
               </div>
               <div className="text-end shrink-0">
@@ -628,7 +665,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
             {/* بيانات السجل */}
             <SectionCard n={1} title={isAr ? 'بيانات السجل' : 'Record details'}>
               <div className="space-y-3">
-                {(isGeneralAdmin || multi) && (
+                {(isGeneralAdmin || multi) && !canProxy && (
                   <div>
                     <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'المحطة *' : 'Station *'}</label>
                     <SelectField required className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
@@ -649,8 +686,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                     </SelectField>
                   </div>
                 </div>
-                <ShiftBoard stationId={(isGeneralAdmin || multi) ? form.station_id : profile.station_id} date={form.sale_date} shift={form.shift}
-                  onPick={v => set('shift', v)} saleId={sale?.id} employeeName={form.employee_name} profileId={sale?.created_by ?? profile?.id} isAr={isAr} />
+                <ShiftBoard stationId={canProxy ? proxyEmp?.station_id : ((isGeneralAdmin || multi) ? form.station_id : profile.station_id)} date={form.sale_date} shift={form.shift}
+                  onPick={v => set('shift', v)} saleId={sale?.id} employeeName={form.employee_name} profileId={sale?.created_by ?? (canProxy ? proxyEmp?.id : profile?.id)} isAr={isAr} />
                 {!sale && (() => {
                   const sug = SHIFTS.find(x => x.value === suggested.shift)
                   const mismatch = form.shift !== suggested.shift || form.sale_date !== suggested.date
@@ -1330,6 +1367,7 @@ export default function SalesPage() {
                                 <td className="px-3 py-3 min-w-[140px]">
                                   <div className="text-[13px] text-gray-800 truncate max-w-[160px]" title={nm} dir="auto">{nm}</div>
                                   <div className="text-[11px] text-gray-400 font-mono">{r.created_by_user?.job_number ? `#${r.created_by_user.job_number}` : ''}</div>
+                                  {r.entered_by_name && <div className="text-[10px] text-amber-700">{isAr ? `أدخلها المشرف: ${r.entered_by_name}` : `Entered by: ${r.entered_by_name}`}</div>}
                                 </td>
                                 <td className="px-3 py-3 font-mono text-xs text-gray-600 hidden md:table-cell">{fmt(r.cash_amount)}</td>
                                 <td className="px-3 py-3 font-mono text-xs text-gray-600 hidden md:table-cell">{fmt(r.mada_amount)}</td>
