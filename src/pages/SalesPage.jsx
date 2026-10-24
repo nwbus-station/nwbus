@@ -322,7 +322,7 @@ export function printSaleRecord({ sale, isAr, profile }) {
 }
 
 /* ─── Sales Modal ───────────────────────────────────────── */
-export function SalesModal({ sale, stations, onClose, onSaved }) {
+export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting }) {
   useEscapeKey(onClose)
   const { profile, isAccountant, isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, allowCap, workStations } = useAuth()
   const { settings } = useAppSettings()
@@ -338,6 +338,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   const canProxy = !sale && !isGeneralAdmin && (isStationAdmin || isAreaSupervisor)
   const [proxyEmps, setProxyEmps] = useState([])
   const [proxyId, setProxyId] = useState('')
+  const [who, setWho] = useState('self')            // self = يوميتي | employee = لأحد موظفيّ
+  const proxyOn = canProxy && who === 'employee'
   const proxyEmp = proxyEmps.find(e => e.id === proxyId) ?? null
   useEffect(() => {
     if (!canProxy) return
@@ -428,6 +430,31 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   function setBalanceRef(i, v)  { const refs = [...form.balance_refs]; refs[i] = v; set('balance_refs', refs) }
   function persistCashier()   { localStorage.setItem(CASHIER_KEY,  form.cashier_ref)   }
 
+  // حالة اليوم: من سجّل يوميته بهذا التاريخ (للمشرف: هو وموظفوه) — لمنع الإضافة المكرّرة وإظهار الحالة فوراً
+  const [dayRecs, setDayRecs] = useState({})
+  const trackDay = !sale && !isGeneralAdmin && !isAccountant
+  useEffect(() => {
+    if (!trackDay) return
+    let off = false
+    ;(async () => {
+      const ids = [profile.id, ...(canProxy ? proxyEmps.map(e => e.id) : [])]
+      const { data } = await supabase.from('sales_records').select('id, created_by, employee_name, shift, is_confirmed')
+        .eq('sale_date', form.sale_date).in('created_by', ids).limit(2000)
+      if (off) return
+      const nn = v => String(v || '').trim().toLowerCase()
+      const m = {}
+      for (const r of data ?? []) {
+        if (r.created_by === profile.id && r.employee_name && nn(r.employee_name) !== nn(profile.full_name_ar)) continue   // قيود قديمة أدخلها المشرف لغيره بالاسم
+        m[r.created_by] = r
+      }
+      setDayRecs(m)
+    })()
+    return () => { off = true }
+  }, [trackDay, canProxy, form.sale_date, proxyEmps.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const ownerId = proxyOn ? proxyId : profile?.id
+  const ownerRec = trackDay && ownerId ? dayRecs[ownerId] : null
+  const takenCount = canProxy ? proxyEmps.filter(e => dayRecs[e.id]).length : 0
+
   // المحاسب (أو الأدمن) يلغي تأكيد اليومية لتعود قابلة لتعديل الموظف
   const canUnconfirm = !!sale?.is_confirmed && (isGeneralAdmin || (isAccountant && allowCap('sales_confirm')))
   async function doUnconfirm() {
@@ -462,12 +489,12 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     }
     setSaving(true); setError('')
 
-    if (canProxy && !proxyEmp) {
+    if (proxyOn && !proxyEmp) {
       setError(isAr ? 'اختر الموظف الذي تُدخل اليومية باسمه' : 'Select the employee you are entering this record for')
       setSaving(false)
       return
     }
-    const stationId = canProxy ? proxyEmp.station_id : ((isGeneralAdmin || multi) ? form.station_id : profile.station_id)
+    const stationId = proxyOn ? proxyEmp.station_id : ((isGeneralAdmin || multi) ? form.station_id : profile.station_id)
     if (!stationId) {
       setError(isAr
         ? ((isGeneralAdmin || multi) ? 'اختر المحطة أولاً' : 'حسابك غير مرتبط بمحطة — تواصل مع الأدمن')
@@ -483,7 +510,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       station_id:         stationId,
       sale_date:          form.sale_date,
       shift:              form.shift,
-      employee_name:      canProxy ? proxyEmp.full_name_ar : (form.employee_name.trim() || null),
+      employee_name:      proxyOn ? proxyEmp.full_name_ar : (form.employee_name.trim() || null),
       cash_amount:        Number(form.cash_amount),
       mada_amount:        Number(form.mada_amount),
       mada_network_ref:   form.mada_network_ref || null,
@@ -497,7 +524,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       bank_deposit_amount: 0,
       bank_deposit_ref:   null,
       // created_by يُضاف فقط عند الإنشاء الجديد، لا عند التعديل
-      ...(!sale && (canProxy
+      ...(!sale && (proxyOn
         ? { created_by: proxyEmp.id, created_by_name: proxyEmp.full_name_ar, entered_by: profile.id, entered_by_name: profile.full_name_ar }
         : { created_by: profile.id, created_by_name: profile.full_name_ar })),
     }
@@ -536,19 +563,22 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
       // التكرار = نفس الموظف بنفس المحطة والتاريخ والوردية (أكثر من موظف بنفس الوردية مسموح، والأدمن يدخل لعدة موظفين)
       const normName = v => String(v || '').trim().toLowerCase()
       const { data: same } = await supabase.from('sales_records').select('id, employee_name')
-        .eq('station_id', stationId).eq('sale_date', form.sale_date).eq('shift', form.shift).eq('created_by', canProxy ? proxyEmp.id : profile.id)
+        .eq('station_id', stationId).eq('sale_date', form.sale_date).eq('shift', form.shift).eq('created_by', proxyOn ? proxyEmp.id : profile.id)
       if ((same ?? []).some(r => normName(r.employee_name) === normName(payload.employee_name))) {
         setError(isAr ? `الموظف ${payload.employee_name || ''} عنده يومية مسجلة لنفس المحطة والتاريخ والوردية. افتحها وعدّلها من القائمة بدل إضافة يومية ثانية.` : 'This employee already has a record for this station, date and shift. Edit it from the list.')
         setSaving(false)
         return
       }
-      // الموظف لا يضيف أكثر من يومية في اليوم الواحد (الأدمن والمحاسب ومشرف المنطقة يدخلون لعدة موظفين فلا يُقيَّدون)
-      if (canProxy || (!isGeneralAdmin && !isAccountant && !isAreaSupervisor && !isStationAdmin)) {
-        const { data: sameDay } = await supabase.from('sales_records').select('id, shift')
-          .eq('created_by', canProxy ? proxyEmp.id : profile.id).eq('sale_date', form.sale_date).limit(1)
-        if (sameDay?.length) {
-          const sh = SHIFTS.find(x => x.value === sameDay[0].shift)
-          setError(isAr ? `${canProxy ? 'هذا الموظف' : 'لديك'} ${canProxy ? 'لديه' : ''} يومية مسجلة بتاريخ ${form.sale_date}${sh ? ` (${sh.ar})` : ''}. لا يمكن إضافة يومية ثانية في نفس اليوم — افتح اليومية من القائمة وعدّلها.` : `You already have a record for ${form.sale_date}. Only one daily record per day is allowed — edit it from the list.`)
+      // يومية واحدة فقط لكل شخص في اليوم: الموظف، والمشرف ليوميته، وكل موظف يُدخلها المشرف باسمه
+      // (الأدمن والمحاسب يدخلون لعدة موظفين بأسمائهم فلا يُقيَّدون)
+      if (!isGeneralAdmin && !isAccountant) {
+        const owner = proxyOn ? proxyEmp : profile
+        const { data: sameDay } = await supabase.from('sales_records').select('id, shift, employee_name')
+          .eq('created_by', owner.id).eq('sale_date', form.sale_date)
+        const mine = (sameDay ?? []).filter(r => proxyOn || !r.employee_name || normName(r.employee_name) === normName(profile.full_name_ar))
+        if (mine.length) {
+          const sh = SHIFTS.find(x => x.value === mine[0].shift)
+          setError(isAr ? `${proxyOn ? `الموظف ${proxyEmp.full_name_ar} لديه` : 'لديك'} يومية مسجلة بتاريخ ${form.sale_date}${sh ? ` (${sh.ar})` : ''}. لا يمكن إضافة يومية ثانية في نفس اليوم — افتح اليومية وعدّلها.` : `${proxyOn ? proxyEmp.full_name_ar + ' already has' : 'You already have'} a record for ${form.sale_date}. Only one daily record per day is allowed — edit it instead.`)
           setSaving(false)
           return
         }
@@ -579,12 +609,12 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   const inputCls = "w-full border border-gray-200 rounded-lg px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-600 focus:outline-none transition"
 
   // الموظف: من حساب المستخدم (للسجل الجديد) أو من السجل المحفوظ؛ الرقم الوظيفي بجانبه ومربوط بالطباعة
-  const empName = sale ? (sale.employee_name || sale.created_by_name || '—') : (canProxy ? (proxyEmp?.full_name_ar || '— اختر الموظف —') : (profile?.full_name_ar || '—'))
+  const empName = sale ? (sale.employee_name || sale.created_by_name || '—') : (proxyOn ? (proxyEmp?.full_name_ar || '— اختر الموظف —') : (profile?.full_name_ar || '—'))
   const empJob  = sale
     ? ((!sale.employee_name || sale.employee_name === sale.created_by_name) ? (sale.created_by_user?.job_number ?? null) : null)
-    : (canProxy ? (proxyEmp?.job_number ?? null) : (profile?.job_number ?? null))
+    : (proxyOn ? (proxyEmp?.job_number ?? null) : (profile?.job_number ?? null))
   const stationLabel = (() => {
-    const id = canProxy ? proxyEmp?.station_id : ((isGeneralAdmin || multi) ? form.station_id : (sale?.station_id ?? profile.station_id))
+    const id = proxyOn ? proxyEmp?.station_id : ((isGeneralAdmin || multi) ? form.station_id : (sale?.station_id ?? profile.station_id))
     // الموظف العادي لا تُحمَّل له قائمة المحطات — نرجع لمحطته من بروفايله (أو محطات عمله المتعددة)
     const st = stations.find(s => s.id === id) ?? workStations?.find(s => s.id === id) ?? sale?.station ?? (id && id === profile?.station_id ? profile.station : null)
     return st ? (isAr ? (st.name_ar || st.name_en) : (st.name_en || st.name_ar)) : null
@@ -638,12 +668,45 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
           <fieldset disabled={isLocked} className="space-y-3.5 disabled:opacity-70 min-w-0">
 
             {canProxy && (
+              <div className="space-y-2.5">
+                <p className="text-[11px] font-bold text-gray-500">{isAr ? 'لمن هذه اليومية؟' : 'Who is this record for?'}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'self', t: isAr ? 'يوميتي أنا' : 'My own record', d: isAr ? 'تُسجَّل باسمك' : 'Recorded under you' },
+                    { id: 'employee', t: isAr ? 'لأحد موظفيّ' : 'For one of my staff', d: isAr ? 'تُنسب للموظف وتظهر «أدخلها المشرف»' : 'Belongs to the employee, marked as entered by you' },
+                  ].map(o => (
+                    <button key={o.id} type="button" onClick={() => { setWho(o.id); setProxyId('') }}
+                      className={`text-start rounded-lg border-2 px-3 py-2.5 transition ${who === o.id ? 'border-emerald-600 bg-emerald-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
+                      <p className={`text-sm font-bold ${who === o.id ? 'text-emerald-800' : 'text-gray-800'}`}>{o.t}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{o.d}</p>
+                    </button>
+                  ))}
+                </div>
+                {who === 'employee' && (
+                  <div>
+                    <SearchSelect required className={inputCls} isAr={isAr} value={proxyId} onChange={setProxyId}
+                      placeholder={isAr ? '— اختر الموظف —' : '— Select employee —'}
+                      options={proxyEmps.map(e => ({
+                        value: e.id, disabled: !!dayRecs[e.id],
+                        label: `${e.full_name_ar}${e.job_number ? ` (${e.job_number})` : ''} — ${isAr ? e.station?.name_ar : (e.station?.name_en || e.station?.name_ar)}${dayRecs[e.id] ? (isAr ? ' · ✓ سجّل يوميته' : ' · ✓ already recorded') : ''}`,
+                      }))} />
+                    <p className="text-[11px] text-gray-500 mt-1">{isAr ? `${proxyEmps.length} موظف في نطاقك — ${takenCount} سجّلوا يوميتهم بتاريخ ${form.sale_date}، و${proxyEmps.length - takenCount} متاحون.` : `${proxyEmps.length} staff — ${takenCount} already recorded on ${form.sale_date}, ${proxyEmps.length - takenCount} available.`}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {trackDay && (
               <div>
-                <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'الموظف * (تُدخل اليومية باسمه)' : 'Employee * (record is entered for them)'}</label>
-                <SearchSelect required className={inputCls} isAr={isAr} value={proxyId} onChange={setProxyId}
-                  placeholder={isAr ? '— اختر الموظف —' : '— Select employee —'}
-                  options={proxyEmps.map(e => ({ value: e.id, label: `${e.full_name_ar}${e.job_number ? ` (${e.job_number})` : ''} — ${isAr ? e.station?.name_ar : (e.station?.name_en || e.station?.name_ar)}` }))} />
-                <p className="text-[11px] text-gray-400 mt-1">{isAr ? 'تُنسب اليومية للموظف وتظهر «أدخلها المشرف» باسمك.' : 'The record belongs to the employee and is marked as entered by you.'}</p>
+                {ownerRec ? (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-3">
+                    <p className="text-xs font-bold text-amber-900">{isAr ? `${proxyOn ? 'هذا الموظف' : 'أنت'} ${proxyOn ? 'لديه' : 'لديك'} يومية مسجلة بتاريخ ${form.sale_date}${SHIFTS.find(x => x.value === ownerRec.shift) ? ` (${SHIFTS.find(x => x.value === ownerRec.shift).ar})` : ''}${ownerRec.is_confirmed ? ' — مؤكدة' : ''}.` : 'A record already exists for this date.'}</p>
+                    <p className="text-[11px] text-amber-800 mt-0.5">{isAr ? 'لا يمكن إضافة يومية ثانية في نفس اليوم. افتحها وعدّلها إن لزم.' : 'A second record on the same day is not allowed. Open it to edit.'}</p>
+                    {onOpenExisting && <button type="button" onClick={() => onOpenExisting(ownerRec.id)} className="mt-2 text-xs font-bold bg-amber-600 text-white rounded-lg px-3 py-1.5">{isAr ? 'فتح اليومية للتعديل' : 'Open the record'}</button>}
+                  </div>
+                ) : (ownerId ? (
+                  <p className="text-[11px] font-semibold text-emerald-700">{isAr ? `✓ لا توجد يومية ${proxyOn ? 'لهذا الموظف' : 'لك'} بتاريخ ${form.sale_date} — يمكنك الإضافة.` : `✓ No record for ${form.sale_date} — you can add one.`}</p>
+                ) : null)}
               </div>
             )}
 
@@ -653,7 +716,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                 {(empName || '؟').trim().charAt(0)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-gray-400">{canProxy ? (isAr ? 'الموظف المختار' : 'Selected employee') : (isAr ? 'الموظف (من الحساب)' : 'Employee (from account)')}{sale?.entered_by_name ? (isAr ? ` · أدخلها المشرف ${sale.entered_by_name}` : ` · entered by ${sale.entered_by_name}`) : ''}</p>
+                <p className="text-[11px] text-gray-400">{proxyOn ? (isAr ? 'الموظف المختار' : 'Selected employee') : (isAr ? 'الموظف (من الحساب)' : 'Employee (from account)')}{sale?.entered_by_name ? (isAr ? ` · أدخلها المشرف ${sale.entered_by_name}` : ` · entered by ${sale.entered_by_name}`) : ''}</p>
                 <p className="text-sm font-bold text-gray-900 truncate" dir="auto">{empName}</p>
               </div>
               <div className="text-end shrink-0">
@@ -665,7 +728,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
             {/* بيانات السجل */}
             <SectionCard n={1} title={isAr ? 'بيانات السجل' : 'Record details'}>
               <div className="space-y-3">
-                {(isGeneralAdmin || multi) && !canProxy && (
+                {(isGeneralAdmin || multi) && !proxyOn && (
                   <div>
                     <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'المحطة *' : 'Station *'}</label>
                     <SelectField required className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
@@ -686,8 +749,8 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
                     </SelectField>
                   </div>
                 </div>
-                <ShiftBoard stationId={canProxy ? proxyEmp?.station_id : ((isGeneralAdmin || multi) ? form.station_id : profile.station_id)} date={form.sale_date} shift={form.shift}
-                  onPick={v => set('shift', v)} saleId={sale?.id} employeeName={form.employee_name} profileId={sale?.created_by ?? (canProxy ? proxyEmp?.id : profile?.id)} isAr={isAr} />
+                <ShiftBoard stationId={proxyOn ? proxyEmp?.station_id : ((isGeneralAdmin || multi) ? form.station_id : profile.station_id)} date={form.sale_date} shift={form.shift}
+                  onPick={v => set('shift', v)} saleId={sale?.id} employeeName={form.employee_name} profileId={sale?.created_by ?? (proxyOn ? proxyEmp?.id : profile?.id)} isAr={isAr} />
                 {!sale && (() => {
                   const sug = SHIFTS.find(x => x.value === suggested.shift)
                   const mismatch = form.shift !== suggested.shift || form.sale_date !== suggested.date
@@ -868,7 +931,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         {/* ═ الذيل: أزرار ثابتة ═ */}
         <div className="shrink-0 px-5 py-3.5 bg-white border-t border-gray-200 flex items-center gap-2.5" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
           {!isLocked && (
-            <button type="submit" disabled={saving}
+            <button type="submit" disabled={saving || !!ownerRec || (proxyOn && !proxyId)}
               className="flex-1 bg-green-700 text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-green-800 transition-colors ">
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ السجل' : 'Save record')}
             </button>
@@ -1536,6 +1599,12 @@ export default function SalesPage() {
           stations={stations}
           onClose={() => setModal(null)}
           onSaved={fetchRecords}
+          onOpenExisting={async id => {
+            const r = records.find(x => x.id === id)
+            if (r) { setModal(r); return }
+            const { data } = await supabase.from('sales_records').select('*, station:station_id(name_ar, name_en)').eq('id', id).maybeSingle()
+            if (data) setModal({ ...data, created_by_user: { job_number: null } })
+          }}
         />
       )}
       {audit && <AuditModal sale={audit} onClose={() => setAudit(null)} />}
