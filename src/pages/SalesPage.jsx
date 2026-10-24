@@ -486,7 +486,11 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
           updated_by_name: profile.full_name_ar,
           updated_at:      new Date().toISOString(),
         }),
-      }).eq('id', sale.id)
+      }).eq('id', sale.id).select('id')
+      // سياسة الأمان قد ترفض التعديل بصمت (0 صف) فيبدو للمستخدم أنه حُفظ وهو لم يُحفظ — نكشف ذلك بدل الإغلاق الكاذب
+      if (!res.error && (!res.data || res.data.length === 0)) {
+        res = { error: { message: 'SALES_UPDATE_BLOCKED' } }
+      }
     } else {
       // التكرار = نفس الموظف بنفس المحطة والتاريخ والوردية (أكثر من موظف بنفس الوردية مسموح، والأدمن يدخل لعدة موظفين)
       const normName = v => String(v || '').trim().toLowerCase()
@@ -501,9 +505,11 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     }
 
     if (res.error) {
+      const blocked = res.error.message === 'SALES_UPDATE_BLOCKED'
       const dup = /duplicate key|unique constraint/i.test(res.error.message || '')
       const future = /sales_future_day/.test(res.error.message || '')
-      setError(future ? (isAr ? `اليوم الجديد لم يُفتح بعد (يُفتح ${fmtCutoff(cutoffMin)}). أدخل الوردية بتاريخ أمس.` : 'The new day is not open yet. Use yesterday\'s date.')
+      setError(blocked ? (isAr ? 'لم يُحفظ التعديل: لا تملك صلاحية تعديل هذه اليومية الآن (غالباً لانتهاء يومها التشغيلي أو لأنها لموظف آخر). لا تُضف يومية جديدة بدلاً منها، وتواصل مع المحاسب أو الأدمن لتعديلها.' : 'The change was NOT saved: you cannot edit this record now (usually its business day has ended, or it belongs to someone else). Do not add a new one; ask the accountant or admin to edit it.')
+        : future ? (isAr ? `اليوم الجديد لم يُفتح بعد (يُفتح ${fmtCutoff(cutoffMin)}). أدخل الوردية بتاريخ أمس.` : 'The new day is not open yet. Use yesterday\'s date.')
         : dup
         ? (isAr ? 'يوجد سجل مطابق لنفس الموظف والمحطة والتاريخ والوردية. افتحه وعدّله من القائمة، أو غيّر الوردية/التاريخ.' : 'A matching record already exists for this employee, station, date and shift. Edit it from the list, or change the shift/date.')
         : res.error.message)
