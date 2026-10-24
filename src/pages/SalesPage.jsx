@@ -323,7 +323,7 @@ export function printSaleRecord({ sale, isAr, profile }) {
 /* ─── Sales Modal ───────────────────────────────────────── */
 export function SalesModal({ sale, stations, onClose, onSaved }) {
   useEscapeKey(onClose)
-  const { profile, isAccountant, isGeneralAdmin, isAreaSupervisor, allowCap, workStations } = useAuth()
+  const { profile, isAccountant, isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowCap, workStations } = useAuth()
   const { settings } = useAppSettings()
   SHIFTS = salesShiftsFrom(null)
   // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
@@ -372,6 +372,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
     deficit_acknowledged:  false,
   })
   const [saving, setSaving] = useState(false)
+  const [confirmUnconfirm, setConfirmUnconfirm] = useState(false)
   // ورديات المحطة المختارة (3 أو 4): من إعداد المحطة نفسها، وإلا الافتراضي العام من الإعدادات
   const curStationId = (isGeneralAdmin || multi) ? form.station_id : profile.station_id
   const [stEnds, setStEnds] = useState({})
@@ -406,6 +407,19 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
   function removeBalanceRef(i)  { set('balance_refs', form.balance_refs.filter((_, idx) => idx !== i)) }
   function setBalanceRef(i, v)  { const refs = [...form.balance_refs]; refs[i] = v; set('balance_refs', refs) }
   function persistCashier()   { localStorage.setItem(CASHIER_KEY,  form.cashier_ref)   }
+
+  // المحاسب (أو الأدمن) يلغي تأكيد اليومية لتعود قابلة لتعديل الموظف
+  const canUnconfirm = !!sale?.is_confirmed && (isGeneralAdmin || (isAccountant && allowCap('sales_confirm')))
+  async function doUnconfirm() {
+    setConfirmUnconfirm(false); setSaving(true); setError('')
+    const { data, error: upErr } = await supabase.from('sales_records').update({
+      is_confirmed: false, confirmed_by: null, confirmed_by_name: null, confirmed_at: null,
+      updated_by: profile.id, updated_by_name: profile.full_name_ar, updated_at: new Date().toISOString(),
+    }).eq('id', sale.id).select('id')
+    setSaving(false)
+    if (upErr || !data?.length) { setError(upErr?.message || (isAr ? 'لم يُلغَ التأكيد: لا تملك صلاحية على هذه اليومية.' : 'Could not remove the confirmation: no permission for this record.')); return }
+    onSaved(); onClose()
+  }
 
   async function handleSave(e) {
     e.preventDefault()
@@ -502,7 +516,7 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         return
       }
       // الموظف لا يضيف أكثر من يومية في اليوم الواحد (الأدمن والمحاسب ومشرف المنطقة يدخلون لعدة موظفين فلا يُقيَّدون)
-      if (!isGeneralAdmin && !isAccountant && !isAreaSupervisor) {
+      if (!isGeneralAdmin && !isAccountant && !isAreaSupervisor && !isStationAdmin) {
         const { data: sameDay } = await supabase.from('sales_records').select('id, shift')
           .eq('created_by', profile.id).eq('sale_date', form.sale_date).limit(1)
         if (sameDay?.length) {
@@ -804,6 +818,13 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
             )}
           </fieldset>
 
+          {canUnconfirm && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-amber-900 leading-relaxed flex-1 min-w-[200px]">{isAr ? 'هذه اليومية مؤكدة. بعد إلغاء التأكيد يستطيع الموظف تعديلها من جديد، ثم تؤكدها أنت بعد المراجعة.' : 'This record is confirmed. After removing the confirmation the employee can edit it again, then you confirm after review.'}</p>
+              <button type="button" disabled={saving} onClick={() => setConfirmUnconfirm(true)} className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50 shrink-0">{isAr ? 'إلغاء التأكيد' : 'Remove confirmation'}</button>
+            </div>
+          )}
+
           {error && <p className="text-red-600 text-xs bg-red-50 rounded-lg p-2.5 border border-red-100">⚠ {error}</p>}
         </div>
 
@@ -828,6 +849,11 @@ export function SalesModal({ sale, stations, onClose, onSaved }) {
         </div>
         </form>
       </div>
+      {confirmUnconfirm && (
+        <ConfirmDialog danger={false} message={isAr ? 'إلغاء تأكيد هذه اليومية ليتمكن الموظف من تعديلها؟' : 'Remove the confirmation so the employee can edit this record?'}
+          confirmLabel={isAr ? 'إلغاء التأكيد' : 'Remove confirmation'} cancelLabel={isAr ? 'تراجع' : 'Back'}
+          onConfirm={doUnconfirm} onCancel={() => setConfirmUnconfirm(false)} />
+      )}
     </div>
   )
 }
