@@ -321,6 +321,15 @@ export function printSaleRecord({ sale, isAr, profile }) {
     openDocWindow(html)
 }
 
+// محطات الوكلاء: ليس لها يوميات إيرادات — تُستبعد من القوائم والإدخال (تُقرأ مرة واحدة بالجلسة)
+let agentIdsCache = null
+async function loadAgentIds() {
+  if (agentIdsCache) return agentIdsCache
+  const { data, error } = await supabase.from('stations').select('id, is_agent')
+  agentIdsCache = new Set(error ? [] : (data ?? []).filter(x => x.is_agent).map(x => x.id))
+  return agentIdsCache
+}
+
 /* ─── Sales Modal ───────────────────────────────────────── */
 export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting }) {
   useEscapeKey(onClose)
@@ -335,6 +344,8 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
   const [savedCashier]  = useState(() => localStorage.getItem(CASHIER_KEY)  ?? '')
 
   // مشرف المحطة/المنطقة يضيف يومية باسم موظف من نطاقه: تُنسب للموظف نفسه وتُسجَّل «أدخلها المشرف»
+  const [agentIds, setAgentIds] = useState(() => new Set())
+  useEffect(() => { loadAgentIds().then(setAgentIds) }, [])
   const canProxy = !sale && !isGeneralAdmin && (isStationAdmin || isAreaSupervisor)
   const [proxyEmps, setProxyEmps] = useState([])
   const [proxyId, setProxyId] = useState('')
@@ -346,11 +357,12 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
     let off = false
     ;(async () => {
       let q = supabase.from('users').select('id, full_name_ar, job_number, station_id, station:station_id(name_ar, name_en)')
-        .eq('is_active', true).eq('role', 'station_employee').or('job_title.is.null,job_title.neq.cleaner').order('full_name_ar')   // عمال النظافة لا علاقة لهم بالإيرادات
-      const scope = isAreaSupervisor ? allowedStationIds : (workStations?.length ? workStations.map(w => w.id) : [profile.station_id])
+        .eq('is_active', true).eq('role', 'station_employee').or('job_title.is.null,job_title.neq.cleaner').or('is_agent.is.null,is_agent.eq.false').order('full_name_ar')   // عمال النظافة والوكلاء لا علاقة لهم بالإيرادات
+      const scope = isAreaSupervisor ? allowedStationIds : [profile.station_id]   // مشرف المحطة: موظفو محطته فقط
       if (scope) q = q.in('station_id', scope)
       const { data } = await q.limit(1000)
-      if (!off) setProxyEmps(data ?? [])
+      const ag = await loadAgentIds()
+      if (!off) setProxyEmps((data ?? []).filter(e => !ag.has(e.station_id)))
     })()
     return () => { off = true }
   }, [canProxy]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -733,7 +745,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
                     <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'المحطة *' : 'Station *'}</label>
                     <SelectField required className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
                       <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
-                      {(multi ? workStations : stations).map(s => <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>)}
+                      {(multi ? workStations : stations).filter(s => !agentIds.has(s.id)).map(s => <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>)}
                     </SelectField>
                   </div>
                 )}
@@ -1043,10 +1055,10 @@ export default function SalesPage() {
   useEffect(() => {
     if (isGeneralAdmin) {
       supabase.from('stations').select('id,name_ar,name_en').eq('is_active', true).order('name_ar')
-        .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
+        .then(async ({ data }) => { const ag = await loadAgentIds(); setStations((data ?? []).filter(s => !isRestStation(s) && !ag.has(s.id))) })
     } else if ((isAreaSupervisor || isStationAdmin) && allowedStationIds?.length) {
       supabase.from('stations').select('id,name_ar,name_en').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
-        .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
+        .then(async ({ data }) => { const ag = await loadAgentIds(); setStations((data ?? []).filter(s => !isRestStation(s) && !ag.has(s.id))) })
     }
   }, [isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds])
 
@@ -1076,7 +1088,9 @@ export default function SalesPage() {
     // ── Privacy filters ──────────────────────────────────
     if (isGeneralAdmin) {
       if (filterStation) q = q.eq('station_id', filterStation)
-    } else if ((isAreaSupervisor || isStationAdmin) && allowedStationIds?.length) {
+    } else if (isStationAdmin && !isAreaSupervisor) {
+      q = q.eq('station_id', profile.station_id)   // مشرف المحطة يرى يوميات محطته فقط
+    } else if (isAreaSupervisor && allowedStationIds?.length) {
       const ids = filterStation ? [filterStation] : allowedStationIds
       q = q.in('station_id', ids)
     } else if (isStationAdmin || isAccountant) {
@@ -1089,7 +1103,8 @@ export default function SalesPage() {
     if (error) { setLoading(false); return }
 
     // جلب الرقم الوظيفي للموظفين بشكل منفصل
-    const rows = data ?? []
+    const agentIds = await loadAgentIds()
+    const rows = (data ?? []).filter(r => !agentIds.has(r.station_id))   // محطات الوكلاء بلا يوميات
     const creatorIds = [...new Set(rows.map(r => r.created_by).filter(Boolean))]
     let jobMap = {}
     if (creatorIds.length > 0) {
