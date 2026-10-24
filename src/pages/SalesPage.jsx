@@ -346,7 +346,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
     let off = false
     ;(async () => {
       let q = supabase.from('users').select('id, full_name_ar, job_number, station_id, station:station_id(name_ar, name_en)')
-        .eq('is_active', true).eq('role', 'station_employee').order('full_name_ar')
+        .eq('is_active', true).eq('role', 'station_employee').or('job_title.is.null,job_title.neq.cleaner').order('full_name_ar')   // عمال النظافة لا علاقة لهم بالإيرادات
       const scope = isAreaSupervisor ? allowedStationIds : (workStations?.length ? workStations.map(w => w.id) : [profile.station_id])
       if (scope) q = q.in('station_id', scope)
       const { data } = await q.limit(1000)

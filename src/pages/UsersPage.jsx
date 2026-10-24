@@ -1619,7 +1619,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{isAr ? 'المسمى الوظيفي' : 'Job Title'}</label>
-                <SelectField className={inputCls} value={form.job_title} onChange={e => set('job_title', e.target.value)}>
+                <SelectField className={inputCls} value={form.job_title} onChange={e => { const v = e.target.value; set('job_title', v); if (v === 'cleaner') set('allowed_modules', ['evaluation']) }}>   {/* عامل النظافة: التقييم فقط، بلا إيرادات ولا أقسام أخرى */}
                   <option value="">{isAr ? '— اختر —' : '— Select —'}</option>
                   {withCustomJobTitles(customTitles).map(j => <option key={j.value} value={j.value}>{isAr ? j.ar : j.en}</option>)}
                 </SelectField>
