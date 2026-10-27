@@ -22,6 +22,7 @@ export default function DailySurveyGate() {
   const [busy, setBusy] = useState(false)
   const [finished, setFinished] = useState(false)
   const [frameKey, setFrameKey] = useState(0)
+  const [fails, setFails] = useState(0)        // محاولات تحقق فاشلة متتالية (بعدها يظهر الاعتماد اليدوي)
   const sinceRef = useRef(new Date(Date.now() - 3000).toISOString())
   const active = enabled && !!profile?.id && !isGeneralAdmin
 
@@ -48,19 +49,20 @@ export default function DailySurveyGate() {
     return () => { off = true }
   }, [active, profile?.id, day]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const next = useCallback(async () => {
+  const next = useCallback(async (manual = false) => {
     setBusy(true); setMsg({ kind: '', text: '' })
     try {
       // التحقق من وصول تقييم جديد فعلاً من الراكب (إن لم تُنشأ الدالة بعد نكتفي بتأكيد الموظف)
-      const { data: cnt, error: re } = await supabase.rpc('survey_count_since', { p_since: sinceRef.current })
+      const { data: cnt, error: re } = manual ? { data: 1, error: null } : await supabase.rpc('survey_count_since', { p_since: sinceRef.current })
       if (!re && (Number(cnt) || 0) < 1) {
+        setFails(f => f + 1)
         setMsg({ kind: 'warn', text: 'لم يصل تقييم جديد بعد. اطلب من الراكب إكمال الاستبيان حتى النهاية (الضغط على «إرسال») ثم اضغط هنا.' })
         setBusy(false); return
       }
       const nd = (done ?? 0) + 1
       const { error: ue } = await supabase.from('user_daily_survey').upsert({ user_id: profile.id, day, done: nd, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day' })
       if (ue) { setMsg({ kind: 'err', text: 'تعذّر حفظ التقدّم: ' + ue.message }); setBusy(false); return }
-      setDone(nd)
+      setDone(nd); setFails(0)
       if (nd >= need) { setFinished(true); setTimeout(() => setFinished(false), 2500) }
       else { sinceRef.current = new Date(Date.now() - 3000).toISOString(); setFrameKey(k => k + 1); setMsg({ kind: 'ok', text: 'تم احتساب التقييم. سلّم الجهاز للراكب التالي.' }) }
     } catch (e) { setMsg({ kind: 'err', text: e.message || 'حدث خطأ' }) }
@@ -82,11 +84,17 @@ export default function DailySurveyGate() {
           {dots.map((on, i) => <span key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: on ? '#34d399' : 'rgba(255,255,255,.18)' }} />)}
           <b style={{ color: '#fff', fontSize: '.8rem', marginInlineStart: 8, fontFamily: 'monospace' }}>{done} / {need}</b>
         </div>
-        <button type="button" disabled={busy || finished} onClick={next}
+        <button type="button" disabled={busy || finished} onClick={() => next(false)}
           style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 18px', fontWeight: 800, fontSize: '.82rem', cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>
           {busy ? 'جارٍ التحقق...' : 'تم تقييم الراكب، التالي'}
         </button>
       </div>
+      {fails >= 2 && !busy && (
+        <div style={{ flexShrink: 0, padding: '8px 16px', background: '#1f2937', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ color: 'rgba(255,255,255,.8)', fontSize: '.75rem', flex: 1 }}>إن أرسل الراكب تقييمه فعلاً ولم يُحتسب، يمكنك اعتماده يدوياً.</span>
+          <button type="button" onClick={() => next(true)} style={{ background: 'transparent', color: '#fbbf24', border: '1px solid #fbbf24', borderRadius: 8, padding: '5px 12px', fontSize: '.74rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>اعتماد يدوي</button>
+        </div>
+      )}
       {msg.text && (
         <div style={{ flexShrink: 0, padding: '8px 16px', fontSize: '.78rem', fontWeight: 600, color: '#fff', background: msg.kind === 'ok' ? '#047857' : msg.kind === 'warn' ? '#b45309' : '#b91c1c' }}>{msg.text}</div>
       )}
