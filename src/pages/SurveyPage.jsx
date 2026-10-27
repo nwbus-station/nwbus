@@ -534,7 +534,7 @@ export default function SurveyPage() {
           )}
 
           {/* ── شبكة المدن (للأدمن أو بدون محطة) ── */}
-          {isAdmin && <DailySurveySettings />}
+          {isAdmin && <DailySurveySettings cities={cities} detectCity={detectSurveyCity} />}
 
           {(isAdmin || !detectedCity) && (
             <div>

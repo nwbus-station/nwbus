@@ -6,7 +6,7 @@ import { ADMIN_ROLE_VALUES } from '../../utils/constants'
 import { riyadhDay } from '../../utils/dates'
 
 // إعداد الأدمن: تفعيل التقييم اليومي الإلزامي وعدد التقييمات، ومتابعة من أكمل اليوم
-export default function DailySurveySettings() {
+export default function DailySurveySettings({ cities = [], detectCity = () => null }) {
   const { settings, saveSetting } = useAppSettings()
   const enabled = String(settings?.daily_survey_enabled) === 'true'
   const count = Math.max(1, Number(settings?.daily_survey_count) || 5)
@@ -22,6 +22,39 @@ export default function DailySurveySettings() {
   const [results, setResults] = useState([])
   const [confirmReset, setConfirmReset] = useState(false)
   const [resetMsg, setResetMsg] = useState('')
+  // فحص حساب: لماذا يظهر أو لا يظهر له التقييم
+  const [cq, setCq] = useState('')
+  const [cres, setCres] = useState([])
+  const [diag, setDiag] = useState(null)
+  useEffect(() => {
+    const term = cq.trim().replace(/[%,()*]/g, '')
+    if (term.length < 2) { setCres([]); return }
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('users').select('id, full_name_ar, job_number, station:station_id(name_ar)').or(`full_name_ar.ilike.%${term}%,job_number.ilike.%${term}%,username.ilike.%${term}%`).limit(8)
+      setCres(data ?? [])
+    }, 250)
+    return () => clearTimeout(t)
+  }, [cq])
+  async function runDiag(u) {
+    setCres([]); setCq(''); setDiag({ loading: true, name: u.full_name_ar })
+    const [{ data: usr }, { data: prog, error: pe }] = await Promise.all([
+      supabase.from('users').select('id, role, station_id, station:station_id(name_ar, name_en, survey_city)').eq('id', u.id).maybeSingle(),
+      supabase.from('user_daily_survey').select('done').eq('user_id', u.id).eq('day', riyadhDay()).maybeSingle(),
+    ])
+    const reasons = []
+    const isAdminRole = ADMIN_ROLE_VALUES.includes(usr?.role)
+    if (!enabled) reasons.push('التقييم اليومي معطّل (فعّل المفتاح أعلاه).')
+    if (isAdminRole) reasons.push('الحساب أدمن، والأدمن مستثنى من التقييم.')
+    if (target === 'selected' && !selectedIds.includes(u.id)) reasons.push('الفئة «حسابات محددة» وهذا الحساب ليس ضمنها.')
+    const key = detectCity(usr?.station)
+    const city = cities.find(c => c.city === key && c.is_active !== false)
+    if (!usr?.station_id) reasons.push('الحساب غير مرتبط بمحطة.')
+    else if (!city) reasons.push(`محطته (${usr?.station?.name_ar || '—'}) لا ترتبط بمدينة استبيان نشطة، فلا يوجد رابط يُعرض له. اربط المحطة بمدينة من «تعديل روابط المدن».`)
+    if (pe) reasons.push('جدول المتابعة غير مُنشأ أو لا يُقرأ: ' + pe.message)
+    const done = prog?.done ?? 0
+    if (!pe && done >= count) reasons.push(`أكمل اليوم (${done} / ${count}) فلن يظهر حتى الغد. استخدم «تصفير تقدّم اليوم».`)
+    setDiag({ name: u.full_name_ar, ok: reasons.length === 0, reasons, station: usr?.station?.name_ar, city: city ? `${city.ar} (${city.city})` : '—', done })
+  }
   useEffect(() => setCountDraft(String(count)), [count])
 
   useEffect(() => {
@@ -88,6 +121,24 @@ export default function DailySurveySettings() {
         </button>
       </div>
       <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+          <p style={{ margin: 0, fontSize: '.78rem', fontWeight: 700, color: 'var(--text-2)' }}>فحص حساب: لماذا يظهر أو لا يظهر له التقييم؟</p>
+          <input value={cq} onChange={e => setCq(e.target.value)} placeholder="اكتب اسم الموظف أو رقمه الوظيفي..." style={{ width: '100%', marginTop: 6, padding: '7px 10px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '.78rem', boxSizing: 'border-box' }} />
+          {cres.length > 0 && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, marginTop: 4, background: 'var(--card)' }}>
+              {cres.map(u => <button key={u.id} type="button" onClick={() => runDiag(u)} style={{ display: 'block', width: '100%', textAlign: 'start', padding: '7px 12px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', color: 'var(--text-1)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '.78rem' }}>{u.full_name_ar} <span style={{ color: 'var(--text-3)' }}>· {u.station?.name_ar || '—'}</span></button>)}
+            </div>
+          )}
+          {diag && !diag.loading && (
+            <div style={{ marginTop: 8, fontSize: '.78rem', color: 'var(--text-1)', lineHeight: 1.7 }}>
+              <b>{diag.name}</b> — المحطة: {diag.station || '—'} · مدينة الاستبيان: {diag.city} · تقدّم اليوم: {diag.done}/{count}
+              {diag.ok
+                ? <p style={{ margin: '4px 0 0', color: '#059669', fontWeight: 700 }}>سيظهر له التقييم عند فتح البرنامج.</p>
+                : <ul style={{ margin: '4px 0 0', paddingInlineStart: 18, color: '#b45309' }}>{diag.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>}
+            </div>
+          )}
+          {diag?.loading && <p style={{ margin: '6px 0 0', fontSize: '.75rem', color: 'var(--text-3)' }}>جارٍ الفحص...</p>}
+        </div>
         <p style={{ margin: '0 0 8px', fontSize: '.78rem', fontWeight: 700, color: 'var(--text-2)' }}>من يشمله التقييم؟</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
           {[{ id: 'all', t: 'كل الحسابات (عدا الأدمن العام)' }, { id: 'selected', t: 'حسابات محددة' }].map(o => (
