@@ -71,7 +71,7 @@ export default function DailySurveyGate() {
       const { data: cnt, error: re } = manual ? { data: 1, error: null } : await supabase.rpc('survey_count_since', { p_since: sinceRef.current })
       if (!re && (Number(cnt) || 0) < 1) {
         setFails(f => f + 1)
-        setMsg({ kind: 'warn', text: 'لم يصل تقييم جديد بعد. اطلب من الراكب إكمال الاستبيان حتى النهاية (الضغط على «إرسال») ثم اضغط هنا.' })
+        setMsg({ kind: 'warn', text: 'لم يصل تقييم جديد بعد. اطلب من الراكب إكمال الاستبيان حتى النهاية (الضغط على أحد الوجوه) ثم اضغط هنا.' })
         setBusy(false); return
       }
       const nd = (done ?? 0) + 1
@@ -132,7 +132,7 @@ export default function DailySurveyGate() {
       <div style={{ flexShrink: 0, background: '#111', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <p style={{ margin: 0, color: '#fff', fontSize: '.85rem', fontWeight: 800 }}>التقييم اليومي لتجربة الراكب{preview ? ' — معاينة (لا تُحتسب)' : ''}</p>
-          <p style={{ margin: '2px 0 0', color: 'rgba(255,255,255,.55)', fontSize: '.7rem' }}>اعرض الشاشة على راكب ليختار الوجه المعبّر عن رضاه ثم يضغط «إرسال». يُحتسب التقييم تلقائياً بمجرد إرساله، وكرّر حتى يكتمل العدد.</p>
+          <p style={{ margin: '2px 0 0', color: 'rgba(255,255,255,.55)', fontSize: '.7rem' }}>اعرض الشاشة على راكب ليضغط الوجه المعبّر عن رضاه. يُحتسب التقييم تلقائياً بمجرد ضغطه، وكرّر حتى يكتمل العدد.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} aria-label={`${done} من ${need}`}>
           {dots.map((on, i) => <span key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: on ? '#34d399' : 'rgba(255,255,255,.18)' }} />)}

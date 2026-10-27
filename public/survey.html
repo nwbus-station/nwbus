@@ -6,6 +6,7 @@
 <title>كيف كانت تجربتك؟ | How was your experience?</title>
 
 <style>
+*{box-sizing:border-box}
 body{
   font-family:system-ui,Segoe UI,Arial;
   max-width:540px;
@@ -34,17 +35,19 @@ h1{
 
 .row{
   display:flex;
-  gap:12px;
+  gap:8px;
+  direction:rtl;
   justify-content:space-between
 }
 
 button{
-  flex:1;
+  flex:1 1 0;
+  min-width:0;
   min-height:80px;
-  padding:20px;
+  padding:16px 0;
   border:1px solid #ddd;
   border-radius:16px;
-  font-size:38px;
+  font-size:clamp(26px,9vw,38px);
   cursor:pointer;
   line-height:1;
   background:#fff
