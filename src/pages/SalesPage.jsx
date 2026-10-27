@@ -1080,8 +1080,10 @@ export default function SalesPage() {
     } else if ((isAreaSupervisor || isStationAdmin) && allowedStationIds?.length) {
       supabase.from('stations').select('id,name_ar,name_en').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(async ({ data }) => { const ag = await loadAgentIds(); setStations((data ?? []).filter(s => !isRestStation(s) && !ag.has(s.id))) })
+    } else if (isAccountant && workStations?.length > 1) {
+      loadAgentIds().then(ag => setStations(workStations.filter(s => !isRestStation(s) && !ag.has(s.id)).map(s => ({ id: s.id, name_ar: s.name_ar, name_en: s.name_en }))))
     }
-  }, [isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds])
+  }, [isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, isAccountant, workStations])
 
   async function handleDelete(id) {
     setConfirmDel(id)
@@ -1115,7 +1117,8 @@ export default function SalesPage() {
       const ids = filterStation ? [filterStation] : allowedStationIds
       q = q.in('station_id', ids)
     } else if (isStationAdmin || isAccountant) {
-      q = workStations?.length > 1 ? q.in('station_id', workStations.map(x => x.id)) : q.eq('station_id', profile.station_id)
+      const wsIds = workStations?.map(x => x.id) ?? []
+      q = wsIds.length > 1 ? (wsIds.includes(filterStation) ? q.eq('station_id', filterStation) : q.in('station_id', wsIds)) : q.eq('station_id', profile.station_id)
     } else {
       q = q.eq('created_by', profile.id)
     }
@@ -1297,6 +1300,7 @@ export default function SalesPage() {
           <p className="text-xs text-gray-400 mt-0.5">
             {isGeneralAdmin ? (isAr ? 'جميع المحطات' : 'All stations')
               : (isAreaSupervisor || isStationAdmin) && allowedStationIds?.length > 1 ? (isAr ? 'محطاتك المخصصة' : 'Your assigned stations')
+              : isAccountant && workStations?.length > 1 ? (isAr ? 'محطاتك المخصصة' : 'Your assigned stations')
               : isStationAdmin || isAccountant ? (isAr ? 'محطتك فقط' : 'Your station only')
               : (isAr ? 'مبيعاتك الخاصة' : 'Your own entries')}
           </p>
@@ -1346,7 +1350,7 @@ export default function SalesPage() {
           <DatePicker value={filterDate} onChange={setFilterDate} isAr={isAr}
             className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
         </div>
-        {(isGeneralAdmin || isAreaSupervisor || isStationAdmin) && stations.length > 0 && (
+        {(isGeneralAdmin || isAreaSupervisor || isStationAdmin || (isAccountant && workStations?.length > 1)) && stations.length > 0 && (
           <>
             <button type="button" onClick={() => stepStation(isAr ? 1 : -1)} title={isAr ? 'المحطة السابقة' : 'Previous station'}
               className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 text-sm font-bold leading-none">{isAr ? '›' : '‹'}</button>
