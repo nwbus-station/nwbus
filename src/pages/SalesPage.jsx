@@ -342,6 +342,31 @@ export function printSaleRecord({ sale, isAr, profile }) {
   })()
 }
 
+// طباعة ورقة الموازنة وحدها (صورة/PDF) بترويسة اليومية — معاينة تناسب الجوال مع مشاركة وحفظ PDF
+export function printBalanceSheet({ sale, isAr, profile }) {
+  if (!sale?.balance_doc_path) return
+  const w = window.open('', '_blank')
+  try { w?.document.write(`<p style="font-family:sans-serif;padding:24px;color:#555">${isAr ? 'جارٍ تجهيز ورقة الموازنة...' : 'Preparing the balance sheet...'}</p>`) } catch { /* لا شي */ }
+  ;(async () => {
+    let url = null
+    try { url = (await supabase.storage.from('sales-docs').createSignedUrl(sale.balance_doc_path, 1800)).data?.signedUrl ?? null } catch { /* بدون رابط */ }
+    const st = sale?.station?.name_ar ?? sale?.station?.name_en ?? '—'
+    const shift = { A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج', D: 'الوردية د' }[sale?.shift] ?? sale?.shift ?? '—'
+    const emp = sale?.employee_name || sale?.created_by_name || '—'
+    const isPdf = /\.pdf$/i.test(sale.balance_doc_path)
+    const html = docShell({
+      title: `موازنة_${st}_${sale?.sale_date ?? ''}_${shift}`.replace(/\s+/g, '_'),
+      body: docHeader({ title: 'ورقة الموازنة', infoLines: [`المحطة: <b>${esc(st)}</b>`, `التاريخ: <b>${esc(sale?.sale_date ?? '—')}</b> · ${esc(shift)}`, `الموظف: <b>${esc(emp)}</b>`] })
+        + `<div class="body"><div class="sec">${!url ? '<p class="muted">تعذّر تحميل الورقة. أعد المحاولة.</p>'
+          : isPdf ? `<p class="muted">ورقة الموازنة بصيغة PDF: <a href="${url}" target="_blank">افتح الملف</a> ثم اطبعه أو احفظه.</p>`
+          : `<img src="${url}" alt="" style="display:block;width:100%;max-height:250mm;object-fit:contain;border:1px solid #dbe2ea;border-radius:8px;background:#fff">`}</div></div>`,
+      footerLeft: `طُبع: ${esc(new Date().toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' }))} · ${esc(profile?.full_name_ar ?? '')}`, footerRight: 'وثيقة داخلية',
+      shareText: `ورقة الموازنة — ${st} · ${sale?.sale_date ?? ''} · ${shift}`,
+    })
+    if (w && !w.closed) { w.document.open(); w.document.write(html); w.document.close() } else openDocWindow(html)
+  })()
+}
+
 // محطات الوكلاء: ليس لها يوميات إيرادات — تُستبعد من القوائم والإدخال (تُقرأ مرة واحدة بالجلسة)
 let agentIdsCache = null
 async function loadAgentIds() {
@@ -395,6 +420,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
   const isLocked = sale?.is_confirmed && !isGeneralAdmin
 
   const handlePrint = () => printSaleRecord({ sale, isAr, profile })
+  const canPrintHere = !!sale && (isGeneralAdmin || (isAccountant && allowCap('sales_print')) || (allowCap('sales_print') && sale.created_by === profile?.id && accountState(parseAccess(settings?.[PRINT_ACCESS_KEY]), profile?.id, todayStr()).allowed))
 
   // الوردية المتوقعة تُحسب مرة واحدة عند فتح السجل الجديد
   const cutoffMin = parseCutoff(settings?.[DAY_CUTOFF_KEY])
@@ -962,17 +988,23 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
         </div>
 
         {/* ═ الذيل: أزرار ثابتة ═ */}
-        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-gray-200 flex items-center gap-2.5" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
+        <div className="shrink-0 px-5 py-3.5 bg-white border-t border-gray-200 flex flex-wrap items-center gap-2.5" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
           {!isLocked && (
             <button type="submit" disabled={saving || !!ownerRec || (proxyOn && !proxyId)}
               className="flex-1 bg-green-700 text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-green-800 transition-colors ">
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ السجل' : 'Save record')}
             </button>
           )}
-          {sale && (isGeneralAdmin || (allowCap('sales_print') && sale.created_by === profile?.id && accountState(parseAccess(settings?.[PRINT_ACCESS_KEY]), profile?.id, todayStr()).allowed)) && (
+          {canPrintHere && (
             <button type="button" onClick={handlePrint}
-              className="flex-1 bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
-              {isAr ? 'طباعة' : 'Print'}
+              className="flex-1 min-w-[140px] bg-nwbus-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
+              {isAr ? (sale?.balance_doc_path ? 'طباعة اليومية والموازنة' : 'طباعة اليومية') : (sale?.balance_doc_path ? 'Print daily + balance' : 'Print daily')}
+            </button>
+          )}
+          {canPrintHere && sale?.balance_doc_path && (
+            <button type="button" onClick={() => printBalanceSheet({ sale, isAr, profile })}
+              className="flex-1 min-w-[140px] border border-nwbus-primary text-nwbus-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors">
+              {isAr ? 'طباعة الموازنة' : 'Print balance'}
             </button>
           )}
           <button type="button" onClick={onClose}
@@ -1158,14 +1190,14 @@ export default function SalesPage() {
 
   // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام، وللمحاسب فقط إذا فعّل له الأدمن الصلاحية
   const canExportDaily = isGeneralAdmin || (isAccountant && grantCap('sales_export_daily'))
-  // طباعة اليومية (الكشف الكامل لليوم) — للأدمن فقط
-  const canPrintDaily = isGeneralAdmin
+  // طباعة اليومية (الكشف الكامل لليوم) — للأدمن، وللمحاسب (كل محطاته)
+  const canPrintDaily = isGeneralAdmin || (isAccountant && allowCap('sales_print'))   // المحاسب: كشف محطاته
   // صلاحية طباعة يوميات الموظفين: إعداد عام يديره الأدمن (وضع عام + استثناءات حسابات، مستمر أو مؤقت)
   const { settings, saveSetting } = useAppSettings()
   SHIFTS = salesShiftsFrom(null)
   const printAccess = parseAccess(settings?.[PRINT_ACCESS_KEY])
   const [printAccessOpen, setPrintAccessOpen] = useState(false)
-  const canPrintRecord = r => isGeneralAdmin || (r.created_by === profile?.id && allowCap('sales_print') && accountState(printAccess, profile?.id, todayStr()).allowed)
+  const canPrintRecord = r => isGeneralAdmin || (isAccountant && allowCap('sales_print')) || (r.created_by === profile?.id && allowCap('sales_print') && accountState(printAccess, profile?.id, todayStr()).allowed)
   async function printDaily() {
     if (!records.length) return
     const sName = r => (isAr ? (r.station?.name_ar || r.station?.name_en) : (r.station?.name_en || r.station?.name_ar)) || '—'
@@ -1517,6 +1549,13 @@ export default function SalesPage() {
                                         className="border border-gray-200 text-gray-600 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors"
                                         title={isAr ? 'عرض ورقة الموازنة' : 'View balance document'} aria-label={isAr ? 'عرض ورقة الموازنة' : 'View balance document'}>
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /></svg>
+                                      </button>
+                                    )}
+                                    {r.balance_doc_path && canPrintRecord(r) && (
+                                      <button type="button" onClick={() => printBalanceSheet({ sale: r, isAr, profile })}
+                                        className="text-xs border border-gray-200 text-gray-600 rounded-lg px-2 py-1 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                                        title={isAr ? 'طباعة ورقة الموازنة وحدها' : 'Print the balance sheet only'}>
+                                        {isAr ? 'طباعة الموازنة' : 'Print balance'}
                                       </button>
                                     )}
                                     {canPrintRecord(r) && (
