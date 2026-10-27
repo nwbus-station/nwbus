@@ -24,7 +24,18 @@ export default function DailySurveyGate() {
   const [frameKey, setFrameKey] = useState(0)
   const [fails, setFails] = useState(0)        // محاولات تحقق فاشلة متتالية (بعدها يظهر الاعتماد اليدوي)
   const sinceRef = useRef(new Date(Date.now() - 3000).toISOString())
-  const active = enabled && !!profile?.id && !isGeneralAdmin
+  // الفئة المستهدفة: كل الحسابات (عدا الأدمن العام) أو حسابات محددة فقط
+  const target = String(settings?.daily_survey_target) === 'selected' ? 'selected' : 'all'
+  let selectedIds = []
+  try { selectedIds = JSON.parse(settings?.daily_survey_users || '[]') } catch { selectedIds = [] }
+  const [preview, setPreview] = useState(false)   // معاينة الأدمن: لا تُحتسب ولا تُحفظ
+  useEffect(() => {
+    const on = () => setPreview(true)
+    window.addEventListener('daily-survey-preview', on)
+    return () => window.removeEventListener('daily-survey-preview', on)
+  }, [])
+  const targeted = target === 'all' || selectedIds.includes(profile?.id)
+  const active = (enabled && !!profile?.id && !isGeneralAdmin && targeted) || (preview && isGeneralAdmin)
 
   // التقدّم الحالي لليوم + رابط استبيان مدينة محطة الموظف
   useEffect(() => {
@@ -43,11 +54,11 @@ export default function DailySurveyGate() {
       if (!city) { setDone(need); return }   // محطة بلا استبيان معرّف: غير مشمولة
       setUrl(city.url || `${BASE}${city.city}`)
       setReady(true)
-      setDone(row?.done ?? 0)
+      setDone(preview ? 0 : (row?.done ?? 0))
       sinceRef.current = new Date(Date.now() - 3000).toISOString()
     })()
     return () => { off = true }
-  }, [active, profile?.id, day]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, profile?.id, day, preview]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const next = useCallback(async (manual = false) => {
     setBusy(true); setMsg({ kind: '', text: '' })
@@ -60,6 +71,7 @@ export default function DailySurveyGate() {
         setBusy(false); return
       }
       const nd = (done ?? 0) + 1
+      if (preview) { setDone(nd); setFails(0); if (nd >= need) { setFinished(true); setTimeout(() => { setFinished(false); setPreview(false) }, 1800) } else { sinceRef.current = new Date(Date.now() - 3000).toISOString(); setFrameKey(k => k + 1) }; setBusy(false); return }
       const { error: ue } = await supabase.from('user_daily_survey').upsert({ user_id: profile.id, day, done: nd, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day' })
       if (ue) { setMsg({ kind: 'err', text: 'تعذّر حفظ التقدّم: ' + ue.message }); setBusy(false); return }
       setDone(nd); setFails(0)
@@ -67,7 +79,7 @@ export default function DailySurveyGate() {
       else { sinceRef.current = new Date(Date.now() - 3000).toISOString(); setFrameKey(k => k + 1); setMsg({ kind: 'ok', text: 'تم احتساب التقييم. سلّم الجهاز للراكب التالي.' }) }
     } catch (e) { setMsg({ kind: 'err', text: e.message || 'حدث خطأ' }) }
     setBusy(false)
-  }, [done, need, profile?.id, day])
+  }, [done, need, profile?.id, day, preview])
 
   if (!active || done === null) return null
   if (done >= need && !finished) return null
@@ -77,13 +89,14 @@ export default function DailySurveyGate() {
     <div dir="rtl" style={{ position: 'fixed', inset: 0, zIndex: 9998, background: '#0b0b0d', display: 'flex', flexDirection: 'column' }}>
       <div style={{ flexShrink: 0, background: '#111', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 180 }}>
-          <p style={{ margin: 0, color: '#fff', fontSize: '.85rem', fontWeight: 800 }}>التقييم اليومي لتجربة الراكب</p>
+          <p style={{ margin: 0, color: '#fff', fontSize: '.85rem', fontWeight: 800 }}>التقييم اليومي لتجربة الراكب{preview ? ' — معاينة (لا تُحتسب)' : ''}</p>
           <p style={{ margin: '2px 0 0', color: 'rgba(255,255,255,.55)', fontSize: '.7rem' }}>اعرض الشاشة على راكب ليختار الوجه المعبّر عن رضاه ثم يضغط «إرسال»، وكرّر حتى يكتمل العدد.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} aria-label={`${done} من ${need}`}>
           {dots.map((on, i) => <span key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: on ? '#34d399' : 'rgba(255,255,255,.18)' }} />)}
           <b style={{ color: '#fff', fontSize: '.8rem', marginInlineStart: 8, fontFamily: 'monospace' }}>{done} / {need}</b>
         </div>
+        {preview && <button type="button" onClick={() => { setPreview(false); setDone(null) }} style={{ background: 'rgba(255,255,255,.1)', color: '#fff', border: '1px solid rgba(255,255,255,.25)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, fontSize: '.78rem', cursor: 'pointer', fontFamily: 'inherit' }}>إغلاق المعاينة</button>}
         <button type="button" disabled={busy || finished} onClick={() => next(false)}
           style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 18px', fontWeight: 800, fontSize: '.82rem', cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>
           {busy ? 'جارٍ التحقق...' : 'تم تقييم الراكب، التالي'}
