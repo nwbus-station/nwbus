@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useAppSettings } from '../../context/AppSettingsContext'
 import { supabase } from '../../lib/supabase'
-import { fetchSurveyCities, detectSurveyCity, BASE } from '../../pages/SurveyPage'
+import { fetchSurveyCities, detectSurveyCity, BASE, surveyFrameUrl } from '../../pages/SurveyPage'
 import { riyadhDay } from '../../utils/dates'
 
 
@@ -54,9 +54,7 @@ export default function DailySurveyGate() {
       const key = detectSurveyCity(st || profile.station)
       const city = cities.find(c => c.city === key && c.is_active !== false)
       if (!city) { setDone(need); return }   // محطة بلا استبيان معرّف: غير مشمولة
-      // نفس صفحة الاستبيان لكن من نظامنا (نسخة تُرسل إشارة «تم التقييم»)؛ الروابط المخصصة الأخرى تبقى كما هي
-      const base = city.url || `${BASE}${city.city}`
-      setUrl(base.startsWith(BASE) ? `${window.location.origin}/survey.html?city=${encodeURIComponent(base.slice(BASE.length))}` : base)
+      setUrl(surveyFrameUrl(city.url || `${BASE}${city.city}`))
       setReady(true)
       setDone(preview ? 0 : (row?.done ?? 0))
       sinceRef.current = new Date(Date.now() - 3000).toISOString()

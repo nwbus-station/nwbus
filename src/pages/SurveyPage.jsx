@@ -6,6 +6,8 @@ import { supabase } from '../lib/supabase'
 import DailySurveySettings from '../components/survey/DailySurveySettings'
 
 export const BASE = 'https://nwbus.sa/survey.html?city='
+// رابط العرض داخل النظام: نسخة صفحة الاستبيان المستضافة عندنا (تتكيّف مع الجوال وتُرسل إشارة «تم التقييم»)؛ الروابط المخصصة الأخرى كما هي
+export const surveyFrameUrl = url => (url.startsWith(BASE) ? `${window.location.origin}/survey.html?city=${encodeURIComponent(url.slice(BASE.length))}` : url)
 
 // مدن ثابتة احتياطية — تُستخدم فقط لو تعذّر الاتصال بالقاعدة أو قبل اكتمال التحميل.
 // المصدر الفعلي والقابل للتعديل هو جدول survey_cities (يديره الأدمن من هذي الصفحة).
@@ -84,7 +86,7 @@ export function SurveyOverlay({ city, cityData, onClose, isAr = true }) {
     return () => { dead = true }
   }, [city, cityData])
   const station = cityData || fetched || SURVEY_STATIONS.find(s => s.city === city)
-  const url = station?.url || `${BASE}${city}`
+  const url = surveyFrameUrl(station?.url || `${BASE}${city}`)
 
   return (
     <div style={{
