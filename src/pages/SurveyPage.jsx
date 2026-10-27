@@ -3,8 +3,9 @@ import { useAuth } from '../context/AuthContext'
 import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import DailySurveySettings from '../components/survey/DailySurveySettings'
 
-const BASE = 'https://nwbus.sa/survey.html?city='
+export const BASE = 'https://nwbus.sa/survey.html?city='
 
 // مدن ثابتة احتياطية — تُستخدم فقط لو تعذّر الاتصال بالقاعدة أو قبل اكتمال التحميل.
 // المصدر الفعلي والقابل للتعديل هو جدول survey_cities (يديره الأدمن من هذي الصفحة).
@@ -533,6 +534,8 @@ export default function SurveyPage() {
           )}
 
           {/* ── شبكة المدن (للأدمن أو بدون محطة) ── */}
+          {isAdmin && <DailySurveySettings />}
+
           {(isAdmin || !detectedCity) && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>

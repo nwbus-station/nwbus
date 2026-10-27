@@ -4,3 +4,6 @@ export const toLocalDateStr = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 export const todayStr = () => toLocalDateStr()
+
+// تاريخ اليوم بتوقيت الرياض (YYYY-MM-DD)
+export const riyadhDay = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' })

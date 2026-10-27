@@ -10,6 +10,7 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
 import { buildStamp } from '../../utils/buildInfo'
+import DailySurveyGate from '../survey/DailySurveyGate'
 import { startPresence, updatePresencePath, stopPresence } from '../../lib/presence'
 import { onPwaUpdateAvailable, applyPwaUpdate, hardRefresh, consumeUpdatedFlag } from '../../lib/pwaUpdate'
 
@@ -997,6 +998,7 @@ export default function AppLayout() {
       </main>
 
       <ScrollToTopButton />
+      <DailySurveyGate />
 
       {/* شارة ثابتة دايماً — تصير مرئية بدون تمرير، على أي صفحة */}
       {location.pathname !== '/' && <div className="no-print app-version-badge">
