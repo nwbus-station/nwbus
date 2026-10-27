@@ -22,6 +22,8 @@ export default function DailySurveyGate() {
   const [busy, setBusy] = useState(false)
   const [finished, setFinished] = useState(false)
   const [frameKey, setFrameKey] = useState(0)
+  const autoRef = useRef(false)             // انتقال تلقائي جارٍ (منع التكرار)
+  const [autoOk, setAutoOk] = useState(null)   // null = لم يُختبر، true = الكشف التلقائي يعمل، false = الدالة غير متاحة
   const [fails, setFails] = useState(0)        // محاولات تحقق فاشلة متتالية (بعدها يظهر الاعتماد اليدوي)
   const sinceRef = useRef(new Date(Date.now() - 3000).toISOString())
   // الفئة المستهدفة: كل الحسابات (عدا الأدمن العام) أو حسابات محددة فقط
@@ -81,6 +83,26 @@ export default function DailySurveyGate() {
     setBusy(false)
   }, [done, need, profile?.id, day, preview])
 
+  // الاحتساب التلقائي: نراقب وصول تقييم جديد (ضغط الراكب «إرسال» بالاستبيان) فنحتسبه وننتقل للراكب التالي دون أي ضغطة
+  useEffect(() => {
+    if (!active || !ready || preview || done === null || done >= need || finished) return
+    let off = false
+    const tick = async () => {
+      if (off || autoRef.current || busy) return
+      const { data: cnt, error } = await supabase.rpc('survey_count_since', { p_since: sinceRef.current })
+      if (off) return
+      if (error) { setAutoOk(false); return }
+      setAutoOk(true)
+      if ((Number(cnt) || 0) >= 1 && !autoRef.current) {
+        autoRef.current = true
+        setMsg({ kind: 'ok', text: 'وصل التقييم. جارٍ الانتقال للراكب التالي...' })
+        setTimeout(async () => { await next(true); autoRef.current = false }, 2200)
+      }
+    }
+    const id = setInterval(tick, 2500)
+    return () => { off = true; clearInterval(id) }
+  }, [active, ready, preview, done, need, finished, busy, next])
+
   if (!active || done === null) return null
   if (done >= need && !finished) return null
 
@@ -90,7 +112,7 @@ export default function DailySurveyGate() {
       <div style={{ flexShrink: 0, background: '#111', borderBottom: '1px solid rgba(255,255,255,.08)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <p style={{ margin: 0, color: '#fff', fontSize: '.85rem', fontWeight: 800 }}>التقييم اليومي لتجربة الراكب{preview ? ' — معاينة (لا تُحتسب)' : ''}</p>
-          <p style={{ margin: '2px 0 0', color: 'rgba(255,255,255,.55)', fontSize: '.7rem' }}>اعرض الشاشة على راكب ليختار الوجه المعبّر عن رضاه ثم يضغط «إرسال»، وكرّر حتى يكتمل العدد.</p>
+          <p style={{ margin: '2px 0 0', color: 'rgba(255,255,255,.55)', fontSize: '.7rem' }}>اعرض الشاشة على راكب ليختار الوجه المعبّر عن رضاه ثم يضغط «إرسال». يُحتسب التقييم تلقائياً بمجرد إرساله، وكرّر حتى يكتمل العدد.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} aria-label={`${done} من ${need}`}>
           {dots.map((on, i) => <span key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: on ? '#34d399' : 'rgba(255,255,255,.18)' }} />)}
@@ -99,7 +121,7 @@ export default function DailySurveyGate() {
         {preview && <button type="button" onClick={() => { setPreview(false); setDone(null) }} style={{ background: 'rgba(255,255,255,.1)', color: '#fff', border: '1px solid rgba(255,255,255,.25)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, fontSize: '.78rem', cursor: 'pointer', fontFamily: 'inherit' }}>إغلاق المعاينة</button>}
         <button type="button" disabled={busy || finished} onClick={() => next(false)}
           style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 18px', fontWeight: 800, fontSize: '.82rem', cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>
-          {busy ? 'جارٍ التحقق...' : 'تم تقييم الراكب، التالي'}
+          {busy ? 'جارٍ التحقق...' : (autoOk ? 'تحقق الآن' : 'تم تقييم الراكب، التالي')}
         </button>
       </div>
       {fails >= 2 && !busy && (
