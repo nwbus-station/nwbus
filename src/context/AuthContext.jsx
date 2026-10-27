@@ -15,6 +15,9 @@ const TAB_AUTH_KEY   = 'nwbus_tab_auth'
 // يشوف إجازاتهم ويوافق عليها ويقيّمهم (المرحّلين منهم فقط)، ولا يوافق ولا يقيّم موظفي المحطات التي تُخصّص له،
 // وتخصيص المحطات له يفتح له الترحيل والتقارير ومعلومات المحطات فقط.
 const isDispSupAccount = (u, t) => u?.job_title === 'dispatcher_supervisor' || t?.job_title === 'dispatcher_supervisor' || t?.eval_source === 'dispatcher_supervisor'
+// ما يمنحه علم «محاسب أيضاً» لأي مسمى وظيفي: مهام المحاسب (تأكيد/عجز/ملاحظات/تقارير) + قسم التقارير
+const ACCOUNTANT_FLAG_CAPS = ['sales_confirm', 'sales_deficit_ack', 'sales_notes', 'sales_print', 'reports_sales', 'reports_print', 'reports_export']
+const ACCOUNTANT_FLAG_MODULES = ['reports', 'sales']
 const DISP_SUP_FORCED = {
   restricted_mode: true, assigned_leaves: true, assigned_evaluate: true, evaluation_dispatchers_only: true, scope_assigned_stations: true,
   leaves_supervisor_stage: false, evaluation_my_employees: false, leaves_final_approve: false, leaves_supervise: false,
@@ -277,9 +280,13 @@ export function AuthProvider({ children }) {
   // مصفوفة صلاحيات المسمى المخصص: grantCap تمنح قدرة إضافية، allowCap تقيّد قدرة الدور الأساسي
   // نفس أولوية القاعدة: قيمة المسمى لو موجودة، وإلا قيمة الدور الأساسي، وإلا الافتراضي
   const dispSup = isDispSupAccount(profile, customTitle)
-  const permOf = key => (dispSup && key in DISP_SUP_FORCED) ? DISP_SUP_FORCED[key] : (customTitle?.permissions?.[key] ?? rolePerms?.[key])
+  // «صلاحيات محاسب أيضاً» على أي مسمى وظيفي: مهام المحاسب كاملة بمحطات الحساب، ولا يقيّدها المسمى
+  const flagAccountant = profile?.is_accountant === true && profile?.role !== 'accountant'
+  const permOf = key => (dispSup && key in DISP_SUP_FORCED) ? DISP_SUP_FORCED[key]
+    : (flagAccountant && ACCOUNTANT_FLAG_CAPS.includes(key)) ? true
+    : (customTitle?.permissions?.[key] ?? rolePerms?.[key])
   // سقف الأقسام للدور الأساسي (الحساب اللي عليه مسمى مخصص ما ينطبق عليه)
-  const roleAllowsModule = mod => roleModuleAllowed(mod, profile?.display_role ?? profile?.role, rolePerms, !!customTitle)
+  const roleAllowsModule = mod => roleModuleAllowed(mod, profile?.display_role ?? profile?.role, rolePerms, !!customTitle) || (flagAccountant && ACCOUNTANT_FLAG_MODULES.includes(mod))
   // المصدر الوحيد لظهور أي قسم: قسم الحساب نفسه + سقف دوره/مسماه
   // الموجودات: مفتوحة لكل الحسابات (البحث عن غرض ضائع يُسأل عنه في أي محطة)، مهما كانت أقسام الحساب
   const canSeeModule = mod => mod === 'lost_found' || ((!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod))

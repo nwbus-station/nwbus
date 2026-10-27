@@ -602,7 +602,8 @@ export default function ReportsPage() {
       supabase.from('user_stations').select('station:station_id(id, name_ar, name_en)').eq('user_id', profile.id)
         .then(({ data }) => {
           let sts = (data ?? []).map(r => r.station).filter(Boolean).filter(s => !isRestStation(s))
-          if (!sts.length && profile?.station) sts = [profile.station]
+          // المحطة الأساسية دائماً ضمن محطاته (user_stations للموظف/المحاسب تحمل الإضافية فقط)
+          if (profile?.station && !sts.some(x => x.id === profile.station.id)) sts = [profile.station, ...sts]
           setStations(sts)
         })
     } else if (profile?.station) {
