@@ -83,6 +83,24 @@ export default function DailySurveyGate() {
     setBusy(false)
   }, [done, need, profile?.id, day, preview])
 
+  // الاحتساب الفوري: صفحة الاستبيان ترسل إشارة عند ظهور «شكراً لكم» (window.parent.postMessage({ nwbusSurveyDone: true })) فنحتسب لحظتها
+  useEffect(() => {
+    if (!active || !ready || finished) return
+    let origin = ''
+    try { origin = new URL(url).origin } catch { /* لا شي */ }
+    const onMsg = e => {
+      if (origin && e.origin !== origin) return
+      const d = e.data
+      if (!(d && (d.nwbusSurveyDone || d.type === 'nwbus-survey-done'))) return
+      if (autoRef.current) return
+      autoRef.current = true
+      setMsg({ kind: 'ok', text: 'وصل التقييم. جارٍ الانتقال للراكب التالي...' })
+      setTimeout(async () => { await next(true); autoRef.current = false }, 1800)
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [active, ready, finished, url, next])
+
   // الاحتساب التلقائي: نراقب وصول تقييم جديد (ضغط الراكب «إرسال» بالاستبيان) فنحتسبه وننتقل للراكب التالي دون أي ضغطة
   useEffect(() => {
     if (!active || !ready || preview || done === null || done >= need || finished) return
