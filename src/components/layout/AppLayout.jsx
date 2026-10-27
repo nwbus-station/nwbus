@@ -506,6 +506,12 @@ function BrandMark() {
 // قائمة الجوال (الدرج الجانبي) — تعرض كل الأقسام المتاحة دفعة وحدة، بدل الاكتفاء بأول 5
 // بالشريط السفلي أو الاضطرار لتدوير الشاشة لعرض الشريط العلوي (نفس محتوى top-nav بالضبط)
 function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, stationName, dark, onToggleTheme, onToggleLang, onRefresh, onChangePwd, onLogout }) {
+  const navigate = useNavigate()
+  const drawerRef = useRef(null)
+  const pushedRef = useRef(false)   // أضفنا مدخل سجل للقائمة المفتوحة (زر الرجوع بالأندرويد يغلقها)
+  const openPathRef = useRef('')
+  const android = typeof document !== 'undefined' && document.documentElement.classList.contains('is-android')
+
   useEffect(() => {
     if (!open) return
     const onKey = e => { if (e.key === 'Escape') onClose() }
@@ -513,6 +519,67 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
     document.body.style.overflow = 'hidden'
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
   }, [open, onClose])
+
+  // الأندرويد: زر الرجوع يغلق القائمة بدل الخروج من الصفحة/التطبيق
+  useEffect(() => {
+    if (!android) return
+    const onPop = () => { if (pushedRef.current) { pushedRef.current = false; onClose() } }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [android, onClose])
+  useEffect(() => {
+    if (!android) return
+    if (open && !pushedRef.current) {
+      try { window.history.pushState(window.history.state, ''); pushedRef.current = true; openPathRef.current = window.location.pathname } catch { /* لا شي */ }
+    } else if (!open && pushedRef.current) {
+      pushedRef.current = false
+      if (window.location.pathname === openPathRef.current) window.history.back()   // أُغلقت بالزر/الطبقة: نزيل مدخل السجل
+    }
+  }, [open, android])
+  // التنقل من القائمة: نزيل مدخل السجل أولاً حتى لا يحتاج الرجوع ضغطتين
+  const goTo = (e, to) => {
+    if (!android || !pushedRef.current) return
+    e.preventDefault()
+    pushedRef.current = false
+    let done = false
+    const go = () => { if (done) return; done = true; navigate(to) }
+    window.addEventListener('popstate', go, { once: true })
+    setTimeout(go, 350)
+    window.history.back()
+    onClose()
+  }
+
+  // الأندرويد: اسحب القائمة نحو حافتها لإغلاقها (تتبع الإصبع)
+  useEffect(() => {
+    const el = drawerRef.current
+    if (!android || !open || !el) return
+    const sign = isAr ? 1 : -1   // اتجاه الإغلاق: العربية يمين، الإنجليزية يسار
+    let sx = 0, sy = 0, dx = 0, mode = null, t0 = 0
+    const start = e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; mode = null; t0 = Date.now() }
+    const move = e => {
+      const t = e.touches[0], mx = t.clientX - sx, my = t.clientY - sy
+      if (!mode) { if (Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my) * 1.4) mode = 'x'; else if (Math.abs(my) > 10) mode = 'y'; else return }
+      if (mode !== 'x') return
+      dx = Math.max(0, mx * sign)
+      el.style.transition = 'none'; el.style.transform = `translateX(${dx * sign}px)`
+    }
+    const end = () => {
+      const fast = dx / (Date.now() - t0 + 1) > 0.45
+      el.style.transition = ''
+      if (mode === 'x' && (dx > 70 || fast)) { el.style.transform = `translateX(${sign * 105}%)`; onClose() }
+      else el.style.transform = ''
+      mode = null; dx = 0
+    }
+    el.addEventListener('touchstart', start, { passive: true })
+    el.addEventListener('touchmove', move, { passive: true })
+    el.addEventListener('touchend', end, { passive: true })
+    el.addEventListener('touchcancel', end, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', start); el.removeEventListener('touchmove', move)
+      el.removeEventListener('touchend', end); el.removeEventListener('touchcancel', end)
+      setTimeout(() => { el.style.transform = ''; el.style.transition = '' }, 320)
+    }
+  }, [open, android, isAr, onClose])
 
   const initials = String(profile?.full_name_ar || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
   const groups = visibleGroups.filter(g => g.items.length)
@@ -527,7 +594,7 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
   return (
     <>
       <div className={`mobile-menu-overlay${open ? ' open' : ''}`} onClick={onClose} />
-      <aside className={`mobile-menu-drawer${open ? ' open' : ''}`} dir={isAr ? 'rtl' : 'ltr'} role="dialog" aria-modal="true">
+      <aside ref={drawerRef} className={`mobile-menu-drawer${open ? ' open' : ''}`} dir={isAr ? 'rtl' : 'ltr'} role="dialog" aria-modal="true" aria-hidden={!open}>
         <div className="mm-hero">
           <div className="mm-hero-top">
             <div className="mm-avatar" aria-hidden="true">{initials}</div>
@@ -558,7 +625,7 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
               {group.items.map(item => {
                 const hue = NAV_HUE[item.to] || '#64748b'
                 return (
-                  <NavLink key={item.to} to={item.to} end={item.to === '/'} onClick={onClose}
+                  <NavLink key={item.to} to={item.to} end={item.to === '/'} onClick={e => { goTo(e, item.to); onClose() }}
                     className={({ isActive }) => `mobile-menu-item${isActive ? ' active' : ''}`} style={{ '--hue': hue }}>
                     <span className="mobile-menu-item-ico"><Icon d={ICONS[item.icon]} size={18} /></span>
                     <span className="mm-label">{isAr ? item.labelAr : item.labelEn}</span>
@@ -819,18 +886,18 @@ export default function AppLayout() {
         )}
 
         {/* اللغة */}
-        <button onClick={toggleLang} className="hbtn" style={ghostBtn}>
+        <button onClick={toggleLang} className="hbtn hdr-desk" style={ghostBtn}>
           {isAr ? 'EN' : 'ع'}
         </button>
 
         {/* تحديث الصفحة (يفحص النسخة الجديدة ويعيد التحميل) */}
         <button onClick={() => hardRefresh()} title={isAr ? 'تحديث الصفحة' : 'Refresh'} aria-label={isAr ? 'تحديث الصفحة' : 'Refresh'}
-          className="hbtn" style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: 8, justifyContent: 'center' }}>
+          className="hbtn hdr-desk" style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: 8, justifyContent: 'center' }}>
           <Icon d={ICONS.refresh} size={15} />
         </button>
 
         {/* المظهر: تلقائي / نهاري / ليلي */}
-        <div data-theme-menu style={{ position: 'relative' }}>
+        <div data-theme-menu className="hdr-desk" style={{ position: 'relative' }}>
           <button onClick={() => setThemeMenu(v => !v)} aria-haspopup="menu" aria-expanded={themeMenu}
             title={isAr ? 'المظهر' : 'Appearance'} aria-label={isAr ? 'المظهر' : 'Appearance'}
             className="hbtn" style={{ ...ghostBtn, width: 34, height: 34, padding: 0, borderRadius: 8, justifyContent: 'center', position: 'relative' }}>
@@ -879,11 +946,11 @@ export default function AppLayout() {
             </div>
           </div>
           <button onClick={() => setShowChangePwd(true)} title={isAr ? 'تغيير كلمة المرور' : 'Change Password'}
-            className="hbtn" style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: 8, justifyContent: 'center', flexShrink: 0 }}>
+            className="hbtn hdr-desk" style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: 8, justifyContent: 'center', flexShrink: 0 }}>
             <Icon d={ICONS.key} size={13} />
           </button>
           <button onClick={handleLogout} title={isAr ? 'تسجيل الخروج' : 'Sign Out'}
-            className="hbtn" style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: 8, justifyContent: 'center', flexShrink: 0 }}
+            className="hbtn hdr-desk" style={{ ...ghostBtn, padding: 0, width: 34, height: 34, borderRadius: 8, justifyContent: 'center', flexShrink: 0 }}
             onMouseEnter={e => { e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.color = '#DC2626' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface)'; e.currentTarget.style.color = 'var(--text-2)' }}>
             <Icon d={ICONS.logout} size={13} />
@@ -1017,6 +1084,10 @@ export default function AppLayout() {
             </span>
           </NavLink>
         ))}
+        <button type="button" className="bottom-nav-item bottom-nav-more" onClick={() => setMobileMenuOpen(true)} aria-label={isAr ? 'المزيد' : 'More'}>
+          <Icon d={ICONS.menu} size={20} />
+          <span>{isAr ? 'المزيد' : 'More'}</span>
+        </button>
       </nav>
     </div>
   )

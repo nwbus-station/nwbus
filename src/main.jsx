@@ -10,6 +10,9 @@ import './index.css'
 import { initPwaUpdate } from './lib/pwaUpdate'
 import { initChunkReload } from './lib/chunkReload'
 
+// علامة منصة الأندرويد: تُفعّل تحسينات اللمس والرجوع الخاصة به فقط (الآيفون يبقى كما هو)
+if (/Android/i.test(navigator.userAgent)) document.documentElement.classList.add('is-android')
+
 initChunkReload()
 initPwaUpdate()
 
