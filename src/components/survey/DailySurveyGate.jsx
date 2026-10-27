@@ -54,7 +54,9 @@ export default function DailySurveyGate() {
       const key = detectSurveyCity(st || profile.station)
       const city = cities.find(c => c.city === key && c.is_active !== false)
       if (!city) { setDone(need); return }   // محطة بلا استبيان معرّف: غير مشمولة
-      setUrl(city.url || `${BASE}${city.city}`)
+      // نفس صفحة الاستبيان لكن من نظامنا (نسخة تُرسل إشارة «تم التقييم»)؛ الروابط المخصصة الأخرى تبقى كما هي
+      const base = city.url || `${BASE}${city.city}`
+      setUrl(base.startsWith(BASE) ? `${window.location.origin}/survey.html?city=${encodeURIComponent(base.slice(BASE.length))}` : base)
       setReady(true)
       setDone(preview ? 0 : (row?.done ?? 0))
       sinceRef.current = new Date(Date.now() - 3000).toISOString()

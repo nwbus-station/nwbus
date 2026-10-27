@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>كيف كانت تجربتك؟ | How was your experience?</title>
+
+<style>
+body{
+  font-family:system-ui,Segoe UI,Arial;
+  max-width:540px;
+  margin:24px auto;
+  padding:16px;
+  text-align:center
+}
+
+.logo{
+  max-width:260px;
+  height:auto;
+  margin:0 auto 12px;
+  display:block
+}
+
+h1{
+  font-size:22px;
+  margin:12px 0 6px
+}
+
+.sub{
+  font-size:18px;
+  color:#555;
+  margin:0 0 16px
+}
+
+.row{
+  display:flex;
+  gap:12px;
+  justify-content:space-between
+}
+
+button{
+  flex:1;
+  min-height:80px;
+  padding:20px;
+  border:1px solid #ddd;
+  border-radius:16px;
+  font-size:38px;
+  cursor:pointer;
+  line-height:1;
+  background:#fff
+}
+
+button:active{
+  transform:scale(0.98)
+}
+</style>
+</head>
+
+<body>
+
+<div id="survey">
+
+<h1>كيف كانت تجربتك؟</h1>
+
+<div class="sub">
+How was your experience?
+</div>
+
+<div class="row">
+
+<button data-rating="1" data-emoji="😡">😡</button>
+
+<button data-rating="2" data-emoji="☹️">☹️</button>
+
+<button data-rating="3" data-emoji="😐">😐</button>
+
+<button data-rating="4" data-emoji="🙂">🙂</button>
+
+<button data-rating="5" data-emoji="😍">😍</button>
+
+</div>
+
+</div>
+
+
+<script>
+
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbz3pv1yAXvn9R-WH4Ta5F86S4KAPpx_LOJoQAIohmdm9ouojKsS6vI214kZZjDGhdMxUQ/exec";
+
+const q = new URLSearchParams(location.search);
+
+const LOCATION_NAME = (q.get('city') || q.get('loc') || 'Unknown').trim();
+
+
+function attachHandlers(){
+
+document.querySelectorAll("button").forEach(button=>{
+
+button.addEventListener("click", async ()=>{
+
+try{
+await fetch(WEBAPP_URL,{
+  method:"POST",
+  body:new URLSearchParams({
+    rating:button.dataset.rating,
+    emoji:button.dataset.emoji,
+    location:LOCATION_NAME,
+    ua:navigator.userAgent
+  })
+});
+
+}catch(e){
+console.error(e);
+}
+
+// إشارة لنظام NWBUS (البوابة اليومية للموظفين) بأن الراكب قيّم
+try{ window.parent.postMessage({ nwbusSurveyDone: true }, '*') }catch(e){}
+
+document.body.innerHTML = `
+<div style="font-size:42px;font-weight:700;margin-top:40vh">
+شكرًا لمشاركتكم 🙏
+<br>
+<span style="font-size:48px">Thank you!</span>
+</div>
+`;
+
+setTimeout(()=>{
+location.reload();
+},1000);
+
+});
+
+});
+
+}
+
+attachHandlers();
+
+</script>
+
+</body>
+</html>
