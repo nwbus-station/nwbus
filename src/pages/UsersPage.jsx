@@ -1339,7 +1339,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   const isMultiStationRole = form.role === 'station_admin' || form.role === 'area_supervisor' || form.role === 'assistant_stations_executive_director'
     || !!selectedTitle?.permissions?.leaves_supervisor_stage || !!selectedTitle?.permissions?.evaluation_my_employees || !!selectedTitle?.permissions?.scope_assigned_stations
   // المحاسب (بالدور أو بعلامة «صلاحيات محاسب أيضاً») يختار محطاته من نفس قائمة المشرف المتعددة: الأساسية ★ + الباقي
-  const isAccountantUser = form.role === 'accountant' || !!form.is_accountant || !!selectedTitle?.permissions?.accountant_duties
+  const isAccountantUser = form.role === 'accountant' || !!form.is_accountant
   const usesPicker = isMultiStationRole || isAccountantUser
   // المحطة الأساسية للمشرف = اللي حددها الأدمن صراحة (أو أول محطة كاحتياط)
   const primaryStation = () =>

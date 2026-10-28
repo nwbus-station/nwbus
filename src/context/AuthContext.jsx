@@ -281,9 +281,7 @@ export function AuthProvider({ children }) {
   // نفس أولوية القاعدة: قيمة المسمى لو موجودة، وإلا قيمة الدور الأساسي، وإلا الافتراضي
   const dispSup = isDispSupAccount(profile, customTitle)
   // «صلاحيات محاسب أيضاً» على أي مسمى وظيفي: مهام المحاسب كاملة بمحطات الحساب، ولا يقيّدها المسمى
-  // مسمى «محاسب داخل المحطة»: مهام المحاسب كاملة بمحطات الحساب، مع بقاء إدخال إيراده ورحلاته (الدور الأساسي موظف)
-  const titleAccountant = customTitle?.permissions?.accountant_duties === true && profile?.role !== 'accountant'
-  const flagAccountant = (profile?.is_accountant === true && profile?.role !== 'accountant') || titleAccountant
+  const flagAccountant = profile?.is_accountant === true && profile?.role !== 'accountant'
   const permOf = key => (dispSup && key in DISP_SUP_FORCED) ? DISP_SUP_FORCED[key]
     : (flagAccountant && ACCOUNTANT_FLAG_CAPS.includes(key)) ? true
     : (customTitle?.permissions?.[key] ?? rolePerms?.[key])
@@ -304,8 +302,7 @@ export function AuthProvider({ children }) {
   const evaluatesOwnEmployees = isAssistantDirector || grantCap('evaluation_my_employees')
   const isShiftSupervisor = profile?.role === 'shift_supervisor'
   const isStationAdmin    = profile?.role === 'station_admin' || isShiftSupervisor || isRestricted
-  const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true || titleAccountant
-  const accountantCanWork = titleAccountant   // محاسب يدخل إيراداً ويعدّل رحلات (المحاسب العادي لا يفعل)
+  const isAccountant      = profile?.role === 'accountant' || profile?.is_accountant === true
   const isEmployee        = profile?.role === 'station_employee'
   const isAreaSupervisor  = profile?.display_role === 'area_supervisor'
   // isAdmin: صلاحيات الأدمن الكاملة فقط — مشرف المنطقة كمشرف المحطة بدون صلاحيات أدمن
@@ -338,7 +335,6 @@ export function AuthProvider({ children }) {
       isShiftSupervisor,
       isStationAdmin,
       isAccountant,
-      accountantCanWork,
       isEmployee,
       isAreaSupervisor,
       isAdmin,
