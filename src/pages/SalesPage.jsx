@@ -379,7 +379,7 @@ async function loadAgentIds() {
 /* ─── Sales Modal ───────────────────────────────────────── */
 export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting }) {
   useEscapeKey(onClose)
-  const { profile, isAccountant, isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, allowCap, workStations } = useAuth()
+  const { profile, isAccountant, isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, allowCap, grantCap, workStations } = useAuth()
   const { settings } = useAppSettings()
   SHIFTS = salesShiftsFrom(null)
   // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
@@ -417,7 +417,9 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
   useEffect(() => { try { localStorage.removeItem(DRAFT_KEY) } catch { /* لا شي */ } }, [])
 
   // السجل مقفول إذا كان مؤكداً وليس الأدمن
-  const isLocked = sale?.is_confirmed && !isGeneralAdmin
+  // ومن يرى إيرادات موظفي محطته (مسمى محاسب داخل المحطة) يعرض يومياتهم دون تعديل
+  const viewOnlyOther = !!sale && grantCap('sales_view_station') && !isGeneralAdmin && !isAccountant && !isStationAdmin && !isAreaSupervisor && sale.created_by !== profile?.id
+  const isLocked = (sale?.is_confirmed && !isGeneralAdmin) || viewOnlyOther
 
   const handlePrint = () => printSaleRecord({ sale, isAr, profile })
   const canPrintHere = !!sale && (isGeneralAdmin || (isAccountant && allowCap('sales_print')) || (allowCap('sales_print') && sale.created_by === profile?.id && accountState(parseAccess(settings?.[PRINT_ACCESS_KEY]), profile?.id, todayStr()).allowed))
@@ -1060,6 +1062,8 @@ function AuditModal({ sale, onClose }) {
 /* ─── Main Page ────────────────────────────────────────── */
 export default function SalesPage() {
   const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds, allowCap, grantCap, workStations } = useAuth()
+  const viewStation = grantCap('sales_view_station')   // مسمى «محاسب داخل المحطة»: يرى إيرادات موظفي محطاته (عرض فقط)
+  const isViewOnlyRow = r => viewStation && !isGeneralAdmin && !isAccountant && !isStationAdmin && !isAreaSupervisor && r.created_by !== profile?.id
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -1112,10 +1116,10 @@ export default function SalesPage() {
     } else if ((isAreaSupervisor || isStationAdmin) && allowedStationIds?.length) {
       supabase.from('stations').select('id,name_ar,name_en').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(async ({ data }) => { const ag = await loadAgentIds(); setStations((data ?? []).filter(s => !isRestStation(s) && !ag.has(s.id))) })
-    } else if (isAccountant && workStations?.length > 1) {
+    } else if ((isAccountant || viewStation) && workStations?.length > 1) {
       loadAgentIds().then(ag => setStations(workStations.filter(s => !isRestStation(s) && !ag.has(s.id)).map(s => ({ id: s.id, name_ar: s.name_ar, name_en: s.name_en }))))
     }
-  }, [isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, isAccountant, workStations])
+  }, [isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, isAccountant, viewStation, workStations])
 
   async function handleDelete(id) {
     setConfirmDel(id)
@@ -1148,7 +1152,7 @@ export default function SalesPage() {
     } else if (isAreaSupervisor && allowedStationIds?.length) {
       const ids = filterStation ? [filterStation] : allowedStationIds
       q = q.in('station_id', ids)
-    } else if (isStationAdmin || isAccountant) {
+    } else if (isStationAdmin || isAccountant || viewStation) {
       const wsIds = workStations?.map(x => x.id) ?? []
       q = wsIds.length > 1 ? (wsIds.includes(filterStation) ? q.eq('station_id', filterStation) : q.in('station_id', wsIds)) : q.eq('station_id', profile.station_id)
     } else {
@@ -1172,7 +1176,7 @@ export default function SalesPage() {
     if (finalRows.length) setCached(cacheKey, finalRows)
     setRecords(finalRows)
     setLoading(false)
-  }, [filterDate, filterStation, profile?.id, profile?.station_id, isEmployee, isStationAdmin, isAccountant, isGeneralAdmin, isAreaSupervisor, allowedStationIds, workStations])
+  }, [filterDate, filterStation, profile?.id, profile?.station_id, isEmployee, isStationAdmin, isAccountant, viewStation, isGeneralAdmin, isAreaSupervisor, allowedStationIds, workStations])
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
 
@@ -1332,8 +1336,8 @@ export default function SalesPage() {
           <p className="text-xs text-gray-400 mt-0.5">
             {isGeneralAdmin ? (isAr ? 'جميع المحطات' : 'All stations')
               : (isAreaSupervisor || isStationAdmin) && allowedStationIds?.length > 1 ? (isAr ? 'محطاتك المخصصة' : 'Your assigned stations')
-              : isAccountant && workStations?.length > 1 ? (isAr ? 'محطاتك المخصصة' : 'Your assigned stations')
-              : isStationAdmin || isAccountant ? (isAr ? 'محطتك فقط' : 'Your station only')
+              : (isAccountant || viewStation) && workStations?.length > 1 ? (isAr ? 'محطاتك المخصصة' : 'Your assigned stations')
+              : isStationAdmin || isAccountant || viewStation ? (isAr ? 'محطتك فقط' : 'Your station only')
               : (isAr ? 'مبيعاتك الخاصة' : 'Your own entries')}
           </p>
         </div>
@@ -1382,7 +1386,7 @@ export default function SalesPage() {
           <DatePicker value={filterDate} onChange={setFilterDate} isAr={isAr}
             className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
         </div>
-        {(isGeneralAdmin || isAreaSupervisor || isStationAdmin || (isAccountant && workStations?.length > 1)) && stations.length > 0 && (
+        {(isGeneralAdmin || isAreaSupervisor || isStationAdmin || ((isAccountant || viewStation) && workStations?.length > 1)) && stations.length > 0 && (
           <>
             <button type="button" onClick={() => stepStation(isAr ? 1 : -1)} title={isAr ? 'المحطة السابقة' : 'Previous station'}
               className="w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 text-sm font-bold leading-none">{isAr ? '›' : '‹'}</button>
@@ -1565,7 +1569,7 @@ export default function SalesPage() {
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
                                       </button>
                                     )}
-                                    {r.is_confirmed && !isGeneralAdmin
+                                    {(r.is_confirmed && !isGeneralAdmin) || isViewOnlyRow(r)
                                       ? (
                                         <button onClick={() => setModal(r)}
                                           className="text-xs border border-gray-300 text-gray-500 rounded-lg px-3 py-1 hover:bg-gray-50 transition-colors">

@@ -67,6 +67,7 @@ export const TITLE_CAPABILITIES = [
   { group: 'تقييمات العملاء', key: 'customer_ratings_view', db: true, kind: 'allow', ar: 'يشوف تقييمات العملاء (الصفحة والبيانات)', en: 'See customer ratings' },
   // الإيرادات
   { group: 'الإيرادات', key: 'sales_add', kind: 'allow', ar: 'إدخال إيرادات جديدة', en: 'Add sales entries' },
+  { group: 'الإيرادات', key: 'sales_view_station', db: true, kind: 'grant', ar: 'يرى إيرادات كل موظفي محطاته (عرض فقط، بلا تأكيد) — مثل «محاسب داخل المحطة»', en: 'View all employees’ revenue in his stations (read-only)' },
   { group: 'الإيرادات', key: 'sales_print', kind: 'allow', ar: 'طباعة سجل الإيراد', en: 'Print sales record' },
   { group: 'الإيرادات', key: 'sales_confirm',     kind: 'allow', ar: 'مهام المحاسب: تأكيد وإغلاق سجل الإيراد', en: 'Accountant: confirm & close a record' },
   { group: 'الإيرادات', key: 'sales_deficit_ack', kind: 'allow', ar: 'مهام المحاسب: إقرار العجز وتحميله على الموظف', en: 'Accountant: acknowledge deficit' },
@@ -126,9 +127,13 @@ export const TITLE_CAPABILITIES = [
 ]
 
 // بنود "منح" تضيّق النطاق بدل ما توسّعه (قصر على محطات مخصصة، تقييم فئة معينة…): تبقى مقفلة في المسمى الجديد المفتوح كالأدمن
-export const NARROWING_CAPS = ['restricted_mode', 'scope_assigned_stations', 'evaluation_dispatchers_only', 'stations_manage_assigned', 'leaves_supervisor_stage', 'evaluation_my_employees']
+export const NARROWING_CAPS = ['sales_view_station', 'restricted_mode', 'scope_assigned_stations', 'evaluation_dispatchers_only', 'stations_manage_assigned', 'leaves_supervisor_stage', 'evaluation_my_employees']
 // صلاحيات مسمى جديد: مفتوح بالكامل كالأدمن، والمستخدم يضيف القيود بنفسه
 export const openTitlePermissions = () => Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, !NARROWING_CAPS.includes(c.key)]))
+
+// أقسام يفتحها المسمى المخصص بقرار الأدمن الصريح حتى لو لم يكن في سقف دوره الأساسي (مثل موظف «محاسب داخل محطة» يرى التقارير)
+// تُفتح فقط إذا كانت مختارة صراحةً ضمن أقسام المسمى/الحساب (القيمة الافتراضية «كل الأقسام» لا تشملها)
+export const TITLE_OPT_IN_MODULES = ['reports']
 
 // الأدوار الأساسية القابلة لتعديل صلاحياتها من نافذة المسميات (الأدمن العام خارج القائمة — كل شي مفتوح له)
 export const EDITABLE_ROLES = ['station_employee', 'accountant', 'station_admin', 'shift_supervisor', 'area_supervisor']

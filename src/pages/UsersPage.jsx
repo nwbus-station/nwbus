@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
-import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS, NARROWING_CAPS, openTitlePermissions } from '../utils/constants'
+import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, TITLE_OPT_IN_MODULES, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS, NARROWING_CAPS, openTitlePermissions } from '../utils/constants'
 import { toLatinDigits, escapeHtml, matchesSearch } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -688,9 +688,10 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   }
   const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary/40 focus:border-nwbus-primary focus:outline-none"
   // أقسام المسمى: null = كل الأقسام المسموحة لنوع الحساب الأساسي
-  const titleModAllowed = m => roleModuleAllowed(m, form.base_role, null, true)
+  // التقارير يفتحها المسمى بقرار صريح حتى لو دوره الأساسي «موظف» (لا تدخل ضمن «كل الأقسام» الافتراضي)
+  const titleModAllowed = m => roleModuleAllowed(m, form.base_role, null, true) || TITLE_OPT_IN_MODULES.includes(m)
   const titleMods = MODULES.filter(m => titleModAllowed(m.value))
-  const titleNoEvent = titleMods.filter(m => m.value !== 'magazine').map(m => m.value)
+  const titleNoEvent = titleMods.filter(m => m.value !== 'magazine' && roleModuleAllowed(m.value, form.base_role, null, true)).map(m => m.value)
   const titleSel = form.allowed_modules ?? titleNoEvent
   const setTitleMods = list => { setSaved(false); setForm(f => ({ ...f, allowed_modules: list.length === titleNoEvent.length && titleNoEvent.every(x => list.includes(x)) && !list.includes('magazine') ? null : list })) }
   const toggleTitleMod = m => setTitleMods(titleSel.includes(m) ? titleSel.filter(x => x !== m) : [...titleSel, m])
@@ -1368,7 +1369,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
   }, [])
   const titleObj = form.custom_title_id ? customTitles.find(t => t.id === form.custom_title_id) : null
   const effRole = titleObj?.base_role ?? form.role
-  const modAllowed = m => roleModuleAllowed(m, effRole, titleObj ? null : rolePermRows[effRole], !!titleObj)
+  const modAllowed = m => roleModuleAllowed(m, effRole, titleObj ? null : rolePermRows[effRole], !!titleObj) || (!!titleObj && TITLE_OPT_IN_MODULES.includes(m))
   const effRoleLabel = (() => { const r = USER_ROLES.find(x => x.value === effRole); return r ? (isAr ? r.ar : r.en) : '' })()
   // لو غيّرت الدور وفيه أقسام صار ما يسمح فيها، نشيلها ونبلغك
   useEffect(() => {

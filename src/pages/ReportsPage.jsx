@@ -598,7 +598,7 @@ export default function ReportsPage() {
     } else if (isAreaSupervisor && allowedStationIds?.length) {
       supabase.from('stations').select('id, name_ar, name_en, city_group, is_agent').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => setStations((data ?? []).filter(s => !isRestStation(s))))
-    } else if ((isStationAdmin || isAccountant) && profile?.id) {
+    } else if ((isStationAdmin || isAccountant || grantCap('sales_view_station')) && profile?.id) {
       supabase.from('user_stations').select('station:station_id(id, name_ar, name_en)').eq('user_id', profile.id)
         .then(({ data }) => {
           let sts = (data ?? []).map(r => r.station).filter(Boolean).filter(s => !isRestStation(s))
@@ -609,7 +609,7 @@ export default function ReportsPage() {
     } else if (profile?.station) {
       setStations([profile.station])
     }
-  }, [seesAll, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, profile?.id, scopedIds?.join(',')])
+  }, [seesAll, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, profile?.id, scopedIds?.join(',')])   // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const runReport = useCallback(async () => {
@@ -1442,7 +1442,7 @@ export default function ReportsPage() {
     audit: ['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z', 'M14 2v6h6', 'M16 13H8', 'M16 17H8'],
   }
   const RpIcon = ({ id, size = 15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{(RP_ICONS[id] || []).map((d, i) => <path key={i} d={d} />)}</svg>
-  const canSales = isGeneralAdmin || isAccountant || isStationAdmin
+  const canSales = isGeneralAdmin || isAccountant || isStationAdmin || grantCap('sales_view_station')
   const TAB_DEFS = [
     { id: 'overview', ar: 'نظرة عامة', en: 'Overview', desc_ar: 'ملخص الفترة وما يحتاج انتباهك', desc_en: 'Period summary & attention items' },
     ...[
@@ -1955,7 +1955,7 @@ export default function ReportsPage() {
           )}
 
           {/* Sales summary — للأدمن العام فقط */}
-          {(isGeneralAdmin || isAccountant || isStationAdmin) && show('sales') && (
+          {(isGeneralAdmin || isAccountant || isStationAdmin || grantCap('sales_view_station')) && show('sales') && (
           <section>
             <h2 className="rp-h2">
               {isAr ? 'ملخص المبيعات' : 'Sales Summary'}

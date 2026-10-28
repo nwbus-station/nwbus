@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE, roleModuleAllowed, jobsForAction } from '../utils/constants'
+import { ADMIN_ROLE_VALUES, ASSISTANT_DIRECTOR_ROLE, roleModuleAllowed, jobsForAction, TITLE_OPT_IN_MODULES } from '../utils/constants'
 
 const AuthContext = createContext(null)
 
@@ -289,7 +289,8 @@ export function AuthProvider({ children }) {
   const roleAllowsModule = mod => roleModuleAllowed(mod, profile?.display_role ?? profile?.role, rolePerms, !!customTitle) || (flagAccountant && ACCOUNTANT_FLAG_MODULES.includes(mod))
   // المصدر الوحيد لظهور أي قسم: قسم الحساب نفسه + سقف دوره/مسماه
   // الموجودات: مفتوحة لكل الحسابات (البحث عن غرض ضائع يُسأل عنه في أي محطة)، مهما كانت أقسام الحساب
-  const canSeeModule = mod => mod === 'lost_found' || ((!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod))
+  const titleOptIn = mod => !!customTitle && TITLE_OPT_IN_MODULES.includes(mod) && Array.isArray(profile?.allowed_modules) && profile.allowed_modules.includes(mod)   // قسم يفتحه المسمى صراحةً خارج سقف دوره
+  const canSeeModule = mod => mod === 'lost_found' || ((!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod)) || titleOptIn(mod)
   const grantCap = key => permOf(key) === true
   const allowCap = key => permOf(key) !== false
   // المسميات الوظيفية اللي له عليها هذا الإجراء (view / evaluate / leaves) بحسب المجموعات الوظيفية
