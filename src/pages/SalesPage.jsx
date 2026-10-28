@@ -379,7 +379,8 @@ async function loadAgentIds() {
 /* ─── Sales Modal ───────────────────────────────────────── */
 export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting }) {
   useEscapeKey(onClose)
-  const { profile, isAccountant, isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, allowCap, grantCap, workStations } = useAuth()
+  const { profile, isAccountant, accountantCanWork, isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, allowCap, grantCap, workStations } = useAuth()
+  const pureAcct = isAccountant && !accountantCanWork   // محاسب فقط (لا يدخل يوميات)؛ مسمى «محاسب داخل المحطة» يدخل ويؤكد
   const { settings } = useAppSettings()
   SHIFTS = salesShiftsFrom(null)
   // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
@@ -493,7 +494,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
 
   // حالة اليوم: من سجّل يوميته بهذا التاريخ (للمشرف: هو وموظفوه) — لمنع الإضافة المكرّرة وإظهار الحالة فوراً
   const [dayRecs, setDayRecs] = useState({})
-  const trackDay = !sale && !isGeneralAdmin && !isAccountant
+  const trackDay = !sale && !isGeneralAdmin && !pureAcct
   useEffect(() => {
     if (!trackDay) return
     let off = false
@@ -632,7 +633,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
       }
       // يومية واحدة فقط لكل شخص في اليوم: الموظف، والمشرف ليوميته، وكل موظف يُدخلها المشرف باسمه
       // (الأدمن والمحاسب يدخلون لعدة موظفين بأسمائهم فلا يُقيَّدون)
-      if (!isGeneralAdmin && !isAccountant) {
+      if (!isGeneralAdmin && !pureAcct) {
         const owner = proxyOn ? proxyEmp : profile
         const { data: sameDay } = await supabase.from('sales_records').select('id, shift, employee_name')
           .eq('created_by', owner.id).eq('sale_date', form.sale_date)
@@ -1061,7 +1062,7 @@ function AuditModal({ sale, onClose }) {
 
 /* ─── Main Page ────────────────────────────────────────── */
 export default function SalesPage() {
-  const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds, allowCap, grantCap, workStations } = useAuth()
+  const { profile, isAccountant, accountantCanWork, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds, allowCap, grantCap, workStations } = useAuth()
   const viewStation = grantCap('sales_view_station')   // مسمى «محاسب داخل المحطة»: يرى إيرادات موظفي محطاته (عرض فقط)
   const isViewOnlyRow = r => viewStation && !isGeneralAdmin && !isAccountant && !isStationAdmin && !isAreaSupervisor && r.created_by !== profile?.id
   const { i18n } = useTranslation()
@@ -1324,7 +1325,7 @@ export default function SalesPage() {
     } catch (e) { setXlErr((isAr ? 'تعذّر إنشاء الملف: ' : 'Could not create the file: ') + (e?.message || e)) }
     setXlBusy(false)
   }
-  const canAdd           = !isAccountant && allowCap('sales_add')
+  const canAdd           = (!isAccountant || accountantCanWork) && allowCap('sales_add')
 
   return (
     <div className="p-4 md:p-6" dir={isAr ? 'rtl' : 'ltr'}>

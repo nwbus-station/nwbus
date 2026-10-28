@@ -67,6 +67,7 @@ export const TITLE_CAPABILITIES = [
   { group: 'تقييمات العملاء', key: 'customer_ratings_view', db: true, kind: 'allow', ar: 'يشوف تقييمات العملاء (الصفحة والبيانات)', en: 'See customer ratings' },
   // الإيرادات
   { group: 'الإيرادات', key: 'sales_add', kind: 'allow', ar: 'إدخال إيرادات جديدة', en: 'Add sales entries' },
+  { group: 'الإيرادات', key: 'accountant_duties', db: true, kind: 'grant', ar: 'يعمل كمحاسب داخل محطاته: يرى إيرادات الموظفين ويؤكد ويطبع ويكتب الملاحظات + التقارير، ويبقى يدخل إيراده ورحلاته', en: 'Works as an in-station accountant (view, confirm, print, notes, reports) while still entering his own revenue and trips' },
   { group: 'الإيرادات', key: 'sales_view_station', db: true, kind: 'grant', ar: 'يرى إيرادات كل موظفي محطاته (عرض فقط، بلا تأكيد) — مثل «محاسب داخل المحطة»', en: 'View all employees’ revenue in his stations (read-only)' },
   { group: 'الإيرادات', key: 'sales_print', kind: 'allow', ar: 'طباعة سجل الإيراد', en: 'Print sales record' },
   { group: 'الإيرادات', key: 'sales_confirm',     kind: 'allow', ar: 'مهام المحاسب: تأكيد وإغلاق سجل الإيراد', en: 'Accountant: confirm & close a record' },
@@ -127,7 +128,7 @@ export const TITLE_CAPABILITIES = [
 ]
 
 // بنود "منح" تضيّق النطاق بدل ما توسّعه (قصر على محطات مخصصة، تقييم فئة معينة…): تبقى مقفلة في المسمى الجديد المفتوح كالأدمن
-export const NARROWING_CAPS = ['sales_view_station', 'restricted_mode', 'scope_assigned_stations', 'evaluation_dispatchers_only', 'stations_manage_assigned', 'leaves_supervisor_stage', 'evaluation_my_employees']
+export const NARROWING_CAPS = ['accountant_duties', 'sales_view_station', 'restricted_mode', 'scope_assigned_stations', 'evaluation_dispatchers_only', 'stations_manage_assigned', 'leaves_supervisor_stage', 'evaluation_my_employees']
 // صلاحيات مسمى جديد: مفتوح بالكامل كالأدمن، والمستخدم يضيف القيود بنفسه
 export const openTitlePermissions = () => Object.fromEntries(TITLE_CAPABILITIES.map(c => [c.key, !NARROWING_CAPS.includes(c.key)]))
 

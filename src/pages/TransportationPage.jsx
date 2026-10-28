@@ -685,7 +685,7 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 
 /* ─── Main Page ─────────────────────────────────────────── */
 export default function TransportationPage() {
-  const { profile, isGeneralAdmin, isRestricted, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds, workStations } = useAuth()
+  const { profile, isGeneralAdmin, isRestricted, isStationAdmin, isAccountant, accountantCanWork, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds, workStations } = useAuth()
   // الحساب المقيّد (مسمى مخصص) يستخدم أزرار الأدمن حسب المفاتيح المفعّلة له فقط
   const adminLike = isGeneralAdmin || isRestricted
   // الرحلة الإضافية RF: للأدمن ومشرف المحطة/المنطقة فقط — مو مشرف الوردية ولا الموظف
@@ -1675,7 +1675,7 @@ export default function TransportationPage() {
   })
 
   // المحاسب الصرف لا يُدخل ترحيلاً — لكن المشرف/الأدمن الذي يحمل صفة محاسب إضافية يُدخل عادي
-  const canEdit = (isGeneralAdmin || isStationAdmin || !isAccountant) && allowCap('transport_record_edit')
+  const canEdit = (isGeneralAdmin || isStationAdmin || !isAccountant || accountantCanWork) && allowCap('transport_record_edit')
 
   const selectedStationName = stations.find(s => s.id === selectedStation)
     ? (isAr
