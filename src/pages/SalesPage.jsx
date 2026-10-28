@@ -19,6 +19,7 @@ import { useEscapeKey } from '../hooks/useEscapeKey'
 import { safeImport } from '../lib/chunkReload'
 import SelectField from '../components/shared/SelectField'
 import SearchSelect from '../components/shared/SearchSelect'
+import { SALES_VIEW_CAPS } from '../utils/constants'
 import { brandHeader, docHeader, docShell, openDocWindow, previewToolbar, TOOLBAR_CSS, esc } from '../utils/printDoc'
 
 // الورديات تتبع إعداد الأدمن (3 أو 4) من الإعدادات؛ تُحدَّث عند كل عرض من app_settings
@@ -418,11 +419,15 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
 
   // السجل مقفول إذا كان مؤكداً وليس الأدمن
   // ومن يرى إيرادات موظفي محطته (مسمى محاسب داخل المحطة) يعرض يومياتهم دون تعديل
-  const viewOnlyOther = !!sale && grantCap('sales_view_station') && !isGeneralAdmin && !isAccountant && !isStationAdmin && !isAreaSupervisor && sale.created_by !== profile?.id
+  const viewStationCap = SALES_VIEW_CAPS.some(grantCap)
+  const viewOnlyOther = !!sale && viewStationCap && !isGeneralAdmin && !isAccountant && !isStationAdmin && !isAreaSupervisor && sale.created_by !== profile?.id
+  // التأكيد/إلغاؤه: للمحاسب، أو لمن مُنح صلاحية التأكيد/الإلغاء بمسماه (على يوميات محطاته)
+  const canConfirmHere = (isAccountant && allowCap('sales_confirm')) || grantCap('sales_confirm_station')
+  const confirmerOnly = viewOnlyOther && canConfirmHere && !sale?.is_confirmed   // يراجع ويؤكد دون تعديل بيانات اليومية
   const isLocked = (sale?.is_confirmed && !isGeneralAdmin) || viewOnlyOther
 
   const handlePrint = () => printSaleRecord({ sale, isAr, profile })
-  const canPrintHere = !!sale && (isGeneralAdmin || (isAccountant && allowCap('sales_print')) || (allowCap('sales_print') && sale.created_by === profile?.id && accountState(parseAccess(settings?.[PRINT_ACCESS_KEY]), profile?.id, todayStr()).allowed))
+  const canPrintHere = !!sale && (isGeneralAdmin || ((isAccountant || viewStationCap) && allowCap('sales_print')) || (allowCap('sales_print') && sale.created_by === profile?.id && accountState(parseAccess(settings?.[PRINT_ACCESS_KEY]), profile?.id, todayStr()).allowed))
 
   // الوردية المتوقعة تُحسب مرة واحدة عند فتح السجل الجديد
   const cutoffMin = parseCutoff(settings?.[DAY_CUTOFF_KEY])
@@ -517,7 +522,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
   const takenCount = canProxy ? proxyEmps.filter(e => dayRecs[e.id]).length : 0
 
   // المحاسب (أو الأدمن) يلغي تأكيد اليومية لتعود قابلة لتعديل الموظف
-  const canUnconfirm = !!sale?.is_confirmed && (isGeneralAdmin || (isAccountant && allowCap('sales_confirm')))
+  const canUnconfirm = !!sale?.is_confirmed && (isGeneralAdmin || (isAccountant && allowCap('sales_confirm')) || grantCap('sales_unconfirm_station'))
   async function doUnconfirm() {
     setConfirmUnconfirm(false); setSaving(true); setError('')
     const { data, error: upErr } = await supabase.from('sales_records').update({
@@ -531,7 +536,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
 
   async function handleSave(e) {
     e.preventDefault()
-    if (isLocked) return
+    if (isLocked && !confirmerOnly) return
     // إجمالي المبيعات إلزامي الإدخال (اكتب 0 إن لم تكن هناك مبيعات)
     if (form.total_sales === '' || form.total_sales === null || form.total_sales === undefined) {
       setTotalMissing(true)
@@ -590,7 +595,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
         : { created_by: profile.id, created_by_name: profile.full_name_ar })),
     }
 
-    if (isAccountant && form.is_confirmed && allowCap('sales_confirm')) {
+    if (canConfirmHere && form.is_confirmed) {
       payload.is_confirmed        = true
       payload.confirmed_by        = profile.id
       payload.confirmed_by_name   = profile.full_name_ar
@@ -607,7 +612,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
     let res
     if (sale) {
       // لا نُحدّث updated_by عند التأكيد فقط (بدون تغيير بيانات)
-      const confirmOnly = isAccountant && form.is_confirmed && !form._dataChanged
+      const confirmOnly = canConfirmHere && form.is_confirmed && !form._dataChanged
       res = await supabase.from('sales_records').update({
         ...payload,
         ...(confirmOnly ? {} : {
@@ -946,11 +951,13 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
               </div>
             </SectionCard>
 
-            {/* تأكيد المحاسب */}
-            {isAccountant && sale && (allowCap('sales_confirm') || allowCap('sales_deficit_ack') || allowCap('sales_notes')) && (
+          </fieldset>
+          <fieldset disabled={!!sale?.is_confirmed && !isGeneralAdmin} className="space-y-3.5 disabled:opacity-70 min-w-0 mt-3.5">
+            {/* تأكيد المحاسب (أو مؤكّد المحطة بصلاحية مسمى) */}
+            {sale && ((isAccountant && (allowCap('sales_confirm') || allowCap('sales_deficit_ack') || allowCap('sales_notes'))) || (!isAccountant && grantCap('sales_confirm_station'))) && (
               <SectionCard title={isAr ? 'تأكيد المحاسب' : 'Accountant confirmation'} tone="bg-amber-50/70 border-amber-200">
                 <div className="space-y-3">
-                  {diff < 0 && allowCap('sales_deficit_ack') && (
+                  {isAccountant && diff < 0 && allowCap('sales_deficit_ack') && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
                       <p className="text-xs font-bold text-red-700">⚠ {isAr ? 'يوجد عجز بمقدار' : 'Deficit of'} {fmt(Math.abs(diff))} {isAr ? 'ر.س' : 'SAR'}</p>
                       <p className="text-xs text-red-600">
@@ -965,13 +972,13 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
                       </label>
                     </div>
                   )}
-                  {allowCap('sales_confirm') && (
+                  {canConfirmHere && (
                     <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
                       <input type="checkbox" className="rounded accent-emerald-700" checked={form.is_confirmed} onChange={e => set('is_confirmed', e.target.checked)} />
                       {isAr ? 'تأكيد وإغلاق السجل' : 'Confirm and close this record'}
                     </label>
                   )}
-                  {allowCap('sales_notes') && <textarea rows={2} placeholder={isAr ? 'ملاحظات...' : 'Notes...'}
+                  {isAccountant && allowCap('sales_notes') && <textarea rows={2} placeholder={isAr ? 'ملاحظات...' : 'Notes...'}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none bg-white focus:ring-2 focus:ring-emerald-500/40 focus:outline-none"
                     value={form.accountant_notes} onChange={e => set('accountant_notes', e.target.value)} />}
                 </div>
@@ -991,7 +998,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
 
         {/* ═ الذيل: أزرار ثابتة ═ */}
         <div className="shrink-0 px-5 py-3.5 bg-white border-t border-gray-200 flex flex-wrap items-center gap-2.5" style={{ paddingBottom: 'max(0.875rem, env(safe-area-inset-bottom))' }}>
-          {!isLocked && (
+          {(!isLocked || confirmerOnly) && (
             <button type="submit" disabled={saving || !!ownerRec || (proxyOn && !proxyId)}
               className="flex-1 bg-green-700 text-white py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50 hover:bg-green-800 transition-colors ">
               {saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ السجل' : 'Save record')}
@@ -1062,7 +1069,7 @@ function AuditModal({ sale, onClose }) {
 /* ─── Main Page ────────────────────────────────────────── */
 export default function SalesPage() {
   const { profile, isAccountant, isStationAdmin, isGeneralAdmin, isEmployee, isAreaSupervisor, allowedStationIds, allowCap, grantCap, workStations } = useAuth()
-  const viewStation = grantCap('sales_view_station')   // مسمى «محاسب داخل المحطة»: يرى إيرادات موظفي محطاته (عرض فقط)
+  const viewStation = SALES_VIEW_CAPS.some(grantCap)   // مسمى يرى إيرادات موظفي محطاته (عرض / تأكيد / إلغاء تأكيد)
   const isViewOnlyRow = r => viewStation && !isGeneralAdmin && !isAccountant && !isStationAdmin && !isAreaSupervisor && r.created_by !== profile?.id
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -1195,13 +1202,13 @@ export default function SalesPage() {
   // تنزيل الجدول اليومي (Excel محاسبي) — للأدمن العام، وللمحاسب فقط إذا فعّل له الأدمن الصلاحية
   const canExportDaily = isGeneralAdmin || (isAccountant && grantCap('sales_export_daily'))
   // طباعة اليومية (الكشف الكامل لليوم) — للأدمن، وللمحاسب (كل محطاته)
-  const canPrintDaily = isGeneralAdmin || (isAccountant && allowCap('sales_print'))   // المحاسب: كشف محطاته
+  const canPrintDaily = isGeneralAdmin || ((isAccountant || viewStation) && allowCap('sales_print'))   // المحاسب: كشف محطاته
   // صلاحية طباعة يوميات الموظفين: إعداد عام يديره الأدمن (وضع عام + استثناءات حسابات، مستمر أو مؤقت)
   const { settings, saveSetting } = useAppSettings()
   SHIFTS = salesShiftsFrom(null)
   const printAccess = parseAccess(settings?.[PRINT_ACCESS_KEY])
   const [printAccessOpen, setPrintAccessOpen] = useState(false)
-  const canPrintRecord = r => isGeneralAdmin || (isAccountant && allowCap('sales_print')) || (r.created_by === profile?.id && allowCap('sales_print') && accountState(printAccess, profile?.id, todayStr()).allowed)
+  const canPrintRecord = r => isGeneralAdmin || ((isAccountant || viewStation) && allowCap('sales_print')) || (r.created_by === profile?.id && allowCap('sales_print') && accountState(printAccess, profile?.id, todayStr()).allowed)
   async function printDaily() {
     if (!records.length) return
     const sName = r => (isAr ? (r.station?.name_ar || r.station?.name_en) : (r.station?.name_en || r.station?.name_ar)) || '—'
@@ -1569,7 +1576,7 @@ export default function SalesPage() {
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
                                       </button>
                                     )}
-                                    {(r.is_confirmed && !isGeneralAdmin) || isViewOnlyRow(r)
+                                    {(r.is_confirmed && !isGeneralAdmin) || (isViewOnlyRow(r) && !grantCap('sales_confirm_station'))
                                       ? (
                                         <button onClick={() => setModal(r)}
                                           className="text-xs border border-gray-300 text-gray-500 rounded-lg px-3 py-1 hover:bg-gray-50 transition-colors">
@@ -1578,7 +1585,7 @@ export default function SalesPage() {
                                       ) : (
                                         <button onClick={() => setModal(r)}
                                           className="text-xs border border-nwbus-primary text-nwbus-primary rounded-lg px-3 py-1 hover:bg-nwbus-primary hover:text-white transition-colors">
-                                          {isAr ? 'تعديل' : 'Edit'}
+                                          {isViewOnlyRow(r) ? (isAr ? 'مراجعة وتأكيد' : 'Review & confirm') : (isAr ? 'تعديل' : 'Edit')}
                                         </button>
                                       )
                                     }
