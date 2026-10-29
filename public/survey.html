@@ -119,7 +119,7 @@ console.error(e);
 }
 
 // إشارة لنظام NWBUS (البوابة اليومية للموظفين) بأن الراكب قيّم
-try{ window.parent.postMessage({ nwbusSurveyDone: true }, '*') }catch(e){}
+try{ window.parent.postMessage({ nwbusSurveyDone: true, rating: Number(button.dataset.rating) }, '*') }catch(e){}
 
 document.body.innerHTML = `
 <div style="font-size:42px;font-weight:700;margin-top:40vh">

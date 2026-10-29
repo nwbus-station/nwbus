@@ -13,7 +13,15 @@ export default function DailySurveyGate() {
   const { settings } = useAppSettings()
   const enabled = String(settings?.daily_survey_enabled) === 'true'
   const need = Math.max(1, Number(settings?.daily_survey_count) || 5)
-  const day = riyadhDay()
+  // اليوم يتجدد تلقائياً عند منتصف الليل (التطبيق يبقى مفتوحاً على شاشات المحطات أياماً): يبدأ عدّ جديد دون تحديث الصفحة
+  const [day, setDay] = useState(riyadhDay())
+  useEffect(() => {
+    const check = () => setDay(d => { const n = riyadhDay(); return n === d ? d : n })
+    const id = setInterval(check, 30000)
+    document.addEventListener('visibilitychange', check)
+    window.addEventListener('focus', check)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', check); window.removeEventListener('focus', check) }
+  }, [])
 
   const [done, setDone] = useState(null)        // null = جارٍ التحميل
   const [url, setUrl] = useState('')
@@ -21,6 +29,7 @@ export default function DailySurveyGate() {
   const [msg, setMsg] = useState({ kind: '', text: '' })
   const [busy, setBusy] = useState(false)
   const [finished, setFinished] = useState(false)
+  const lastRatingRef = useRef(null)          // نتيجة آخر تقييم (1-5) تصل من صفحة الاستبيان لتسجيلها بالتقرير
   const [frameKey, setFrameKey] = useState(0)
   const autoRef = useRef(false)             // انتقال تلقائي جارٍ (منع التكرار)
   const [autoOk, setAutoOk] = useState(null)   // null = لم يُختبر، true = الكشف التلقائي يعمل، false = الدالة غير متاحة
@@ -43,6 +52,8 @@ export default function DailySurveyGate() {
   useEffect(() => {
     if (!active) return
     let off = false
+    // يوم جديد: نصفّر حالة اليوم السابق قبل التحميل
+    setDone(null); setReady(false); setFinished(false); setFails(0); setMsg({ kind: '', text: '' }); autoRef.current = false
     ;(async () => {
       const [{ data: row, error: pe }, { data: st }, cities] = await Promise.all([
         supabase.from('user_daily_survey').select('done').eq('user_id', profile.id).eq('day', day).maybeSingle(),
@@ -76,6 +87,9 @@ export default function DailySurveyGate() {
       if (preview) { setDone(nd); setFails(0); if (nd >= need) { setFinished(true); setTimeout(() => { setFinished(false); setPreview(false) }, 1800) } else { sinceRef.current = new Date(Date.now() - 3000).toISOString(); setFrameKey(k => k + 1) }; setBusy(false); return }
       const { error: ue } = await supabase.from('user_daily_survey').upsert({ user_id: profile.id, day, done: nd, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day' })
       if (ue) { setMsg({ kind: 'err', text: 'تعذّر حفظ التقدّم: ' + ue.message }); setBusy(false); return }
+      // سجل تفصيلي لكل تقييم (من قيّم، أي محطة، النتيجة، الوقت) للتقرير — لا يمنع الاحتساب إن فشل
+      const rt = Number(lastRatingRef.current); lastRatingRef.current = null
+      supabase.from('user_survey_events').insert({ user_id: profile.id, day, station_id: profile.station_id || null, rating: rt >= 1 && rt <= 5 ? rt : null }).then(() => {}, () => {})
       setDone(nd); setFails(0)
       if (nd >= need) { setFinished(true); setTimeout(() => setFinished(false), 2500) }
       else { sinceRef.current = new Date(Date.now() - 3000).toISOString(); setFrameKey(k => k + 1); setMsg({ kind: 'ok', text: 'تم احتساب التقييم. سلّم الجهاز للراكب التالي.' }) }
@@ -94,6 +108,7 @@ export default function DailySurveyGate() {
       if (!(d && (d.nwbusSurveyDone || d.type === 'nwbus-survey-done'))) return
       if (autoRef.current) return
       autoRef.current = true
+      lastRatingRef.current = d.rating ?? null
       setMsg({ kind: 'ok', text: 'وصل التقييم. جارٍ الانتقال للراكب التالي...' })
       setTimeout(async () => { await next(true); autoRef.current = false }, 1800)
     }
@@ -156,7 +171,7 @@ export default function DailySurveyGate() {
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 10, color: '#fff' }}>
           <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#16a34a', display: 'grid', placeItems: 'center', fontSize: 32 }}>&#10003;</div>
           <b style={{ fontSize: '1.1rem' }}>اكتمل تقييم اليوم</b>
-          <span style={{ fontSize: '.8rem', opacity: .7 }}>شكراً لك. لن يظهر التقييم مجدداً حتى الغد.</span>
+          <span style={{ fontSize: '.8rem', opacity: .7 }}>شكراً لك. يعود التقييم تلقائياً في اليوم التالي.</span>
         </div>
       )}
     </div>
