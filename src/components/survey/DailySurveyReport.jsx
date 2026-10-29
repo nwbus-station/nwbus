@@ -151,30 +151,48 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
   const stColor = { done: '#059669', part: '#b45309', none: '#b91c1c' }
   const rangeLabel = single ? fmtDay(from) : `${from} إلى ${days[days.length - 1]}`
 
-  function exportCsv() {
-    const head = ['المحطة', 'الموظف', 'الرقم الوظيفي', 'عدد التقييمات', 'أيام مكتملة', 'متوسط الرضا', ...[1, 2, 3, 4, 5].map(n => RATING_LABEL[n])]
-    const esc2 = v => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const lines = [head, ...groups.flatMap(g => g.list.map(r => [g.name, r.u.full_name_ar, r.u.job_number ?? '', r.done, `${r.fullDays}/${N}`, r.avg == null ? '' : r.avg.toFixed(2), ...[1, 2, 3, 4, 5].map(n => r.ratings.filter(x => x === n).length)]))]
-    const blob = new Blob(['﻿' + lines.map(l => l.map(esc2).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' })
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `تقييم_الركاب_${from}_${days[days.length - 1]}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000)
+  const [xlBusy, setXlBusy] = useState(false)
+  async function exportExcel() {
+    setXlBusy(true)
+    try {
+      const { exportSurveyExcel } = await import('../../utils/surveyReportExport')
+      await exportSurveyExcel({ groups, ctx: { from, to: days[days.length - 1], N, single, need, total, compliance, allRatings, stationF, notStarted: cnt('none') } })
+    } catch (e) { setErr('تعذّر إنشاء ملف Excel: ' + (e?.message || '')) }
+    setXlBusy(false)
   }
 
   function print() {
-    const distCell = list => list.length ? distOf(list).filter(([, n]) => n).map(([r, n]) => `${RATING_LABEL[r]} ${n}`).join(' · ') : '—'
+    const chipRate = (r, t) => `<span style="display:inline-block;margin:1px 2px;padding:1px 7px;border-radius:99px;font-size:10.5px;font-weight:700;color:#fff;background:${RATING_COLOR[r] || '#94a3b8'}">${t ? `${t} ` : ''}${r ? RATING_LABEL[r] : 'غير مسجّلة'}</span>`
+    const distBar = list => {
+      const d = distOf(list).reverse()
+      return list.length ? `<div style="display:flex;height:11px;border-radius:99px;overflow:hidden;background:#e8edf3">${d.map(([n, c]) => c ? `<i style="display:block;width:${(c / list.length) * 100}%;background:${RATING_COLOR[n]}"></i>` : '').join('')}</div>
+        <div style="margin-top:5px;font-size:10.5px;color:#475569">${d.map(([n, c]) => `<span style="margin-inline-end:12px"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${RATING_COLOR[n]};margin-inline-end:4px"></i>${RATING_LABEL[n]} <b>${c}</b> (${pct(c, list.length)}%)</span>`).join('')}</div>` : '<span class="muted">لا توجد نتائج مسجّلة</span>'
+    }
+    const complBar = v => `<div style="display:inline-block;width:70px;height:7px;border-radius:99px;background:#e8edf3;overflow:hidden;vertical-align:middle"><i style="display:block;height:100%;width:${v}%;background:${v >= 80 ? '#15803d' : v >= 50 ? '#d97706' : '#dc2626'}"></i></div> <b>${v}%</b>`
+    const detail = r => r.evs.length
+      ? r.evs.map(e => chipRate(e.rating, single ? timeOf(e.created_at) : `${e.day.slice(5)} ${timeOf(e.created_at)}`)).join('')
+      : (r.done ? '<span class="muted">عدد فقط (قبل تفعيل سجل التفاصيل)</span>' : '—')
     const body = `<div class="body">
       <div class="sec"><div class="grid g4">
         <div class="kpi" style="--c:#059669"><small>إجمالي التقييمات</small><b>${total}</b><em>${single ? 'تقييم اليوم' : `خلال ${N} يوم`}</em></div>
-        <div class="kpi" style="--c:#264673"><small>نسبة الالتزام</small><b>${compliance}%</b><em>${single ? `أكملوا ${cnt('done')} من ${rows.length}` : `${rows.length} حساب`}</em></div>
+        <div class="kpi" style="--c:${compliance >= 80 ? '#15803d' : compliance >= 50 ? '#d97706' : '#dc2626'}"><small>نسبة الالتزام</small><b>${compliance}%</b><em>${single ? `أكملوا ${cnt('done')} من ${rows.length}` : `${rows.length} حساب`}</em></div>
         <div class="kpi" style="--c:#7c3aed"><small>متوسط رضا الركاب</small><b>${fmtAvg(avgOf(allRatings))}</b><em>من 5 (${allRatings.length} نتيجة)</em></div>
         <div class="kpi" style="--c:#dc2626"><small>لم يبدأوا</small><b>${cnt('none')}</b><em>حساب</em></div>
       </div></div>
-      <div class="sec"><p class="muted">توزيع النتائج: ${esc(distCell(allRatings))}</p></div>
-      ${groups.map(g => `<div class="sec"><h3>${esc(g.name)} <span class="muted">(${g.list.length} حساب · ${g.done} تقييم · التزام ${g.compliance}% · رضا ${fmtAvg(g.avg)})</span></h3>
-        <table class="t"><thead><tr><th>الموظف</th><th>الرقم الوظيفي</th><th>التقييمات</th><th>${single ? 'الحالة' : 'أيام مكتملة'}</th><th>المتوسط</th><th>توزيع النتائج</th>${single ? '<th>الوقت</th>' : ''}</tr></thead><tbody>${g.list.map(r => `<tr>
-          <td class="l">${esc(r.u.full_name_ar ?? '—')}</td><td>${esc(r.u.job_number ?? '—')}</td><td><b>${r.done}</b>${single ? ` / ${need}` : ''}</td>
-          <td>${single ? `<span class="chip" style="background:${r.st === 'done' ? '#dcfce7' : r.st === 'part' ? '#fef3c7' : '#fee2e2'};color:${stColor[r.st]}">${stTxt[r.st]}</span>` : `${r.fullDays} / ${N}`}</td>
-          <td>${fmtAvg(r.avg)}</td><td class="l">${esc(distCell(r.ratings))}</td>
-          ${single ? `<td>${r.evs.length ? `${timeOf(r.evs[0].created_at)} – ${timeOf(r.evs[r.evs.length - 1].created_at)}` : '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`).join('')}
+      <div class="sec"><h3>توزيع نتائج الركاب</h3>${distBar(allRatings)}</div>
+      <div class="sec"><h3>ملخص المحطات</h3>
+        <table class="t"><thead><tr><th>المحطة</th><th>الحسابات</th><th>التقييمات</th><th>الالتزام</th><th>متوسط الرضا</th></tr></thead><tbody>
+        ${groups.map(g => `<tr><td class="l"><b>${esc(g.name)}</b></td><td>${g.list.length}</td><td><b>${g.done}</b></td><td>${complBar(g.compliance)}</td><td><b>${fmtAvg(g.avg)}</b></td></tr>`).join('')}
+        <tr class="tot"><td class="l">الإجمالي</td><td>${rows.length}</td><td>${total}</td><td>${compliance}%</td><td>${fmtAvg(avgOf(allRatings))}</td></tr></tbody></table></div>
+      ${groups.map(g => {
+        const active = g.list.filter(r => r.done > 0), idle = g.list.filter(r => r.done === 0)
+        return `<div class="sec"><h3>${esc(g.name)} <span class="muted">(${g.list.length} حساب · ${g.done} تقييم · رضا ${fmtAvg(g.avg)})</span></h3>
+        ${active.length ? `<table class="t"><thead><tr><th>الموظف</th><th>الرقم</th><th>التقييمات</th><th>${single ? 'الحالة' : 'الأيام المكتملة'}</th><th>المتوسط</th><th>نتائج الركاب (${single ? 'الوقت' : 'التاريخ والوقت'})</th></tr></thead><tbody>${active.map(r => `<tr>
+          <td class="l"><b>${esc(r.u.full_name_ar ?? '—')}</b></td><td>${esc(r.u.job_number ?? '—')}</td><td><b>${r.done}</b>${single ? ` / ${need}` : ''}</td>
+          <td>${single ? `<span class="chip" style="background:${r.st === 'done' ? '#dcfce7' : '#fef3c7'};color:${stColor[r.st]}">${stTxt[r.st]}</span>` : `${r.fullDays} من ${N}`}</td>
+          <td>${fmtAvg(r.avg)}</td><td class="l">${detail(r)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">لا توجد تقييمات في هذه المحطة.</p>'}
+        ${idle.length ? `<p class="muted" style="margin-top:6px"><b style="color:#b91c1c">لم يبدأوا (${idle.length}):</b> ${idle.map(r => esc(r.u.full_name_ar ?? '—')).join(' · ')}</p>` : ''}</div>`
+      }).join('')}
       ${data?.noEvents ? '<p class="muted">ملاحظة: نتيجة كل تقييم ووقته غير متوفرة (جدول التفاصيل غير مفعّل).</p>' : ''}
     </div>`
     openDocWindow(docShell({
@@ -206,7 +224,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
         <span style={{ fontSize: '.74rem', color: 'var(--text-3)' }}>إلى</span>
         <div style={{ width: 168 }}><DatePicker value={to} onChange={onTo} max={today} isAr className={dpCls} /></div>
         <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 6 }}>
-          <button type="button" onClick={exportCsv} disabled={!rows.length} style={btn(false)}>تصدير Excel</button>
+          <button type="button" onClick={exportExcel} disabled={!rows.length || xlBusy} style={btn(false)}>{xlBusy ? 'جارٍ التجهيز...' : 'تصدير Excel'}</button>
           <button type="button" onClick={print} disabled={!rows.length} style={btn(true)}>طباعة التقرير</button>
         </span>
       </div>
@@ -270,11 +288,24 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
                       <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{r.done}{single ? <span style={{ color: 'var(--text-3)' }}> / {need}</span> : null}</span>
                       <span style={{ fontSize: '.72rem' }}>
                         <b style={{ color: stColor[r.st] }}>{stTxt[r.st]}</b>
-                        <span style={{ color: 'var(--text-3)' }}>{single ? (r.evs.length ? ` · ${timeOf(r.evs[0].created_at)} – ${timeOf(r.evs[r.evs.length - 1].created_at)}` : '') : ` · ${r.fullDays} / ${N} يوم`}</span>
+                        <span style={{ color: 'var(--text-3)' }}>{single ? (r.evs.length ? ` · ${timeOf(r.evs[0].created_at)} – ${timeOf(r.evs[r.evs.length - 1].created_at)}` : '') : ` · ${r.fullDays} من ${N} يوم`}</span>
                       </span>
                       <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{fmtAvg(r.avg)}</span>
                       <DistBar list={r.ratings} height={6} />
                       <span />
+                      {r.done > 0 && (
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
+                          {r.evs.length
+                            ? r.evs.map((e, i) => (
+                              <span key={i} title={e.rating ? RATING_LABEL[e.rating] : 'نتيجة غير مسجّلة'}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 99, fontSize: '.68rem', fontWeight: 700, color: '#fff', background: RATING_COLOR[e.rating] || '#94a3b8' }}>
+                                <span style={{ fontFamily: 'monospace', opacity: .9 }}>{single ? timeOf(e.created_at) : `${e.day.slice(5)} ${timeOf(e.created_at)}`}</span>
+                                {e.rating ? `${RATING_LABEL[e.rating]}` : 'غير مسجّلة'}
+                              </span>
+                            ))
+                            : <span style={{ fontSize: '.68rem', color: 'var(--text-3)' }}>عدد التقييمات مسجّل، ونتائجها غير متوفرة (قبل تفعيل سجل التفاصيل).</span>}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
