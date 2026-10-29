@@ -147,6 +147,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
   const allRatings = rows.flatMap(r => r.ratings)
   const compliance = pct(rows.reduce((a, r) => a + r.fullDays, 0), rows.length * N)
   const cnt = st => rows.filter(r => r.st === st).length
+  const rated = rows.filter(r => r.done > 0).length   // حسابات قيّمت فعلاً (تقييم واحد فأكثر)
   const stTxt = { done: single ? 'أكمل' : 'التزم', part: 'لم يكمل', none: 'لم يبدأ' }
   const stColor = { done: '#059669', part: '#b45309', none: '#b91c1c' }
   const rangeLabel = single ? fmtDay(from) : `${from} إلى ${days[days.length - 1]}`
