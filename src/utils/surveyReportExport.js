@@ -25,6 +25,7 @@ export async function exportSurveyExcel({ groups, ctx }) {
   S.section('نظرة سريعة')
   S.spacer(0)
   S.kpis([
+    { label: 'حسابات قيّمت', value: ctx.rated, fmt: '0', color: XL.green, foot: `من ${ctx.accounts} حساب` },
     { label: 'إجمالي التقييمات', value: total, fmt: '#,##0', foot: single ? 'تقييم اليوم' : `خلال ${N} يوم` },
     { label: 'نسبة الالتزام', value: compliance / 100, fmt: '0%', color: compliance >= 80 ? XL.green : compliance >= 50 ? XL.amber : XL.red, foot: `المطلوب ${need} تقييمات لكل حساب يومياً` },
     { label: 'متوسط رضا الركاب', value: r2(avgOf(allRatings)) || '—', fmt: '0.00', foot: `من 5 · ${allRatings.length} نتيجة مسجّلة` },

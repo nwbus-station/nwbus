@@ -156,7 +156,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
     setXlBusy(true)
     try {
       const { exportSurveyExcel } = await import('../../utils/surveyReportExport')
-      await exportSurveyExcel({ groups, ctx: { from, to: days[days.length - 1], N, single, need, total, compliance, allRatings, stationF, notStarted: cnt('none') } })
+      await exportSurveyExcel({ groups, ctx: { from, to: days[days.length - 1], N, single, need, total, compliance, allRatings, stationF, notStarted: cnt('none'), rated, accounts: rows.length } })
     } catch (e) { setErr('تعذّر إنشاء ملف Excel: ' + (e?.message || '')) }
     setXlBusy(false)
   }
@@ -173,7 +173,8 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
       ? r.evs.map(e => chipRate(e.rating, single ? timeOf(e.created_at) : `${e.day.slice(5)} ${timeOf(e.created_at)}`)).join('')
       : (r.done ? '<span class="muted">عدد فقط (قبل تفعيل سجل التفاصيل)</span>' : '—')
     const body = `<div class="body">
-      <div class="sec"><div class="grid g4">
+      <div class="sec"><div class="grid g5">
+        <div class="kpi" style="--c:#0369a1"><small>حسابات قيّمت</small><b>${rated}</b><em>من ${rows.length} حساب (${pct(rated, rows.length)}%)</em></div>
         <div class="kpi" style="--c:#059669"><small>إجمالي التقييمات</small><b>${total}</b><em>${single ? 'تقييم اليوم' : `خلال ${N} يوم`}</em></div>
         <div class="kpi" style="--c:${compliance >= 80 ? '#15803d' : compliance >= 50 ? '#d97706' : '#dc2626'}"><small>نسبة الالتزام</small><b>${compliance}%</b><em>${single ? `أكملوا ${cnt('done')} من ${rows.length}` : `${rows.length} حساب`}</em></div>
         <div class="kpi" style="--c:#7c3aed"><small>متوسط رضا الركاب</small><b>${fmtAvg(avgOf(allRatings))}</b><em>من 5 (${allRatings.length} نتيجة)</em></div>
@@ -236,6 +237,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
         <>
           {/* المؤشرات */}
           <div style={{ display: 'flex', flexWrap: 'wrap', border: '1px solid var(--border-2, #e0e0e0)', borderRadius: 10, overflow: 'hidden', background: 'var(--card)' }}>
+            <Kpi label="حسابات قيّمت" value={rated} sub={`من ${rows.length} حساب · ${pct(rated, rows.length)}%`} tone={rated ? '#059669' : undefined} />
             <Kpi label="إجمالي التقييمات" value={total} sub={single ? 'تقييم اليوم' : `${N} يوم`} />
             <Kpi label="نسبة الالتزام" value={`${compliance}%`} sub={single ? `أكملوا ${cnt('done')} من ${rows.length}` : `${rows.length} حساب`} tone={compliance >= 80 ? '#059669' : compliance >= 50 ? '#b45309' : '#b91c1c'} />
             <Kpi label="متوسط رضا الركاب" value={fmtAvg(avgOf(allRatings))} sub={`من 5 · ${allRatings.length} نتيجة`} />
