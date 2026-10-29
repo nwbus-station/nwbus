@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import DailySurveySettings from '../components/survey/DailySurveySettings'
+import { getThemeMode, setThemeMode, resolveDark, applyTheme } from '../lib/theme'
 
 export const BASE = 'https://nwbus.sa/survey.html?city='
 // رابط العرض داخل النظام: نسخة صفحة الاستبيان المستضافة عندنا (تتكيّف مع الجوال وتُرسل إشارة «تم التقييم»)؛ الروابط المخصصة الأخرى كما هي
@@ -321,6 +322,10 @@ export default function SurveyPage() {
   const isAr       = i18n.language === 'ar'
   const params      = useParams()
   const navigate    = useNavigate()
+  // الصفحة مستقلة عن قالب التطبيق: نطبّق المظهر المحفوظ بأنفسنا، ونتيح للموظف التبديل (ليلي/نهاري) ويُحفظ اختياره
+  const [themeMode, setThemeModeSt] = useState(() => getThemeMode())
+  const isDarkNow = resolveDark(themeMode)
+  useEffect(() => { applyTheme(resolveDark(themeMode)); setThemeMode(themeMode) }, [themeMode])
 
   // دعم /survey/:city مباشرة (رابط عام للراكب)
   const paramCity   = params?.city
@@ -452,6 +457,24 @@ export default function SurveyPage() {
                     <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/>
                   </svg>
                   {manage ? (isAr ? 'إنهاء التعديل' : 'Done') : (isAr ? 'تعديل روابط المدن' : 'Manage city links')}
+                </button>
+              )}
+              {profile && (
+                <button
+                  onClick={() => setThemeModeSt(isDarkNow ? 'light' : 'dark')}
+                  title={isAr ? 'تبديل المظهر' : 'Toggle theme'} aria-label={isAr ? 'تبديل المظهر' : 'Toggle theme'}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    borderRadius: 8, padding: '7px 14px',
+                    color: 'var(--text-2)', fontSize: '0.78rem', fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  {isDarkNow
+                    ? <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+                    : <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>}
+                  {isDarkNow ? (isAr ? 'نهاري' : 'Light') : (isAr ? 'ليلي' : 'Dark')}
                 </button>
               )}
               {profile && (

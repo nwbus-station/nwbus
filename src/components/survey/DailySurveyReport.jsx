@@ -55,7 +55,7 @@ function DistBar({ list, height = 10, legend = false }) {
 
 function Kpi({ label, value, sub, tone }) {
   return (
-    <div style={{ flex: '1 1 130px', minWidth: 120, padding: '12px 14px', borderInlineStart: '1px solid var(--border-2, #e0e0e0)' }}>
+    <div style={{ padding: '12px 14px', background: 'var(--card)', minWidth: 0 }}>
       <div style={{ fontSize: '1.35rem', fontWeight: 800, fontFamily: 'ui-monospace, monospace', lineHeight: 1.1, color: tone || 'var(--text-1)' }}>{value}</div>
       <div style={{ fontSize: '.7rem', color: 'var(--text-3)', marginTop: 3 }}>{label}</div>
       {sub != null && <div style={{ fontSize: '.66rem', color: 'var(--text-3)', marginTop: 1 }}>{sub}</div>}
@@ -237,7 +237,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
       {!data ? <p style={{ margin: 0, fontSize: '.8rem', color: 'var(--text-3)' }}>جارٍ التحميل...</p> : (
         <>
           {/* المؤشرات */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', border: '1px solid var(--border-2, #e0e0e0)', borderRadius: 10, overflow: 'hidden', background: 'var(--card)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, border: '1px solid var(--border-2, #e0e0e0)', borderRadius: 10, overflow: 'hidden', background: 'var(--border-2, #e0e0e0)' }}>
             <Kpi label="حسابات قيّمت" value={rated} sub={`من ${rows.length} حساب · ${pct(rated, rows.length)}%`} tone={rated ? '#059669' : undefined} />
             <Kpi label="إجمالي التقييمات" value={total} sub={single ? 'تقييم اليوم' : `${N} يوم`} />
             <Kpi label="نسبة الالتزام" value={`${compliance}%`} sub={single ? `أكملوا ${cnt('done')} من ${rows.length}` : `${rows.length} حساب`} tone={compliance >= 80 ? '#059669' : compliance >= 50 ? '#b45309' : '#b91c1c'} />
