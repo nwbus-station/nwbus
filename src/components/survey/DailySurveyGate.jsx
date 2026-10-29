@@ -13,6 +13,7 @@ export default function DailySurveyGate() {
   const { settings } = useAppSettings()
   const enabled = String(settings?.daily_survey_enabled) === 'true'
   const need = Math.max(1, Number(settings?.daily_survey_count) || 5)
+  const manualOn = String(settings?.daily_survey_manual) === 'true'   // زر «تحقق الآن» / «اعتماد يدوي»: يفعّله الأدمن عند الحاجة فقط
   // اليوم يتجدد تلقائياً عند منتصف الليل (التطبيق يبقى مفتوحاً على شاشات المحطات أياماً): يبدأ عدّ جديد دون تحديث الصفحة
   const [day, setDay] = useState(riyadhDay())
   useEffect(() => {
@@ -152,12 +153,14 @@ export default function DailySurveyGate() {
           <b style={{ color: '#fff', fontSize: '.8rem', marginInlineStart: 8, fontFamily: 'monospace' }}>{done} / {need}</b>
         </div>
         {preview && <button type="button" onClick={() => { setPreview(false); setDone(null) }} style={{ background: 'rgba(255,255,255,.1)', color: '#fff', border: '1px solid rgba(255,255,255,.25)', borderRadius: 9, padding: '8px 14px', fontWeight: 700, fontSize: '.78rem', cursor: 'pointer', fontFamily: 'inherit' }}>إغلاق المعاينة</button>}
-        <button type="button" disabled={busy || finished} onClick={() => next(false)}
-          style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 18px', fontWeight: 800, fontSize: '.82rem', cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>
-          {busy ? 'جارٍ التحقق...' : (autoOk ? 'تحقق الآن' : 'تم تقييم الراكب، التالي')}
-        </button>
+        {manualOn && (
+          <button type="button" disabled={busy || finished} onClick={() => next(false)}
+            style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 18px', fontWeight: 800, fontSize: '.82rem', cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? .6 : 1 }}>
+            {busy ? 'جارٍ التحقق...' : (autoOk ? 'تحقق الآن' : 'تم تقييم الراكب، التالي')}
+          </button>
+        )}
       </div>
-      {fails >= 2 && !busy && (
+      {manualOn && fails >= 2 && !busy && (
         <div style={{ flexShrink: 0, padding: '8px 16px', background: '#1f2937', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ color: 'rgba(255,255,255,.8)', fontSize: '.75rem', flex: 1 }}>إن أرسل الراكب تقييمه فعلاً ولم يُحتسب، يمكنك اعتماده يدوياً.</span>
           <button type="button" onClick={() => next(true)} style={{ background: 'transparent', color: '#fbbf24', border: '1px solid #fbbf24', borderRadius: 8, padding: '5px 12px', fontSize: '.74rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>اعتماد يدوي</button>

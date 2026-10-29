@@ -11,6 +11,7 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
   const { settings, saveSetting } = useAppSettings()
   const enabled = String(settings?.daily_survey_enabled) === 'true'
   const count = Math.max(1, Number(settings?.daily_survey_count) || 5)
+  const manualOn = String(settings?.daily_survey_manual) === 'true'
   const [countDraft, setCountDraft] = useState(String(count))
   const [reportKey, setReportKey] = useState(0)
   const [tab, setTab] = useState('report')   // report | settings | check
@@ -135,6 +136,18 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
                 onBlur={() => { const n = Math.min(50, Math.max(1, Number(countDraft) || 5)); setCountDraft(String(n)); if (n !== count) saveSetting('daily_survey_count', String(n)) }}
                 style={{ ...input, width: 90, fontFamily: 'monospace', textAlign: 'center' }} />
               <p style={hint}>يُحفظ تلقائياً. الأدمن العام مستثنى دائماً.</p>
+            </div>
+            <div>
+              <p style={lbl}>الأزرار اليدوية للموظف</p>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '.8rem', fontWeight: 700, color: 'var(--text-2)' }}>
+                <span role="switch" aria-checked={manualOn} tabIndex={0} onClick={() => saveSetting('daily_survey_manual', manualOn ? 'false' : 'true')}
+                  onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); saveSetting('daily_survey_manual', manualOn ? 'false' : 'true') } }}
+                  style={{ width: 44, height: 24, borderRadius: 99, background: manualOn ? '#059669' : 'var(--border-2, #cfcfcf)', position: 'relative', transition: 'background .15s', flexShrink: 0 }}>
+                  <i style={{ position: 'absolute', top: 3, insetInlineStart: manualOn ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.3)', transition: 'inset-inline-start .15s' }} />
+                </span>
+                {manualOn ? 'زر «تحقق الآن» و«اعتماد يدوي» ظاهران للموظف' : 'مخفيان (الاحتساب تلقائي عند ضغط الراكب)'}
+              </label>
+              <p style={hint}>الاحتساب يتم تلقائياً بمجرد ضغط الراكب على الوجه. فعّل الأزرار اليدوية فقط إن تعطّل الاحتساب التلقائي على جهاز معيّن.</p>
             </div>
             <div>
               <p style={lbl}>من يشمله التقييم؟</p>
