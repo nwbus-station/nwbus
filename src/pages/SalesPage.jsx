@@ -479,6 +479,8 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
     setForm(f => (shiftTouched.current && SHIFTS.some(sh => sh.value === f.shift) ? f : { ...f, shift: suggested.shift }))
   }, [shiftsKey, suggested.shift])
   const [error,  setError]  = useState('')
+  const docBoxRef = useRef(null)
+  const [docMissing, setDocMissing] = useState(false)
   const [totalMissing, setTotalMissing] = useState(false)
   // الحقول التي تعتبر تغييراً حقيقياً للبيانات (لا تشمل is_confirmed والملاحظات فقط)
   const DATA_FIELDS = ['sale_date','shift','station_id','employee_name','cashier_ref','balance_refs','cash_amount','mada_amount','mada_network_ref','visa_amount','mastercard_amount','other_amount','other_type','total_sales','balance_doc_path']
@@ -487,6 +489,9 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
     ...(DATA_FIELDS.includes(k) && sale ? { _dataChanged: true } : {}),
   })) }
 
+  // ورقة الموازنة: إلزامية على الموظف/المشرف إن وُجد مبلغ بغير النقد؛ الأدمن والمحاسب (مراجعة وتأكيد) مستثنيان
+  const cardAmt = ['mada_amount', 'visa_amount', 'mastercard_amount', 'other_amount'].some(k => Number(form[k]) > 0)
+  const docRequired = cardAmt && !isGeneralAdmin && !isAccountant && !confirmerOnly
   const totalActual = Math.round(Number(form.cash_amount)) + Math.round(Number(form.mada_amount)) +
     Math.round(Number(form.visa_amount)) + Math.round(Number(form.mastercard_amount)) + Math.round(Number(form.other_amount))
   const diff = totalActual - Math.round(Number(form.total_sales))
@@ -551,6 +556,13 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
     }
     if (!sale && (form.shift !== suggested.shift || form.sale_date !== suggested.date) && !shiftConfirmed) {
       setError(isAr ? 'الوردية أو التاريخ يختلف عن المتوقع حسب الوقت الحالي — أكّد صحتهما بالتأشير على خانة التأكيد' : 'The shift or date differs from the one expected for the current time — tick the confirmation box')
+      return
+    }
+    // ورقة الموازنة إلزامية متى أُدخل مبلغ (أكبر من صفر) في مدى أو فيزا أو ماستركارد أو أخرى (الفاضي أو الصفر يمر بدونها)
+    if (docRequired && !form.balance_doc_path) {
+      setDocMissing(true)
+      setError(isAr ? 'أدخلت مبلغاً في مدى/فيزا/ماستركارد/أخرى: أرفق صورة ورقة الموازنة (تصوير أو رفع ملف) قبل الحفظ.' : 'You entered a card/other amount: attach the balance document (scan or upload) before saving.')
+      try { docBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) } catch { /* بدون تمرير */ }
       return
     }
     setSaving(true); setError('')
@@ -890,7 +902,9 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
                     </div>
                   ))}
                 </div>
-                <BalanceDocScan path={form.balance_doc_path} onChange={v => set('balance_doc_path', v)} isAr={isAr} />
+                <div ref={docBoxRef}>
+                  <BalanceDocScan path={form.balance_doc_path} onChange={v => { set('balance_doc_path', v); if (v) setDocMissing(false) }} isAr={isAr} required={docRequired} missing={docMissing} />
+                </div>
               </div>
             </SectionCard>
 

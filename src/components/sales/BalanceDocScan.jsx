@@ -21,7 +21,7 @@ async function compress(file) {
 
 // مسح مستند (ورقة الموازنة): تصوير بالكاميرا أو اختيار صورة، تُحفظ مع اليومية في مخزن خاص
 // path: مسار الصورة المحفوظ (أو null) — onChange(pathجديد|null)
-export default function BalanceDocScan({ path, onChange, isAr, disabled }) {
+export default function BalanceDocScan({ path, onChange, isAr, disabled, required = false, missing = false }) {
   const inputRef = useRef(null)
   const sessionPaths = useRef(new Set())   // ما رُفع في هذه الجلسة ولم يُحفظ بعد (يُحذف فوراً عند الاستبدال/الإزالة)
   const [preview, setPreview] = useState('') // رابط عرض الصورة الحالية
@@ -83,10 +83,15 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled }) {
       <div className="flex items-center justify-between mb-1">
         <label className="text-[11px] font-bold text-gray-500">
           {isAr ? 'ورقة الموازنة' : 'Balance document'}
-          <span className="ms-1.5 text-gray-400 font-normal">({isAr ? 'اختياري' : 'optional'})</span>
+          {required
+            ? <span className="ms-1.5 text-red-600 font-bold">({isAr ? 'إلزامي' : 'required'})</span>
+            : <span className="ms-1.5 text-gray-400 font-normal">({isAr ? 'اختياري' : 'optional'})</span>}
         </label>
       </div>
-      <div className="flex items-center gap-3 flex-wrap">
+      {required && !path && (
+        <p className={`text-[11px] mb-1.5 leading-relaxed ${missing ? 'text-red-600 font-bold' : 'text-amber-700'}`}>{isAr ? 'أدخلت مبلغاً في مدى/فيزا/ماستركارد/أخرى، فإرفاق صورة الموازنة (تصوير أو رفع ملف) إلزامي قبل الحفظ.' : 'You entered a card/other amount, so the balance document (scan or upload) is required before saving.'}</p>
+      )}
+      <div className={`flex items-center gap-3 flex-wrap ${missing && required && !path ? 'rounded-lg ring-2 ring-red-400 p-2' : ''}`}>
         {path && /\.pdf$/i.test(path) && (
           <button type="button" onClick={() => openBalanceDoc(path)} title={isAr ? 'عرض الملف' : 'View file'}
             className="w-16 h-16 rounded-lg border border-gray-200 bg-gray-50 flex flex-col items-center justify-center text-[11px] font-bold text-red-600">PDF<span className="text-[9px] font-normal text-gray-500">{isAr ? 'عرض' : 'View'}</span></button>
