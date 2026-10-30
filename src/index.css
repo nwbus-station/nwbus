@@ -1006,3 +1006,18 @@ html.dark input:disabled, html.dark select:disabled, html.dark textarea:disabled
 .rp-card-t { font-size: 0.95rem; font-weight: 800; color: var(--text-1); margin-top: 4px; }
 .rp-card-d { font-size: 0.74rem; color: var(--text-3); line-height: 1.5; }
 @media (max-width: 767px) { .rp-tabs { top: 60px; } }
+
+
+/* ── نافذة إدخال الإيراد: ورقة سفلية على الجوال، ومركزية على الشاشات الكبيرة ─────────── */
+.sales-sheet { height: calc(100vh - 12px); max-height: calc(100vh - 12px); animation: sheet-up .22s cubic-bezier(.2, .8, .2, 1); }
+@supports (height: 100dvh) { .sales-sheet { height: calc(100dvh - 12px); max-height: calc(100dvh - 12px); } }
+@media (min-width: 640px) {
+  .sales-sheet { height: auto; max-height: 92vh; animation-name: sheet-pop; }
+  @supports (height: 100dvh) { .sales-sheet { max-height: 92dvh; } }
+}
+@keyframes sheet-up { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sheet-pop { from { transform: scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sales-sheet { animation: none; } }
+/* حقول المبالغ كبيرة وبلا إطار داخلي (الإطار للصف كله)، وبحجم ≥16px كي لا يكبّر آيفون الصفحة عند التركيز */
+input.amt-input, input.amt-hero { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+@media (max-width: 767px) { input.amt-input { font-size: 20px !important; } input.amt-hero { font-size: 28px !important; } }
