@@ -413,7 +413,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
     ;(async () => {
       let q = supabase.from('users').select('id, full_name_ar, job_number, station_id, station:station_id(name_ar, name_en)')
         .eq('is_active', true).eq('role', 'station_employee').or('job_title.is.null,job_title.neq.cleaner').or('is_agent.is.null,is_agent.eq.false').order('full_name_ar')   // عمال النظافة والوكلاء لا علاقة لهم بالإيرادات
-      const scope = (isAreaSupervisor || allowedStationIds?.length > 1) ? allowedStationIds : [profile.station_id]   // مشرف المحطة: موظفو محطته (أو محطاته المخصصة إن تعددت)
+      const scope = isAreaSupervisor ? allowedStationIds : [profile.station_id]   // مشرف المحطة: موظفو محطته فقط
       if (scope) q = q.in('station_id', scope)
       const { data } = await q.limit(1000)
       const ag = await loadAgentIds()
@@ -1285,9 +1285,12 @@ export default function SalesPage() {
     // ── Privacy filters ──────────────────────────────────
     if (isGeneralAdmin) {
       if (filterStation) q = q.eq('station_id', filterStation)
-    } else if (isStationAdmin && !isAreaSupervisor && !(allowedStationIds?.length > 1)) {
-      q = q.eq('station_id', profile.station_id)   // مشرف المحطة (محطة واحدة) يرى يوميات محطته فقط
-    } else if ((isAreaSupervisor || isStationAdmin) && allowedStationIds?.length) {
+    } else if (isStationAdmin && !isAreaSupervisor) {
+      // مشرف المحطة يرى يوميات محطته الأساسية فقط، وإن أضاف يوميته بمحطة أخرى من محطاته تظهر له يوميته هو فقط (لا يرى إيرادات المحطات الثانية)
+      q = (allowedStationIds?.length > 1 && profile.station_id)
+        ? q.or(`station_id.eq.${profile.station_id},created_by.eq.${profile.id}`)
+        : q.eq('station_id', profile.station_id)
+    } else if (isAreaSupervisor && allowedStationIds?.length) {
       const ids = filterStation ? [filterStation] : allowedStationIds
       q = q.in('station_id', ids)
     } else if (isStationAdmin || isAccountant || viewStation) {
