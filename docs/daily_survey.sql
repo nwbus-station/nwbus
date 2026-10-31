@@ -43,3 +43,33 @@ drop policy if exists "use_select" on public.user_survey_events;
 create policy "use_select" on public.user_survey_events for select to authenticated using (user_id = current_user_id() or is_admin());
 drop policy if exists "use_delete_admin" on public.user_survey_events;
 create policy "use_delete_admin" on public.user_survey_events for delete to authenticated using (is_admin());
+
+-- سجل تغييرات الإعدادات: من غيّر أي إعداد (مثل مفتاح التقييم اليومي) ومتى
+create table if not exists public.app_settings_log (
+  id bigint generated always as identity primary key,
+  key text not null,
+  old_value text,
+  new_value text,
+  changed_by uuid,
+  changed_by_name text,
+  changed_at timestamptz not null default now()
+);
+alter table public.app_settings_log enable row level security;
+drop policy if exists "asl_admin_select" on public.app_settings_log;
+create policy "asl_admin_select" on public.app_settings_log for select to authenticated using (is_admin());
+grant select on public.app_settings_log to authenticated;
+grant select, insert, update, delete on public.app_settings_log to service_role;
+
+create or replace function public.log_app_settings() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare uid uuid; nm text;
+begin
+  select u.id, u.full_name_ar into uid, nm from users u where u.auth_id = auth.uid() limit 1;
+  if tg_op = 'INSERT' or new.value::text is distinct from old.value::text then
+    insert into app_settings_log(key, old_value, new_value, changed_by, changed_by_name)
+    values (new.key, case when tg_op = 'UPDATE' then old.value::text end, new.value::text, uid, nm);
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_log_app_settings on public.app_settings;
+create trigger trg_log_app_settings after insert or update on public.app_settings for each row execute function public.log_app_settings();

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import { supabase } from '../../lib/supabase'
 import { useAppSettings } from '../../context/AppSettingsContext'
@@ -23,6 +23,16 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
   const [results, setResults] = useState([])
   const [confirmReset, setConfirmReset] = useState(false)
   const [resetMsg, setResetMsg] = useState('')
+  const [confirmOff, setConfirmOff] = useState(false)
+  // آخر تغيير على مفتاح التفعيل: من ومتى (من سجل الإعدادات، إن كان الجدول مُنشأً)
+  const [lastChange, setLastChange] = useState(null)
+  const loadLast = useCallback(() => {
+    supabase.from('app_settings_log').select('new_value, changed_by_name, changed_at').eq('key', 'daily_survey_enabled')
+      .order('changed_at', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data, error }) => { if (!error) setLastChange(data ?? null) }, () => {})
+  }, [])
+  useEffect(() => { loadLast() }, [loadLast])
+  const toggleEnabled = () => { if (enabled) setConfirmOff(true); else { saveSetting('daily_survey_enabled', 'true'); setTimeout(loadLast, 1200) } }
   // فحص حساب: لماذا يظهر أو لا يظهر له التقييم
   const [cq, setCq] = useState('')
   const [cres, setCres] = useState([])
@@ -106,10 +116,13 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
           <p style={hint}>{enabled
             ? `يعمل كل يوم تلقائياً ويستمر حتى توقفه أنت: عند أول فتح في اليوم (وعند منتصف الليل للشاشات المفتوحة) يطلب من كل حساب ${count} تقييمات من الركاب.`
             : 'معطّل حالياً. عند التفعيل يستمر يوماً بعد يوم حتى توقفه.'}</p>
+          {lastChange && (
+            <p style={{ ...hint, marginTop: 2 }}>آخر تغيير: <b style={{ color: 'var(--text-2)' }}>{lastChange.new_value === 'true' ? 'تفعيل' : 'إيقاف'}</b> بواسطة <b style={{ color: 'var(--text-2)' }}>{lastChange.changed_by_name || 'غير معروف'}</b> · {new Date(lastChange.changed_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' })}</p>
+          )}
         </div>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '.8rem', fontWeight: 700, color: 'var(--text-2)' }}>
-          <span role="switch" aria-checked={enabled} tabIndex={0} onClick={() => saveSetting('daily_survey_enabled', enabled ? 'false' : 'true')}
-            onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); saveSetting('daily_survey_enabled', enabled ? 'false' : 'true') } }}
+          <span role="switch" aria-checked={enabled} tabIndex={0} onClick={toggleEnabled}
+            onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleEnabled() } }}
             style={{ width: 44, height: 24, borderRadius: 99, background: enabled ? '#059669' : 'var(--border-2, #cfcfcf)', position: 'relative', transition: 'background .15s', flexShrink: 0 }}>
             <i style={{ position: 'absolute', top: 3, insetInlineStart: enabled ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.3)', transition: 'inset-inline-start .15s' }} />
           </span>
@@ -217,6 +230,8 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
           </div>
         )}
       </div>
+      {confirmOff && <ConfirmDialog danger message="إيقاف التقييم اليومي الإلزامي لكل الموظفين؟ سيتوقف ظهوره لهم حتى تفعّله مرة أخرى." confirmLabel="إيقاف" cancelLabel="إلغاء"
+        onConfirm={() => { setConfirmOff(false); saveSetting('daily_survey_enabled', 'false'); setTimeout(loadLast, 1200) }} onCancel={() => setConfirmOff(false)} />}
       {confirmReset && <ConfirmDialog danger message={target === 'selected' ? 'تصفير تقدّم اليوم للحسابات المحددة؟ سيظهر لهم الاستبيان من جديد، ويُحذف سجل تقييمات اليوم لهم.' : 'تصفير تقدّم اليوم لكل الحسابات؟ سيظهر الاستبيان لهم من جديد، ويُحذف سجل تقييمات اليوم.'} confirmLabel="تصفير" cancelLabel="إلغاء" onConfirm={resetToday} onCancel={() => setConfirmReset(false)} />}
     </div>
   )
