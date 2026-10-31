@@ -903,33 +903,67 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
                 </div>
               </div>
 
-              <p className="text-[11px] font-bold text-gray-500 mt-4 mb-2">{isAr ? 'ما حصّلته (طرق الدفع)' : 'Collected (payment methods)'}</p>
-              <div className="space-y-2">
-                {METHODS.map(m => {
-                  const v = Number(form[m.key]) || 0
-                  return (
-                    <div key={m.key}>
-                      <label className={`flex items-center gap-3 rounded-xl border-2 ps-3 pe-3.5 min-h-[56px] transition cursor-text focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 ${v > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
-                        <span className="w-1.5 h-8 rounded-full shrink-0" style={{ background: m.dot }} aria-hidden="true" />
-                        <span className="flex-1 text-[14px] font-bold text-gray-800">{m.label}</span>
-                        <span className="flex items-baseline gap-1.5" dir="ltr">
-                          <input type="text" inputMode="numeric" lang="en" dir="ltr" autoComplete="off" aria-label={m.label}
-                            className="amt-input w-28 sm:w-36 bg-transparent outline-none text-end font-mono text-[20px] font-extrabold text-gray-900"
-                            value={form[m.key]}
-                            onChange={e => set(m.key, Math.round(Number(cleanNumber(e.target.value))) || 0)}
-                            onFocus={e => e.target.select()} />
-                          <span className="text-[11px] font-bold text-gray-400 w-6 text-start">{isAr ? 'ر.س' : 'SAR'}</span>
-                        </span>
-                      </label>
-                      {m.ref && v > 0 && (
-                        <input placeholder={m.refLabel} dir="ltr" aria-label={m.refLabel}
-                          className="mt-1.5 w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:outline-none font-mono"
-                          value={form[m.ref]} onChange={e => set(m.ref, toLatinDigits(e.target.value))} />
-                      )}
+              {(() => {
+                const cashM = METHODS[0], netM = METHODS.slice(1)
+                const netTotal = netM.reduce((t, m) => t + (Number(form[m.key]) || 0), 0)
+                const needDocNote = !isGeneralAdmin && !isAccountant
+                const amountInput = m => (
+                  <span className="flex items-baseline gap-1.5" dir="ltr">
+                    <input type="text" inputMode="numeric" lang="en" dir="ltr" autoComplete="off" aria-label={m.label}
+                      className="amt-input w-28 sm:w-36 bg-transparent outline-none text-end font-mono text-[20px] font-extrabold text-gray-900"
+                      value={form[m.key]}
+                      onChange={e => set(m.key, Math.round(Number(cleanNumber(e.target.value))) || 0)}
+                      onFocus={e => e.target.select()} />
+                    <span className="text-[11px] font-bold text-gray-400 w-6 text-start">{isAr ? 'ر.س' : 'SAR'}</span>
+                  </span>
+                )
+                const head = (title, total, accent, note) => (
+                  <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-extrabold text-gray-800 flex items-center gap-2"><span className="w-1.5 h-4 rounded-full" style={{ background: accent }} aria-hidden="true" />{title}</p>
+                      {note && <p className="text-[10.5px] text-gray-500 mt-0.5 leading-snug">{note}</p>}
                     </div>
-                  )
-                })}
-              </div>
+                    {total != null && <span className="shrink-0 text-[13px] font-extrabold font-mono text-gray-900" dir="ltr">{fmt(total)} <span className="text-[10px] font-bold text-gray-400">{isAr ? 'ر.س' : 'SAR'}</span></span>}
+                  </div>
+                )
+                return (
+                  <div className="mt-4 space-y-3">
+                    {/* النقد: مجموعة مستقلة */}
+                    <div className="rounded-2xl border border-gray-200 overflow-hidden bg-white">
+                      {head(isAr ? 'النقد' : 'Cash', null, '#16a34a')}
+                      <label className="flex items-center gap-3 px-4 min-h-[60px] cursor-text focus-within:bg-emerald-50 transition">
+                        <span className="flex-1 text-[14px] font-bold text-gray-800">{cashM.label}</span>
+                        {amountInput(cashM)}
+                      </label>
+                    </div>
+
+                    {/* الشبكة: مدى + فيزا + ماستركارد + أخرى */}
+                    <div className="rounded-2xl border border-gray-200 overflow-hidden bg-white">
+                      {head(isAr ? 'الشبكة (البطاقات)' : 'Network (cards)', netTotal, '#2563eb',
+                        needDocNote ? (isAr ? 'أي مبلغ هنا يستلزم إرفاق صورة ورقة الموازنة' : 'Any amount here requires the balance document') : null)}
+                      {netM.map((m, i) => {
+                        const v = Number(form[m.key]) || 0
+                        return (
+                          <div key={m.key} className={i ? 'border-t border-gray-100' : ''}>
+                            <label className={`flex items-center gap-3 px-4 min-h-[56px] cursor-text focus-within:bg-emerald-50 transition ${v > 0 ? 'bg-emerald-50/60' : ''}`}>
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: m.dot }} aria-hidden="true" />
+                              <span className="flex-1 text-[14px] font-bold text-gray-800">{m.label}</span>
+                              {amountInput(m)}
+                            </label>
+                            {m.ref && v > 0 && (
+                              <div className="px-4 pb-3">
+                                <input placeholder={m.refLabel} dir="ltr" aria-label={m.refLabel}
+                                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:outline-none font-mono"
+                                  value={form[m.ref]} onChange={e => set(m.ref, toLatinDigits(e.target.value))} />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {isLocked && (
                 <div className="grid grid-cols-2 gap-2.5 mt-4">
