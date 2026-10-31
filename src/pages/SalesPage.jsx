@@ -390,7 +390,9 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
   const { settings } = useAppSettings()
   SHIFTS = salesShiftsFrom(null)
   // موظف يعمل بأكثر من محطة (محطة أساسية + إضافية حدّدها الأدمن): لازم يحدد محطة اليومية بنفسه
-  const multi = !isGeneralAdmin && workStations?.length > 1
+  // مشرف (محطة/منطقة) عنده أكثر من محطة مخصصة: يضيف يوميته لأي منها باختيار المحطة
+  const supMulti = !isGeneralAdmin && (isStationAdmin || isAreaSupervisor) && allowedStationIds?.length > 1
+  const multi = !isGeneralAdmin && (workStations?.length > 1 || supMulti)
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
 
@@ -411,7 +413,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
     ;(async () => {
       let q = supabase.from('users').select('id, full_name_ar, job_number, station_id, station:station_id(name_ar, name_en)')
         .eq('is_active', true).eq('role', 'station_employee').or('job_title.is.null,job_title.neq.cleaner').or('is_agent.is.null,is_agent.eq.false').order('full_name_ar')   // عمال النظافة والوكلاء لا علاقة لهم بالإيرادات
-      const scope = isAreaSupervisor ? allowedStationIds : [profile.station_id]   // مشرف المحطة: موظفو محطته فقط
+      const scope = (isAreaSupervisor || allowedStationIds?.length > 1) ? allowedStationIds : [profile.station_id]   // مشرف المحطة: موظفو محطته (أو محطاته المخصصة إن تعددت)
       if (scope) q = q.in('station_id', scope)
       const { data } = await q.limit(1000)
       const ag = await loadAgentIds()
@@ -837,7 +839,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
                     <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'المحطة *' : 'Station *'}</label>
                     <SelectField required className={inputCls} value={form.station_id} onChange={e => set('station_id', e.target.value)}>
                       <option value="">{isAr ? '— اختر المحطة —' : '— Select Station —'}</option>
-                      {(multi ? workStations : stations).filter(s => !agentIds.has(s.id)).map(s => <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>)}
+                      {(workStations?.length > 1 ? workStations : stations).filter(s => !agentIds.has(s.id)).map(s => <option key={s.id} value={s.id}>{isAr ? s.name_ar : s.name_en}</option>)}
                     </SelectField>
                   </div>
                 )}
@@ -1283,9 +1285,9 @@ export default function SalesPage() {
     // ── Privacy filters ──────────────────────────────────
     if (isGeneralAdmin) {
       if (filterStation) q = q.eq('station_id', filterStation)
-    } else if (isStationAdmin && !isAreaSupervisor) {
-      q = q.eq('station_id', profile.station_id)   // مشرف المحطة يرى يوميات محطته فقط
-    } else if (isAreaSupervisor && allowedStationIds?.length) {
+    } else if (isStationAdmin && !isAreaSupervisor && !(allowedStationIds?.length > 1)) {
+      q = q.eq('station_id', profile.station_id)   // مشرف المحطة (محطة واحدة) يرى يوميات محطته فقط
+    } else if ((isAreaSupervisor || isStationAdmin) && allowedStationIds?.length) {
       const ids = filterStation ? [filterStation] : allowedStationIds
       q = q.in('station_id', ids)
     } else if (isStationAdmin || isAccountant || viewStation) {
