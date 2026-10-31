@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, memo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
@@ -84,8 +84,12 @@ const Row = memo(function Row({ e, accent, th, isAr, nowMin }) {
 export default function LiveBoard() {
   const navigate = useNavigate()
   const { i18n } = useTranslation()
-  const { isGeneralAdmin, profile } = useAuth()
+  const { isGeneralAdmin, isStationAdmin, isAreaSupervisor, allowedStationIds, supervisedStationIds, workStations, profile } = useAuth()
   const isAr = i18n.language === 'ar'
+  // المشرفون (محطة/منطقة/ترحيل/وردية) يفتحون إعدادات الشاشة ويختارون من محطاتهم أو المحطة المحددة لهم؛ الأدمن كل المحطات
+  const canConfigure = isGeneralAdmin || isStationAdmin || isAreaSupervisor
+  const myIds = useMemo(() => [...new Set([profile?.station_id, ...(allowedStationIds ?? []), ...(supervisedStationIds ?? []), ...((workStations ?? []).map(s => s.id))].filter(Boolean))],
+    [profile?.station_id, allowedStationIds, supervisedStationIds, workStations])
   const nm = s => (isAr ? s?.name_ar : s?.name_en) || '—'
 
   // المحطة المعروضة: الأدمن يختار أو "الكل"؛ غيره محصور بمحطته
@@ -93,13 +97,21 @@ export default function LiveBoard() {
   const [boardStation, setBoardStation] = useState(() =>
     localStorage.getItem('nwbus_board_station') || 'all')
   useEffect(() => {
-    if (!isGeneralAdmin && profile?.station_id) setBoardStation(profile.station_id)
-  }, [isGeneralAdmin, profile?.station_id])
+    if (isGeneralAdmin) return
+    // غير الأدمن: آخر محطة اختارها إن كانت ضمن محطاته، وإلا محطته الأساسية (أو أول محطة مخصصة له)
+    const saved = localStorage.getItem('nwbus_board_station')
+    const pick = (canConfigure && saved && myIds.includes(saved)) ? saved : (profile?.station_id || myIds[0])
+    if (pick) setBoardStation(pick)
+  }, [isGeneralAdmin, canConfigure, profile?.station_id, myIds])
   useEffect(() => {
-    if (!isGeneralAdmin) return
-    supabase.from('stations').select('id,name_ar,name_en').eq('is_active', true).order('name_ar')
-      .then(({ data }) => setStations((data || []).filter(s => !isRestStation(s))))
-  }, [isGeneralAdmin])
+    if (isGeneralAdmin) {
+      supabase.from('stations').select('id,name_ar,name_en').eq('is_active', true).order('name_ar')
+        .then(({ data }) => setStations((data || []).filter(s => !isRestStation(s))))
+    } else if (myIds.length) {
+      supabase.from('stations').select('id,name_ar,name_en').in('id', myIds).eq('is_active', true).order('name_ar')
+        .then(({ data }) => setStations((data || []).filter(s => !isRestStation(s))))
+    }
+  }, [isGeneralAdmin, myIds])
 
 
   const [mode, setMode] = useState(() => localStorage.getItem('nwbus_board_mode') || 'actual')
@@ -312,7 +324,7 @@ export default function LiveBoard() {
       </div>
 
       {/* ── أزرار المشرف (تظهر عند تحريك الفأرة) ── */}
-      {isGeneralAdmin && (
+      {canConfigure && (
         <div style={{ position: 'absolute', bottom: 14, insetInlineEnd: 44, display: 'flex', gap: 8, opacity: showHint ? 1 : 0, transition: 'opacity .4s', zIndex: 6, pointerEvents: showHint ? 'auto' : 'none' }}>
           {[['actual', isAr ? 'فعلي' : 'Actual'], ['scheduled', isAr ? 'مجدول' : 'Scheduled']].map(([v, l]) => (
             <button key={v} onClick={() => setModePref(v)} style={{ padding: '7px 18px', borderRadius: 8, border: `1px solid ${th.accent}77`, fontSize: 13, fontWeight: 800, cursor: 'pointer', background: mode === v ? th.accent : 'rgba(0,0,0,0.35)', color: mode === v ? '#101010' : th.text, fontFamily: 'inherit' }}>{l}</button>
@@ -368,14 +380,17 @@ export default function LiveBoard() {
               <button onClick={() => setSettingsOpen(false)} style={{ background: 'none', border: 'none', color: th.muted, fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
 
-            {isGeneralAdmin && (
+            {canConfigure && (
               <>
                 <div style={{ fontSize: 13, color: th.muted, marginBottom: 6 }}>{isAr ? 'المحطة المعروضة' : 'Displayed station'}</div>
                 <SelectField value={boardStation} onChange={e => setStationPref(e.target.value)}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: th.text, fontSize: 13, marginBottom: 18 }}>
-                  <option value="all" style={{ color: '#000' }}>{isAr ? 'كل المحطات (شامل)' : 'All stations'}</option>
+                  {isGeneralAdmin && <option value="all" style={{ color: '#000' }}>{isAr ? 'كل المحطات (شامل)' : 'All stations'}</option>}
                   {stations.map(s => <option key={s.id} value={s.id} style={{ color: '#000' }}>{nm(s)}</option>)}
                 </SelectField>
+                {!isGeneralAdmin && stations.length <= 1 && (
+                  <div style={{ fontSize: 11, color: th.muted, marginTop: -12, marginBottom: 16 }}>{isAr ? 'هذه محطتك المحددة. تظهر هنا كل محطة تُضاف لحسابك.' : 'This is your assigned station. Any station added to your account appears here.'}</div>
+                )}
               </>
             )}
 
