@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
+import { canPickFolder } from '../../utils/pdfFolder'
 
 // مجلد طباعة المحطات: تختار محطات (مع فلتر «فيها حسابات»)، فتظهر في مجلد كل محطة فيه كملف مستقل،
 // وتحدد لكل ملف ما تريده: وصول ومغادرة (جداول تفصيلية) أو ملخص وصول ومغادرة (أرقام ونسب فقط).
@@ -16,19 +17,22 @@ const Ico = ({ d, size = 16 }) => <svg width={size} height={size} viewBox="0 0 2
 const FOLDER = 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z'
 const FILE = ['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z', 'M14 2v6h6']
 
-export default function StationFolderModal({ isAr, stations, staff, folder, setFolder, overview, setOverview, onPrint, onClose }) {
+export default function StationFolderModal({ isAr, stations, staff, folder, setFolder, overview, setOverview, onPrint, onSavePdf, onClose }) {
   useBodyScrollLock()
   const [q, setQ] = useState('')
   const [onlyStaffed, setOnlyStaffed] = useState(true)
   const [kind, setKind] = useState('all')            // all | stations | agents
   const [defMode, setDefMode] = useState('detail')    // النوع الافتراضي للمحطات المضافة
   const [pane, setPane] = useState('pick')            // الجوال: pick | folder
+  const [busy, setBusy] = useState(null)              // { i, total, name } أثناء تحويل PDF
+  const [done, setDone] = useState(null)
+  const [err, setErr] = useState('')
 
   useEffect(() => {
-    const k = e => { if (e.key === 'Escape') onClose() }
+    const k = e => { if (e.key === 'Escape' && !busy) onClose() }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }, [onClose])
+  }, [onClose, busy])
 
   const T = (a, e) => (isAr ? a : e)
   const nameOf = s => (isAr ? (s.name_ar || s.name_en) : (s.name_en || s.name_ar)) || '—'
@@ -50,9 +54,28 @@ export default function StationFolderModal({ isAr, stations, staff, folder, setF
   const setAllModes = mode => { setDefMode(mode); setFolder(folder.map(f => ({ ...f, mode }))) }
   const files = folder.filter(f => byId[f.id])
   const nDetail = files.filter(f => f.mode === 'detail').length
+  const ov = overview && files.length > 1
+  const pickerOk = canPickFolder()
+
+  // via: 'folder' = حفظ داخل مجلد تختاره (كروم/إيدج على الكمبيوتر) · 'zip' = ملف مضغوط (كل الأجهزة)
+  const savePdf = async via => {
+    setErr(''); setDone(null)
+    let dirHandle
+    if (via === 'folder') {
+      try { dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }) }
+      catch (e) { if (e?.name !== 'AbortError') setErr(T('تعذّر فتح المجلد، جرّب خيار ZIP', 'Could not open the folder, try ZIP')); return }
+    }
+    setBusy({ i: 0, total: files.length + (ov ? 1 : 0), name: '' })
+    try {
+      const r = await onSavePdf(files, ov, { via, dirHandle, onProgress: (i, total, name) => setBusy({ i, total, name }) })
+      setDone(r)
+    } catch (e) {
+      setErr(T('تعذّر إنشاء ملفات PDF: ', 'Could not create PDFs: ') + (e?.message || ''))
+    } finally { setBusy(null) }
+  }
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/50" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/50" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose() }}>
       <div role="dialog" aria-modal="true" aria-label={T('مجلد طباعة المحطات', 'Station print folder')} className="fd-sheet" dir={isAr ? 'rtl' : 'ltr'}>
         <header className="fd-head">
           <span className="fd-head-ico"><Ico d={FOLDER} size={20} /></span>
@@ -60,7 +83,7 @@ export default function StationFolderModal({ isAr, stations, staff, folder, setF
             <h2 className="fd-title">{T('مجلد طباعة المحطات', 'Station print folder')}</h2>
             <p className="fd-sub">{T('اختر المحطات، ثم حدّد لكل محطة ما تريد طباعته', 'Pick stations, then choose what to print for each')}</p>
           </div>
-          <button type="button" onClick={onClose} className="fd-x" aria-label={T('إغلاق', 'Close')}><Ico d={['M18 6L6 18', 'M6 6l12 12']} size={18} /></button>
+          <button type="button" onClick={onClose} disabled={!!busy} className="fd-x" aria-label={T('إغلاق', 'Close')}><Ico d={['M18 6L6 18', 'M6 6l12 12']} size={18} /></button>
         </header>
 
         <div className="fd-tabs" role="tablist">
@@ -137,15 +160,34 @@ export default function StationFolderModal({ isAr, stations, staff, folder, setF
         </div>
 
         <footer className="fd-foot">
+          {busy && (
+            <div className="fd-prog" role="status" aria-live="polite">
+              <div className="fd-prog-t"><span>{T('جارٍ إنشاء ملفات PDF…', 'Creating PDFs…')} {busy.name && <i>{busy.name}</i>}</span><b>{Math.min(busy.i + 1, busy.total)} / {busy.total}</b></div>
+              <div className="fd-prog-bar"><i style={{ width: `${Math.round((busy.i / Math.max(1, busy.total)) * 100)}%` }} /></div>
+            </div>
+          )}
+          {!busy && done && <p className="fd-ok" role="status">{done.via === 'folder' ? T(`تم حفظ ${done.count} ملف PDF في مجلد «${done.folderName}»`, `Saved ${done.count} PDFs in folder “${done.folderName}”`) : T(`تم تنزيل ملف مضغوط فيه ${done.count} ملف PDF — فكّه لتجد المجلد`, `Downloaded a ZIP with ${done.count} PDFs`)}</p>}
+          {!busy && err && <p className="fd-err" role="alert">{err}</p>}
           <label className={`fd-opt${files.length < 2 ? ' off' : ''}`}>
-            <input type="checkbox" checked={overview && files.length > 1} disabled={files.length < 2} onChange={e => setOverview(e.target.checked)} />
-            <span>{T('صفحة ملخص المحطات في البداية', 'Overview page first')}</span>
+            <input type="checkbox" checked={ov} disabled={files.length < 2 || !!busy} onChange={e => setOverview(e.target.checked)} />
+            <span>{T('ملف ملخص المحطات', 'Stations summary file')}</span>
           </label>
           <span className="fd-foot-sum">{T(`${files.length} ملف · ${nDetail} تفصيلي · ${files.length - nDetail} ملخص`, `${files.length} files · ${nDetail} detailed · ${files.length - nDetail} summary`)}</span>
-          <button type="button" className="fd-print" disabled={!files.length} onClick={() => onPrint(files, overview && files.length > 1)}>
-            <Ico d={['M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2', 'M6 14h12v8H6z']} size={16} />
-            {T(`طباعة المجلد (${files.length})`, `Print folder (${files.length})`)}
-          </button>
+          <div className="fd-acts">
+            <button type="button" className="fd-print fd-print-2" disabled={!files.length || !!busy} onClick={() => onPrint(files, ov)}>
+              <Ico d={['M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2', 'M6 14h12v8H6z']} size={16} />
+              {T('طباعة', 'Print')}
+            </button>
+            {pickerOk && (
+              <button type="button" className="fd-print fd-print-2" disabled={!files.length || !!busy} onClick={() => savePdf('zip')}>
+                <Ico d={['M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3']} size={16} />ZIP
+              </button>
+            )}
+            <button type="button" className="fd-print" disabled={!files.length || !!busy} onClick={() => savePdf(pickerOk ? 'folder' : 'zip')}>
+              <Ico d={FOLDER} size={16} />
+              {pickerOk ? T(`حفظ PDF في مجلد (${files.length + (ov ? 1 : 0)})`, `Save PDFs to folder (${files.length + (ov ? 1 : 0)})`) : T(`تنزيل PDF مضغوط (${files.length + (ov ? 1 : 0)})`, `Download PDFs as ZIP (${files.length + (ov ? 1 : 0)})`)}
+            </button>
+          </div>
         </footer>
       </div>
     </div>,

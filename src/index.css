@@ -1160,3 +1160,16 @@ input.amt-input, input.amt-hero { background: transparent !important; border: 0 
 @media (max-width: 640px) { .rp-actions .rp-folder-btn { width: 100%; } }
 .rp-staffed { display: flex; align-items: center; gap: 8px; min-height: 36px; margin-top: 6px; font-size: 0.76rem; font-weight: 700; color: var(--text-2); cursor: pointer; }
 .rp-staffed input { width: 16px; height: 16px; accent-color: #5B5BD6; }
+.fd-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-inline-start: auto; }
+.fd-print-2 { background: var(--card); color: var(--text-1); border: 1.5px solid var(--border-2); }
+.fd-prog { flex: 1 0 100%; }
+.fd-prog-t { display: flex; justify-content: space-between; gap: 10px; font-size: 0.78rem; font-weight: 800; margin-bottom: 6px; }
+.fd-prog-t i { font-style: normal; font-weight: 600; color: var(--text-3); margin-inline-start: 6px; }
+.fd-prog-t b { font-family: 'IBM Plex Mono', monospace; }
+.fd-prog-bar { height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.fd-prog-bar i { display: block; height: 100%; background: #5B5BD6; border-radius: 999px; transition: width .3s ease; }
+.fd-ok, .fd-err { flex: 1 0 100%; margin: 0; padding: 9px 12px; border-radius: 10px; font-size: 0.8rem; font-weight: 700; }
+.fd-ok { background: rgba(22,163,74,.1); color: #15803d; border: 1px solid rgba(22,163,74,.35); }
+.fd-err { background: rgba(220,38,38,.08); color: #b91c1c; border: 1px solid rgba(220,38,38,.3); }
+[data-theme="dark"] .fd-ok { color: #86efac; } [data-theme="dark"] .fd-err { color: #fca5a5; }
+@media (max-width: 519px) { .fd-acts { width: 100%; margin: 0; } .fd-acts .fd-print { flex: 1 1 100%; } }

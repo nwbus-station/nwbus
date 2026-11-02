@@ -15,6 +15,7 @@ import { USER_ROLES, ADMIN_ROLE_VALUES, SALES_VIEW_CAPS } from '../utils/constan
 import SelectField from '../components/shared/SelectField'
 import { brandHeader } from '../utils/printDoc'
 import StationFolderModal from '../components/reports/StationFolderModal'
+import { savePdfFolder } from '../utils/pdfFolder'
 
 const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { minimumFractionDigits: 2 })
 const fmtN = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn')
@@ -1097,7 +1098,7 @@ export default function ReportsPage() {
   }
 
   // plan: [{ id, mode: 'detail' | 'summary' }] بترتيب المجلد — detail = وصول ومغادرة بالجداول، summary = أرقام ونسب فقط
-  function printStationsReport(plan, withOverview = true) {
+  function printStationsReport(plan, withOverview = true, outMode = 'print') {
     if (!data || !plan?.length) return
     const modeById = Object.fromEntries(plan.map(f => [f.id, f.mode]))
     const targetIds = plan.map(f => f.id)
@@ -1123,7 +1124,7 @@ export default function ReportsPage() {
         </div>
       </div>`
 
-    const pages = targetStations.map((stn, idx) => {
+    const pageList = targetStations.map((stn, idx) => {
       const stMoves = data.movements.filter(m => m.station_id === stn.id)
       const deps = stMoves.filter(m => m.type === 'departure')
       const arrs = stMoves.filter(m => m.type === 'arrival')
@@ -1210,7 +1211,8 @@ export default function ReportsPage() {
             <span class="pill-dark" style="background:#1C2B36;color:#fff;font-size:10px;font-weight:800;padding:3px 12px;border-radius:999px;letter-spacing:.6px">NORTH WEST BUS</span>
           </div>
         </div>`
-    }).join('')
+    })
+    const pages = pageList.join('')
 
     // عند تحديد أكثر من محطة: صفحة ملخص أولاً ثم تفاصيل كل محطة. المغادرة والوصول منفصلان دائماً (لا يُجمعان أبداً)
     let summaryPage = ''
@@ -1288,12 +1290,27 @@ export default function ReportsPage() {
         </div>`
     }
 
-    const html = `<div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">${summaryPage}${pages}</div>`
+    const wrapSheet = h => `<div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">${h}</div>`
+    // حفظ PDF: ملف مستقل لكل محطة (+ ملف لصفحة الملخص إن وُجدت)
+    if (outMode === 'pdf') {
+      const modeWord = m => (m === 'summary' ? (isAr ? 'ملخص وصول ومغادرة' : 'Arr-Dep summary') : (isAr ? 'وصول ومغادرة' : 'Arrivals-Departures'))
+      const files = []
+      if (summaryPage) files.push({ name: `00 - ${isAr ? 'ملخص المحطات' : 'Stations summary'}`, html: wrapSheet(summaryPage) })
+      targetStations.forEach((stn, i) => files.push({ name: `${String(i + 1).padStart(2, '0')} - ${isAr ? (stn.name_ar || stn.name_en) : (stn.name_en || stn.name_ar)} - ${modeWord(modeById[stn.id])}`, html: wrapSheet(pageList[i]) }))
+      return { files, css: SHEET_CSS }
+    }
+    const html = wrapSheet(`${summaryPage}${pages}`)
     const kindS = reportKindName()
     const docTitleS = targetStations.length > 1
       ? `${kindS} — ${isAr ? 'ملخص المحطات' : 'Stations summary'} (${targetStations.length}) — ${periodForName()}`
       : `${kindS} — ${isAr ? targetStations[0]?.name_ar || targetStations[0]?.name_en : targetStations[0]?.name_en || targetStations[0]?.name_ar} — ${periodForName()}`
     openPrintPreview(html, SHEET_CSS, true, docTitleS)
+  }
+
+  // حفظ ملفات PDF (ملف لكل محطة) في مجلد على الجهاز أو ZIP
+  function savePdfFiles(plan, ov, opts) {
+    const built = printStationsReport(plan, ov, 'pdf')
+    return savePdfFolder(built.files, { ...opts, css: built.css, folderName: `${isAr ? 'تقارير المحطات' : 'Stations reports'} ${periodForName()}` })
   }
 
   function printReport() {
@@ -1402,7 +1419,7 @@ export default function ReportsPage() {
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto" dir={isAr ? 'rtl' : 'ltr'}>
       {showFolder && <StationFolderModal isAr={isAr} stations={stations} staff={staffByStation} folder={folder} setFolder={setFolder}
         overview={folderOverview} setOverview={setFolderOverview} onClose={() => setShowFolder(false)}
-        onPrint={(plan, ov) => { setShowFolder(false); printStationsReport(plan, ov) }} />}
+        onPrint={(plan, ov) => { setShowFolder(false); printStationsReport(plan, ov) }} onSavePdf={savePdfFiles} />}
       {/* ═ الرأس ═ */}
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
