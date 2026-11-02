@@ -362,6 +362,26 @@ function MoveTableComp({ list, color, label, isAr, storageKey }) {
 }
 
 // قائمة اختيار محطات الطباعة المتعددة: بحث، اختصارات (الكل / لا شيء / التي فيها موظفون نشطون)، عدد الموظفين لكل محطة، وزر الطباعة بالأعلى
+// حلقة نسبة الالتزام: اللون + كلمة الحالة (لا يعتمد على اللون وحده)
+function RateRing({ value, isAr }) {
+  const has = value != null
+  const tone = !has ? { c: '#94a3b8', w: isAr ? 'لا بيانات' : 'No data' }
+    : value >= 80 ? { c: '#16a34a', w: isAr ? 'جيد' : 'Good' }
+    : value >= 60 ? { c: '#d97706', w: isAr ? 'مقبول' : 'Fair' }
+    : { c: '#dc2626', w: isAr ? 'ضعيف' : 'Weak' }
+  const R = 40, C = 2 * Math.PI * R
+  return (
+    <div className="rp-ring" role="img" aria-label={has ? `${value}%` : '—'}>
+      <svg viewBox="0 0 100 100" width="104" height="104">
+        <circle cx="50" cy="50" r={R} fill="none" stroke="var(--border)" strokeWidth="9" />
+        {has && <circle cx="50" cy="50" r={R} fill="none" stroke={tone.c} strokeWidth="9" strokeLinecap="round"
+          strokeDasharray={`${(C * Math.min(value, 100)) / 100} ${C}`} transform="rotate(-90 50 50)" style={{ transition: 'stroke-dasharray .5s ease' }} />}
+      </svg>
+      <div className="rp-ring-c"><b>{has ? `${value}%` : '—'}</b><i style={{ color: tone.c }}>{tone.w}</i></div>
+    </div>
+  )
+}
+
 function StationPrintPicker({ isAr, label, accent, list, staff, selected, setSelected, open, setOpen, onPrint }) {
   const [q, setQ] = useState('')
   const ids = list.map(s => s.id)
@@ -456,6 +476,7 @@ export default function ReportsPage() {
   const [tab, _setTab] = useState(() => localStorage.getItem('rpt_tab') || 'overview')
   const setTab = v => { localStorage.setItem('rpt_tab', v); _setTab(v); try { window.scrollTo({ top: 0 }) } catch { /* بدون تمرير */ } }
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [perfDir, setPerfDir] = useState('arrival')   // ترتيب المحطات: الوصول والمغادرة منفصلان دائماً
   // أقسام الطباعة: اختيار متعدد (يُحفظ بالمتصفح) — الافتراضي كل الأقسام
   const PRINTABLE = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost']
   const [printTypes, _setPrintTypes] = useState(() => { try { const v = JSON.parse(localStorage.getItem('rpt_print_types') ?? 'null'); return Array.isArray(v) ? v : PRINTABLE } catch { return PRINTABLE } })
@@ -1552,19 +1573,24 @@ export default function ReportsPage() {
         </div>
         <div className="col-span-2 lg:col-span-1">
           <p className="rp-label mb-1.5">{isAr ? 'اختصار' : 'Quick'}</p>
-            <div className="flex gap-1.5 overflow-x-auto">
-              {[
-                [isAr ? 'اليوم' : 'Today', 0, 0],
-                [isAr ? 'أمس' : 'Yesterday', -1, -1],
-                [isAr ? '7 أيام' : '7 days', -6, 0],
-                [isAr ? '30 يوماً' : '30 days', -29, 0],
-              ].map(([label, fromOff, toOff]) => {
-                const f = new Date(); f.setDate(f.getDate() + fromOff)
-                const t = new Date(); t.setDate(t.getDate() + toOff)
-                const fv = toLocalDateStr(f), tv = toLocalDateStr(t), on = dateFrom === fv && dateTo === tv
+            <div className="flex gap-1.5 overflow-x-auto rp-presets">
+              {(() => {
+                const now = new Date()
+                const ymd = d => toLocalDateStr(d)
+                const off = n => { const d = new Date(); d.setDate(d.getDate() + n); return ymd(d) }
+                return [
+                  [isAr ? 'اليوم' : 'Today', off(0), off(0)],
+                  [isAr ? 'أمس' : 'Yesterday', off(-1), off(-1)],
+                  [isAr ? '7 أيام' : '7 days', off(-6), off(0)],
+                  [isAr ? '30 يوماً' : '30 days', off(-29), off(0)],
+                  [isAr ? 'هذا الشهر' : 'This month', ymd(new Date(now.getFullYear(), now.getMonth(), 1)), off(0)],
+                  [isAr ? 'الشهر الماضي' : 'Last month', ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1)), ymd(new Date(now.getFullYear(), now.getMonth(), 0))],
+                ]
+              })().map(([label, fv, tv]) => {
+                const on = dateFrom === fv && dateTo === tv
                 return (
-                  <button key={label} type="button" onClick={() => { setDateFrom(fv); setDateTo(tv) }}
-                    className={`shrink-0 whitespace-nowrap px-3.5 py-2 rounded-lg text-sm font-semibold border transition ${on ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-700 border-gray-300 hover:border-nwbus-primary hover:text-nwbus-primary'}`}>
+                  <button key={label} type="button" onClick={() => { setDateFrom(fv); setDateTo(tv) }} aria-pressed={on}
+                    className={`rp-preset${on ? ' on' : ''}`}>
                     {label}
                   </button>
                 )
@@ -1602,64 +1628,206 @@ export default function ReportsPage() {
       {/* ═ نظرة عامة ═ */}
       {activeTab === 'overview' && (!data ? (
         <div className="space-y-3">{[0, 1, 2].map(i => <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />)}</div>
-      ) : (
-        <div className="space-y-6">
-          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-            {[
-              { id: 'movements', label: isAr ? 'رحلات المغادرة' : 'Departures', val: fmtN(data.moveTotals.dep), sub: `${fmtN(data.moveTotals.depPax)} ${isAr ? 'راكب' : 'pax'}`, rate: data.moveTotals.depOnTimeRate, hue: '#0ea5e9' },
-              { id: 'movements', label: isAr ? 'رحلات الوصول' : 'Arrivals', val: fmtN(data.moveTotals.arr), sub: `${fmtN(data.moveTotals.arrPax)} ${isAr ? 'راكب' : 'pax'}`, rate: data.moveTotals.arrOnTimeRate, hue: '#10b981' },
-              { id: 'missed', label: isAr ? 'المتخلفون' : 'Missed', val: fmtN(data.trips.totalMissed), sub: isAr ? 'راكب' : 'passengers', hue: '#ef4444' },
-              { id: 'movements', label: isAr ? 'رحلات غير مدخلة' : 'Not entered', val: fmtN(data.moveTotals.unentered), sub: isAr ? 'تحتاج إدخال' : 'need entry', hue: '#f59e0b' },
-            ].map((k, i) => (
-              <button key={i} type="button" onClick={() => typeAllowed(k.id) && setTab(k.id)} className="rp-kpi" style={{ '--hue': k.hue }}>
-                <span className="rp-kpi-l">{k.label}</span>
-                <span className="rp-kpi-v">{k.val}</span>
-                <span className="rp-kpi-s">{k.sub}</span>
-                {k.rate != null && <span className="rp-kpi-r" style={{ color: k.rate >= 80 ? '#16a34a' : k.rate >= 60 ? '#d97706' : '#dc2626' }}>{isAr ? 'الالتزام' : 'On-time'} {k.rate}%</span>}
-              </button>
-            ))}
-          </div>
+      ) : (() => {
+        const M = data.moveTotals
+        const days = Math.max(1, Math.round((new Date(dateTo + 'T12:00:00Z') - new Date(dateFrom + 'T12:00:00Z')) / 86400000) + 1)
+        const sar = n => `${fmtN(Math.round(n))} ${isAr ? 'ر.س' : 'SAR'}`
 
-          {(() => {
-            const items = [
-              { n: data.moveTotals.unentered, ar: 'رحلة غير مدخلة', en: 'trips not entered', id: 'movements', c: '#f59e0b' },
-              { n: data.missed.length, ar: 'متخلف عن الرحلات', en: 'missed passengers records', id: 'missed', c: '#ef4444' },
-              { n: data.facilities.length, ar: 'عطل في تجهيزات الحافلات', en: 'facility faults', id: 'facilities', c: '#f97316' },
-              { n: data.lost.unclaimed, ar: 'غرض غير مستلم', en: 'unclaimed items', id: 'lost', c: '#8b5cf6' },
-            ].filter(x => x.n > 0 && typeAllowed(x.id))
-            return (
-              <section>
-                <h2 className="rp-h2">{isAr ? 'تحتاج انتباهك' : 'Needs attention'}</h2>
-                {items.length === 0 ? (
-                  <div className="rounded-xl border border-green-200 bg-green-50 text-green-800 text-sm font-semibold px-4 py-3">{isAr ? 'كل شيء على ما يرام في هذه الفترة' : 'Everything looks fine for this period'}</div>
-                ) : (
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {items.map(x => (
-                      <button key={x.id + x.ar} type="button" onClick={() => setTab(x.id)} className="rp-alert" style={{ '--hue': x.c }}>
-                        <b>{fmtN(x.n)}</b><span>{isAr ? x.ar : x.en}</span>
-                        <i>{isAr ? 'عرض' : 'View'}</i>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )
-          })()}
+        // أداء كل محطة — الوصول والمغادرة منفصلان دائماً
+        const byStation = {}
+        data.movements.forEach(m => {
+          const o = byStation[m.station_id] ??= { id: m.station_id, name: m.station, arr: { rated: 0, ok: 0, n: 0, un: 0 }, dep: { rated: 0, ok: 0, n: 0, un: 0 }, missed: 0 }
+          const d = m.type === 'arrival' ? o.arr : o.dep
+          if (m.unentered) { d.un++; return }
+          d.n++; o.missed += m.missed || 0
+          if (m.acc.key !== 'none') { d.rated++; if (m.acc.key === 'ontime' || m.acc.key === 'early') d.ok++ }
+        })
+        const rateOf = d => (d.rated >= 1 ? Math.round(d.ok / d.rated * 100) : null)
+        const dirKey = perfDir === 'arrival' ? 'arr' : 'dep'
+        const ranked = Object.values(byStation).filter(o => o[dirKey].rated > 0)
+          .map(o => ({ ...o, rate: rateOf(o[dirKey]), d: o[dirKey] }))
+          .sort((x, y) => x.rate - y.rate || y.d.n - x.d.n)
+        const withUn = Object.values(byStation).map(o => ({ name: o.name, un: o.arr.un + o.dep.un })).filter(o => o.un > 0).sort((x, y) => y.un - x.un)
+        const topMissed = Object.values(byStation).filter(o => o.missed > 0).sort((x, y) => y.missed - x.missed)[0]
 
-          <section>
-            <h2 className="rp-h2">{isAr ? 'التقارير' : 'Reports'}</h2>
-            <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
-              {TAB_DEFS.filter(t => t.id !== 'overview').map(t => (
-                <button key={t.id} type="button" onClick={() => setTab(t.id)} className="rp-card">
-                  <span className="rp-card-ico"><RpIcon id={t.id} size={18} /></span>
-                  <span className="rp-card-t">{isAr ? t.ar : t.en}</span>
-                  <span className="rp-card-d">{isAr ? t.desc_ar : t.desc_en}</span>
+        // ملخص بلغة بسيطة — جمل تلقائية من الأرقام
+        const insights = []
+        const pushDir = (key, arLabel, enLabel) => {
+          const list = Object.values(byStation).filter(o => o[key].rated >= 3).map(o => ({ name: o.name, rate: rateOf(o[key]) })).sort((x, y) => y.rate - x.rate)
+          if (list.length >= 2) {
+            const best = list[0], worst = list[list.length - 1]
+            if (best.rate !== worst.rate) insights.push({ t: 'ok', ar: `الالتزام ${arLabel}: الأعلى ${best.name} (${best.rate}%) والأدنى ${worst.name} (${worst.rate}%)`, en: `${enLabel} punctuality: highest ${best.name} (${best.rate}%), lowest ${worst.name} (${worst.rate}%)` })
+          }
+        }
+        pushDir('arr', 'بالوصول', 'Arrival'); pushDir('dep', 'بالمغادرة', 'Departure')
+        if (withUn.length) insights.push({ t: 'warn', ar: `${fmtN(M.unentered)} رحلة غير مدخلة، أكثرها في ${withUn[0].name} (${fmtN(withUn[0].un)})`, en: `${fmtN(M.unentered)} trips not entered, most at ${withUn[0].name} (${fmtN(withUn[0].un)})` })
+        if (topMissed && data.trips.totalMissed > 0) insights.push({ t: 'bad', ar: `${fmtN(data.trips.totalMissed)} راكب متخلف، أعلى محطة ${topMissed.name} (${fmtN(topMissed.missed)})`, en: `${fmtN(data.trips.totalMissed)} missed passengers, highest at ${topMissed.name} (${fmtN(topMissed.missed)})` })
+        if (typeAllowed('sales') && canSales && data.sales.total > 0 && data.sales.totalSurplus < 0)
+          insights.push({ t: 'bad', ar: `عجز في المبيعات بمقدار ${sar(Math.abs(data.sales.totalSurplus))} خلال الفترة`, en: `Sales deficit of ${sar(Math.abs(data.sales.totalSurplus))} for the period` })
+        if (typeAllowed('sales') && canSales && data.sales.total > 0 && data.sales.confirmed < data.sales.total)
+          insights.push({ t: 'warn', ar: `${fmtN(data.sales.total - data.sales.confirmed)} يومية مبيعات لم تُؤكَّد بعد`, en: `${fmtN(data.sales.total - data.sales.confirmed)} sales records not confirmed yet` })
+
+        const dirPanel = (key) => {
+          const isA = key === 'arr'
+          const rate = isA ? M.arrOnTimeRate : M.depOnTimeRate
+          const unA = Object.values(byStation).reduce((n, o) => n + o[key].un, 0)
+          return (
+            <button type="button" onClick={() => typeAllowed('movements') && setTab('movements')} className="rp-dir" style={{ '--hue': isA ? '#10b981' : '#0ea5e9' }}>
+              <RateRing value={rate} isAr={isAr} />
+              <span className="rp-dir-b">
+                <span className="rp-dir-t">{isA ? (isAr ? 'الوصول' : 'Arrivals') : (isAr ? 'المغادرة' : 'Departures')}</span>
+                <span className="rp-dir-s"><b>{fmtN(isA ? M.arr : M.dep)}</b> {isAr ? 'رحلة' : 'trips'}</span>
+                <span className="rp-dir-s"><b>{fmtN(isA ? M.arrPax : M.depPax)}</b> {isAr ? 'راكب' : 'passengers'}</span>
+                {unA > 0 && <span className="rp-dir-w">{fmtN(unA)} {isAr ? 'غير مدخلة' : 'not entered'}</span>}
+              </span>
+            </button>
+          )
+        }
+
+        const kpis = [
+          { id: 'missed', label: isAr ? 'المتخلفون' : 'Missed', val: fmtN(data.trips.totalMissed), sub: isAr ? 'راكب' : 'passengers', hue: '#ef4444' },
+          { id: 'movements', label: isAr ? 'رحلات غير مدخلة' : 'Not entered', val: fmtN(M.unentered), sub: isAr ? 'تحتاج إدخال' : 'need entry', hue: '#f59e0b' },
+          { id: 'facilities', label: isAr ? 'أعطال التجهيزات' : 'Facility faults', val: fmtN(data.facilities.length), sub: isAr ? 'عطل مسجّل' : 'recorded', hue: '#f97316' },
+          { id: 'lost', label: isAr ? 'موجودات غير مستلمة' : 'Unclaimed items', val: fmtN(data.lost.unclaimed), sub: isAr ? `من ${fmtN(data.lost.total)} غرض` : `of ${fmtN(data.lost.total)}`, hue: '#8b5cf6' },
+          ...(canSales && typeAllowed('sales') ? [{ id: 'sales', label: isAr ? 'إيراد الفترة' : 'Period revenue', val: fmtN(Math.round(data.sales.totalRevenue)), sub: isAr ? 'ريال' : 'SAR', hue: '#0d9488' }] : []),
+        ].filter(k => typeAllowed(k.id))
+
+        const attention = [
+          { n: M.unentered, ar: 'رحلة غير مدخلة', en: 'trips not entered', id: 'movements', c: '#f59e0b' },
+          { n: data.missed.length, ar: 'سجل متخلفين عن الرحلات', en: 'missed-passenger records', id: 'missed', c: '#ef4444' },
+          { n: data.facilities.length, ar: 'عطل في تجهيزات الحافلات', en: 'facility faults', id: 'facilities', c: '#f97316' },
+          { n: data.lost.unclaimed, ar: 'غرض غير مستلم', en: 'unclaimed items', id: 'lost', c: '#8b5cf6' },
+        ].filter(x => x.n > 0 && typeAllowed(x.id))
+
+        const GROUPS = [
+          { ar: 'التشغيل', en: 'Operations', ids: ['movements', 'compliance', 'transport', 'missed', 'facilities'] },
+          { ar: 'المالية', en: 'Finance', ids: ['sales'] },
+          { ar: 'السجلات', en: 'Records', ids: ['lost', 'audit'] },
+        ]
+        const cardStat = id => ({
+          movements: `${fmtN(M.arr)} ${isAr ? 'وصول' : 'arr'} · ${fmtN(M.dep)} ${isAr ? 'مغادرة' : 'dep'}`,
+          compliance: `${isAr ? 'وصول' : 'Arr'} ${M.arrOnTimeRate ?? '—'}${M.arrOnTimeRate != null ? '%' : ''} · ${isAr ? 'مغادرة' : 'Dep'} ${M.depOnTimeRate ?? '—'}${M.depOnTimeRate != null ? '%' : ''}`,
+          missed: `${fmtN(data.trips.totalMissed)} ${isAr ? 'راكب' : 'pax'}`,
+          facilities: `${fmtN(data.facilities.length)} ${isAr ? 'عطل' : 'faults'}`,
+          sales: canSales ? sar(data.sales.totalRevenue) : '',
+          lost: `${fmtN(data.lost.unclaimed)} ${isAr ? 'غير مستلم' : 'unclaimed'}`,
+        }[id] || '')
+
+        return (
+        <div className="space-y-7">
+          {/* الشريط العلوي: الفترة + الحلقتان (الوصول والمغادرة منفصلان) */}
+          <section className="rp-hero">
+            <div className="rp-hero-head">
+              <div>
+                <h2 className="rp-hero-t">{isAr ? 'ملخص الفترة' : 'Period summary'}</h2>
+                <p className="rp-hero-s"><span dir="ltr">{periodText}</span> · {fmtN(days)} {isAr ? (days === 1 ? 'يوم' : 'أيام') : (days === 1 ? 'day' : 'days')} · {stationLabel}</p>
+              </div>
+            </div>
+            <div className="rp-hero-grid">{dirPanel('arr')}{dirPanel('dep')}</div>
+          </section>
+
+          {kpis.length > 0 && (
+            <div className="grid gap-3 grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(170px,1fr))]">
+              {kpis.map(k => (
+                <button key={k.id} type="button" onClick={() => setTab(k.id)} className="rp-kpi" style={{ '--hue': k.hue }}>
+                  <span className="rp-kpi-l">{k.label}</span>
+                  <span className="rp-kpi-v">{k.val}</span>
+                  <span className="rp-kpi-s">{k.sub}</span>
                 </button>
               ))}
             </div>
+          )}
+
+          {/* ما يستحق الانتباه — جمل جاهزة */}
+          <section>
+            <h2 className="rp-h2">{isAr ? 'أبرز ما في الفترة' : 'Highlights'}</h2>
+            {insights.length === 0 ? (
+              <div className="rp-note rp-note-ok">{isAr ? 'لا توجد ملاحظات بارزة في هذه الفترة' : 'Nothing notable for this period'}</div>
+            ) : (
+              <ul className="rp-insights">
+                {insights.map((x, i) => (
+                  <li key={i} className={`rp-ins rp-ins-${x.t}`}>
+                    <span className="rp-ins-dot" aria-hidden="true" />
+                    <span>{isAr ? x.ar : x.en}</span>
+                    <b className="rp-ins-tag">{x.t === 'ok' ? (isAr ? 'إيجابي' : 'Good') : x.t === 'warn' ? (isAr ? 'تنبيه' : 'Notice') : (isAr ? 'يحتاج متابعة' : 'Follow up')}</b>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
+
+          {/* ترتيب المحطات */}
+          {typeAllowed('compliance') && Object.keys(byStation).length > 1 && (
+            <section>
+              <div className="rp-sec-head">
+                <h2 className="rp-h2" style={{ margin: 0 }}>{isAr ? 'أداء المحطات' : 'Station performance'}</h2>
+                <div className="rp-seg" role="tablist" aria-label={isAr ? 'الاتجاه' : 'Direction'}>
+                  {[['arrival', isAr ? 'الوصول' : 'Arrivals'], ['departure', isAr ? 'المغادرة' : 'Departures']].map(([v, l]) => (
+                    <button key={v} type="button" role="tab" aria-selected={perfDir === v} className={perfDir === v ? 'on' : ''} onClick={() => setPerfDir(v)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <p className="rp-hint">{isAr ? 'الأضعف التزاماً أولاً — اضغط على محطة لعرضها وحدها' : 'Weakest first — tap a station to focus on it'}</p>
+              {ranked.length === 0 ? (
+                <div className="rp-note">{isAr ? 'لا توجد رحلات مُدخلة بوقت فعلي في هذا الاتجاه' : 'No entered trips with actual times in this direction'}</div>
+              ) : (
+                <div className="rp-rank">
+                  {ranked.map(o => {
+                    const c = o.rate >= 80 ? '#16a34a' : o.rate >= 60 ? '#d97706' : '#dc2626'
+                    return (
+                      <button key={o.id} type="button" className="rp-rank-row" onClick={() => { setStation(o.id); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
+                        <span className="rp-rank-n">{o.name}</span>
+                        <span className="rp-rank-bar"><i style={{ width: `${o.rate}%`, background: c }} /></span>
+                        <span className="rp-rank-v" style={{ color: c }}>{o.rate}%</span>
+                        <span className="rp-rank-m">{fmtN(o.d.n)} {isAr ? 'رحلة' : 'trips'}{o.d.un > 0 ? ` · ${fmtN(o.d.un)} ${isAr ? 'غير مدخلة' : 'not entered'}` : ''}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {attention.length > 0 && (
+            <section>
+              <h2 className="rp-h2">{isAr ? 'تحتاج انتباهك' : 'Needs attention'}</h2>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {attention.map(x => (
+                  <button key={x.id + x.ar} type="button" onClick={() => setTab(x.id)} className="rp-alert" style={{ '--hue': x.c }}>
+                    <b>{fmtN(x.n)}</b><span>{isAr ? x.ar : x.en}</span>
+                    <i>{isAr ? 'عرض' : 'View'}</i>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* كل التقارير — مجمّعة */}
+          {GROUPS.map(g => {
+            const list = TAB_DEFS.filter(t => g.ids.includes(t.id))
+            if (!list.length) return null
+            return (
+              <section key={g.ar}>
+                <h2 className="rp-h2">{isAr ? g.ar : g.en}</h2>
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {list.map(t => (
+                    <button key={t.id} type="button" onClick={() => setTab(t.id)} className="rp-card">
+                      <span className="rp-card-top">
+                        <span className="rp-card-ico"><RpIcon id={t.id} size={18} /></span>
+                        {t.n > 0 && <b className="rp-tab-n">{fmtN(t.n)}</b>}
+                      </span>
+                      <span className="rp-card-t">{isAr ? t.ar : t.en}</span>
+                      <span className="rp-card-d">{isAr ? t.desc_ar : t.desc_en}</span>
+                      {cardStat(t.id) && <span className="rp-card-s">{cardStat(t.id)}</span>}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )
+          })}
         </div>
-      ))}
+        )
+      })())}
 
       {data && (
         <div className="space-y-6">
