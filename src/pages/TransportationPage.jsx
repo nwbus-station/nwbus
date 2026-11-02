@@ -716,6 +716,8 @@ export default function TransportationPage() {
   const [schedDir, setSchedDir] = useState('all')   // all | arrival | departure
   const [schedStations, setSchedStations] = useState(() => { try { return JSON.parse(localStorage.getItem('nwbus_sched_stations') || '[]') } catch { return [] } })   // فارغ = كل المحطات
   const [stPanel, setStPanel] = useState(false)
+  const [stTab, setStTab] = useState('stations')   // صفحتا الاختيار: stations | agents
+  const [schedScope, setSchedScope] = useState(() => localStorage.getItem('nwbus_sched_scope') || 'stations')   // عند عدم اختيار محطات: stations (بدون وكلاء) | agents | all
   const [stQ, setStQ] = useState('')
   const [userCounts, setUserCounts] = useState({})   // عدد مستخدمي كل محطة
   const [openNotes, setOpenNotes] = useState(() => new Set())   // الحركات المفتوحة ملاحظاتها بالجدول الشامل
@@ -764,13 +766,13 @@ export default function TransportationPage() {
   // جلب المحطات: الأدمن يرى الكل؛ مشرف المنطقة محطاته؛ المشرف والمحاسب محطاتهم فقط
   useEffect(() => {
     if (isGeneralAdmin && !scopedIds) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (scopedIds) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').in('id', scopedIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').in('id', scopedIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (isAreaSupervisor && allowedStationIds?.length) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (workStations?.length > 1) {
       // موظف/محاسب يعمل بأكثر من محطة (محطته الأساسية أولاً ثم الإضافية التي حدّدها الأدمن) — يتنقّل بينها مثل المشرف
@@ -780,14 +782,14 @@ export default function TransportationPage() {
         .then(async ({ data }) => {
           let sts = (data ?? []).map(r => r.station).filter(Boolean).filter(s => !isRestStation(s))
           if (sts.length === 0 && profile?.station_id) {
-            const { data: st } = await supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').eq('id', profile.station_id).maybeSingle()
+            const { data: st } = await supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').eq('id', profile.station_id).maybeSingle()
             sts = st ? [st] : (profile?.station ? [profile.station] : [])
           }
           setStations(sts)
         })
     } else if (profile?.station_id) {
       // الموظف: محطته فقط — نجيبها كاملة (بما فيها إعداد دمج الوصول والمغادرة) عشان تظهر له نفس بطاقة الأدمن
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends').eq('id', profile.station_id).maybeSingle()
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').eq('id', profile.station_id).maybeSingle()
         .then(({ data }) => { if (data) setStations([data]) })
     }
   }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id, profile?.station_id, scopedIds?.join(','), workStations])
@@ -1005,7 +1007,7 @@ export default function TransportationPage() {
       pageAll(() => supabase.from('station_trips')
         .select(`
           station_id, departure_time, arrival_time, dep_enabled, arr_enabled,
-          station:station_id(id, name_ar, name_en, city_group),
+          station:station_id(id, name_ar, name_en, city_group, is_agent),
           trip:trip_schedule_id(
             id, trip_number, trip_name, scheduled_departure, scheduled_arrival,
             is_active, is_rf, rf_date, start_date, end_date, days_of_week, from_station_id, to_station_id,
@@ -1480,7 +1482,11 @@ export default function TransportationPage() {
       const overdue = isToday && !departed && sm != null && sm < nowMin - 5
       return { ...t, sm: sm ?? 0, dly, departed, overdue, late: departed && dly != null && dly > 5 }
     })
-    const rows = selSet.size ? allRows.filter(r => selSet.has(r.station?.id)) : allRows
+    const agentIds = new Set(stations.filter(x => x.is_agent).map(x => x.id))
+    const isAgentRow = r => agentIds.has(r.station?.id) || !!r.station?.is_agent
+    const rows = selSet.size
+      ? allRows.filter(r => selSet.has(r.station?.id))
+      : allRows.filter(r => schedScope === 'all' || (schedScope === 'agents' ? isAgentRow(r) : !isAgentRow(r)))
     const total = rows.length
     const departedN = rows.filter(r => r.departed).length
     const arrN = rows.filter(r => r.role === 'arrival').length, depN = rows.length - arrN
@@ -1668,7 +1674,7 @@ export default function TransportationPage() {
           </div>
           <div className="tp-head">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 10px', flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{isAr ? `الجدول الشامل — ${selSet.size ? `${selSet.size} ${selSet.size === 1 ? 'محطة' : 'محطات'}` : 'كل المحطات'}` : `Global schedule — ${selSet.size ? selSet.size + ' station(s)' : 'all stations'}`}</span>
+              <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{isAr ? `الجدول الشامل — ${selSet.size ? `${selSet.size} ${selSet.size === 1 ? 'محطة' : 'محطات'}` : schedScope === 'agents' ? 'الوكلاء' : schedScope === 'all' ? 'المحطات والوكلاء' : 'كل المحطات (بدون الوكلاء)'}` : `Global schedule — ${selSet.size ? selSet.size + ' station(s)' : schedScope === 'agents' ? 'agents' : schedScope === 'all' ? 'stations & agents' : 'all stations (no agents)'}`}</span>
               <span style={{ fontSize: '0.72rem', opacity: 0.75 }} dir="ltr">{date}</span>
             </div>
           </div>
@@ -1719,7 +1725,7 @@ export default function TransportationPage() {
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <button type="button" onClick={() => setStPanel(o => !o)} aria-expanded={stPanel} style={{ ...pill(stPanel || selSet.size > 0), flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              {isAr ? 'المحطات' : 'Stations'} <span style={{ fontFamily: MONO }}>{selSet.size ? selSet.size : (isAr ? 'الكل' : 'All')}</span>
+              {isAr ? 'المحطات' : 'Stations'} <span style={{ fontFamily: MONO }}>{selSet.size ? (() => { const a = stations.filter(x => x.is_agent && selSet.has(x.id)).length; const n = selSet.size - a; return isAr ? `${n}${a ? ` + ${a} وكيل` : ''}` : `${n}${a ? ` + ${a} agents` : ''}` })() : (schedScope === 'agents' ? (isAr ? 'الوكلاء' : 'Agents') : schedScope === 'all' ? (isAr ? 'الكل' : 'All') : (isAr ? 'بدون وكلاء' : 'No agents'))}</span>
             </button>
             <input value={schedQ} onChange={e => setSchedQ(e.target.value)} placeholder={isAr ? 'بحث: رقم الرحلة / المحطة / الحافلة' : 'Search trip / station / bus'} aria-label={isAr ? 'بحث بالجدول' : 'Search schedule'}
               style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-2)', borderRadius: 10, padding: '9px 12px', fontSize: '0.82rem', fontFamily: 'inherit', background: 'var(--card)' }} />
@@ -1727,31 +1733,81 @@ export default function TransportationPage() {
           </div>
           {stPanel && (() => {
             const term = stQ.trim().toLowerCase()
-            const withUsers = stations.filter(x => (userCounts[x.id] || 0) > 0)
-            const listSt = stations.filter(x => !term || `${x.name_ar || ''} ${x.name_en || ''}`.toLowerCase().includes(term)).sort((a, b) => (en(a)).localeCompare(en(b)))
-            const quick = (label, onClick, on) => <button type="button" onClick={onClick} style={{ ...pill(on), flexShrink: 0 }}>{label}</button>
+            const plain = stations.filter(x => !x.is_agent), agents = stations.filter(x => x.is_agent)
+            const pool = stTab === 'agents' ? agents : plain
+            const listSt = pool.filter(x => !term || `${x.name_ar || ''} ${x.name_en || ''}`.toLowerCase().includes(term)).sort((a, b) => en(a).localeCompare(en(b)))
+            const withUsers = pool.filter(x => (userCounts[x.id] || 0) > 0)
+            const selPlain = plain.filter(x => selSet.has(x.id)), selAgents = agents.filter(x => selSet.has(x.id))
+            const selAll = [...selPlain, ...selAgents]
+            const tone = stTab === 'agents' ? '#7c3aed' : 'var(--info)'
+            const addMany = ids => setSel([...new Set([...schedStations, ...ids])])
+            const dropMany = ids => setSel(schedStations.filter(i => !ids.includes(i)))
+            const btn = (label, onClick, on, disabled) => <button type="button" onClick={onClick} disabled={disabled} style={{ ...pill(on), flexShrink: 0, opacity: disabled ? 0.45 : 1, minHeight: 36 }}>{label}</button>
+            const pageTab = (k, label, total, picked, color) => (
+              <button key={k} type="button" role="tab" aria-selected={stTab === k} onClick={() => setStTab(k)}
+                style={{ flex: 1, minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, padding: '8px 12px', border: 'none', borderBottom: `3px solid ${stTab === k ? color : 'transparent'}`, background: stTab === k ? 'var(--surface)' : 'transparent', color: stTab === k ? 'var(--text-1)' : 'var(--text-3)', fontWeight: 800, fontSize: '0.84rem', fontFamily: 'inherit', cursor: 'pointer' }}>
+                <i aria-hidden="true" style={{ width: 9, height: 9, borderRadius: '50%', background: color }} />{label}
+                <span style={{ ...chipS('var(--surface-2)', 'var(--text-2)'), fontFamily: MONO }}>{total}</span>
+                {picked > 0 && <span style={{ ...chipS(color, '#fff'), fontFamily: MONO }}>{picked}</span>}
+              </button>
+            )
             return (
-              <div style={{ border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {quick(isAr ? 'كل المحطات' : 'All stations', () => setSel([]), selSet.size === 0)}
-                  {quick(`${isAr ? 'المحطات التي فيها مستخدمون' : 'Stations with users'} (${withUsers.length})`, () => setSel(withUsers.map(x => x.id)), selSet.size > 0 && selSet.size === withUsers.length && withUsers.every(x => selSet.has(x.id)))}
-                  {selSet.size > 0 && quick(isAr ? 'مسح الاختيار' : 'Clear', () => setSel([]), false)}
-                  <input value={stQ} onChange={e => setStQ(e.target.value)} placeholder={isAr ? 'ابحث عن محطة...' : 'Find a station...'} aria-label={isAr ? 'بحث عن محطة' : 'Find a station'}
-                    style={{ flex: 1, minWidth: 160, border: '1px solid var(--border-2)', borderRadius: 10, padding: '7px 11px', fontSize: '0.8rem', fontFamily: 'inherit', background: 'var(--card)' }} />
+              <div style={{ border: '1px solid var(--border-2)', borderRadius: 16, background: 'var(--card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '11px 14px', borderBottom: '1px solid var(--border-2)' }}>
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? 'اختيار المحطات' : 'Choose stations'}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{isAr ? 'المحطات والوكلاء في صفحتين منفصلتين، واختيارك من الصفحتين يُجمع معاً' : 'Stations and agents on two pages; picks from both are combined'}</div>
+                  </div>
+                  <button type="button" onClick={() => setStPanel(false)} aria-label={isAr ? 'إغلاق' : 'Close'} style={{ width: 40, height: 40, borderRadius: 12, border: '1px solid var(--border-2)', background: 'var(--surface)', color: 'var(--text-2)', fontSize: '1.2rem', cursor: 'pointer' }}>×</button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
-                  {listSt.map(x => {
-                    const on = selSet.has(x.id), uc = userCounts[x.id] || 0
-                    return (
-                      <button key={x.id} type="button" onClick={() => setSel(on ? schedStations.filter(i => i !== x.id) : [...schedStations, x.id])} aria-pressed={on}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 10, border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-1)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
-                        <span aria-hidden="true" style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--accent)' : 'transparent', color: '#fff', fontSize: 11, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{on ? '✓' : ''}</span>
-                        <span dir="auto" style={{ flex: 1, minWidth: 0, fontSize: '0.78rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{en(x)}</span>
-                        <span title={isAr ? 'عدد المستخدمين' : 'Users'} style={{ ...chipS(uc ? 'var(--success-bg)' : 'var(--surface-2)', uc ? 'var(--success)' : 'var(--text-3)'), fontFamily: MONO }}>{uc}</span>
-                      </button>
-                    )
-                  })}
-                  {listSt.length === 0 && <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', padding: 8 }}>{isAr ? 'لا محطات مطابقة' : 'No matching stations'}</span>}
+                <div role="tablist" style={{ display: 'flex', borderBottom: '1px solid var(--border-2)' }}>
+                  {pageTab('stations', isAr ? 'المحطات' : 'Stations', plain.length, selPlain.length, 'var(--info)')}
+                  {pageTab('agents', isAr ? 'الوكلاء' : 'Agents', agents.length, selAgents.length, '#7c3aed')}
+                </div>
+                <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {btn(isAr ? `تحديد الكل (${pool.length})` : `Select all (${pool.length})`, () => addMany(pool.map(x => x.id)), pool.length > 0 && pool.every(x => selSet.has(x.id)), pool.length === 0)}
+                    {btn(`${isAr ? 'التي فيها مستخدمون' : 'With users'} (${withUsers.length})`, () => addMany(withUsers.map(x => x.id)), withUsers.length > 0 && withUsers.every(x => selSet.has(x.id)), withUsers.length === 0)}
+                    {btn(isAr ? 'مسح هذه الصفحة' : 'Clear this page', () => dropMany(pool.map(x => x.id)), false, !pool.some(x => selSet.has(x.id)))}
+                    <input value={stQ} onChange={e => setStQ(e.target.value)} placeholder={stTab === 'agents' ? (isAr ? 'ابحث عن وكيل...' : 'Find an agent...') : (isAr ? 'ابحث عن محطة...' : 'Find a station...')} aria-label={isAr ? 'بحث' : 'Search'}
+                      style={{ flex: 1, minWidth: 160, minHeight: 36, border: '1px solid var(--border-2)', borderRadius: 10, padding: '7px 11px', fontSize: '0.8rem', fontFamily: 'inherit', background: 'var(--card)' }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8, maxHeight: 280, overflowY: 'auto', paddingInlineEnd: 2 }}>
+                    {listSt.map(x => {
+                      const on = selSet.has(x.id), uc = userCounts[x.id] || 0
+                      return (
+                        <button key={x.id} type="button" onClick={() => setSel(on ? schedStations.filter(i => i !== x.id) : [...schedStations, x.id])} aria-pressed={on}
+                          style={{ display: 'flex', alignItems: 'center', gap: 9, minHeight: 46, padding: '8px 11px', borderRadius: 12, border: `1.5px solid ${on ? tone : 'var(--border-2)'}`, background: on ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-1)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start', transition: 'border-color .12s, background .12s' }}>
+                          <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${on ? tone : 'var(--border-2)'}`, background: on ? tone : 'transparent', color: '#fff', fontSize: 12, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{on ? '✓' : ''}</span>
+                          <span dir="auto" style={{ flex: 1, minWidth: 0, fontSize: '0.8rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{en(x)}</span>
+                          <span title={isAr ? 'عدد المستخدمين' : 'Users'} style={{ ...chipS(uc ? 'var(--success-bg)' : 'var(--surface-2)', uc ? 'var(--success)' : 'var(--text-3)'), fontFamily: MONO }}>{uc}</span>
+                        </button>
+                      )
+                    })}
+                    {listSt.length === 0 && <span style={{ fontSize: '0.8rem', color: 'var(--text-3)', padding: 10 }}>{stTab === 'agents' && !agents.length ? (isAr ? 'لا يوجد وكلاء مسجّلون' : 'No agents') : (isAr ? 'لا نتائج مطابقة' : 'No matches')}</span>}
+                  </div>
+                </div>
+                <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border-2)', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {selAll.length > 0 ? (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-3)' }}>{isAr ? `المختارة (${selAll.length})` : `Selected (${selAll.length})`}</span>
+                      {selAll.slice(0, 40).map(x => (
+                        <span key={x.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 4px 3px 10px', borderRadius: 99, background: 'var(--card)', border: `1px solid ${x.is_agent ? '#7c3aed' : 'var(--border-2)'}`, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-1)' }}>
+                          {x.is_agent && <i aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', background: '#7c3aed' }} />}{en(x)}
+                          <button type="button" onClick={() => dropMany([x.id])} aria-label={isAr ? 'إزالة' : 'Remove'} style={{ width: 22, height: 22, borderRadius: '50%', border: 'none', background: 'var(--surface-2)', color: 'var(--text-2)', cursor: 'pointer', lineHeight: 1 }}>×</button>
+                        </span>
+                      ))}
+                      {selAll.length > 40 && <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>+{selAll.length - 40}</span>}
+                      <button type="button" onClick={() => setSel([])} style={{ marginInlineStart: 'auto', ...chipS('var(--danger-bg)', 'var(--danger)'), border: 'none', cursor: 'pointer', fontFamily: 'inherit', minHeight: 30 }}>{isAr ? 'مسح الكل' : 'Clear all'}</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-2)' }}>{isAr ? 'لم تختر شيئاً، فيُعرض:' : 'Nothing selected, showing:'}</span>
+                      {[['stations', isAr ? 'المحطات (بدون الوكلاء)' : 'Stations (no agents)'], ['agents', isAr ? 'الوكلاء فقط' : 'Agents only'], ['all', isAr ? 'الكل' : 'All']].map(([k, l]) => (
+                        <button key={k} type="button" onClick={() => { setSchedScope(k); try { localStorage.setItem('nwbus_sched_scope', k) } catch { /* بدون تخزين */ } }} style={{ ...pill(schedScope === k), minHeight: 34 }}>{l}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )
