@@ -718,6 +718,7 @@ export default function TransportationPage() {
   const [stPanel, setStPanel] = useState(false)
   const [stQ, setStQ] = useState('')
   const [userCounts, setUserCounts] = useState({})   // عدد مستخدمي كل محطة
+  const [openNotes, setOpenNotes] = useState(() => new Set())   // الحركات المفتوحة ملاحظاتها بالجدول الشامل
   const scheduleDateRef = useRef('')   // التحميل الأول لليوم فقط يُظهر «جارٍ التحميل»؛ التحديثات بعده صامتة (بدون وميض)
   const [boardMode, setBoardMode] = useState('now')   // now = الأحدث/القادمة فوق · shift = حسب الوردية
   const [showPast, setShowPast] = useState(false)
@@ -1017,7 +1018,7 @@ export default function TransportationPage() {
         .select('trip_schedule_id, station_id, arrival_time, departure_time')
         .order('trip_schedule_id').order('station_id')),
       pageAll(() => supabase.from('trip_records')
-        .select('trip_schedule_id, station_id, is_arrival, actual_departure, actual_arrival, is_cancelled, bus_number, passenger_count, missed_count')
+        .select('trip_schedule_id, station_id, is_arrival, actual_departure, actual_arrival, is_cancelled, bus_number, passenger_count, missed_count, operational_status, notes, created_by_name, updated_by_name, created_at, updated_at')
         .eq('record_date', date)
         .order('id')),
     ])
@@ -1033,6 +1034,17 @@ export default function TransportationPage() {
       const w = (st.name_en || '').split(/[\s-]+/)[0].toLowerCase()
       return w || null
     }
+    // ملاحظات وحالات تشغيلية غير عادية لكل رحلة من كل محطاتها (محطة عبور قد تضيف ملاحظة تهم بقية الرحلة)
+    const stationById = {}
+    stRows.forEach(r => { if (r.station) stationById[r.station_id] = r.station })
+    const notesByTrip = {}
+    recRows.forEach(r => {
+      const text = (r.notes || '').trim()
+      const abnormal = !!r.operational_status && r.operational_status !== 'Normal'
+      if (!text && !abnormal) return
+      ;(notesByTrip[r.trip_schedule_id] ??= []).push({ stationId: r.station_id, station: stationById[r.station_id] || { name_en: '—' }, role: r.is_arrival ? 'arrival' : 'departure', text, status: r.operational_status, by: r.created_by_name, editedBy: r.updated_by_name, at: r.updated_at || r.created_at })
+    })
+    Object.values(notesByTrip).forEach(a => a.sort((x, y) => String(x.at).localeCompare(String(y.at))))
 
     // حركات كل محطة (وصول ومغادرة) بنفس شروط شاشة المحطة، تُبنى مرة واحدة ثم نختار المحطات محلياً (بلا إعادة جلب)
     const entries = []
@@ -1063,6 +1075,7 @@ export default function TransportationPage() {
           schedTime: hhmm, rec, status: stamp ? 'departed' : 'scheduled',
           actual_departure: stamp ? new Date(stamp).toISOString().slice(11, 16) : null,
           bus_number: rec?.bus_number, passenger_count: rec?.passenger_count, missed: rec?.missed_count,
+          opStatus: rec?.operational_status || null, tripNotes: notesByTrip[tr.id] || [],
         })
       }
       if (isDest) add('arrival', arrT || tr.scheduled_arrival)
@@ -1491,6 +1504,8 @@ export default function TransportationPage() {
       if (schedStatus === 'scheduled' && r.departed) return false
       if (schedStatus === 'late' && !(r.late || r.overdue)) return false
       if (schedDir !== 'all' && r.role !== schedDir) return false
+      if (schedStatus === 'notes' && !r.tripNotes?.some(n => n.text)) return false
+      if (schedStatus === 'issue' && !(r.opStatus && r.opStatus !== 'Normal') && !r.tripNotes?.some(n => n.status && n.status !== 'Normal')) return false
       if (schedShift !== 'all' && shiftOf(r) !== schedShift) return false
       if (q && !`${r.trip_number} ${r.trip_name || ''} ${r.station?.name_ar || ''} ${r.station?.name_en || ''} ${r.from_station?.name_ar || ''} ${r.from_station?.name_en || ''} ${r.to_station?.name_ar || ''} ${r.to_station?.name_en || ''} ${r.bus_number || ''}`.toLowerCase().includes(q)) return false
       return true
@@ -1506,6 +1521,72 @@ export default function TransportationPage() {
       : r.overdue
         ? <span style={{ ...chipS('var(--warning-bg)', 'var(--warning)'), display: 'inline-flex', alignItems: 'center', gap: 5 }}><i className="tp-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warning)' }} />{isAr ? 'بانتظار التسجيل' : 'Awaiting entry'}</span>
         : <span style={chipS('var(--surface-2)', 'var(--text-3)')}>{isAr ? 'مجدولة' : 'Scheduled'}</span>
+    const hhmmRiyadh = ts => { try { return new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Riyadh' }) } catch { return '' } }
+    const opMeta = st => TRIP_STATUSES.find(x => x.value === st)
+    const opLabel = st => (isAr ? (opMeta(st)?.ar || st) : (opMeta(st)?.en || st))
+    const initials = n => String(n || '؟').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+    const toggleNotes = k => setOpenNotes(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+    // الحالة التشغيلية + ملاحظات الرحلة (من أي محطة) — بطاقات بالمحطة واسم المرحّل
+    const opStrip = r => {
+      const hasRec = !!r.opStatus
+      const notes = r.tripNotes || []
+      const textNotes = notes.filter(n => n.text)
+      if (!hasRec && !notes.length) return null
+      const normal = r.opStatus === 'Normal'
+      const isOpen = openNotes.has(r.key)
+      return (
+        <div style={{ gridColumn: '1 / -1', borderTop: '1px dashed var(--border-2)', marginTop: 4, paddingTop: 9 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px 10px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.64rem', fontWeight: 800, color: 'var(--text-3)', letterSpacing: '.04em' }}>{isAr ? 'الحالة التشغيلية' : 'Operational status'}</span>
+            {hasRec
+              ? <span style={{ ...chipS(normal ? 'var(--success-bg)' : 'var(--danger-bg)', normal ? 'var(--success)' : 'var(--danger)'), display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <i style={{ width: 6, height: 6, borderRadius: '50%', background: normal ? 'var(--success)' : 'var(--danger)' }} />{opLabel(r.opStatus)}
+              </span>
+              : <span style={chipS('var(--surface-2)', 'var(--text-3)')}>{isAr ? 'لم تُسجَّل بعد' : 'Not entered yet'}</span>}
+            {textNotes.length > 0 && (
+              <button type="button" onClick={() => toggleNotes(r.key)} aria-expanded={isOpen}
+                style={{ ...chipS('var(--warning-bg)', 'var(--warning)'), border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {isAr ? 'ملاحظات' : 'Notes'} <b style={{ fontFamily: MONO }}>{textNotes.length}</b>
+                <span aria-hidden="true" style={{ display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(-90deg)', transition: 'transform .15s' }}>&#8250;</span>
+              </button>
+            )}
+            {!isOpen && textNotes[0] && (
+              <span dir="auto" style={{ fontSize: '0.74rem', color: 'var(--text-2)', minWidth: 0, flex: '1 1 160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <b style={{ color: 'var(--text-1)' }}>{en(textNotes[0].station)}</b>: {textNotes[0].text}{textNotes[0].by ? ` — ${textNotes[0].by}` : ''}
+              </span>
+            )}
+          </div>
+          {isOpen && (
+            <div style={{ display: 'grid', gap: 8, marginTop: 9 }}>
+              {notes.map((n, i) => {
+                const mine = n.stationId === r.station?.id
+                const abn = n.status && n.status !== 'Normal'
+                const accent = abn ? 'var(--danger)' : mine ? 'var(--accent)' : 'var(--warning)'
+                return (
+                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: 'var(--surface)', border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${accent}`, borderRadius: 12, padding: '9px 12px' }}>
+                    <span aria-hidden="true" title={n.by || ''} style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, var(--solid-1), var(--solid-2))', color: '#fff', display: 'grid', placeItems: 'center', fontSize: '0.7rem', fontWeight: 800, flexShrink: 0 }}>{initials(n.by)}</span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
+                        <span dir="auto" style={{ fontWeight: 800, fontSize: '0.78rem', color: 'var(--text-1)' }}>{en(n.station)}</span>
+                        <span style={chipS(n.role === 'arrival' ? 'var(--info-bg)' : 'var(--success-bg)', n.role === 'arrival' ? 'var(--info)' : 'var(--success)')}>{n.role === 'arrival' ? (isAr ? 'وصول' : 'Arrival') : (isAr ? 'مغادرة' : 'Departure')}</span>
+                        {mine && <span style={chipS('var(--gold-dim)', 'var(--accent)')}>{isAr ? 'هذه المحطة' : 'This station'}</span>}
+                        {abn && <span style={chipS('var(--danger-bg)', 'var(--danger)')}>{opLabel(n.status)}</span>}
+                        <span style={{ marginInlineStart: 'auto', fontFamily: MONO, fontSize: '0.68rem', color: 'var(--text-3)' }} dir="ltr">{hhmmRiyadh(n.at)}</span>
+                      </div>
+                      {n.text && <p dir="auto" style={{ margin: 0, fontSize: '0.82rem', lineHeight: 1.7, color: 'var(--text-1)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.text}</p>}
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: 4 }}>
+                        {isAr ? 'المرحّل' : 'Dispatcher'}: <b style={{ color: 'var(--text-2)' }}>{n.by || (isAr ? 'غير معروف' : 'unknown')}</b>
+                        {n.editedBy && n.editedBy !== n.by ? <> · {isAr ? 'آخر تعديل' : 'last edit'}: {n.editedBy}</> : null}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )
+    }
     const setSel = arr => { setSchedStations(arr); try { localStorage.setItem('nwbus_sched_stations', JSON.stringify(arr)) } catch { /* بدون تخزين */ } }
     const stationTag = r => (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
@@ -1544,6 +1625,7 @@ export default function TransportationPage() {
         </div>
         <div className="tp-route">{track(r.from_station, r.to_station)}</div>
         <div className="tp-exec">{exec(r)}</div>
+        {opStrip(r)}
       </div>
     )
     const card = r => (
@@ -1561,6 +1643,7 @@ export default function TransportationPage() {
           </div>
         </div>
         <div style={{ margin: '9px 0' }}>{track(r.from_station, r.to_station)}</div>
+        {opStrip(r) && <div style={{ display: 'grid', marginBottom: 8 }} dir={isAr ? 'rtl' : 'ltr'}>{opStrip(r)}</div>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '8px 4px' }}>
           {[[isAr ? 'الفعلي' : 'Actual', r.actual_departure || '—', r.departed ? 'var(--success)' : 'var(--text-3)'], [isAr ? 'الفرق' : 'Delta', r.dly != null ? `${r.dly > 0 ? '+' : ''}${r.dly}` : '—', r.late ? 'var(--danger)' : 'var(--text-1)'], [isAr ? 'الركاب' : 'Pax', r.passenger_count ?? '—', 'var(--text-1)'], [isAr ? 'الحافلة' : 'Bus', r.bus_number || '—', 'var(--text-1)']].map(([l, v, c]) => (
             <div key={l}><div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.86rem', color: c }}>{v}</div><div style={{ fontSize: '0.6rem', color: 'var(--text-3)', fontWeight: 700, marginTop: 2 }}>{l}</div></div>
@@ -1628,7 +1711,7 @@ export default function TransportationPage() {
         {/* التصفية والبحث */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
-            {[['all', isAr ? 'الكل' : 'All'], ['departed', isAr ? 'غادرت' : 'Departed'], ['scheduled', isAr ? 'مجدولة' : 'Scheduled'], ['late', isAr ? 'متأخرة / بانتظار' : 'Late / awaiting']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedStatus === k), flexShrink: 0 }} onClick={() => setSchedStatus(k)}>{l}</button>)}
+            {[['all', isAr ? 'الكل' : 'All'], ['departed', isAr ? 'غادرت' : 'Departed'], ['scheduled', isAr ? 'مجدولة' : 'Scheduled'], ['late', isAr ? 'متأخرة / بانتظار' : 'Late / awaiting'], ['notes', isAr ? 'فيها ملاحظات' : 'With notes'], ['issue', isAr ? 'حالة غير عادية' : 'Irregular']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedStatus === k), flexShrink: 0 }} onClick={() => setSchedStatus(k)}>{l}</button>)}
             <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
             {[['all', isAr ? 'كل الورديات' : 'All shifts'], ...SH.map(x => [x[0], isAr ? x[1] : x[2]])].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedShift === k), flexShrink: 0 }} onClick={() => setSchedShift(k)}>{l}</button>)}
             <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
