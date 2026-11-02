@@ -14,6 +14,7 @@ import { esc, docHeader, docShell, openDocWindow } from '../utils/printDoc'
 import { parseShifts, shiftIdx } from '../utils/shifts'
 import { shiftsOfStation } from '../utils/stationShifts'
 import StationsPerformance from '../components/employeeFile/StationsPerformance'
+import StationsCoverage from '../components/employeeFile/StationsCoverage'
 
 const MONO = 'ui-monospace, Menlo, Consolas, monospace'
 const LEAVE_AR = { annual: 'سنوية', casual: 'استئذان خروج', compensatory: 'تعويضية', unpaid: 'بدون راتب', emergency: 'اضطرارية', sick: 'مرضية', marriage: 'زواج', paternity: 'مولود', bereavement: 'وفاة' }
@@ -700,7 +701,7 @@ export default function EmployeeFilePage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
-  const [view, setView] = useState('employee')   // employee | stations (أداء المحطات)
+  const [view, setView] = useState('employee')   // employee | stations (أداء المحطات) | coverage (الالتزام بالإيراد)
 
   useEffect(() => { try { localStorage.setItem('empfile_sections_v3', JSON.stringify([...sel])) } catch { /* بدون تخزين */ } }, [sel])
   useEffect(() => {
@@ -929,7 +930,7 @@ export default function EmployeeFilePage() {
             <p style={{ margin: '3px 0 0', fontSize: '0.76rem', color: 'var(--text-3)' }}>{isAr ? 'سجل شامل للموظف: البيانات، الإجازات، الأداء التشغيلي، الإيرادات، التقييمات، والدخول — للأدمن فقط' : 'Complete employee record: details, leaves, operations, revenue, evaluations and logins — admin only'}</p>
           </div>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border-2)', borderRadius: 12, overflow: 'hidden' }}>
-            {[['employee', isAr ? 'ملف الموظف' : 'Employee'], ['stations', isAr ? 'أداء المحطات' : 'Stations performance']].map(([k, l]) => (
+            {[['employee', isAr ? 'ملف الموظف' : 'Employee'], ['stations', isAr ? 'أداء المحطات' : 'Stations performance'], ['coverage', isAr ? 'الالتزام بالإيراد' : 'Revenue compliance']].map(([k, l]) => (
               <button key={k} type="button" onClick={() => setView(k)} style={{ padding: '9px 20px', border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', background: view === k ? '#1C2B4A' : 'var(--card)', color: view === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
             ))}
           </div>
@@ -938,6 +939,12 @@ export default function EmployeeFilePage() {
           </button>}
         </div>
       </div>
+
+      {view === 'coverage' && (
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 20px' }}>
+          <StationsCoverage isAr={isAr} />
+        </div>
+      )}
 
       {view === 'stations' && (
         <div style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 20px' }}>
