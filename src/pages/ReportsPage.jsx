@@ -14,6 +14,7 @@ import { isRestStation } from '../utils/stations'
 import { USER_ROLES, ADMIN_ROLE_VALUES, SALES_VIEW_CAPS } from '../utils/constants'
 import SelectField from '../components/shared/SelectField'
 import { brandHeader } from '../utils/printDoc'
+import StationFolderModal from '../components/reports/StationFolderModal'
 
 const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { minimumFractionDigits: 2 })
 const fmtN = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn')
@@ -382,81 +383,6 @@ function RateRing({ value, isAr }) {
   )
 }
 
-function StationPrintPicker({ isAr, label, accent, list, staff, selected, setSelected, open, setOpen, onPrint }) {
-  const [q, setQ] = useState('')
-  const ids = list.map(s => s.id)
-  const eff = selected.length === 0 ? ids : selected[0] === '__none__' ? [] : selected.filter(id => ids.includes(id))
-  const set = arr => setSelected(arr.length === 0 ? ['__none__'] : arr)
-  const toggle = id => set(eff.includes(id) ? eff.filter(x => x !== id) : [...eff, id])
-  const withStaff = list.filter(s => (staff[s.id] || 0) > 0)
-  const term = q.trim().toLowerCase()
-  const shown = list
-    .filter(s => !term || (s.name_ar || '').toLowerCase().includes(term) || (s.name_en || '').toLowerCase().includes(term))
-    .sort((a, b) => ((staff[b.id] || 0) > 0) - ((staff[a.id] || 0) > 0) || (a.name_ar || a.name_en || '').localeCompare(b.name_ar || b.name_en || '', isAr ? 'ar' : 'en'))
-  const c = accent === 'indigo' ? { bg: 'bg-indigo-700', soft: 'bg-indigo-50 text-indigo-700 border-indigo-200', acc: 'accent-indigo-700' } : { bg: 'bg-teal-700', soft: 'bg-teal-50 text-teal-700 border-teal-200', acc: 'accent-teal-700' }
-  return (
-    <div className="relative">
-      <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open}
-        className={`${c.bg} text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 flex items-center gap-2`}>
-        {label}
-        <span className="text-xs opacity-80 font-mono">({eff.length}/{list.length})</span>
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="fixed inset-x-3 top-24 z-50 sm:absolute sm:inset-x-auto sm:top-full sm:mt-2 sm:start-0 sm:w-[380px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
-            {/* الرأس: العنوان + زر الطباعة */}
-            <div className="p-3 border-b border-gray-100 flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-extrabold text-gray-900 truncate">{label}</p>
-                <p className="text-[11px] text-gray-500">{isAr ? `${eff.length} من ${list.length} محطة محددة` : `${eff.length} of ${list.length} selected`}</p>
-              </div>
-              <button type="button" disabled={eff.length === 0} onClick={() => { setOpen(false); onPrint(eff) }}
-                className={`${c.bg} text-white px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-40 shrink-0`}>
-                {isAr ? `طباعة (${eff.length})` : `Print (${eff.length})`}
-              </button>
-            </div>
-            {/* بحث + اختصارات */}
-            <div className="p-3 pb-2 space-y-2">
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder={isAr ? 'ابحث عن محطة…' : 'Search stations…'}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-nwbus-primary/30 focus:outline-none" />
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  [isAr ? 'الكل' : 'All', () => set(ids)],
-                  [isAr ? 'لا شيء' : 'None', () => set([])],
-                  [isAr ? `فيها حسابات نشطة (${withStaff.length})` : `With active accounts (${withStaff.length})`, () => set(withStaff.map(s => s.id))],
-                ].map(([l, fn]) => (
-                  <button key={l} type="button" onClick={fn} className={`text-[11px] font-bold border rounded-full px-3 py-1 ${c.soft} hover:opacity-80`}>{l}</button>
-                ))}
-              </div>
-            </div>
-            {/* القائمة */}
-            <div className="max-h-[320px] overflow-y-auto border-t border-gray-100">
-              {shown.length === 0 && <p className="text-center text-xs text-gray-400 py-6">{isAr ? 'لا توجد محطات مطابقة' : 'No matching stations'}</p>}
-              {shown.map(s => {
-                const n = staff[s.id] || 0
-                const on = eff.includes(s.id)
-                return (
-                  <label key={s.id} className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-gray-50 ${on ? 'bg-gray-50' : 'hover:bg-gray-50'}`}>
-                    <input type="checkbox" className={`${c.acc} w-4 h-4 shrink-0`} checked={on} onChange={() => toggle(s.id)} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-gray-900 truncate">{isAr ? (s.name_ar || s.name_en) : (s.name_en || s.name_ar)}</span>
-                      {isAr && s.name_en && s.name_ar && <span className="block text-[11px] text-gray-400 truncate" dir="ltr" style={{ textAlign: 'right' }}>{s.name_en}</span>}
-                    </span>
-                    <span className={`shrink-0 text-[11px] font-bold rounded-full px-2.5 py-0.5 border ${n > 0 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                      {n > 0 ? (isAr ? `${n} حساب` : `${n} accounts`) : (isAr ? 'بلا حسابات' : 'No accounts')}
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
 export default function ReportsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -486,25 +412,17 @@ export default function ReportsPage() {
   const myStationIds = stations.map(s => s.id)   // محطاته المخصصة (لو غير أدمن) — منقولة هنا عشان fetchAudit يستخدمها
   const [station,  _setStation]      = useState(() => localStorage.getItem('rpt_station') || 'all')
   const setStation = v => { localStorage.setItem('rpt_station', v); _setStation(v) }
-  const [printStationIds, _setPrintStationIds] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('rpt_station_ids') ?? '[]') } catch { return [] }
+  // مجلد طباعة المحطات: كل ملف = محطة + نوع المحتوى (detail: وصول ومغادرة بالجداول، summary: ملخص)
+  const [folder, _setFolder] = useState(() => {
+    try { const v = JSON.parse(localStorage.getItem('rpt_folder') ?? '[]'); return Array.isArray(v) ? v.filter(f => f && f.id && (f.mode === 'detail' || f.mode === 'summary')) : [] } catch { return [] }
   })
-  const setPrintStationIds = v => {
-    const next = typeof v === 'function' ? v(printStationIds) : v
-    localStorage.setItem('rpt_station_ids', JSON.stringify(next))
-    _setPrintStationIds(next)
-  }
-  const [showStationPicker, setShowStationPicker] = useState(false)
-
-  const [printAgentIds, _setPrintAgentIds] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('rpt_agent_ids') ?? '[]') } catch { return [] }
-  })
-  const setPrintAgentIds = v => {
-    const next = typeof v === 'function' ? v(printAgentIds) : v
-    localStorage.setItem('rpt_agent_ids', JSON.stringify(next))
-    _setPrintAgentIds(next)
-  }
-  const [showAgentPicker, setShowAgentPicker] = useState(false)
+  const setFolder = v => { localStorage.setItem('rpt_folder', JSON.stringify(v)); _setFolder(v) }
+  const [folderOverview, _setFolderOverview] = useState(() => localStorage.getItem('rpt_folder_overview') !== '0')
+  const setFolderOverview = v => { localStorage.setItem('rpt_folder_overview', v ? '1' : '0'); _setFolderOverview(v) }
+  const [showFolder, setShowFolder] = useState(false)
+  // فلتر قائمة المحطات الرئيسية: فقط المحطات التي فيها يوزرات
+  const [onlyStaffed, _setOnlyStaffed] = useState(() => localStorage.getItem('rpt_only_staffed') === '1')
+  const setOnlyStaffed = v => { localStorage.setItem('rpt_only_staffed', v ? '1' : '0'); _setOnlyStaffed(v) }
   // عدد الموظفين النشطين لكل محطة (لقوائم الطباعة المتعددة)
   const [staffByStation, setStaffByStation] = useState({})
   useEffect(() => {
@@ -1178,12 +1096,12 @@ export default function ReportsPage() {
     w.document.close()
   }
 
-  function printStationsReport(idsOverride) {
-    if (!data) return
-    const sourceIds = idsOverride ?? printStationIds
-    const cleanIds = sourceIds.filter(id => id !== '__none__')
-    const targetIds = cleanIds.length ? cleanIds : stations.map(s => s.id)
-    const targetStations = stations.filter(s => targetIds.includes(s.id))
+  // plan: [{ id, mode: 'detail' | 'summary' }] بترتيب المجلد — detail = وصول ومغادرة بالجداول، summary = أرقام ونسب فقط
+  function printStationsReport(plan, withOverview = true) {
+    if (!data || !plan?.length) return
+    const modeById = Object.fromEntries(plan.map(f => [f.id, f.mode]))
+    const targetIds = plan.map(f => f.id)
+    const targetStations = plan.map(f => stations.find(s => s.id === f.id)).filter(Boolean)
 
     const calcRate = (list) => {
       const withSched = list.filter(m => m.sched && m.sched !== '—' && m.actual && m.actual !== '—' && !m.unentered)
@@ -1279,12 +1197,12 @@ export default function ReportsPage() {
 
       return `
         <div style="page-break-after:${idx < targetStations.length - 1 ? 'always' : 'avoid'}">
-          ${brandHeader({ title: isAr ? 'تقرير الوصول والمغادرة' : 'Arrivals & Departures', subtitle: escapeHtml(stnName), lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
+          ${brandHeader({ title: modeById[stn.id] === 'summary' ? (isAr ? 'ملخص الوصول والمغادرة' : 'Arrivals & Departures summary') : (isAr ? 'تقرير الوصول والمغادرة' : 'Arrivals & Departures'), subtitle: escapeHtml(stnName), lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
           <div style="padding:0 4px">
             ${kpiBar}
             ${perf}
-            ${moveTable(deps, '#1C2B36', isAr ? 'رحلات المغادرة' : 'Departures', '↗')}
-            ${moveTable(arrs, '#23695A', isAr ? 'رحلات الوصول' : 'Arrivals', '↙')}
+            ${modeById[stn.id] === 'summary' ? '' : `${moveTable(deps, '#1C2B36', isAr ? 'رحلات المغادرة' : 'Departures', '↗')}
+            ${moveTable(arrs, '#23695A', isAr ? 'رحلات الوصول' : 'Arrivals', '↙')}`}
           </div>
           <div style="margin-top:12px;padding:8px 14px;border-top:2px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b">
             <span>${escapeHtml(profile?.full_name_ar) ?? '—'} · ${new Date().toLocaleString('en-GB')}</span>
@@ -1296,7 +1214,7 @@ export default function ReportsPage() {
 
     // عند تحديد أكثر من محطة: صفحة ملخص أولاً ثم تفاصيل كل محطة. المغادرة والوصول منفصلان دائماً (لا يُجمعان أبداً)
     let summaryPage = ''
-    if (targetStations.length > 1) {
+    if (targetStations.length > 1 && withOverview) {
       const sum = (l, f) => l.reduce((x, m) => x + (m[f] || 0), 0)
       const rowsS = targetStations.map(stn => {
         const mv = data.movements.filter(m => m.station_id === stn.id)
@@ -1482,6 +1400,9 @@ export default function ReportsPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto" dir={isAr ? 'rtl' : 'ltr'}>
+      {showFolder && <StationFolderModal isAr={isAr} stations={stations} staff={staffByStation} folder={folder} setFolder={setFolder}
+        overview={folderOverview} setOverview={setFolderOverview} onClose={() => setShowFolder(false)}
+        onPrint={(plan, ov) => { setShowFolder(false); printStationsReport(plan, ov) }} />}
       {/* ═ الرأس ═ */}
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
@@ -1556,8 +1477,12 @@ export default function ReportsPage() {
               className="border rounded-lg px-3 py-2 text-sm bg-white w-full"
               options={[
                 { value: 'all', label: seesAll ? (isAr ? 'جميع المحطات' : 'All stations') : (isAr ? 'كل محطاتي' : 'My stations') },
-                ...stations.map(s => ({ value: s.id, label: isAr ? s.name_ar : s.name_en })),
+                ...stations.filter(s => !onlyStaffed || (staffByStation[s.id] || 0) > 0 || s.id === station).map(s => ({ value: s.id, label: `${isAr ? s.name_ar : s.name_en}${(staffByStation[s.id] || 0) > 0 ? '' : (isAr ? ' — بلا يوزر' : ' — no users')}` })),
               ]} />
+            <label className="rp-staffed">
+              <input type="checkbox" checked={onlyStaffed} onChange={e => setOnlyStaffed(e.target.checked)} />
+              <span>{isAr ? 'فقط المحطات اللي فيها يوزر' : 'Only stations with users'}</span>
+            </label>
           </div>
         )}
         </div>
@@ -1598,18 +1523,15 @@ export default function ReportsPage() {
             </div>
         </div>
         {data && stations.length > 1 && (
-          <div className="rp-actions col-span-2 lg:col-span-4 flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
-            <span className="rp-label me-1">{isAr ? 'طباعة متعددة' : 'Bulk print'}</span>
-          <div className="flex flex-wrap gap-2 items-start">
-            <StationPrintPicker isAr={isAr} label={isAr ? 'طباعة تقرير المحطات' : 'Print Stations Report'} accent="teal"
-              list={stations} staff={staffByStation} selected={printStationIds} setSelected={setPrintStationIds}
-              open={showStationPicker} setOpen={v => { setShowStationPicker(v); if (v) setShowAgentPicker(false) }}
-              onPrint={ids => printStationsReport(ids)} />
-            <StationPrintPicker isAr={isAr} label={isAr ? 'تقرير محطات الوكلاء' : 'Agent Stations Report'} accent="indigo"
-              list={stations.some(s => s.is_agent) ? stations.filter(s => s.is_agent) : stations} staff={staffByStation} selected={printAgentIds} setSelected={setPrintAgentIds}
-              open={showAgentPicker} setOpen={v => { setShowAgentPicker(v); if (v) setShowStationPicker(false) }}
-              onPrint={ids => printStationsReport(ids)} />
-          </div>
+          <div className="rp-actions col-span-2 lg:col-span-4 flex flex-wrap items-center gap-3 pt-3 border-t border-gray-100">
+            <button type="button" onClick={() => setShowFolder(true)} className="rp-folder-btn">
+              <span className="rp-folder-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></span>
+              <span className="rp-folder-t">
+                <b>{isAr ? 'مجلد طباعة المحطات' : 'Station print folder'}</b>
+                <small>{folder.length ? (isAr ? `${folder.length} ملف جاهز — لكل محطة نوعها` : `${folder.length} files ready`) : (isAr ? 'اختر محطات وحدّد ما تريد من كل واحدة' : 'Pick stations and choose what you want from each')}</small>
+              </span>
+              {folder.length > 0 && <span className="rp-folder-n">{folder.length}</span>}
+            </button>
           </div>
         )}
       </div>
