@@ -713,6 +713,12 @@ export default function TransportationPage() {
   const [schedStatus, setSchedStatus] = useState('all')   // all | departed | scheduled | late
   const [schedShift, setSchedShift] = useState('all')    // all | A | B | C | D
   const [schedQ, setSchedQ] = useState('')
+  const [schedDir, setSchedDir] = useState('all')   // all | arrival | departure
+  const [schedStations, setSchedStations] = useState(() => { try { return JSON.parse(localStorage.getItem('nwbus_sched_stations') || '[]') } catch { return [] } })   // فارغ = كل المحطات
+  const [stPanel, setStPanel] = useState(false)
+  const [stQ, setStQ] = useState('')
+  const [userCounts, setUserCounts] = useState({})   // عدد مستخدمي كل محطة
+  const scheduleDateRef = useRef('')   // التحميل الأول لليوم فقط يُظهر «جارٍ التحميل»؛ التحديثات بعده صامتة (بدون وميض)
   const [boardMode, setBoardMode] = useState('now')   // now = الأحدث/القادمة فوق · shift = حسب الوردية
   const [showPast, setShowPast] = useState(false)
   const [scheduleLoading, setScheduleLoading] = useState(false)
@@ -981,12 +987,12 @@ export default function TransportationPage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const fetchSchedule = useCallback(async () => {
-    setScheduleLoading(true)
+    if (scheduleDateRef.current !== date) setScheduleLoading(true)
 
     // الخادم يقصّ كل استجابة عند 1000 صف وهذا الجدول يضم رحلات كل المحطات — نقرأ على دفعات حتى نكمل
     const pageAll = async make => {
       const out = []
-      for (let f = 0; f < 20000; f += 1000) {
+      for (let f = 0; f < 80000; f += 1000) {
         const { data, error } = await make().range(f, f + 999)
         if (error) break
         out.push(...(data ?? []))
@@ -994,63 +1000,83 @@ export default function TransportationPage() {
       }
       return out
     }
-    const [allTrips, allRecords] = await Promise.all([
+    const [stRows, stopRows, recRows] = await Promise.all([
       pageAll(() => supabase.from('station_trips')
         .select(`
-          station_id,
-          departure_time,
-          dep_enabled,
+          station_id, departure_time, arrival_time, dep_enabled, arr_enabled,
+          station:station_id(id, name_ar, name_en, city_group),
           trip:trip_schedule_id(
             id, trip_number, trip_name, scheduled_departure, scheduled_arrival,
-            is_active, is_rf, rf_date, start_date, end_date, days_of_week,
-            from_station:from_station_id(id, name_ar, name_en),
-            to_station:to_station_id(id, name_ar, name_en)
+            is_active, is_rf, rf_date, start_date, end_date, days_of_week, from_station_id, to_station_id,
+            from_station:from_station_id(id, name_ar, name_en, city_group),
+            to_station:to_station_id(id, name_ar, name_en, city_group)
           )
         `)
-        .eq('dep_enabled', true)
         .order('trip_schedule_id').order('station_id')),
-
+      pageAll(() => supabase.from('trip_schedule_stops')
+        .select('trip_schedule_id, station_id, arrival_time, departure_time')
+        .order('trip_schedule_id').order('station_id')),
       pageAll(() => supabase.from('trip_records')
-        .select('trip_schedule_id, actual_departure, is_cancelled, station_id, bus_number, passenger_count, missed_count')
+        .select('trip_schedule_id, station_id, is_arrival, actual_departure, actual_arrival, is_cancelled, bus_number, passenger_count, missed_count')
         .eq('record_date', date)
-        .eq('is_arrival', false)
         .order('id')),
     ])
 
+    const stopMap = {}
+    stopRows.forEach(x => { stopMap[`${x.trip_schedule_id}|${x.station_id}`] = x })
     const recMap = {}
-    ;(allRecords ?? []).forEach(r => { recMap[r.trip_schedule_id] = r })
+    recRows.forEach(r => { recMap[`${r.trip_schedule_id}|${r.station_id}|${r.is_arrival ? 'arrival' : 'departure'}`] = r })
+    const s5 = t => (t ? String(t).slice(0, 5) : '')
+    const groupOf = st => {
+      if (!st) return null
+      if (st.city_group) return st.city_group
+      const w = (st.name_en || '').split(/[\s-]+/)[0].toLowerCase()
+      return w || null
+    }
 
-    const seen = new Set()
+    // حركات كل محطة (وصول ومغادرة) بنفس شروط شاشة المحطة، تُبنى مرة واحدة ثم نختار المحطات محلياً (بلا إعادة جلب)
     const entries = []
-    ;(allTrips ?? []).forEach(st => {
-      const tr = st.trip
-      if (!tr || !tr.id) return
-      // نفس شروط عرض رحلات المحطة: الرحلة الإضافية (RF) تظهر في تاريخها فقط، والمتوقفة/المنتهية/خارج أيامها لا تظهر بالجدول الشامل
-      if (tr.is_active === false) return
+    stRows.forEach(r => {
+      const tr = r.trip
+      if (!tr || !tr.id || !tr.is_active) return
       if (tr.is_rf && tr.rf_date !== date) return
       if (tr.start_date && date < tr.start_date) return
       if (tr.end_date && date > tr.end_date) return
       if (tr.days_of_week?.length && !tr.days_of_week.includes(new Date(date + 'T00:00:00').getDay())) return
-      if (seen.has(tr.id)) return
-      seen.add(tr.id)
-      const rec = recMap[tr.id]
-      const schedTime = (st.departure_time || tr.scheduled_departure || '').slice(0, 5)
-      entries.push({
-        id: tr.id,
-        trip_number: tr.trip_number,
-        trip_name: tr.trip_name,
-        from_station: tr.from_station,
-        to_station: tr.to_station,
-        schedTime,
-        rec,
-        status: rec?.actual_departure ? 'departed' : 'scheduled',
-        actual_departure: rec?.actual_departure ? new Date(rec.actual_departure).toISOString().slice(11, 16) : null,
-        bus_number: rec?.bus_number,
-        passenger_count: rec?.passenger_count,
-        missed: rec?.missed_count,
-      })
+      const st = r.station
+      if (!st) return
+      const isDest = tr.to_station_id === r.station_id, isOrigin = tr.from_station_id === r.station_id
+      const stop = stopMap[`${tr.id}|${r.station_id}`]
+      const arrOn = r.arrival_time !== undefined && r.arr_enabled !== false
+      const depOn = r.dep_enabled !== false
+      const arrT = r.arrival_time || '', depT = r.departure_time || ''
+      const curG = groupOf(st), fromG = groupOf(tr.from_station), toG = groupOf(tr.to_station)
+      const add = (role, time) => {
+        const on = role === 'arrival' ? (r.arr_enabled !== false) : depOn
+        const hhmm = s5(time)
+        if (!on || !hhmm) return
+        const rec = recMap[`${tr.id}|${r.station_id}|${role}`]
+        const stamp = role === 'arrival' ? rec?.actual_arrival : rec?.actual_departure
+        entries.push({
+          key: `${tr.id}|${r.station_id}|${role}`, id: tr.id, role, station: st,
+          trip_number: tr.trip_number, trip_name: tr.trip_name, from_station: tr.from_station, to_station: tr.to_station,
+          schedTime: hhmm, rec, status: stamp ? 'departed' : 'scheduled',
+          actual_departure: stamp ? new Date(stamp).toISOString().slice(11, 16) : null,
+          bus_number: rec?.bus_number, passenger_count: rec?.passenger_count, missed: rec?.missed_count,
+        })
+      }
+      if (isDest) add('arrival', arrT || tr.scheduled_arrival)
+      else if (isOrigin) add('departure', depT || tr.scheduled_departure)
+      else if (stop) {
+        if (!(curG && fromG && curG === fromG)) add('arrival', arrT || stop.arrival_time)
+        if (!(curG && toG && curG === toG)) add('departure', depT || stop.departure_time)
+      } else {
+        if (!(curG && fromG && curG === fromG)) add('arrival', arrT)
+        if (!(curG && toG && curG === toG)) add('departure', depT)
+      }
     })
-    entries.sort((a, b) => (a.schedTime || '').localeCompare(b.schedTime || ''))
+    entries.sort((a, b) => (a.schedTime || '').localeCompare(b.schedTime || '') || (a.role === b.role ? 0 : a.role === 'arrival' ? -1 : 1))
+    scheduleDateRef.current = date
     setScheduleData(entries)
     setScheduleLoading(false)
   }, [date])
@@ -1070,11 +1096,33 @@ export default function TransportationPage() {
   // Real-time sync للجدول الشامل
   useEffect(() => {
     if (viewMode !== 'schedule') return
+    let t = null
     const ch = supabase.channel('global_schedule_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_records' }, () => fetchSchedule())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_records' }, () => { clearTimeout(t); t = setTimeout(fetchSchedule, 700) })   // تجميع التحديثات المتقاربة بلا وميض
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { clearTimeout(t); supabase.removeChannel(ch) }
   }, [viewMode, fetchSchedule])
+
+  // عدد مستخدمي كل محطة (لاختيار «المحطات التي فيها مستخدمون» بالجدول الشامل)
+  useEffect(() => {
+    if (viewMode !== 'schedule') return
+    let off = false
+    ;(async () => {
+      const out = []
+      for (let f = 0; f < 20000; f += 1000) {
+        const { data, error } = await supabase.from('users').select('station_id').eq('is_active', true).not('station_id', 'is', null)
+          .not('role', 'in', '(general_admin,stations_executive_director,assistant_stations_executive_director)').order('id').range(f, f + 999)
+        if (error) break
+        out.push(...(data ?? []))
+        if ((data ?? []).length < 1000) break
+      }
+      if (off) return
+      const m = {}
+      out.forEach(u => { m[u.station_id] = (m[u.station_id] || 0) + 1 })
+      setUserCounts(m)
+    })()
+    return () => { off = true }
+  }, [viewMode])
 
   // عند بداية يوم جديد: تحديث ناعم للبيانات بدون إعادة تحميل الصفحة
   // (window.location.reload كان يغلق المودال المفتوح عند منتصف الليل أو العودة من الخلفية)
@@ -1410,7 +1458,8 @@ export default function TransportationPage() {
     const nowD = new Date(), nowMin = nowD.getHours() * 60 + nowD.getMinutes()
     const toMin = t => (t ? Number(String(t).slice(0, 2)) * 60 + Number(String(t).slice(3, 5)) : null)
     const en = st => st?.name_en || st?.name_ar || '—'
-    const rows = scheduleData.map(t => {
+    const selSet = new Set(schedStations)
+    const allRows = scheduleData.map(t => {
       const sm = toMin(t.schedTime), am = toMin(t.actual_departure)
       let dly = null
       if (sm != null && am != null) { dly = am - sm; if (dly < -720) dly += 1440; else if (dly > 720) dly -= 1440 }
@@ -1418,8 +1467,10 @@ export default function TransportationPage() {
       const overdue = isToday && !departed && sm != null && sm < nowMin - 5
       return { ...t, sm: sm ?? 0, dly, departed, overdue, late: departed && dly != null && dly > 5 }
     })
+    const rows = selSet.size ? allRows.filter(r => selSet.has(r.station?.id)) : allRows
     const total = rows.length
     const departedN = rows.filter(r => r.departed).length
+    const arrN = rows.filter(r => r.role === 'arrival').length, depN = rows.length - arrN
     const lateN = rows.filter(r => r.late).length
     const overdueN = rows.filter(r => r.overdue).length
     const paxSum = rows.reduce((a, r) => a + (Number(r.passenger_count) || 0), 0)
@@ -1429,7 +1480,7 @@ export default function TransportationPage() {
     const pct = total ? Math.round((departedN / total) * 100) : 0
     // الجدول الشامل لكل المحطات: وردية الرحلة حسب محطة انطلاقها (3 أو 4 ورديات لكل محطة)
     const stById = Object.fromEntries(stations.map(s => [s.id, s]))
-    const rowShift = r => { const sh = shiftsOfStation(stById[r.from_station?.id] ?? r.from_station); return sh[shiftIdx(r.sm, sh)] }
+    const rowShift = r => { const sh = shiftsOfStation(stById[r.station?.id] ?? r.station); return sh[shiftIdx(r.sm, sh)] }
     const shiftOf = r => rowShift(r).k
     const shKeys = ['A', 'B', 'C', 'D'].filter(k => rows.some(r => shiftOf(r) === k))
     const rangeOf = k => { const set = new Set(rows.filter(r => shiftOf(r) === k).map(r => rowShift(r).range)); return set.size === 1 ? [...set][0] : '' }
@@ -1439,8 +1490,9 @@ export default function TransportationPage() {
       if (schedStatus === 'departed' && !r.departed) return false
       if (schedStatus === 'scheduled' && r.departed) return false
       if (schedStatus === 'late' && !(r.late || r.overdue)) return false
+      if (schedDir !== 'all' && r.role !== schedDir) return false
       if (schedShift !== 'all' && shiftOf(r) !== schedShift) return false
-      if (q && !`${r.trip_number} ${r.trip_name || ''} ${r.from_station?.name_ar || ''} ${r.from_station?.name_en || ''} ${r.to_station?.name_ar || ''} ${r.to_station?.name_en || ''} ${r.bus_number || ''}`.toLowerCase().includes(q)) return false
+      if (q && !`${r.trip_number} ${r.trip_name || ''} ${r.station?.name_ar || ''} ${r.station?.name_en || ''} ${r.from_station?.name_ar || ''} ${r.from_station?.name_en || ''} ${r.to_station?.name_ar || ''} ${r.to_station?.name_en || ''} ${r.bus_number || ''}`.toLowerCase().includes(q)) return false
       return true
     }).sort((a, b) => a.sm - b.sm)
     const hours = Array.from({ length: 24 }, (_, h) => ({ dep: rows.filter(r => r.departed && Math.floor(r.sm / 60) === h).length, sch: rows.filter(r => !r.departed && Math.floor(r.sm / 60) === h).length }))
@@ -1450,10 +1502,17 @@ export default function TransportationPage() {
     const chipS = (bg, c) => ({ background: bg, color: c, borderRadius: 99, padding: '2px 10px', fontSize: '0.66rem', fontWeight: 800, whiteSpace: 'nowrap' })
     const pill = on => ({ padding: '6px 14px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--accent)' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' })
     const statusChip = r => r.departed
-      ? <span style={chipS(r.late ? 'var(--danger-bg)' : 'var(--success-bg)', r.late ? 'var(--danger)' : 'var(--success)')}>{isAr ? 'غادرت' : 'Departed'}{r.dly != null ? ` · ${r.dly > 0 ? '+' : ''}${r.dly}${isAr ? 'د' : 'm'}` : ''}</span>
+      ? <span style={chipS(r.late ? 'var(--danger-bg)' : 'var(--success-bg)', r.late ? 'var(--danger)' : 'var(--success)')}>{r.role === 'arrival' ? (isAr ? 'وصلت' : 'Arrived') : (isAr ? 'غادرت' : 'Departed')}{r.dly != null ? ` · ${r.dly > 0 ? '+' : ''}${r.dly}${isAr ? 'د' : 'm'}` : ''}</span>
       : r.overdue
         ? <span style={{ ...chipS('var(--warning-bg)', 'var(--warning)'), display: 'inline-flex', alignItems: 'center', gap: 5 }}><i className="tp-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warning)' }} />{isAr ? 'بانتظار التسجيل' : 'Awaiting entry'}</span>
         : <span style={chipS('var(--surface-2)', 'var(--text-3)')}>{isAr ? 'مجدولة' : 'Scheduled'}</span>
+    const setSel = arr => { setSchedStations(arr); try { localStorage.setItem('nwbus_sched_stations', JSON.stringify(arr)) } catch { /* بدون تخزين */ } }
+    const stationTag = r => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
+        <span style={chipS(r.role === 'arrival' ? 'var(--info-bg)' : 'var(--success-bg)', r.role === 'arrival' ? 'var(--info)' : 'var(--success)')}>{r.role === 'arrival' ? (isAr ? 'وصول' : 'Arrival') : (isAr ? 'مغادرة' : 'Departure')}</span>
+        <span dir="auto" style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)' }}>{en(r.station)}</span>
+      </div>
+    )
     const track = (from, to) => (
       <div dir="ltr" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(36px, 70px) minmax(0,1fr)', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)', textAlign: 'end' }}>{en(from)}</span>
@@ -1476,9 +1535,10 @@ export default function TransportationPage() {
     )
     const edgeOf = r => (r.late ? 'var(--danger)' : r.departed ? 'var(--success)' : r.overdue ? 'var(--warning)' : 'var(--border-2)')
     const row = r => (
-      <div key={r.id} className="tp-row tp-row-sched" style={{ alignItems: 'center', padding: '12px 18px', background: 'var(--card)', border: '1px solid var(--border-2)', borderInlineStart: `5px solid ${edgeOf(r)}`, borderRadius: 14 }}>
+      <div key={r.key} className="tp-row tp-row-sched" style={{ alignItems: 'center', padding: '12px 18px', background: 'var(--card)', border: '1px solid var(--border-2)', borderInlineStart: `5px solid ${edgeOf(r)}`, borderRadius: 14 }}>
         <div className="tp-time" style={{ textAlign: 'center', fontFamily: MONO, fontWeight: 800, fontSize: '1.45rem', color: 'var(--text-1)', lineHeight: 1.1 }}>{r.schedTime}</div>
         <div className="tp-trip" style={{ minWidth: 0 }}>
+          {stationTag(r)}
           <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.02rem', color: 'var(--text-1)' }}>{r.trip_number}</span>
           {r.trip_name && <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 2 }}>{r.trip_name}</div>}
         </div>
@@ -1487,9 +1547,10 @@ export default function TransportationPage() {
       </div>
     )
     const card = r => (
-      <div key={r.id} dir="ltr" style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${edgeOf(r)}`, borderRadius: 12, background: 'var(--card)', padding: '10px 12px' }}>
+      <div key={r.key} dir="ltr" style={{ border: '1px solid var(--border-2)', borderInlineStart: `4px solid ${edgeOf(r)}`, borderRadius: 12, background: 'var(--card)', padding: '10px 12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <div>
+            {stationTag(r)}
             <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{r.trip_number}</span>
             {r.trip_name && <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{r.trip_name}</div>}
             <div style={{ marginTop: 5 }}>{statusChip(r)}</div>
@@ -1519,23 +1580,23 @@ export default function TransportationPage() {
             </svg>
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} dir="ltr">
               <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.6rem', lineHeight: 1 }}>{pct}%</span>
-              <span style={{ fontSize: '0.6rem', opacity: 0.75, fontWeight: 700, marginTop: 3 }}>{isAr ? 'غادرت' : 'departed'}</span>
+              <span style={{ fontSize: '0.6rem', opacity: 0.75, fontWeight: 700, marginTop: 3 }}>{isAr ? 'تمّت' : 'done'}</span>
             </div>
           </div>
           <div className="tp-head">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 10px', flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{isAr ? 'الجدول الشامل — كل المحطات' : 'Global schedule — all stations'}</span>
+              <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{isAr ? `الجدول الشامل — ${selSet.size ? `${selSet.size} ${selSet.size === 1 ? 'محطة' : 'محطات'}` : 'كل المحطات'}` : `Global schedule — ${selSet.size ? selSet.size + ' station(s)' : 'all stations'}`}</span>
               <span style={{ fontSize: '0.72rem', opacity: 0.75 }} dir="ltr">{date}</span>
             </div>
           </div>
           <div className="tp-kpis">
             {[
-              [isAr ? 'إجمالي الرحلات' : 'Trips', total, '#fff'],
-              [isAr ? 'غادرت' : 'Departed', departedN, '#34D399'],
-              [isAr ? 'مجدولة' : 'Scheduled', total - departedN, '#fff'],
+              [isAr ? 'إجمالي الحركات' : 'Movements', total, '#fff'],
+              [isAr ? 'وصول' : 'Arrivals', arrN, '#fff'],
+              [isAr ? 'مغادرة' : 'Departures', depN, '#fff'],
+              [isAr ? 'تمّت' : 'Done', departedN, '#34D399'],
               [isAr ? 'متأخرة / بانتظار' : 'Late / awaiting', `${lateN} / ${overdueN}`, lateN + overdueN > 0 ? '#F87171' : '#fff'],
               [isAr ? 'التزام بالموعد' : 'On-time', punct != null ? `${punct}%` : '—', punct != null && punct >= 85 ? '#34D399' : punct != null && punct < 70 ? '#F87171' : '#fff'],
-              [isAr ? 'ركاب / متخلفون' : 'Pax / missed', `${paxSum} / ${missSum}`, '#fff'],
             ].map(([l, v, c]) => (
               <div key={l} style={{ background: 'rgba(255,255,255,0.10)', borderRadius: 12, padding: '8px 10px', textAlign: 'center' }}>
                 <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.15rem', lineHeight: 1.2, color: c }} dir="ltr">{v}</div>
@@ -1570,18 +1631,55 @@ export default function TransportationPage() {
             {[['all', isAr ? 'الكل' : 'All'], ['departed', isAr ? 'غادرت' : 'Departed'], ['scheduled', isAr ? 'مجدولة' : 'Scheduled'], ['late', isAr ? 'متأخرة / بانتظار' : 'Late / awaiting']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedStatus === k), flexShrink: 0 }} onClick={() => setSchedStatus(k)}>{l}</button>)}
             <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
             {[['all', isAr ? 'كل الورديات' : 'All shifts'], ...SH.map(x => [x[0], isAr ? x[1] : x[2]])].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedShift === k), flexShrink: 0 }} onClick={() => setSchedShift(k)}>{l}</button>)}
+            <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
+            {[['all', isAr ? 'وصول ومغادرة' : 'Both'], ['arrival', isAr ? 'وصول' : 'Arrivals'], ['departure', isAr ? 'مغادرة' : 'Departures']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedDir === k), flexShrink: 0 }} onClick={() => setSchedDir(k)}>{l}</button>)}
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button type="button" onClick={() => setStPanel(o => !o)} aria-expanded={stPanel} style={{ ...pill(stPanel || selSet.size > 0), flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {isAr ? 'المحطات' : 'Stations'} <span style={{ fontFamily: MONO }}>{selSet.size ? selSet.size : (isAr ? 'الكل' : 'All')}</span>
+            </button>
             <input value={schedQ} onChange={e => setSchedQ(e.target.value)} placeholder={isAr ? 'بحث: رقم الرحلة / المحطة / الحافلة' : 'Search trip / station / bus'} aria-label={isAr ? 'بحث بالجدول' : 'Search schedule'}
               style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-2)', borderRadius: 10, padding: '9px 12px', fontSize: '0.82rem', fontFamily: 'inherit', background: 'var(--card)' }} />
             <span style={{ fontFamily: MONO, fontSize: '0.76rem', color: 'var(--text-3)', flexShrink: 0 }} dir="ltr">{list.length} / {total}</span>
           </div>
+          {stPanel && (() => {
+            const term = stQ.trim().toLowerCase()
+            const withUsers = stations.filter(x => (userCounts[x.id] || 0) > 0)
+            const listSt = stations.filter(x => !term || `${x.name_ar || ''} ${x.name_en || ''}`.toLowerCase().includes(term)).sort((a, b) => (en(a)).localeCompare(en(b)))
+            const quick = (label, onClick, on) => <button type="button" onClick={onClick} style={{ ...pill(on), flexShrink: 0 }}>{label}</button>
+            return (
+              <div style={{ border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {quick(isAr ? 'كل المحطات' : 'All stations', () => setSel([]), selSet.size === 0)}
+                  {quick(`${isAr ? 'المحطات التي فيها مستخدمون' : 'Stations with users'} (${withUsers.length})`, () => setSel(withUsers.map(x => x.id)), selSet.size > 0 && selSet.size === withUsers.length && withUsers.every(x => selSet.has(x.id)))}
+                  {selSet.size > 0 && quick(isAr ? 'مسح الاختيار' : 'Clear', () => setSel([]), false)}
+                  <input value={stQ} onChange={e => setStQ(e.target.value)} placeholder={isAr ? 'ابحث عن محطة...' : 'Find a station...'} aria-label={isAr ? 'بحث عن محطة' : 'Find a station'}
+                    style={{ flex: 1, minWidth: 160, border: '1px solid var(--border-2)', borderRadius: 10, padding: '7px 11px', fontSize: '0.8rem', fontFamily: 'inherit', background: 'var(--card)' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+                  {listSt.map(x => {
+                    const on = selSet.has(x.id), uc = userCounts[x.id] || 0
+                    return (
+                      <button key={x.id} type="button" onClick={() => setSel(on ? schedStations.filter(i => i !== x.id) : [...schedStations, x.id])} aria-pressed={on}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 10, border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-1)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
+                        <span aria-hidden="true" style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--accent)' : 'transparent', color: '#fff', fontSize: 11, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{on ? '✓' : ''}</span>
+                        <span dir="auto" style={{ flex: 1, minWidth: 0, fontSize: '0.78rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{en(x)}</span>
+                        <span title={isAr ? 'عدد المستخدمين' : 'Users'} style={{ ...chipS(uc ? 'var(--success-bg)' : 'var(--surface-2)', uc ? 'var(--success)' : 'var(--text-3)'), fontFamily: MONO }}>{uc}</span>
+                      </button>
+                    )
+                  })}
+                  {listSt.length === 0 && <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', padding: 8 }}>{isAr ? 'لا محطات مطابقة' : 'No matching stations'}</span>}
+                </div>
+              </div>
+            )
+          })()}
         </div>
 
         {next && schedStatus === 'all' && schedShift === 'all' && !q && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--info-bg)', border: '1px solid var(--border-2)', borderRadius: 14, padding: '10px 16px', flexWrap: 'wrap' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.72rem', fontWeight: 800, color: 'var(--info)' }}><i className="tp-pulse" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)' }} />{isAr ? 'الرحلة القادمة' : 'Next up'}</span>
             <span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }}>{next.trip_number}</span>
+            <span style={chipS('var(--card)', 'var(--text-2)')}>{next.role === 'arrival' ? (isAr ? 'وصول' : 'Arrival') : (isAr ? 'مغادرة' : 'Departure')} · {en(next.station)}</span>
             <span dir="ltr" style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-2)' }}>{en(next.from_station)} → {en(next.to_station)}</span>
             <span style={{ marginInlineStart: 'auto', fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }} dir="ltr">{next.schedTime}</span>
             <span style={chipS('var(--card)', 'var(--text-1)')}>{nextIn <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${nextIn >= 60 ? `${Math.floor(nextIn / 60)}س ${nextIn % 60}د` : `${nextIn} د`}` : `in ${nextIn} min`)}</span>
