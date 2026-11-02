@@ -425,6 +425,8 @@ function RegisterItemTab({ profile, isAr, stations }) {
 
     const { error: err } = await supabase.from('lost_found_items').insert({
       ...form,
+      from_station_id: form.from_station_id || null,   // اختياريان: الفارغ يُرسل null (النص الفارغ يُرفض في أعمدة uuid)
+      to_station_id:   form.to_station_id   || null,
       found_location:  effectiveStation,
       station_id:      effectiveStationId || null,
       status:          'unclaimed',
