@@ -120,6 +120,14 @@ function SectionCard({ n, title, hint, children, tone = 'bg-white border-gray-20
   )
 }
 
+// اسم ملف اليومية: «المحطة - الموظف - التاريخ» (المحطة مختصرة بحذف كلمات عامة مثل «محطة» و«باص»)
+function saleFileName(sale) {
+  const raw = sale?.station?.name_ar ?? sale?.station?.name_en ?? ''
+  const st = raw.replace(/محطة|محطات|باصات|باص|نورث\s*وست|\bbus\b|\bstation\b|\bnorth\s*west\b/gi, ' ').replace(/\s+/g, ' ').trim() || raw
+  const emp = sale?.employee_name || sale?.created_by_name || ''
+  return [st, emp, sale?.sale_date].filter(Boolean).join(' - ').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim() || 'يومية'
+}
+
 /* ─── طباعة سجل إيراد واحد (كشف الإيرادات اليومية) — تُستدعى من النافذة ومن زر الطباعة بصف السجل ─── */
 function buildSaleRecordHtml({ sale, isAr, profile, docUrl, docPages }) {
     const dir = isAr ? 'rtl' : 'ltr'
@@ -143,7 +151,7 @@ function buildSaleRecordHtml({ sale, isAr, profile, docUrl, docPages }) {
       `${isAr ? 'الموظف' : 'Employee'}: ${employeeName}${jobNumber !== '—' ? ` (#${jobNumber})` : ''}`,
       `${isAr ? 'المحصَّل' : 'Collected'}: ${fmt(totalActualVal)} ${isAr ? 'ر.س' : 'SAR'} · ${isAr ? 'المبيعات' : 'Sales'}: ${fmt(sale?.total_expected)} · ${isAr ? 'الفرق' : 'Diff'}: ${diff > 0 ? '+' : ''}${fmt(diff)}`,
     ].join('\n')
-    const docTitle = `إيرادات_${stationName}_${sale?.sale_date ?? ''}_${shiftLabel}`.replace(/\s+/g, '_')
+    const docTitle = saleFileName(sale)
     const html = `<!DOCTYPE html><html dir="${dir}"><head>
       <meta charset="UTF-8"/>
       <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -379,7 +387,7 @@ export async function saveSaleRecordPdf({ sale, isAr, profile }) {
       printedBy: T('طُبع بواسطة', 'Printed by'), date: T('التاريخ', 'Date'), time: T('الوقت', 'Time'), attach: T('مرفق', 'Attachment'), balanceSheet: T('ورقة الموازنة', 'Balance sheet'),
     },
   }
-  const fileName = `يومية_${stationName}_${sale?.sale_date ?? ''}_${shiftLabel}`.replace(/\s+/g, '_').replace(/[\\/:*?"<>|]/g, '-')
+  const fileName = saleFileName(sale)
   await saveSalePdf({ data, pages: doc?.pages ?? [], fileName, isAr })
 }
 
