@@ -25,12 +25,15 @@ export const TOOLBAR_CSS = `
   .toolbar .bwg { display: inline-flex; border: 1px solid rgba(255,255,255,.35); border-radius: 8px; overflow: hidden; }
   .toolbar .bwg button { background: transparent; color: #fff; border-radius: 0; padding: 8px 14px; font-size: 13px; font-weight: 700; }
   .toolbar .bwg button.on { background: #fff; color: #1C2B36; }
+  .toolbar .apx { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; cursor: pointer; padding: 0 4px; }
+  .toolbar .apx input { width: 18px; height: 18px; accent-color: #EE712D; cursor: pointer; }
+  body.noappx .appx { display: none !important; }
   @media print { .toolbar { display: none !important; } }
 `
 
 // شريط المعاينة: زر طباعة/حفظ PDF + زر مشاركة (يظهر على الأجهزة التي تدعم المشاركة، مثل الجوال)
-export function previewToolbar({ label = 'معاينة المستند', shareTitle = '', shareText = '' } = {}) {
-  return `<div class="toolbar" data-t="${esc(shareTitle)}" data-x="${esc(shareText)}"><span>${esc(label)}</span><span class="acts"><span class="bwg"><button class="on" type="button" data-m="c">ألوان</button><button type="button" data-m="b">أبيض وأسود</button></span><button class="sh" type="button">مشاركة / إرسال</button><button type="button" onclick="window.print()">طباعة / حفظ PDF</button></span></div>
+export function previewToolbar({ label = 'معاينة المستند', shareTitle = '', shareText = '', appendixLabel = '' } = {}) {
+  return `<div class="toolbar" data-t="${esc(shareTitle)}" data-x="${esc(shareText)}"><span>${esc(label)}</span><span class="acts">${appendixLabel ? `<label class="apx"><input type="checkbox" checked onchange="document.body.classList.toggle('noappx',!this.checked)">${esc(appendixLabel)}</label>` : ''}<span class="bwg"><button class="on" type="button" data-m="c">ألوان</button><button type="button" data-m="b">أبيض وأسود</button></span><button class="sh" type="button">مشاركة / إرسال</button><button type="button" onclick="window.print()">طباعة / حفظ PDF</button></span></div>
 <script>(function(){var t=document.querySelector('.toolbar');if(!t)return;Array.prototype.forEach.call(t.querySelectorAll('.bwg button'),function(b){b.onclick=function(){document.body.classList.toggle('bw',b.getAttribute('data-m')==='b');Array.prototype.forEach.call(t.querySelectorAll('.bwg button'),function(x){x.classList.toggle('on',x===b)})}});var x=t.getAttribute('data-x');var b=t.querySelector('.sh');if(navigator.share&&x&&b){b.style.display='inline-block';b.onclick=function(){navigator.share({title:t.getAttribute('data-t')||document.title,text:x}).catch(function(){})}}})();</script>`
 }
 
@@ -96,9 +99,9 @@ export function docHeader({ title, infoLines = [] }) {
   return `<div class="hd"><div class="info">${infoLines.map(l => `<div>${l}</div>`).join('')}</div><div class="title"><b>${esc(title)}</b></div><div class="logo">${NWB_LOGO_SVG}</div></div>`
 }
 
-export function docShell({ title, body, footerLeft = '', footerRight = '', shareText = '' }) {
+export function docShell({ title, body, footerLeft = '', footerRight = '', shareText = '', appendixLabel = '' }) {
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${PRINT_CSS}</style></head><body>
-${previewToolbar({ shareTitle: title, shareText })}
+${previewToolbar({ shareTitle: title, shareText, appendixLabel })}
 <div class="sheet">${body}<div class="ft"><span>${footerLeft}</span><span class="pill">NORTH WEST BUS</span><span>${footerRight}</span></div></div></body></html>`
 }
 
