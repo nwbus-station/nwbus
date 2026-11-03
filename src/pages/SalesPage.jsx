@@ -24,6 +24,7 @@ import { SALES_VIEW_CAPS } from '../utils/constants'
 import { brandHeader, docHeader, docShell, openDocWindow, previewToolbar, TOOLBAR_CSS, esc } from '../utils/printDoc'
 import { getBalanceDoc, awaitBalanceDocs, balanceAppendixHtml } from '../utils/balanceDoc'
 import { saveSalePdf } from '../utils/salePdf'
+import DailyExcelModal from '../components/sales/DailyExcelModal'
 
 // الورديات تتبع إعداد الأدمن (3 أو 4) من الإعدادات؛ تُحدَّث عند كل عرض من app_settings
 const salesShiftsFrom = raw => parseShifts(raw).map(s => ({ value: s.k, ar: s.ar, en: s.en, range: s.range, end: s.to / 60 }))
@@ -1429,33 +1430,16 @@ export default function SalesPage() {
     openDocWindow(html.replace('</body>', `${appendix}</body>`))
   }
 
-  const [xlBusy, setXlBusy] = useState(false)
   const [xlOpen, setXlOpen] = useState(false)
-  const [xlFrom, setXlFrom] = useState(filterDate)
-  const [xlTo, setXlTo] = useState(filterDate)
-  // محطات التنزيل المختارة — فارغة = كل المحطات. تُحفظ بالجهاز فتبقى ثابتة بين مرة وأخرى حتى تغيّرها أنت
-  const [xlSel, setXlSel] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('sales_xl_stations') ?? '[]')) } catch { return new Set() } })
-  useEffect(() => { try { localStorage.setItem('sales_xl_stations', JSON.stringify([...xlSel])) } catch { /* بدون تخزين */ } }, [xlSel])
-  const [xlSearch, setXlSearch] = useState('')
-  const [xlErr, setXlErr] = useState('')
-  const dayShift = n => { const d = new Date(); d.setDate(d.getDate() + n); return toLocalDateStr(d) }
-  const xlPresets = [
-    [isAr ? 'اليوم' : 'Today', dayShift(0), dayShift(0)],
-    [isAr ? 'أمس' : 'Yesterday', dayShift(-1), dayShift(-1)],
-    [isAr ? 'آخر 7 أيام' : 'Last 7 days', dayShift(-6), dayShift(0)],
-    [isAr ? 'آخر 30 يوماً' : 'Last 30 days', dayShift(-29), dayShift(0)],
-    [isAr ? 'هذا الشهر' : 'This month', toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), dayShift(0)],
-    [isAr ? 'الشهر الماضي' : 'Last month', toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)), toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth(), 0))],
-  ]
-  function openXl() { setXlFrom(filterDate); setXlTo(filterDate); setXlSearch(''); setXlErr(''); setXlOpen(true) }
-  async function downloadDailyExcel() {
-    if (!canExportDaily) return
-    if (!xlFrom || !xlTo || xlFrom > xlTo) { setXlErr(isAr ? 'حدّد فترة صحيحة' : 'Pick a valid period'); return }
-    if ((new Date(xlTo) - new Date(xlFrom)) / 86400000 > 92) { setXlErr(isAr ? 'الحد الأقصى للفترة 93 يوماً' : 'Maximum period is 93 days'); return }
-    setXlBusy(true); setXlErr('')
+  // يُرجع نص الخطأ للمودال أو null عند النجاح
+  async function downloadDailyExcel({ from: xlFrom, to: xlTo, sel: xlSel }) {
+    if (!canExportDaily) return null
+    if (!xlFrom || !xlTo || xlFrom > xlTo) return isAr ? 'حدّد فترة صحيحة' : 'Pick a valid period'
+    if ((new Date(xlTo) - new Date(xlFrom)) / 86400000 > 92) return isAr ? 'الحد الأقصى للفترة 93 يوماً' : 'Maximum period is 93 days'
     try {
       // نفس نطاق الصلاحية الذي يطبّقه جلب السجلات في الصفحة (المحطات المحذوفة من القائمة تُتجاهل)
       const selIds = stations.filter(x => xlSel.has(x.id)).map(x => x.id)
+      if (isGeneralAdmin && xlSel.size && !selIds.length) return isAr ? 'المحطات المختارة وكلاء ولا تُسجَّل لها يوميات إيرادات. اختر محطات أخرى أو امسح التحديد.' : 'The selected stations are agents with no revenue entries. Pick other stations or clear the selection.'
       const build = () => {
         let q = supabase.from('sales_records').select('*, station:station_id(name_ar, name_en)')
           .gte('sale_date', xlFrom).lte('sale_date', xlTo).order('sale_date').order('shift').order('id')
@@ -1471,7 +1455,7 @@ export default function SalesPage() {
         all = all.concat(data ?? [])
         if (!data || data.length < 1000) break
       }
-      if (!all.length) { setXlErr(isAr ? 'لا توجد سجلات إيرادات في هذه الفترة' : 'No revenue records in this period'); setXlBusy(false); return }
+      if (!all.length) return isAr ? 'لا توجد سجلات إيرادات في هذه الفترة' : 'No revenue records in this period'
       const creatorIds = [...new Set(all.map(r => r.created_by).filter(Boolean))]
       const jobMap = {}
       for (let i = 0; i < creatorIds.length; i += 150) {
@@ -1491,9 +1475,8 @@ export default function SalesPage() {
         scopeText, shifts: SHIFTS.map(sh => ({ k: sh.value, range: sh.range })),
         preparedBy: profile?.full_name_ar || '',
       })
-      setXlOpen(false)
-    } catch (e) { setXlErr((isAr ? 'تعذّر إنشاء الملف: ' : 'Could not create the file: ') + (e?.message || e)) }
-    setXlBusy(false)
+      return null
+    } catch (e) { return (isAr ? 'تعذّر إنشاء الملف: ' : 'Could not create the file: ') + (e?.message || e) }
   }
   const canAdd           = !isAccountant && allowCap('sales_add')
 
@@ -1532,7 +1515,7 @@ export default function SalesPage() {
           </button>
         )}
         {canExportDaily && (
-          <button type="button" onClick={openXl} disabled={xlBusy}
+          <button type="button" onClick={() => setXlOpen(true)}
             title={isAr ? 'جدول يومي بأسلوب محاسبي: قيود + تسوية ورديات + توزيع طرق الدفع + توقيعات الاعتماد' : 'Accounting-style daily workbook'}
             className="bg-white text-gray-800 border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-40">
             {isAr ? 'تنزيل الجدول (Excel)' : 'Download sheet (Excel)'}
@@ -1804,76 +1787,7 @@ export default function SalesPage() {
           onSave={next => saveSetting(PRINT_ACCESS_KEY, JSON.stringify(next))} />
       )}
 
-      {xlOpen && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-3" dir={isAr ? 'rtl' : 'ltr'} onClick={e => { if (e.target === e.currentTarget && !xlBusy) setXlOpen(false) }}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-extrabold text-gray-900">{isAr ? 'تنزيل جدول الإيرادات (Excel)' : 'Download revenue sheet (Excel)'}</h3>
-                <p className="text-[11px] text-gray-400 mt-0.5">{isAr ? 'قيود مفصّلة + ملخص محاسبي + تسوية الورديات + توقيعات الاعتماد' : 'Entries + accounting summary + shift reconciliation + sign-off'}</p>
-              </div>
-              <button type="button" onClick={() => !xlBusy && setXlOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="flex flex-wrap gap-1.5">
-                {xlPresets.map(([l, a, b]) => {
-                  const on = xlFrom === a && xlTo === b
-                  return <button key={l} type="button" onClick={() => { setXlFrom(a); setXlTo(b) }}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${on ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{l}</button>
-                })}
-              </div>
-              <div className="flex items-end gap-3 flex-wrap">
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'من' : 'From'}</label>
-                  <DatePicker value={xlFrom} onChange={v => { setXlFrom(v); if (v && xlTo && v > xlTo) setXlTo(v) }} isAr={isAr} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-44" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-500 mb-1">{isAr ? 'إلى' : 'To'}</label>
-                  <DatePicker value={xlTo} onChange={v => { setXlTo(v); if (v && xlFrom && v < xlFrom) setXlFrom(v) }} isAr={isAr} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-44" />
-                </div>
-              </div>
-              {isGeneralAdmin && stations.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-bold text-gray-500">{isAr ? 'المحطات' : 'Stations'}
-                      <span className="ms-1.5 font-semibold text-gray-700">{xlSel.size ? (isAr ? `(${xlSel.size} مختارة)` : `(${xlSel.size} selected)`) : (isAr ? '(الكل)' : '(all)')}</span>
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <button type="button" onClick={() => setXlSel(new Set())} className="text-[11px] font-bold text-nwbus-primary hover:underline">{isAr ? 'الكل' : 'All'}</button>
-                      {xlSel.size > 0 && <button type="button" onClick={() => setXlSel(new Set())} className="text-[11px] text-red-500 hover:underline">{isAr ? 'مسح التحديد' : 'Clear'}</button>}
-                    </div>
-                  </div>
-                  <input value={xlSearch} onChange={e => setXlSearch(e.target.value)} placeholder={isAr ? 'ابحث عن محطة…' : 'Search a station…'}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs mb-1.5 focus:ring-2 focus:ring-nwbus-primary/40 focus:outline-none" />
-                  <div className="border border-gray-200 rounded-lg max-h-52 overflow-y-auto overscroll-contain divide-y divide-gray-50">
-                    <label className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 text-sm font-bold text-gray-800">
-                      <input type="checkbox" className="accent-gray-900 w-4 h-4" checked={xlSel.size === 0} onChange={() => setXlSel(new Set())} />
-                      {isAr ? 'جميع المحطات' : 'All stations'}
-                    </label>
-                    {[...stations].sort((a, b) => (isAr ? (a.name_ar || a.name_en) : (a.name_en || a.name_ar)).localeCompare(isAr ? (b.name_ar || b.name_en) : (b.name_en || b.name_ar)))
-                      .filter(x => !xlSearch || (x.name_ar ?? '').includes(xlSearch) || (x.name_en ?? '').toLowerCase().includes(xlSearch.toLowerCase()))
-                      .map(x => (
-                        <label key={x.id} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-50 text-sm text-gray-700">
-                          <input type="checkbox" className="accent-gray-900 w-4 h-4" checked={xlSel.has(x.id)}
-                            onChange={() => setXlSel(prev => { const n = new Set(prev); n.has(x.id) ? n.delete(x.id) : n.add(x.id); return n.size === stations.length ? new Set() : n })} />
-                          <span dir="auto" className="truncate">{isAr ? (x.name_ar || x.name_en) : (x.name_en || x.name_ar)}</span>
-                        </label>
-                      ))}
-                  </div>
-                </div>
-              )}
-              {xlErr && <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{xlErr}</p>}
-            </div>
-            <div className="px-5 py-3.5 border-t border-gray-100 flex items-center gap-2.5">
-              <button type="button" onClick={downloadDailyExcel} disabled={xlBusy}
-                className="flex-1 bg-gray-900 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-black disabled:opacity-50">
-                {xlBusy ? (isAr ? 'جارٍ التجهيز…' : 'Preparing…') : (isAr ? 'تنزيل الملف' : 'Download')}
-              </button>
-              <button type="button" onClick={() => setXlOpen(false)} disabled={xlBusy} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 bg-white hover:bg-gray-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {xlOpen && <DailyExcelModal isAr={isAr} isGeneralAdmin={isGeneralAdmin} defaultDate={filterDate} onDownload={downloadDailyExcel} onClose={() => setXlOpen(false)} />}
 
       {modal && (
         <SalesModal
