@@ -23,6 +23,7 @@ import SearchSelect from '../components/shared/SearchSelect'
 import { SALES_VIEW_CAPS } from '../utils/constants'
 import { brandHeader, docHeader, docShell, openDocWindow, previewToolbar, TOOLBAR_CSS, esc } from '../utils/printDoc'
 import { getBalanceDoc, awaitBalanceDocs, balanceAppendixHtml } from '../utils/balanceDoc'
+import { saveSalePdf } from '../utils/salePdf'
 
 // الورديات تتبع إعداد الأدمن (3 أو 4) من الإعدادات؛ تُحدَّث عند كل عرض من app_settings
 const salesShiftsFrom = raw => parseShifts(raw).map(s => ({ value: s.k, ar: s.ar, en: s.en, range: s.range, end: s.to / 60 }))
@@ -334,6 +335,52 @@ export async function printSaleRecord({ sale, isAr, profile }) {
   // الموازنة تُجهَّز ونحن بالتبويب الظاهر (غالباً جاهزة مسبقاً فتفتح فوراً)، ثم تُفتح نافذة الطباعة مكتملة
   const [d] = await awaitBalanceDocs([sale.balance_doc_path], isAr ? 'جارٍ تجهيز اليومية مع ورقة الموازنة...' : 'Preparing the daily sheet with the balance sheet...')
   openDocWindow(buildSaleRecordHtml({ sale, isAr, profile, docUrl: d.url, docPages: d.pages }))
+}
+
+// حفظ اليومية (مع الموازنة إن وُجدت) كملف PDF — للجوال خصوصاً حيث الطباعة غير مناسبة
+export async function saveSaleRecordPdf({ sale, isAr, profile }) {
+  const now = new Date()
+  const stationName = sale?.station?.name_ar ?? sale?.station?.name_en ?? '—'
+  const employeeName = sale?.employee_name || sale?.created_by_name || '—'
+  const jobNumber = ((!sale?.employee_name || sale.employee_name === sale.created_by_name) ? sale?.created_by_user?.job_number : null) ?? '—'
+  const actual = Number(sale?.cash_amount ?? 0) + Number(sale?.mada_amount ?? 0) + Number(sale?.visa_amount ?? 0) + Number(sale?.mastercard_amount ?? 0) + Number(sale?.other_amount ?? 0)
+  const diff = actual - Number(sale?.total_expected ?? 0)
+  const shiftLabel = { A: isAr ? 'الوردية أ' : 'Shift A', B: isAr ? 'الوردية ب' : 'Shift B', C: isAr ? 'الوردية ج' : 'Shift C', D: isAr ? 'الوردية د' : 'Shift D' }[sale?.shift] ?? sale?.shift ?? '—'
+  const accountantName = sale?.confirmed_by_name ?? '—'
+  const ack = !!sale?.accountant_notes?.includes('تم إقرار العجز')
+  const T = (ar, en) => (isAr ? ar : en)
+  const refs = parseRefsArr(sale?.balance_ref)
+  const [doc] = sale?.balance_doc_path ? await awaitBalanceDocs([sale.balance_doc_path], T('جارٍ تجهيز ملف PDF...', 'Preparing the PDF...')) : [null]
+  const data = {
+    title: T('كشف الإيرادات اليومية', 'Daily Revenue Report'), stationName, dateStr: sale?.sale_date ?? '—', confirmed: !!sale?.is_confirmed,
+    shiftLabel, employeeName, jobNumber, cashierNo: refs[0] || '—', balanceRef: refs.slice(1).filter(Boolean).join(' / ') || '—',
+    rows: [
+      [T('مبيعات كاش', 'Cash Sales'), fmt(sale?.cash_amount)], [T('مبيعات مدى', 'Mada Sales'), fmt(sale?.mada_amount)],
+      [T('مبيعات فيزا', 'Visa Sales'), fmt(sale?.visa_amount)], [T('مبيعات ماستركارد', 'Mastercard Sales'), fmt(sale?.mastercard_amount)],
+      [`${T('مبيعات أخرى', 'Other Sales')}${sale?.other_type ? ` (${sale.other_type})` : ''}`, fmt(sale?.other_amount)],
+      ...(sale?.bank_deposit_amount ? [[T('المودع بالبنك', 'Bank Deposit'), fmt(sale.bank_deposit_amount)]] : []),
+    ],
+    note: sale?.accountant_notes || '',
+    totalSales: fmt(sale?.total_expected), actual: fmt(actual), diff, diffAbs: fmt(Math.abs(diff)),
+    deficit: diff < 0 ? {
+      ack,
+      lines: [`${T('مبلغ العجز', 'Deficit amount')}: ${fmt(Math.abs(diff))} ${T('ر.س', 'SAR')}`, `${T('اسم الموظف', 'Employee')}: ${employeeName}`, `${T('الرقم الوظيفي', 'Job No.')}: ${jobNumber}`, `${T('اعتمد بواسطة المحاسب', 'Approved by accountant')}: ${accountantName}`, `${T('المحطة', 'Station')}: ${stationName}`],
+      status: ack ? T('✓ تم إقرار العجز وتحميله على الموظف من قِبل محاسب المحطة', '✓ Deficit acknowledged and charged to employee') : T('⚠ لم يتم إقرار العجز بعد', '⚠ Deficit not yet acknowledged'),
+    } : null,
+    accountantName, printerName: profile?.full_name_ar ?? profile?.full_name ?? '—',
+    printDate: now.toLocaleDateString('en-GB'), printTime: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    meta: `${stationName} · ${sale?.sale_date ?? '—'} · ${shiftLabel} · ${employeeName}`,
+    l: {
+      recordDate: T('تاريخ السجل', 'Record date'), confirmed: T('سجل مؤكد', 'CONFIRMED'), attached: T('ورقة الموازنة مرفقة بعد هذه الصفحة', 'Balance sheet attached overleaf'),
+      shift: T('الوردية', 'Shift'), employee: T('اسم الموظف', 'Employee'), jobNo: T('الرقم الوظيفي', 'Job No.'), cashier: T('رقم الصرافة', 'Cashier No.'), balanceRef: T('رقم الموازنة', 'Balance Ref'),
+      item: T('البيان', 'Description'), amount: T('المبلغ (ر.س)', 'Amount (SAR)'), notes: T('ملاحظات المحاسب', 'Accountant Notes'),
+      totalSales: T('إجمالي المبيعات', 'Total Sales'), actual: T('إجمالي الإيرادات الفعلي', 'Actual Total Revenue'), surplus: T('فائض', 'Surplus'), deficit: T('عجز', 'Deficit'), sar: T('ر.س', 'SAR'),
+      defTitle: T('إقرار العجز', 'Deficit Acknowledgment'), empSig: T('توقيع الموظف', 'Employee Signature'), accSig: T('اعتماد محاسب المحطة', 'Station Accountant Approval'),
+      printedBy: T('طُبع بواسطة', 'Printed by'), date: T('التاريخ', 'Date'), time: T('الوقت', 'Time'), attach: T('مرفق', 'Attachment'), balanceSheet: T('ورقة الموازنة', 'Balance sheet'),
+    },
+  }
+  const fileName = `يومية_${stationName}_${sale?.sale_date ?? ''}_${shiftLabel}`.replace(/\s+/g, '_').replace(/[\\/:*?"<>|]/g, '-')
+  await saveSalePdf({ data, pages: doc?.pages ?? [], fileName, isAr })
 }
 
 // طباعة ورقة الموازنة وحدها (صورة/PDF) بترويسة اليومية — معاينة تناسب الجوال مع مشاركة وحفظ PDF
@@ -1083,6 +1130,12 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
                 {isAr ? (sale?.balance_doc_path ? 'طباعة اليومية والموازنة' : 'طباعة اليومية') : (sale?.balance_doc_path ? 'Print daily + balance' : 'Print daily')}
               </button>
             )}
+            {canPrintHere && (
+              <button type="button" onClick={() => saveSaleRecordPdf({ sale, isAr, profile })}
+                className="flex-1 min-w-[140px] min-h-[48px] border border-emerald-600 text-emerald-700 rounded-xl text-sm font-bold hover:bg-emerald-50 transition-colors">
+                {isAr ? (sale?.balance_doc_path ? 'حفظ PDF (يومية + موازنة)' : 'حفظ PDF') : 'Save PDF'}
+              </button>
+            )}
             {canPrintHere && sale?.balance_doc_path && (
               <button type="button" onClick={() => printBalanceSheet({ sale, isAr, profile })}
                 className="flex-1 min-w-[140px] min-h-[48px] border border-nwbus-primary text-nwbus-primary rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors">
@@ -1670,6 +1723,13 @@ export default function SalesPage() {
                                         className="text-xs border border-gray-200 text-gray-600 rounded-lg px-2 py-1 hover:bg-gray-50 transition-colors whitespace-nowrap"
                                         title={isAr ? 'طباعة ورقة الموازنة وحدها' : 'Print the balance sheet only'}>
                                         {isAr ? 'طباعة الموازنة' : 'Print balance'}
+                                      </button>
+                                    )}
+                                    {canPrintRecord(r) && (
+                                      <button type="button" onClick={() => saveSaleRecordPdf({ sale: r, isAr, profile })}
+                                        className="text-xs border border-emerald-600 text-emerald-700 rounded-lg px-2 py-1 hover:bg-emerald-50 transition-colors whitespace-nowrap"
+                                        title={isAr ? 'حفظ هذه اليومية كملف PDF' : 'Save this daily sheet as PDF'}>
+                                        {isAr ? 'حفظ PDF' : 'Save PDF'}
                                       </button>
                                     )}
                                     {canPrintRecord(r) && (
