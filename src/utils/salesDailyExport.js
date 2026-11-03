@@ -1,7 +1,8 @@
 // الجدول اليومي للإيرادات (Excel) — بأسلوب محاسبي: قيود مفصّلة + تسوية الورديات + توزيع طرق الدفع + توقيعات الاعتماد.
 // كل الإجماليات صيغ حيّة مرتبطة بورقة «القيود»، فأي تعديل يدوي في القيود ينعكس تلقائياً على الملخص.
 import { createBook, XL, colLetter } from './excelExport'
-import { ACC, settingsRefs, fillSettings, fillJournal, fillBank, fillEmployees, fillAudit, fillCharts } from './salesAccounting'
+import { deficitAck } from './deficit'
+import { ACC, settingsRefs, fillSettings, fillJournal, fillBank, fillCash, fillStationShortage, fillEmployees, fillAudit, fillCharts } from './salesAccounting'
 
 const n0 = n => Math.round((Number(n) || 0) * 100) / 100       // هللات: دقة محاسبية (خانتان عشريتان)
 const ACC_FMT = ACC                                           // محاسبي: السالب أحمر، الصفر شرطة
@@ -52,16 +53,16 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
       date: String(r.sale_date || '').slice(0, 10), shift: sh(r), station: stName(r), emp: r.employee_name || r.created_by_name || '—', job: r.created_by_user?.job_number ?? '',
       cashier: refs.cashier, budget: refs.budget, cash, mada, visa, mc, other, otherType: r.other_type || '', collected: n0(collected), expected, diff: n0(collected - expected),
       confirmed: !!r.is_confirmed, by: r.confirmed_by_name || '', notes: String(r.accountant_notes || '').replace(/\n?\[عجز[^\]]*\]/g, '').trim(),
-      acked: String(r.accountant_notes || '').includes('تم إقرار العجز'), raw: r,
+      acked: deficitAck(r.accountant_notes) === 'yes', raw: r,
     }
   })
   // حقول التدقيق والعجز لكل قيد (تُستخدم في أوراق المحاسب)
-  const DUP = T('تكرار', 'Duplicate'), NO = T('لا', 'No'), YES = T('نعم', 'Yes')
+  const DUP = T('تكرار', 'Duplicate'), NO = T('لا', 'No'), YES = T('نعم', 'Yes'), PEND = T('بانتظار', 'Pending')
   const keyCount = {}
   rows.forEach(r => { r.key = `${r.date}|${r.raw.shift}|${r.station}|${r.emp}`; keyCount[r.key] = (keyCount[r.key] || 0) + 1 })
   rows.forEach(r => {
     r.def = n0(Math.max(0, -r.diff)); r.sur = n0(Math.max(0, r.diff))
-    r.ackTxt = r.diff < 0 ? (r.acked ? YES : NO) : '—'
+    r.ackTxt = r.diff < 0 ? (!r.confirmed ? PEND : r.acked ? YES : NO) : '—'
     r.docTxt = r.raw.balance_doc_path ? T('مرفقة', 'Attached') : T('ناقصة', 'Missing')
     r.net = r.raw.mada_network_ref || ''
     r.cat = r.raw.confirmed_at ? new Date(new Date(r.raw.confirmed_at).getTime() + 3 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ') : ''
@@ -83,7 +84,9 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
   const matrixByDay = allDays.length > 1 && allDays.length <= 31
   const M = stList.length > 1 ? book.sheet(T('حسب المحطة', 'By station'), matrixByDay ? [28, ...allDays.map(() => 12), 15] : [28, 10, 15, 15, 14], { tab: 'FF8B5CF6' }) : null
   const JR = book.sheet(T('قيد اليومية', 'Journal'), [12, 24, 16, 10, 34, 14, 14, 40], { tab: 'FF0F766E' })
+  const KS = book.sheet(T('تسوية الكاش', 'Cash recon'), [13, 24, 15, 18, 15, 16, 14, 24, 17], { tab: 'FF16A34A' })
   const BK = book.sheet(T('تسوية الشبكات', 'Network recon'), [13, 14, 15, 11, 13, 15, 16, 16, 14, 17], { tab: 'FF0369A1' })
+  const SSH = book.sheet(T('عجز المحطات', 'Station shortage'), [24, 26, 13, 18, 14, 14, 24, 13, 13, 13], { tab: 'FFDC2626' })
   const EM = book.sheet(T('الموظفون والعجز', 'Employees'), [26, 12, 22, 9, 13, 13, 13, 13, 14, 13, 10, 12, 14], { tab: 'FFB91C1C' })
   const AU = book.sheet(T('فحوصات التدقيق', 'Audit checks'), [6, 46, 12, 10, 14, 52], { tab: 'FFB45309' })
   const CH = book.sheet(T('الرسوم البيانية', 'Charts'), Array(12).fill(14), { tab: 'FF7C3AED' })
@@ -104,7 +107,7 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
     { header: T('الحالة', 'Status'), color: v => (v === T('مؤكَّد', 'Confirmed') ? XL.green : XL.amber), align: 'center' },
     { header: T('أكّده', 'Confirmed by') }, { header: T('ملاحظات المحاسب', 'Accountant notes'), wrap: true },
     { header: T('عجز', 'Shortage'), fmt: ACC_FMT }, { header: T('زيادة', 'Surplus'), fmt: ACC_FMT },
-    { header: T('إقرار العجز', 'Shortage acknowledged'), align: 'center', color: v => (v === T('لا', 'No') ? XL.red : v === T('نعم', 'Yes') ? XL.green : null) },
+    { header: T('إقرار العجز', 'Shortage acknowledged'), align: 'center', color: v => (v === T('لا', 'No') ? XL.red : v === T('نعم', 'Yes') ? XL.green : v === T('بانتظار', 'Pending') ? XL.amber : null) },
     { header: T('ورقة الموازنة', 'Balance sheet'), align: 'center', color: v => (v === T('ناقصة', 'Missing') ? XL.amber : null) }, { header: T('مرجع شبكة مدى', 'Mada network ref.') },
     { header: T('وقت التأكيد', 'Confirmed at'), align: 'center' }, { header: T('تكرار', 'Dup.'), align: 'center', color: v => (v ? XL.red : null) },
     { header: T('تنبيهات التدقيق', 'Audit flags'), wrap: true, color: v => (v ? XL.red : null) },
@@ -167,7 +170,9 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
   ;[
     [ENT, T('كل القيود بالتفصيل مع الفلاتر وتنبيهات التدقيق لكل قيد', 'Every entry in detail with filters and per-entry audit flags')],
     [JR.name, T('قيد اليومية المحاسبي (مدين/دائن) بالضريبة وجاهز للنسخ لنظامك', 'Accounting journal (Dr/Cr) with VAT, ready to copy into your ERP')],
+    [KS.name, T('تسوية الكاش: النقد المحصَّل مقابل المودَع بالبنك والرصيد غير المودَع لكل محطة', 'Cash reconciliation: collected vs banked, with each station’s undeposited balance')],
     [BK.name, T('تسوية مدى وVisa وMastercard مع تاريخ الإيداع المتوقع ومقارنة بكشف البنك', 'Network settlement with expected deposit dates vs your bank statement')],
+    [SSH.name, T('عجز كل محطة ومن المتسبب به من الموظفين وحالة إقراره', 'Each station’s shortage, who caused it and its acknowledgement state')],
     [EM.name, T('عجز وزيادة والتزام كل موظف مع العجز غير المُقرّ', 'Per-employee shortage, surplus and accuracy, with unacknowledged shortage')],
     [AU.name, T('فحوصات تدقيق آلية ونسبة جودة القيود', 'Automatic audit checks and an entry quality score')],
     [CH.name, T('رسوم بيانية للتحصيل وطرق الدفع والمحطات والعجز', 'Charts: collection, payment methods, stations, shortages')],
@@ -270,16 +275,23 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
     S.bars(`G${tT.first}:G${tT.last}`, 'FFA9C4EB')
   }
 
-  // قيود تحتاج انتباه المحاسب
+  // قيود تحتاج انتباه المحاسب — مع حالة الإقرار بنص صريح
   const flagged = rows.filter(r => r.diff !== 0)
-  S.section(T('قيود فيها فرق', 'Entries with a difference'), T('كل قيد محصَّله لا يساوي مبيعاته — لمراجعة المحاسب', 'Every entry whose collection differs from its sales — for the accountant’s review'))
+  S.section(T('قيود فيها فرق', 'Entries with a difference'), T('كل قيد محصَّله لا يساوي مبيعاته. عمود «الحالة» يوضّح: هل هو عجز أم زيادة، وهل أقرّه المحاسب وحمّله على الموظف.', 'Every entry whose collection differs from its sales. The “Status” column says whether it is a shortage or surplus and whether the accountant acknowledged it.'))
+  const ackStatus = r => {
+    if (r.diff > 0) return r.confirmed ? T('▲ زيادة مؤكَّدة — تحتاج تفسيراً', '▲ Confirmed surplus — needs explanation') : T('⏳ زيادة بانتظار مراجعة المحاسب', '⏳ Surplus awaiting review')
+    if (!r.confirmed) return T('⏳ عجز بانتظار مراجعة المحاسب (الإقرار يُحدَّد عند التأكيد)', '⏳ Shortage awaiting review (decided on confirmation)')
+    return r.acked ? T('✓ عجز مُقرّ ومحمَّل على الموظف', '✓ Shortage acknowledged and charged to the employee') : T('✗ عجز لم يُقرّ — أكّده المحاسب دون تحميل الموظف', '✗ Shortage not acknowledged — confirmed without charging the employee')
+  }
+  const ackColor = v => (String(v).startsWith('✓') ? XL.green : String(v).startsWith('✗') ? XL.red : String(v).startsWith('▲') ? 'FF1D4ED8' : XL.amber)
   if (!flagged.length) S.note(T('✅ كل القيود مطابقة — لا فروق.', '✅ All entries match — no differences.'), { bold: true, color: XL.green })
   else {
     S.table({
-      columns: [{ header: T('التاريخ', 'Date'), span: 2 }, { header: T('الوردية', 'Shift'), align: 'center' }, { header: T('المحطة', 'Station'), span: 3, bold: true }, { header: T('الموظف', 'Employee'), span: 3 },
-        { header: T('الفرق', 'Difference'), fmt: DIFF_FMT, bold: true, color: v => (typeof v !== 'number' ? null : v < 0 ? XL.red : 'FF1D4ED8') }, { header: T('الإقرار', 'Acknowledgement'), span: 2, color: v => (v === T('أُقرّ على الموظف', 'Acknowledged') ? XL.green : XL.amber) }],
-      rows: flagged.map(r => [r.date, r.shift, r.station, r.emp, r.diff, r.diff < 0 ? (r.acked ? T('أُقرّ على الموظف', 'Acknowledged') : (r.confirmed ? T('لم يُقرّ', 'Not acknowledged') : T('بانتظار المراجعة', 'Pending review'))) : T('زيادة — تُراجَع', 'Surplus — review')]),
+      columns: [{ header: T('التاريخ', 'Date'), span: 2 }, { header: T('الوردية', 'Shift'), align: 'center' }, { header: T('المحطة', 'Station'), span: 2, bold: true }, { header: T('الموظف', 'Employee'), span: 2 },
+        { header: T('الفرق', 'Difference'), span: 1, fmt: DIFF_FMT, bold: true, color: v => (typeof v !== 'number' ? null : v < 0 ? XL.red : 'FF1D4ED8') }, { header: T('الحالة والإقرار', 'Status & acknowledgement'), span: 4, color: ackColor }],
+      rows: flagged.map(r => [r.date, r.shift, r.station, r.emp, r.diff, ackStatus(r)]),
     })
+    S.note(T('✓ مُقرّ = حمّله المحاسب على الموظف · ✗ لم يُقرّ = أكّدته دون تحميل · ⏳ بانتظار = لم يُؤكَّد القيد بعد (الإقرار يُحدَّد وقت التأكيد) · ▲ زيادة = المحصَّل أكبر من المبيعات.', '✓ acknowledged = charged to the employee · ✗ not acknowledged = confirmed without charging · ⏳ pending = entry not confirmed yet · ▲ surplus = collected exceeds sales.'), { color: XL.grey, size: 9 })
   }
 
   // الاعتماد والتوقيع
@@ -317,7 +329,9 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
   const actx = { T, isAr, rows, C, rng, S: SR, subtitle, book, tot }
   fillSettings(ST, actx)
   fillJournal(JR, actx)
+  fillCash(KS, actx)
   fillBank(BK, actx)
+  fillStationShortage(SSH, actx)
   fillEmployees(EM, actx)
   fillAudit(AU, actx)
   fillCharts(CH, actx)

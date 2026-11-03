@@ -24,6 +24,7 @@ import { SALES_VIEW_CAPS } from '../utils/constants'
 import { brandHeader, docHeader, docShell, openDocWindow, previewToolbar, TOOLBAR_CSS, esc } from '../utils/printDoc'
 import { getBalanceDoc, awaitBalanceDocs, balanceAppendixHtml } from '../utils/balanceDoc'
 import { saveSalePdf } from '../utils/salePdf'
+import { deficitAck } from '../utils/deficit'
 import DailyExcelModal from '../components/sales/DailyExcelModal'
 import EmployeeLookup from '../components/sales/EmployeeLookup'
 
@@ -144,7 +145,7 @@ function buildSaleRecordHtml({ sale, isAr, profile, docUrl, docPages }) {
     const totalActualVal = (Number(sale?.cash_amount??0) + Number(sale?.mada_amount??0) + Number(sale?.visa_amount??0) + Number(sale?.mastercard_amount??0) + Number(sale?.other_amount??0))
     const diff = totalActualVal - Number(sale?.total_expected??0)
     const hasDeficit = diff < 0
-    const deficitAcknowledged = sale?.accountant_notes?.includes('تم إقرار العجز')
+    const deficitAcknowledged = deficitAck(sale?.accountant_notes) === 'yes'
     const shiftLabel = { A: isAr ? 'الوردية أ' : 'Shift A', B: isAr ? 'الوردية ب' : 'Shift B', C: isAr ? 'الوردية ج' : 'Shift C', D: isAr ? 'الوردية د' : 'Shift D' }[sale?.shift] ?? sale?.shift ?? '—'
 
     const shareText = [
@@ -303,10 +304,12 @@ function buildSaleRecordHtml({ sale, isAr, profile, docUrl, docPages }) {
           <div>${isAr ? 'الرقم الوظيفي:' : 'Job No.:'} <strong style="font-family:monospace">${jobNumber}</strong></div>
           <div>${isAr ? 'اعتمد بواسطة المحاسب:' : 'Approved by Accountant:'} <strong>${accountantName}</strong></div>
           <div>${isAr ? 'المحطة:' : 'Station:'} <strong>${stationName}</strong></div>
-          <div style="margin-top:6px;padding:6px 10px;background:${deficitAcknowledged ? '#dcfce7' : '#fef2f2'};border-radius:4px;font-weight:700;color:${deficitAcknowledged ? '#15803d' : '#dc2626'}">
+          <div style="margin-top:6px;padding:6px 10px;background:${deficitAcknowledged ? '#dcfce7' : !sale?.is_confirmed ? '#fffbeb' : '#fef2f2'};border-radius:4px;font-weight:700;color:${deficitAcknowledged ? '#15803d' : !sale?.is_confirmed ? '#b45309' : '#dc2626'}">
             ${deficitAcknowledged
               ? (isAr ? '✓ تم إقرار العجز وتحميله على الموظف من قِبل محاسب المحطة' : '✓ Deficit acknowledged and charged to employee by station accountant')
-              : (isAr ? '⚠ لم يتم إقرار العجز بعد' : '⚠ Deficit not yet acknowledged')}
+              : !sale?.is_confirmed
+                ? (isAr ? '⏳ بانتظار مراجعة المحاسب — الإقرار يُحدَّد عند تأكيد اليومية' : '⏳ Awaiting accountant review — acknowledgement is decided on confirmation')
+                : (isAr ? '✗ لم يُقرّ العجز: أكّد المحاسب اليومية دون تحميله على الموظف' : '✗ Deficit not acknowledged: confirmed without charging the employee')}
           </div>
         </div>
       </div>` : ''}
@@ -357,7 +360,7 @@ export async function saveSaleRecordPdf({ sale, isAr, profile }) {
   const diff = actual - Number(sale?.total_expected ?? 0)
   const shiftLabel = { A: isAr ? 'الوردية أ' : 'Shift A', B: isAr ? 'الوردية ب' : 'Shift B', C: isAr ? 'الوردية ج' : 'Shift C', D: isAr ? 'الوردية د' : 'Shift D' }[sale?.shift] ?? sale?.shift ?? '—'
   const accountantName = sale?.confirmed_by_name ?? '—'
-  const ack = !!sale?.accountant_notes?.includes('تم إقرار العجز')
+  const ack = deficitAck(sale?.accountant_notes) === 'yes'
   const T = (ar, en) => (isAr ? ar : en)
   const refs = parseRefsArr(sale?.balance_ref)
   const [doc] = sale?.balance_doc_path ? await awaitBalanceDocs([sale.balance_doc_path], T('جارٍ تجهيز ملف PDF...', 'Preparing the PDF...')) : [null]
@@ -373,9 +376,9 @@ export async function saveSaleRecordPdf({ sale, isAr, profile }) {
     note: sale?.accountant_notes || '',
     totalSales: fmt(sale?.total_expected), actual: fmt(actual), diff, diffAbs: fmt(Math.abs(diff)),
     deficit: diff < 0 ? {
-      ack,
+      ack: ack ? 1 : !sale?.is_confirmed ? 2 : 0,
       lines: [`${T('مبلغ العجز', 'Deficit amount')}: ${fmt(Math.abs(diff))} ${T('ر.س', 'SAR')}`, `${T('اسم الموظف', 'Employee')}: ${employeeName}`, `${T('الرقم الوظيفي', 'Job No.')}: ${jobNumber}`, `${T('اعتمد بواسطة المحاسب', 'Approved by accountant')}: ${accountantName}`, `${T('المحطة', 'Station')}: ${stationName}`],
-      status: ack ? T('✓ تم إقرار العجز وتحميله على الموظف من قِبل محاسب المحطة', '✓ Deficit acknowledged and charged to employee') : T('⚠ لم يتم إقرار العجز بعد', '⚠ Deficit not yet acknowledged'),
+      status: ack ? T('✓ تم إقرار العجز وتحميله على الموظف من قِبل محاسب المحطة', '✓ Deficit acknowledged and charged to employee') : !sale?.is_confirmed ? T('⏳ بانتظار مراجعة المحاسب — الإقرار يُحدَّد عند التأكيد', '⏳ Awaiting accountant review') : T('✗ لم يُقرّ العجز: أُكّدت اليومية دون تحميله على الموظف', '✗ Not acknowledged: confirmed without charging the employee'),
     } : null,
     accountantName, printerName: profile?.full_name_ar ?? profile?.full_name ?? '—',
     printDate: now.toLocaleDateString('en-GB'), printTime: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),

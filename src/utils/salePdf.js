@@ -142,8 +142,8 @@ async function drawDaily(d, rtl, hasAppendix) {
     x.strokeStyle = '#dc2626'; x.lineWidth = 2; rr(x, L + 1, y + 1, tw - 2, bh - 2, 8); x.stroke()
     text(x, `⚠ ${d.l.defTitle}`, start + dirSign * 14, y + 20, { size: 13, weight: 700, color: '#dc2626', align: 'start' })
     d.deficit.lines.forEach((ln, i) => text(x, ln, start + dirSign * 14, y + 44 + i * 19, { size: 12, color: '#374151', align: 'start', maxW: tw - 28 }))
-    const okc = d.deficit.ack ? '#15803d' : '#dc2626'
-    x.fillStyle = d.deficit.ack ? '#dcfce7' : '#fef2f2'; rr(x, L + 12, y + bh - 34, tw - 24, 26, 4); x.fill()
+    const okc = d.deficit.ack === 1 ? '#15803d' : d.deficit.ack === 2 ? '#b45309' : '#dc2626'
+    x.fillStyle = d.deficit.ack === 1 ? '#dcfce7' : d.deficit.ack === 2 ? '#fffbeb' : '#fef2f2'; rr(x, L + 12, y + bh - 34, tw - 24, 26, 4); x.fill()
     text(x, d.deficit.status, start + dirSign * 22, y + bh - 21, { size: 12, weight: 700, color: okc, align: 'start', maxW: tw - 44 })
     y += bh + 16
   }

@@ -299,6 +299,163 @@ export function fillEmployees(Em, ctx) {
   Em.finish({ landscape: true })
 }
 
+/* ═════════════ تسوية الكاش (النقد المحصَّل مقابل المودَع بالبنك) ═════════════ */
+export function fillCash(K, ctx) {
+  const { T, rows, C, rng, subtitle } = ctx
+  K.header({ title: T('تسوية الكاش', 'Cash reconciliation'), subtitle })
+  K.note(T('كل صف = نقد محطة في يوم. اكتب في الخلايا الصفراء المبلغ المودَع فعلاً ورقم سند الإيداع وتاريخه، فيظهر الفرق والرصيد المتراكم غير المودَع لكل محطة. (النظام لا يسجّل الإيداع، فالإدخال هنا يدوي من سند البنك.)', 'One row = a station’s cash for a day. Type the actual deposit, slip number and date in the yellow cells; the gap and each station’s running undeposited balance update. (The system does not record deposits, so entry here is manual from the bank slip.)'), { color: XL.grey })
+
+  const groups = new Map()
+  for (const r of rows) {
+    if (!(r.cash > 0.004)) continue
+    const k = `${r.date}|${r.station}`
+    const g = groups.get(k) ?? { date: r.date, station: r.station, cash: 0 }
+    g.cash += r.cash
+    groups.set(k, g)
+  }
+  const list = [...groups.values()].sort((a, b) => a.date.localeCompare(b.date) || a.station.localeCompare(b.station))
+  if (!list.length) { K.note(T('لا يوجد نقد في هذه الفترة.', 'No cash in this period.'), { bold: true }); K.finish({ landscape: true }); return }
+
+  const stations = [...new Set(list.map(g => g.station))].sort((a, b) => a.localeCompare(b))
+  const sHr = K.r + 4 + 1                          // بعد المؤشرات (4 صفوف) وعنوان القسم الأول (صف) = رأس جدول المحطات
+  // صفوف جدول المحطات: رأس + n + إجمالي + سطر فاصل، ثم عنوان القسم الثاني
+  const dHr = sHr + stations.length + 3 + 1
+  const dFirst = dHr + 1, dLast = dHr + list.length
+  const A = (c, f = dFirst, l = dLast) => `$${c}$${f}:$${c}$${l}`
+  const totCash = r2(list.reduce((a, g) => a + g.cash, 0))
+
+  K.kpis([
+    { label: T('النقد المحصَّل', 'Cash collected'), value: { formula: `SUM(${A('C')})`, result: totCash }, fmt: '#,##0.00', color: XL.navy, foot: T('ر.س', 'SAR') },
+    { label: T('المودَع فعلياً', 'Deposited'), value: { formula: `SUM(${A('E')})`, result: 0 }, fmt: '#,##0.00', color: XL.green, foot: T('من سندات الإيداع', 'from deposit slips') },
+    { label: T('رصيد غير مودَع', 'Undeposited balance'), value: { formula: `SUM(${A('C')})-SUM(${A('E')})`, result: totCash }, fmt: '#,##0.00', color: XL.red, foot: T('نقد لم يصل البنك', 'cash not yet at the bank') },
+    { label: T('أيام بلا إيداع', 'Days not deposited'), value: { formula: `COUNTIF(${A('H')},"⏳*")`, result: list.length }, fmt: '0', color: XL.amber, foot: T('صفوف بلا مبلغ مودَع', 'rows with no deposit entered') },
+  ], 2)
+
+  // 1) الرصيد غير المودَع لكل محطة
+  K.section(T('الرصيد غير المودَع لكل محطة', 'Undeposited balance by station'))
+  if (K.r !== sHr) throw new Error('cash layout mismatch (stations)')
+  K.table({
+    columns: [{ header: T('المحطة', 'Station'), bold: true }, { header: T('أيام فيها نقد', 'Cash days'), fmt: '0' }, { header: T('النقد المحصَّل', 'Cash collected'), fmt: ACC }, { header: T('المودَع', 'Deposited'), fmt: ACC },
+      { header: T('الرصيد غير المودَع', 'Undeposited'), fmt: ACC, bold: true }, { header: T('أقدم يوم غير مودَع', 'Oldest undeposited'), align: 'center' }, { header: T('الحالة', 'Status') }],
+    rows: stations.map((st, i) => {
+      const r = sHr + 1 + i, cash = list.filter(g => g.station === st).reduce((a, g) => a + g.cash, 0), oldest = list.find(g => g.station === st)?.date ?? ''
+      return [st, { formula: `COUNTIF(${A('B')},$A${r})`, result: list.filter(g => g.station === st).length }, { formula: `SUMIFS(${A('C')},${A('B')},$A${r})`, result: r2(cash) },
+        { formula: `SUMIFS(${A('E')},${A('B')},$A${r})`, result: 0 }, { formula: `C${r}-D${r}`, result: r2(cash) },
+        { formula: `IFERROR(INDEX(${A('A')},MATCH(1,INDEX((${A('B')}=$A${r})*(LEFT(${A('H')},1)<>"✓"),0),0)),"")`, result: oldest },
+        { formula: `IF(ROUND(E${r},2)<=0,"${T('✓ لا رصيد', '✓ Nothing outstanding')}",IF(D${r}=0,"${T('⏳ لم يُودَع شيء', '⏳ Nothing deposited')}","${T('⚠ رصيد متبقٍّ', '⚠ Balance outstanding')}"))`, result: T('⏳ لم يُودَع شيء', '⏳ Nothing deposited') }]
+    }),
+    totals: [T('الإجمالي', 'Total'), { formula: `SUM(B${sHr + 1}:B${sHr + stations.length})`, result: list.length }, { formula: `SUM(C${sHr + 1}:C${sHr + stations.length})`, result: totCash },
+      { formula: `SUM(D${sHr + 1}:D${sHr + stations.length})`, result: 0 }, { formula: `SUM(E${sHr + 1}:E${sHr + stations.length})`, result: totCash }, '', ''],
+    zebra: true,
+  })
+  statusFormat(K.ws, `G${sHr + 1}:G${sHr + stations.length}`, `G${sHr + 1}`)
+  K.bars(`E${sHr + 1}:E${sHr + stations.length}`, 'FFF4A6A6')
+
+  // 2) تفصيل يومي (مدخلات الإيداع)
+  K.section(T('التفصيل اليومي وإدخال الإيداع', 'Daily detail and deposit entry'))
+  if (K.r !== dHr) throw new Error('cash layout mismatch (detail)')
+  K.table({
+    columns: [{ header: T('التاريخ', 'Date'), bold: true }, { header: T('المحطة', 'Station'), bold: true }, { header: T('النقد المحصَّل', 'Cash collected'), fmt: ACC, bold: true }, { header: T('رقم سند الإيداع', 'Deposit slip no.') },
+      { header: T('المودَع فعلياً', 'Deposited'), fmt: ACC, bold: true }, { header: T('تاريخ الإيداع', 'Deposit date') }, { header: T('الفرق', 'Gap'), fmt: '+#,##0.00;[Red]-#,##0.00;"–"', bold: true },
+      { header: T('الحالة', 'Status') }, { header: T('رصيد المحطة المتراكم', 'Station running balance'), fmt: ACC }],
+    rows: list.map((g, i) => {
+      const r = dFirst + i
+      const run = list.slice(0, i + 1).filter(x => x.station === g.station).reduce((a, x) => a + x.cash, 0)
+      return [g.date, g.station, { formula: `SUMIFS(${rng(C.cash)},${rng(C.date)},$A${r},${rng(C.station)},$B${r})`, result: r2(g.cash) }, null, null, null,
+        { formula: `IF(E${r}="","",E${r}-C${r})`, result: '' },
+        { formula: `IF(E${r}="","${T('⏳ لم يُودَع بعد', '⏳ Not deposited yet')}",IF(ROUND(G${r},2)=0,"${T('✓ مودَع بالكامل', '✓ Fully deposited')}",IF(G${r}<0,"${T('⚠ المودَع أقل من المحصَّل', '⚠ Deposit below collected')}","${T('⚠ المودَع أكثر من المحصَّل', '⚠ Deposit above collected')}")))`, result: T('⏳ لم يُودَع بعد', '⏳ Not deposited yet') },
+        { formula: `SUMIFS($C$${dFirst}:C${r},$B$${dFirst}:B${r},$B${r})-SUMIFS($E$${dFirst}:E${r},$B$${dFirst}:B${r},$B${r})`, result: r2(run) }]
+    }),
+    totals: [T('الإجمالي', 'Total'), '', { formula: `SUBTOTAL(109,C${dFirst}:C${dLast})`, result: totCash }, '', { formula: `SUBTOTAL(109,E${dFirst}:E${dLast})`, result: 0 }, '', { formula: `SUBTOTAL(109,G${dFirst}:G${dLast})`, result: 0 }, '', ''],
+    filter: true, printTitle: true,
+  })
+  list.forEach((_, i) => { const r = dFirst + i; styleInput(K.ws.getCell(r, 4)); styleInput(K.ws.getCell(r, 5), ACC); styleInput(K.ws.getCell(r, 6)) })
+  K.ws.dataValidations.add(`E${dFirst}:E${dLast}`, { type: 'decimal', operator: 'greaterThanOrEqual', allowBlank: true, formulae: [0], showErrorMessage: true, errorTitle: T('قيمة غير صحيحة', 'Invalid value'), error: T('أدخل مبلغاً رقمياً موجباً', 'Enter a positive number') })
+  statusFormat(K.ws, `H${dFirst}:H${dLast}`, `H${dFirst}`)
+  K.note(T('الفرق = المودَع − المحصَّل (سالب = أودعت أقل من النقد المحصَّل). الرصيد المتراكم لكل محطة = مجموع نقدها حتى هذا اليوم − ما أُودع منه.', 'Gap = deposited − collected (negative = deposited less than cash collected). Running balance = the station’s cash to date − deposits to date.'), { color: XL.grey, size: 9 })
+  K.finish({ landscape: true })
+}
+
+/* ═════════════ عجز المحطات: ومن المتسبب ═════════════ */
+export function fillStationShortage(SS, ctx) {
+  const { T, rows, C, rng, subtitle } = ctx
+  SS.header({ title: T('عجز المحطات: من المتسبب؟', 'Station shortages: who is responsible?'), subtitle })
+  SS.note(T('الجدول الأول: عجز كل محطة ونسبته. الثاني: لكل محطة، كم ساهم كل موظف بعجزها وما حالة إقرار كل مبلغ. «غير مُقرّ» = أكّد المحاسب اليومية دون تحميل الموظف، و«بانتظار» = اليومية لم تُؤكَّد بعد.', 'Table 1: each station’s shortage and its rate. Table 2: for each station, how much each employee contributed and the acknowledgement state. “Unacknowledged” = confirmed without charging the employee; “Pending” = not confirmed yet.'), { color: XL.grey })
+  const NO = T('لا', 'No'), YES = T('نعم', 'Yes'), PEND = T('بانتظار', 'Pending')
+
+  const byStation = new Map()
+  for (const r of rows) {
+    const e = byStation.get(r.station) ?? { st: r.station, n: 0, exp: 0, def: 0, yes: 0, no: 0, pend: 0, emps: new Map() }
+    e.n++; e.exp += r.expected
+    if (r.def > 0) {
+      e.def += r.def
+      if (r.ackTxt === YES) e.yes += r.def; else if (r.ackTxt === PEND) e.pend += r.def; else e.no += r.def
+      const m = e.emps.get(r.emp) ?? { emp: r.emp, job: r.job, n: 0, def: 0, yes: 0, no: 0, pend: 0 }
+      m.n++; m.def += r.def; if (!m.job && r.job) m.job = r.job
+      if (r.ackTxt === YES) m.yes += r.def; else if (r.ackTxt === PEND) m.pend += r.def; else m.no += r.def
+      e.emps.set(r.emp, m)
+    }
+    byStation.set(r.station, e)
+  }
+  const stList = [...byStation.values()].filter(e => e.def > 0).sort((a, b) => b.def - a.def)
+  if (!stList.length) { SS.note(T('✅ لا عجز في أي محطة خلال هذه الفترة.', '✅ No shortage at any station in this period.'), { bold: true, color: XL.green }); SS.finish({ landscape: true }); return }
+  const detail = []
+  stList.forEach(e => [...e.emps.values()].sort((a, b) => b.def - a.def).forEach(m => detail.push({ st: e.st, stDef: e.def, ...m })))
+
+  const sHr = SS.r + 4 + 1
+  const dHr = sHr + stList.length + 3 + 1
+  const dFirst = dHr + 1, dLast = dHr + detail.length
+  const totDef = r2(stList.reduce((a, e) => a + e.def, 0))
+  const D = c => `$${c}$${dFirst}:$${c}$${dLast}`
+
+  SS.kpis([
+    { label: T('إجمالي عجز المحطات', 'Total station shortage'), value: { formula: `SUM(${rng(C.def)})`, result: totDef }, fmt: '#,##0.00', color: XL.red, foot: T('ر.س', 'SAR') },
+    { label: T('محطات فيها عجز', 'Stations with a shortage'), value: stList.length, fmt: '0', color: XL.amber, foot: `${T('من', 'of')} ${byStation.size}` },
+    { label: T('أعلى محطة عجزاً', 'Highest shortage'), value: stList[0].st, color: XL.red, foot: `${r2(stList[0].def)} ${T('ر.س', 'SAR')}` },
+    { label: T('عجز غير مُقرّ + بانتظار', 'Unacknowledged + pending'), value: { formula: `SUMIFS(${rng(C.def)},${rng(C.ack)},"${NO}")+SUMIFS(${rng(C.def)},${rng(C.ack)},"${PEND}")`, result: r2(stList.reduce((a, e) => a + e.no + e.pend, 0)) }, fmt: '#,##0.00', color: XL.red, foot: T('لم يُحمَّل على موظف بعد', 'not yet charged to an employee') },
+  ], 2)
+
+  SS.section(T('1) عجز كل محطة', '1) Shortage by station'))
+  if (SS.r !== sHr) throw new Error('shortage layout mismatch (stations)')
+  SS.table({
+    columns: [{ header: T('المحطة', 'Station'), bold: true }, { header: T('القيود', 'Entries'), fmt: '0' }, { header: T('المبيعات', 'Sales'), fmt: ACC }, { header: T('إجمالي العجز', 'Shortage'), fmt: ACC, bold: true },
+      { header: T('نسبة العجز من المبيعات', 'Shortage % of sales'), fmt: '0.00%' }, { header: T('موظفون ساهموا', 'Employees involved'), fmt: '0' }, { header: T('أعلى متسبب', 'Top contributor') },
+      { header: T('مُقرّ', 'Acknowledged'), fmt: ACC }, { header: T('غير مُقرّ', 'Unacknowledged'), fmt: ACC }, { header: T('بانتظار', 'Pending'), fmt: ACC }],
+    rows: stList.map((e, i) => {
+      const r = sHr + 1 + i, top = [...e.emps.values()].sort((a, b) => b.def - a.def)[0]
+      const S = (extra = '') => `SUMIFS(${rng(C.def)},${rng(C.station)},$A${r}${extra})`
+      return [e.st, { formula: `COUNTIF(${rng(C.station)},$A${r})`, result: e.n }, { formula: `SUMIFS(${rng(C.expected)},${rng(C.station)},$A${r})`, result: r2(e.exp) }, { formula: S(), result: r2(e.def) },
+        { formula: `IFERROR(D${r}/C${r},0)`, result: e.exp ? e.def / e.exp : 0 }, { formula: `COUNTIFS(${D('A')},$A${r},${D('E')},">0")`, result: e.emps.size },
+        `${top.emp} (${r2(top.def)})`, { formula: S(`,${rng(C.ack)},"${YES}"`), result: r2(e.yes) }, { formula: S(`,${rng(C.ack)},"${NO}"`), result: r2(e.no) }, { formula: S(`,${rng(C.ack)},"${PEND}"`), result: r2(e.pend) }]
+    }),
+    totals: [T('الإجمالي', 'Total'), { formula: `SUM(B${sHr + 1}:B${sHr + stList.length})`, result: stList.reduce((a, e) => a + e.n, 0) }, { formula: `SUM(C${sHr + 1}:C${sHr + stList.length})`, result: r2(stList.reduce((a, e) => a + e.exp, 0)) },
+      { formula: `SUM(D${sHr + 1}:D${sHr + stList.length})`, result: totDef }, { formula: `IFERROR(D${sHr + stList.length + 1}/C${sHr + stList.length + 1},0)`, result: totDef / Math.max(stList.reduce((a, e) => a + e.exp, 0), 1) }, '', '',
+      { formula: `SUM(H${sHr + 1}:H${sHr + stList.length})`, result: r2(stList.reduce((a, e) => a + e.yes, 0)) }, { formula: `SUM(I${sHr + 1}:I${sHr + stList.length})`, result: r2(stList.reduce((a, e) => a + e.no, 0)) }, { formula: `SUM(J${sHr + 1}:J${sHr + stList.length})`, result: r2(stList.reduce((a, e) => a + e.pend, 0)) }],
+  })
+  SS.bars(`D${sHr + 1}:D${sHr + stList.length}`, 'FFF4A6A6')
+
+  SS.section(T('2) كل محطة: ومن المتسبب بعجزها؟', '2) Per station: who caused it?'))
+  if (SS.r !== dHr) throw new Error('shortage layout mismatch (detail)')
+  SS.table({
+    columns: [{ header: T('المحطة', 'Station'), bold: true }, { header: T('الموظف', 'Employee'), bold: true }, { header: T('الرقم الوظيفي', 'Job no.') }, { header: T('أيام عجز', 'Shortage days'), fmt: '0' },
+      { header: T('العجز', 'Shortage'), fmt: ACC, bold: true }, { header: T('حصته من عجز المحطة', 'Share of station shortage'), fmt: '0%' }, { header: T('مُقرّ', 'Acknowledged'), fmt: ACC }, { header: T('غير مُقرّ', 'Unacknowledged'), fmt: ACC }, { header: T('بانتظار', 'Pending'), fmt: ACC }],
+    rows: detail.map((m, i) => {
+      const r = dFirst + i
+      const S = (extra = '') => `SUMIFS(${rng(C.def)},${rng(C.station)},$A${r},${rng(C.emp)},$B${r}${extra})`
+      return [m.st, m.emp, m.job || '', { formula: `COUNTIFS(${rng(C.station)},$A${r},${rng(C.emp)},$B${r},${rng(C.def)},">0")`, result: m.n }, { formula: S(), result: r2(m.def) },
+        { formula: `IFERROR(E${r}/SUMIFS(${rng(C.def)},${rng(C.station)},$A${r}),0)`, result: m.stDef ? m.def / m.stDef : 0 },
+        { formula: S(`,${rng(C.ack)},"${YES}"`), result: r2(m.yes) }, { formula: S(`,${rng(C.ack)},"${NO}"`), result: r2(m.no) }, { formula: S(`,${rng(C.ack)},"${PEND}"`), result: r2(m.pend) }]
+    }),
+    totals: [T('الإجمالي', 'Total'), '', '', { formula: `SUM(D${dFirst}:D${dLast})`, result: detail.reduce((a, m) => a + m.n, 0) }, { formula: `SUM(E${dFirst}:E${dLast})`, result: totDef }, '',
+      { formula: `SUM(G${dFirst}:G${dLast})`, result: r2(detail.reduce((a, m) => a + m.yes, 0)) }, { formula: `SUM(H${dFirst}:H${dLast})`, result: r2(detail.reduce((a, m) => a + m.no, 0)) }, { formula: `SUM(I${dFirst}:I${dLast})`, result: r2(detail.reduce((a, m) => a + m.pend, 0)) }],
+    filter: true, printTitle: true,
+  })
+  SS.bars(`E${dFirst}:E${dLast}`, 'FFF4A6A6')
+  SS.scale(`F${dFirst}:F${dLast}`, { min: 0, mid: 0.5, max: 1, colors: ['FFFFFFFF', 'FFFDE7C8', 'FFF4A6A6'] })
+  SS.note(T('حصة الموظف = عجزه ÷ عجز المحطة نفسها (الأعلى حصة هو الأكثر تسبباً). الأرقام حيّة من ورقة «القيود».', 'Employee share = their shortage ÷ the same station’s shortage. All figures are live from the Entries sheet.'), { color: XL.grey, size: 9 })
+  SS.finish({ landscape: true })
+}
+
 /* ═════════════ فحوصات التدقيق ═════════════ */
 export function fillAudit(Au, ctx) {
   const { T, rows, C, rng, subtitle } = ctx
@@ -307,7 +464,8 @@ export function fillAudit(Au, ctx) {
   const no = T('لا', 'No'), pending = T('قيد المراجعة', 'Pending'), conf = T('مؤكَّد', 'Confirmed'), missing = T('ناقصة', 'Missing'), dupWord = T('تكرار', 'Duplicate')
   const checks = [
     [T('قيود فيها فرق بين المحصَّل والمبيعات', 'Entries with a difference'), T('حرج', 'High'), `COUNTIF(${rng(C.diff)},"<>0")`, rows.filter(r => r.diff !== 0).length, T('رتّب أو افلتر عمود «الفرق»', 'Filter the Difference column')],
-    [T('عجز لم يُقرّ تحميله على الموظف', 'Shortage not acknowledged'), T('حرج', 'High'), `COUNTIFS(${rng(C.def)},">0",${rng(C.ack)},"${no}")`, rows.filter(r => r.def > 0 && r.ackTxt === no).length, T('عمود «إقرار العجز» = لا', 'Column “Acknowledged” = No')],
+    [T('عجز أكّده المحاسب دون تحميله على الموظف', 'Shortage confirmed without charging the employee'), T('حرج', 'High'), `COUNTIFS(${rng(C.def)},">0",${rng(C.ack)},"${no}")`, rows.filter(r => r.def > 0 && r.ackTxt === no).length, T('عمود «إقرار العجز» = لا', 'Column “Acknowledged” = No')],
+    [T('عجز بانتظار مراجعة المحاسب وإقراره', 'Shortage awaiting accountant review'), T('متوسط', 'Medium'), `COUNTIFS(${rng(C.def)},">0",${rng(C.ack)},"${T('بانتظار', 'Pending')}")`, rows.filter(r => r.def > 0 && r.ackTxt === T('بانتظار', 'Pending')).length, T('عمود «إقرار العجز» = بانتظار', 'Column “Acknowledged” = Pending')],
     [T('قيود مؤكَّدة وما زال فيها فرق', 'Confirmed entries still showing a difference'), T('حرج', 'High'), `COUNTIFS(${rng(C.status)},"${conf}",${rng(C.diff)},"<>0")`, rows.filter(r => r.confirmed && r.diff !== 0).length, T('راجع المحاسب الذي أكّدها', 'Ask the confirming accountant')],
     [T('تكرار محتمل (نفس اليوم والوردية والمحطة والموظف)', 'Possible duplicates (same day, shift, station, employee)'), T('حرج', 'High'), `COUNTIF(${rng(C.dup)},"${dupWord}")`, rows.filter(r => r.dup).length, T('عمود «تكرار»', 'Column “Duplicate”')],
     [T('قيود لم تُؤكَّد بعد', 'Entries not yet confirmed'), T('متوسط', 'Medium'), `COUNTIF(${rng(C.status)},"${pending}")`, rows.filter(r => !r.confirmed).length, T('عمود «الحالة» = قيد المراجعة', 'Status = Pending')],
