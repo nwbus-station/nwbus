@@ -25,6 +25,7 @@ import { brandHeader, docHeader, docShell, openDocWindow, previewToolbar, TOOLBA
 import { getBalanceDoc, awaitBalanceDocs, balanceAppendixHtml } from '../utils/balanceDoc'
 import { saveSalePdf } from '../utils/salePdf'
 import DailyExcelModal from '../components/sales/DailyExcelModal'
+import EmployeeLookup from '../components/sales/EmployeeLookup'
 
 // الورديات تتبع إعداد الأدمن (3 أو 4) من الإعدادات؛ تُحدَّث عند كل عرض من app_settings
 const salesShiftsFrom = raw => parseShifts(raw).map(s => ({ value: s.k, ar: s.ar, en: s.en, range: s.range, end: s.to / 60 }))
@@ -1318,6 +1319,20 @@ export default function SalesPage() {
     fetchRecords()
   }
 
+  const [lookupActive, setLookupActive] = useState(false)
+  const canLookup = isGeneralAdmin || isAccountant || isStationAdmin || isAreaSupervisor || viewStation
+  // نفس حدود صلاحية جلب السجلات، لبحث الرقم الوظيفي عبر الأيام
+  const applyScope = q => {
+    if (isGeneralAdmin) return q
+    if (isStationAdmin && !isAreaSupervisor && !(allowedStationIds?.length > 1)) return q.eq('station_id', profile.station_id)
+    if ((isAreaSupervisor || isStationAdmin) && allowedStationIds?.length) return q.in('station_id', allowedStationIds)
+    if (isStationAdmin || isAccountant || viewStation) {
+      const wsIds = workStations?.map(x => x.id) ?? []
+      return wsIds.length > 1 ? q.in('station_id', wsIds) : q.eq('station_id', profile.station_id)
+    }
+    return q.eq('created_by', profile.id)
+  }
+
   const fetchRecords = useCallback(async () => {
     const cacheKey = `sales_${filterDate}_${filterStation}_${profile?.id}`
     const cached = getCached(cacheKey)
@@ -1530,6 +1545,9 @@ export default function SalesPage() {
         </div>
       </div>
 
+      {canLookup && <EmployeeLookup isAr={isAr} refresh={records} applyScope={applyScope} onActive={setLookupActive} onOpenRecord={r => setModal(r)} />}
+
+      {!lookupActive && (<>
       {/* Date + Station filter */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <button type="button" onClick={() => setFilterDate(todayStr())}
@@ -1781,6 +1799,7 @@ export default function SalesPage() {
           </div>
         )
       })()}
+      </>)}
 
       {printAccessOpen && (
         <PrintAccessModal isAr={isAr} access={printAccess} onClose={() => setPrintAccessOpen(false)}
