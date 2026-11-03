@@ -1,10 +1,11 @@
 // الجدول اليومي للإيرادات (Excel) — بأسلوب محاسبي: قيود مفصّلة + تسوية الورديات + توزيع طرق الدفع + توقيعات الاعتماد.
 // كل الإجماليات صيغ حيّة مرتبطة بورقة «القيود»، فأي تعديل يدوي في القيود ينعكس تلقائياً على الملخص.
 import { createBook, XL, colLetter } from './excelExport'
+import { ACC, settingsRefs, fillSettings, fillJournal, fillBank, fillEmployees, fillAudit, fillCharts } from './salesAccounting'
 
-const n0 = n => Math.round(Number(n) || 0)
-const ACC_FMT = '#,##0;[Red]-#,##0;"–"'          // محاسبي: السالب أحمر، الصفر شرطة
-const DIFF_FMT = '+#,##0;[Red]-#,##0;"–"'
+const n0 = n => Math.round((Number(n) || 0) * 100) / 100       // هللات: دقة محاسبية (خانتان عشريتان)
+const ACC_FMT = ACC                                           // محاسبي: السالب أحمر، الصفر شرطة
+const DIFF_FMT = '+#,##0.00;[Red]-#,##0.00;"–"'
 const SHIFT_LABEL = { A: ['أ', 'A'], B: ['ب', 'B'], C: ['ج', 'C'], D: ['د', 'D'] }
 const DEFAULT_RANGE = { A: '00:00 – 08:00', B: '08:00 – 16:00', C: '16:00 – 24:00' }
 const WD_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
@@ -49,10 +50,25 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
     const refs = parseRefs(r.balance_ref)
     return {
       date: String(r.sale_date || '').slice(0, 10), shift: sh(r), station: stName(r), emp: r.employee_name || r.created_by_name || '—', job: r.created_by_user?.job_number ?? '',
-      cashier: refs.cashier, budget: refs.budget, cash, mada, visa, mc, other, otherType: r.other_type || '', collected, expected, diff: collected - expected,
+      cashier: refs.cashier, budget: refs.budget, cash, mada, visa, mc, other, otherType: r.other_type || '', collected: n0(collected), expected, diff: n0(collected - expected),
       confirmed: !!r.is_confirmed, by: r.confirmed_by_name || '', notes: String(r.accountant_notes || '').replace(/\n?\[عجز[^\]]*\]/g, '').trim(),
       acked: String(r.accountant_notes || '').includes('تم إقرار العجز'), raw: r,
     }
+  })
+  // حقول التدقيق والعجز لكل قيد (تُستخدم في أوراق المحاسب)
+  const DUP = T('تكرار', 'Duplicate'), NO = T('لا', 'No'), YES = T('نعم', 'Yes')
+  const keyCount = {}
+  rows.forEach(r => { r.key = `${r.date}|${r.raw.shift}|${r.station}|${r.emp}`; keyCount[r.key] = (keyCount[r.key] || 0) + 1 })
+  rows.forEach(r => {
+    r.def = n0(Math.max(0, -r.diff)); r.sur = n0(Math.max(0, r.diff))
+    r.ackTxt = r.diff < 0 ? (r.acked ? YES : NO) : '—'
+    r.docTxt = r.raw.balance_doc_path ? T('مرفقة', 'Attached') : T('ناقصة', 'Missing')
+    r.net = r.raw.mada_network_ref || ''
+    r.cat = r.raw.confirmed_at ? new Date(new Date(r.raw.confirmed_at).getTime() + 3 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ') : ''
+    r.dup = keyCount[r.key] > 1 ? DUP : ''
+    r.alerts = [r.diff !== 0 ? T('فرق', 'Difference') : '', r.def > 0 && r.ackTxt === NO ? T('عجز غير مُقرّ', 'Unacknowledged shortage') : '', !r.confirmed ? T('غير مؤكد', 'Not confirmed') : '',
+      r.docTxt === T('ناقصة', 'Missing') ? T('بلا موازنة', 'No balance sheet') : '', !String(r.cashier || '').length ? T('بلا رقم صرافة', 'No cashier no.') : '', r.dup ? DUP : '',
+      r.mada > 0 && !String(r.net).length ? T('مدى بلا مرجع', 'Mada without ref.') : ''].filter(Boolean).join(' · ')
   })
   const tot = rows.reduce((a, r) => ({ cash: a.cash + r.cash, mada: a.mada + r.mada, visa: a.visa + r.visa, mc: a.mc + r.mc, other: a.other + r.other, collected: a.collected + r.collected, expected: a.expected + r.expected }),
     { cash: 0, mada: 0, visa: 0, mc: 0, other: 0, collected: 0, expected: 0 })
@@ -60,9 +76,21 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
 
   // ═════════ ورقة القيود (أولاً في البناء لنعرف نطاقاتها، لكنها تُرتَّب ثانياً) ═════════
   const S = book.sheet(SUM, Array(12).fill(13), { tab: XL.orange })
-  const E = book.sheet(ENT, [5, 12, 8, 24, 26, 12, 13, 16, 12, 12, 12, 12, 12, 13, 14, 14, 13, 14, 20, 34], { tab: XL.navy })
+  const E = book.sheet(ENT, [5, 12, 8, 24, 26, 12, 13, 16, 12, 12, 12, 12, 12, 13, 14, 14, 13, 14, 20, 34, 11, 11, 12, 12, 16, 17, 9, 36], { tab: XL.navy })
+  // أوراق المحاسب (تُنشأ هنا ليُحدَّد ترتيبها، وتُملأ بعد ورقة القيود)
+  const allDays = [...new Set(rows.map(r => r.date))].sort()
+  const stList = [...new Set(rows.map(r => r.station))].sort((a, b) => a.localeCompare(b))
+  const matrixByDay = allDays.length > 1 && allDays.length <= 31
+  const M = stList.length > 1 ? book.sheet(T('حسب المحطة', 'By station'), matrixByDay ? [28, ...allDays.map(() => 12), 15] : [28, 10, 15, 15, 14], { tab: 'FF8B5CF6' }) : null
+  const JR = book.sheet(T('قيد اليومية', 'Journal'), [12, 24, 16, 10, 34, 14, 14, 40], { tab: 'FF0F766E' })
+  const BK = book.sheet(T('تسوية الشبكات', 'Network recon'), [13, 14, 15, 11, 13, 15, 16, 16, 14, 17], { tab: 'FF0369A1' })
+  const EM = book.sheet(T('الموظفون والعجز', 'Employees'), [26, 12, 22, 9, 13, 13, 13, 13, 14, 13, 10, 12, 14], { tab: 'FFB91C1C' })
+  const AU = book.sheet(T('فحوصات التدقيق', 'Audit checks'), [6, 46, 12, 10, 14, 52], { tab: 'FFB45309' })
+  const CH = book.sheet(T('الرسوم البيانية', 'Charts'), Array(12).fill(14), { tab: 'FF7C3AED' })
+  const ST = book.sheet(T('الإعدادات', 'Settings'), [38, 18, 38, 46], { tab: 'FF64748B' })
+  const SR = settingsRefs(ST.name)
   // حروف أعمدة القيود (ثابتة المكان)
-  const C = { n: 'A', date: 'B', shift: 'C', station: 'D', emp: 'E', job: 'F', cashier: 'G', budget: 'H', cash: 'I', mada: 'J', visa: 'K', mc: 'L', other: 'M', otherType: 'N', collected: 'O', expected: 'P', diff: 'Q', status: 'R', by: 'S', notes: 'T' }
+  const C = { n: 'A', date: 'B', shift: 'C', station: 'D', emp: 'E', job: 'F', cashier: 'G', budget: 'H', cash: 'I', mada: 'J', visa: 'K', mc: 'L', other: 'M', otherType: 'N', collected: 'O', expected: 'P', diff: 'Q', status: 'R', by: 'S', notes: 'T', def: 'U', sur: 'V', ack: 'W', doc: 'X', net: 'Y', cat: 'Z', dup: 'AA', alert: 'AB' }
 
   E.header({ title: single ? T('قيود الإيرادات اليومية', 'Daily revenue entries') : T('قيود الإيرادات — الفترة', 'Revenue entries — period'), subtitle })
   const cols = [
@@ -75,6 +103,11 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
     { header: T('الفرق', 'Difference'), fmt: DIFF_FMT, bold: true, color: v => (typeof v !== 'number' ? null : v < 0 ? XL.red : v > 0 ? 'FF1D4ED8' : XL.green) },
     { header: T('الحالة', 'Status'), color: v => (v === T('مؤكَّد', 'Confirmed') ? XL.green : XL.amber), align: 'center' },
     { header: T('أكّده', 'Confirmed by') }, { header: T('ملاحظات المحاسب', 'Accountant notes'), wrap: true },
+    { header: T('عجز', 'Shortage'), fmt: ACC_FMT }, { header: T('زيادة', 'Surplus'), fmt: ACC_FMT },
+    { header: T('إقرار العجز', 'Shortage acknowledged'), align: 'center', color: v => (v === T('لا', 'No') ? XL.red : v === T('نعم', 'Yes') ? XL.green : null) },
+    { header: T('ورقة الموازنة', 'Balance sheet'), align: 'center', color: v => (v === T('ناقصة', 'Missing') ? XL.amber : null) }, { header: T('مرجع شبكة مدى', 'Mada network ref.') },
+    { header: T('وقت التأكيد', 'Confirmed at'), align: 'center' }, { header: T('تكرار', 'Dup.'), align: 'center', color: v => (v ? XL.red : null) },
+    { header: T('تنبيهات التدقيق', 'Audit flags'), wrap: true, color: v => (v ? XL.red : null) },
   ]
   const hdrRow = E.r  // صف الترويسة القادم
   const first = hdrRow + 1, last = hdrRow + rows.length
@@ -82,15 +115,21 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
   const eRows = rows.map((r, i) => {
     const rr = first + i
     return [i + 1, r.date, r.shift, r.station, r.emp, r.job, r.cashier, r.budget, r.cash, r.mada, r.visa, r.mc, r.other, r.otherType,
-      { formula: `SUM(${C.cash}${rr}:${C.other}${rr})`, result: r.collected }, r.expected, { formula: `${C.collected}${rr}-${C.expected}${rr}`, result: r.diff },
-      r.confirmed ? T('مؤكَّد', 'Confirmed') : T('قيد المراجعة', 'Pending'), r.by, r.notes]
+      { formula: `ROUND(SUM(${C.cash}${rr}:${C.other}${rr}),2)`, result: r.collected }, r.expected, { formula: `ROUND(${C.collected}${rr}-${C.expected}${rr},2)`, result: r.diff },
+      r.confirmed ? T('مؤكَّد', 'Confirmed') : T('قيد المراجعة', 'Pending'), r.by, r.notes,
+      { formula: `MAX(0,-${C.diff}${rr})`, result: r.def }, { formula: `MAX(0,${C.diff}${rr})`, result: r.sur }, r.ackTxt, r.docTxt, r.net, r.cat,
+      rows.length <= 4000
+        ? { formula: `IF(COUNTIFS($B$${first}:$B$${last},B${rr},$C$${first}:$C$${last},C${rr},$D$${first}:$D$${last},D${rr},$E$${first}:$E$${last},E${rr})>1,"${T('تكرار', 'Duplicate')}","")`, result: r.dup }
+        : r.dup,
+      { formula: `TRIM(IF(${C.diff}${rr}<>0,"${T('فرق', 'Difference')} ","")&IF(AND(${C.def}${rr}>0,${C.ack}${rr}="${T('لا', 'No')}"),"${T('عجز غير مُقرّ', 'Unacknowledged shortage')} ","")&IF(${C.status}${rr}="${T('قيد المراجعة', 'Pending')}","${T('غير مؤكد', 'Not confirmed')} ","")&IF(${C.doc}${rr}="${T('ناقصة', 'Missing')}","${T('بلا موازنة', 'No balance sheet')} ","")&IF(LEN(${C.cashier}${rr})=0,"${T('بلا رقم صرافة', 'No cashier no.')} ","")&IF(${C.dup}${rr}="${T('تكرار', 'Duplicate')}","${T('تكرار', 'Duplicate')} ","")&IF(AND(${C.mada}${rr}>0,LEN(${C.net}${rr})=0),"${T('مدى بلا مرجع', 'Mada without ref.')} ",""))`, result: r.alerts.replace(/ · /g, ' ') }]
   })
   const tE = E.table({
     columns: cols, rows: eRows, filter: true, freeze: 5, printTitle: true,
     totals: rows.length ? [T('الإجمالي', 'Total'), '', '', '', '', '', '', '',
       ...[C.cash, C.mada, C.visa, C.mc, C.other].map((c, k) => ({ formula: `SUBTOTAL(109,${c}${first}:${c}${last})`, result: [tot.cash, tot.mada, tot.visa, tot.mc, tot.other][k] })), '',
       { formula: `SUBTOTAL(109,${C.collected}${first}:${C.collected}${last})`, result: tot.collected }, { formula: `SUBTOTAL(109,${C.expected}${first}:${C.expected}${last})`, result: tot.expected },
-      { formula: `SUBTOTAL(109,${C.diff}${first}:${C.diff}${last})`, result: netDiff }, '', '', ''] : null,
+      { formula: `SUBTOTAL(109,${C.diff}${first}:${C.diff}${last})`, result: netDiff }, '', '', '',
+      { formula: `SUBTOTAL(109,${C.def}${first}:${C.def}${last})`, result: n0(rows.reduce((a, r) => a + r.def, 0)) }, { formula: `SUBTOTAL(109,${C.sur}${first}:${C.sur}${last})`, result: n0(rows.reduce((a, r) => a + r.sur, 0)) }, '', '', '', '', '', ''] : null,
   })
   if (rows.length) {
     E.scale(`${C.diff}${tE.first}:${C.diff}${tE.last}`, { min: -500, mid: 0, max: 500, colors: ['FFF8696B', 'FFFFFFFF', 'FF8DB4F2'] })
@@ -107,11 +146,42 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
   S.spacer(0)
   const confirmedN = rows.filter(r => r.confirmed).length
   S.kpis([
-    { label: T('إجمالي المبيعات (المتوقّع)', 'Total sales (expected)'), value: { formula: `SUM(${rng(C.expected)})`, result: tot.expected }, fmt: '#,##0', foot: T('ر.س', 'SAR') },
-    { label: T('إجمالي المحصَّل', 'Total collected'), value: { formula: `SUM(${rng(C.collected)})`, result: tot.collected }, fmt: '#,##0', color: XL.green, foot: T('ر.س', 'SAR') },
-    { label: T('الفرق الصافي', 'Net difference'), value: { formula: `SUM(${rng(C.diff)})`, result: netDiff }, fmt: '+#,##0;-#,##0;0', color: netDiff === 0 ? XL.green : netDiff < 0 ? XL.red : 'FF1D4ED8', foot: netDiff === 0 ? T('مطابق', 'Matched') : netDiff < 0 ? T('عجز', 'Deficit') : T('زيادة', 'Surplus') },
+    { label: T('إجمالي المبيعات (المتوقّع)', 'Total sales (expected)'), value: { formula: `SUM(${rng(C.expected)})`, result: tot.expected }, fmt: '#,##0.00', foot: T('ر.س', 'SAR') },
+    { label: T('إجمالي المحصَّل', 'Total collected'), value: { formula: `SUM(${rng(C.collected)})`, result: tot.collected }, fmt: '#,##0.00', color: XL.green, foot: T('ر.س', 'SAR') },
+    { label: T('الفرق الصافي', 'Net difference'), value: { formula: `SUM(${rng(C.diff)})`, result: netDiff }, fmt: '+#,##0.00;-#,##0.00;0', color: netDiff === 0 ? XL.green : netDiff < 0 ? XL.red : 'FF1D4ED8', foot: netDiff === 0 ? T('مطابق', 'Matched') : netDiff < 0 ? T('عجز', 'Deficit') : T('زيادة', 'Surplus') },
     { label: T('السجلات المؤكَّدة', 'Confirmed records'), value: `${confirmedN} / ${rows.length}`, color: confirmedN === rows.length && rows.length ? XL.green : XL.amber, foot: rows.length - confirmedN ? T(`${rows.length - confirmedN} قيد المراجعة`, `${rows.length - confirmedN} pending`) : T('كلها مؤكَّدة', 'all confirmed') },
   ], 3)
+
+  // الضريبة وصافي الإيراد (نسبة الضريبة من ورقة الإعدادات)
+  S.section(T('الضريبة وصافي الإيراد', 'VAT and net revenue'), T('نسبة الضريبة قابلة للتعديل في ورقة «الإعدادات» — المبيعات تُعتبر شاملة الضريبة.', 'The VAT rate is editable in the Settings sheet — sales are treated as VAT-inclusive.'))
+  const vatRate = 0.15, netSales = tot.expected / (1 + vatRate), defTot = rows.reduce((a, r) => a + r.def, 0)
+  S.kpis([
+    { label: T('المبيعات شاملة الضريبة', 'Sales incl. VAT'), value: { formula: `SUM(${rng(C.expected)})`, result: tot.expected }, fmt: '#,##0.00', foot: T('ر.س', 'SAR') },
+    { label: T('صافي الإيراد قبل الضريبة', 'Net revenue before VAT'), value: { formula: `SUM(${rng(C.expected)})/(1+${SR.vat})`, result: netSales }, fmt: '#,##0.00', color: XL.green, foot: T('ر.س', 'SAR') },
+    { label: T('ضريبة القيمة المضافة', 'VAT amount'), value: { formula: `SUM(${rng(C.expected)})-SUM(${rng(C.expected)})/(1+${SR.vat})`, result: tot.expected - netSales }, fmt: '#,##0.00', color: XL.amber, foot: T('مستحقة للهيئة', 'payable to the authority') },
+    { label: T('إجمالي العجز', 'Total shortage'), value: { formula: `SUM(${rng(C.def)})`, result: defTot }, fmt: '#,##0.00', color: defTot ? XL.red : XL.green, foot: T('ر.س', 'SAR') },
+  ], 3)
+
+  // فهرس الأوراق بروابط
+  S.section(T('محتويات الملف', 'Workbook contents'))
+  ;[
+    [ENT, T('كل القيود بالتفصيل مع الفلاتر وتنبيهات التدقيق لكل قيد', 'Every entry in detail with filters and per-entry audit flags')],
+    [JR.name, T('قيد اليومية المحاسبي (مدين/دائن) بالضريبة وجاهز للنسخ لنظامك', 'Accounting journal (Dr/Cr) with VAT, ready to copy into your ERP')],
+    [BK.name, T('تسوية مدى وVisa وMastercard مع تاريخ الإيداع المتوقع ومقارنة بكشف البنك', 'Network settlement with expected deposit dates vs your bank statement')],
+    [EM.name, T('عجز وزيادة والتزام كل موظف مع العجز غير المُقرّ', 'Per-employee shortage, surplus and accuracy, with unacknowledged shortage')],
+    [AU.name, T('فحوصات تدقيق آلية ونسبة جودة القيود', 'Automatic audit checks and an entry quality score')],
+    [CH.name, T('رسوم بيانية للتحصيل وطرق الدفع والمحطات والعجز', 'Charts: collection, payment methods, stations, shortages')],
+    [ST.name, T('نسبة الضريبة وأيام التسوية ودليل الحسابات (مدخلات قابلة للتعديل)', 'VAT rate, settlement days and chart of accounts (editable inputs)')],
+  ].forEach(([nm, desc]) => {
+    const wsS = S.ws, r = S.r
+    wsS.getRow(r).height = 22
+    wsS.mergeCells(r, 1, r, 3); wsS.mergeCells(r, 4, r, 12)
+    const a = wsS.getCell(r, 1); a.value = { text: nm, hyperlink: `#'${nm}'!A1` }; a.font = { size: 11, bold: true, underline: true, color: { argb: 'FF1D4ED8' } }; a.alignment = { vertical: 'middle', horizontal: isAr ? 'right' : 'left', indent: 1 }
+    const d = wsS.getCell(r, 4); d.value = desc; d.font = { size: 10, color: { argb: XL.grey } }; d.alignment = { vertical: 'middle', horizontal: isAr ? 'right' : 'left', wrapText: true }
+    for (let c = 1; c <= 12; c++) wsS.getCell(r, c).border = { bottom: { style: 'thin', color: { argb: XL.line } } }
+    S.r++
+  })
+  S.spacer(1)
 
   // توزيع طرق الدفع
   S.section(T('توزيع المحصَّل حسب طريقة الدفع', 'Collected by payment method'))
@@ -124,6 +194,23 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
     zebra: false,
   })
   S.bars(`E${tM.first}:E${tM.last}`, 'FFA9C4EB')
+
+  // حسب الشهر (عند امتداد الفترة لأكثر من شهر): أساس الإقرار الضريبي
+  const monthList = [...new Set(rows.map(r => r.date.slice(0, 7)))].sort()
+  if (monthList.length > 1) {
+    S.section(T('حسب الشهر', 'By month'), T('المبيعات الصافية والضريبة لكل شهر — لإعداد الإقرار الضريبي', 'Net sales and VAT per month — for the VAT return'))
+    const mo0 = S.r + 1
+    const mm = monthList.map(m => { const rs = rows.filter(r => r.date.startsWith(m)); return { m, n: rs.length, exp: rs.reduce((a, r) => a + r.expected, 0), coll: rs.reduce((a, r) => a + r.collected, 0) } })
+    const tMo = S.table({
+      columns: [{ header: T('الشهر', 'Month'), span: 2, bold: true }, { header: T('القيود', 'Entries'), fmt: '0' }, { header: T('المبيعات شاملة', 'Sales incl. VAT'), span: 2, fmt: ACC_FMT }, { header: T('الصافي قبل الضريبة', 'Net of VAT'), span: 2, fmt: ACC_FMT },
+        { header: T('الضريبة', 'VAT'), span: 2, fmt: ACC_FMT, bold: true }, { header: T('المحصَّل', 'Collected'), span: 2, fmt: ACC_FMT }, { header: T('الفرق', 'Diff.'), fmt: DIFF_FMT, bold: true, color: v => (typeof v !== 'number' ? null : v < 0 ? XL.red : v > 0 ? 'FF1D4ED8' : XL.green) }],
+      rows: mm.map((x, i) => { const r = mo0 + i; return [x.m, { formula: `COUNTIF(${rng(C.date)},A${r}&"*")`, result: x.n }, { formula: `SUMIFS(${rng(C.expected)},${rng(C.date)},A${r}&"*")`, result: x.exp },
+        { formula: `D${r}/(1+${SR.vat})`, result: x.exp / (1 + vatRate) }, { formula: `D${r}-F${r}`, result: x.exp - x.exp / (1 + vatRate) }, { formula: `SUMIFS(${rng(C.collected)},${rng(C.date)},A${r}&"*")`, result: x.coll }, { formula: `J${r}-D${r}`, result: x.coll - x.exp }] }),
+      totals: [T('الإجمالي', 'Total'), { formula: `SUM(C${mo0}:C${mo0 + mm.length - 1})`, result: rows.length }, { formula: `SUM(D${mo0}:D${mo0 + mm.length - 1})`, result: tot.expected }, { formula: `SUM(F${mo0}:F${mo0 + mm.length - 1})`, result: netSales },
+        { formula: `SUM(H${mo0}:H${mo0 + mm.length - 1})`, result: tot.expected - netSales }, { formula: `SUM(J${mo0}:J${mo0 + mm.length - 1})`, result: tot.collected }, { formula: `SUM(L${mo0}:L${mo0 + mm.length - 1})`, result: netDiff }],
+    })
+    void tMo
+  }
 
   // حسب اليوم (للفترات فقط)
   if (!single) {
@@ -226,13 +313,17 @@ export async function exportDailySalesExcel({ isAr, records, from, to, scopeText
   ])
   S.finish({ landscape: false })
 
+  // ═════════ أوراق المحاسب المالي ═════════
+  const actx = { T, isAr, rows, C, rng, S: SR, subtitle, book, tot }
+  fillSettings(ST, actx)
+  fillJournal(JR, actx)
+  fillBank(BK, actx)
+  fillEmployees(EM, actx)
+  fillAudit(AU, actx)
+  fillCharts(CH, actx)
+
   // ═════════ المحطات × الأيام (عند اختيار أكثر من محطة) — يبيّن أي محطة حقّقت كم في كل يوم ═════════
-  const allDays = [...new Set(rows.map(r => r.date))].sort()
-  const stList = [...new Set(rows.map(r => r.station))].sort((a, b) => a.localeCompare(b))
-  if (stList.length > 1) {
-    const matrixByDay = allDays.length > 1 && allDays.length <= 31
-    const widths = matrixByDay ? [28, ...allDays.map(() => 12), 15] : [28, 10, 15, 15, 14]
-    const M = book.sheet(T('حسب المحطة', 'By station'), widths, { tab: 'FF8B5CF6' })
+  if (M) {
     M.header({ title: T('المحصَّل حسب المحطة' + (matrixByDay ? ' واليوم' : ''), 'Collected by station' + (matrixByDay ? ' and day' : '')), subtitle })
     M.note(T('كل محطة بصف واحد، والأرقام صيغ حيّة من ورقة «القيود» (اضغط اسم المحطة في الفلتر هناك لرؤية قيودها).', 'One row per station; figures are live formulas from the “Entries” sheet.'), { color: XL.grey })
     const h0 = M.r + 1
