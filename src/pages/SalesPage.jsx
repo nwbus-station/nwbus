@@ -22,7 +22,7 @@ import SelectField from '../components/shared/SelectField'
 import SearchSelect from '../components/shared/SearchSelect'
 import { SALES_VIEW_CAPS } from '../utils/constants'
 import { brandHeader, docHeader, docShell, openDocWindow, previewToolbar, TOOLBAR_CSS, esc } from '../utils/printDoc'
-import { getBalanceDoc, balanceAppendixHtml, loadingPageHtml, fillAppendixSlot } from '../utils/balanceDoc'
+import { getBalanceDoc, awaitBalanceDocs, balanceAppendixHtml } from '../utils/balanceDoc'
 
 // الورديات تتبع إعداد الأدمن (3 أو 4) من الإعدادات؛ تُحدَّث عند كل عرض من app_settings
 const salesShiftsFrom = raw => parseShifts(raw).map(s => ({ value: s.k, ar: s.ar, en: s.en, range: s.range, end: s.to / 60 }))
@@ -210,14 +210,14 @@ function buildSaleRecordHtml({ sale, isAr, profile, docUrl, docPages }) {
         }
       </style>
     </head><body>
-    ${previewToolbar({ label: sale?.balance_doc_path ? (isAr ? 'معاينة اليومية مع ورقة الموازنة' : 'Daily sheet with balance sheet') : (isAr ? 'معاينة كشف الإيرادات' : 'Revenue sheet preview'), shareTitle: docTitle, shareText, appendixLabel: sale?.balance_doc_path ? (isAr ? 'مع ورقة الموازنة' : 'Include balance sheet') : '' })}
+    ${previewToolbar({ label: docUrl ? (isAr ? 'معاينة اليومية مع ورقة الموازنة' : 'Daily sheet with balance sheet') : (isAr ? 'معاينة كشف الإيرادات' : 'Revenue sheet preview'), shareTitle: docTitle, shareText, appendixLabel: docUrl ? (isAr ? 'مع ورقة الموازنة' : 'Include balance sheet') : '' })}
     <div class="page">
 
       <!-- Header -->
       ${brandHeader({
         title: isAr ? 'كشف الإيرادات اليومية' : 'Daily Revenue Report',
         subtitle: stationName,
-        lines: [`${isAr ? 'تاريخ السجل' : 'Record date'}: <b>${sale?.sale_date ?? '—'}</b>`, sale?.is_confirmed ? `<span style="display:inline-block;border:1.5px solid #16a34a;color:#16a34a;border-radius:6px;padding:0 8px;font-weight:700">&#10003; ${isAr ? 'سجل مؤكد' : 'CONFIRMED'}</span>` : '', sale?.balance_doc_path ? `<span class="appx" style="display:inline-block;border:1.5px solid #264673;color:#264673;border-radius:6px;padding:0 8px;font-weight:700">${isAr ? 'ورقة الموازنة مرفقة بعد هذه الصفحة' : 'Balance sheet attached overleaf'}</span>` : ''].filter(Boolean),
+        lines: [`${isAr ? 'تاريخ السجل' : 'Record date'}: <b>${sale?.sale_date ?? '—'}</b>`, sale?.is_confirmed ? `<span style="display:inline-block;border:1.5px solid #16a34a;color:#16a34a;border-radius:6px;padding:0 8px;font-weight:700">&#10003; ${isAr ? 'سجل مؤكد' : 'CONFIRMED'}</span>` : '', docUrl ? `<span class="appx" style="display:inline-block;border:1.5px solid #264673;color:#264673;border-radius:6px;padding:0 8px;font-weight:700">${isAr ? 'ورقة الموازنة مرفقة بعد هذه الصفحة' : 'Balance sheet attached overleaf'}</span>` : ''].filter(Boolean),
         dir, margin: '0 0 16px',
       })}
 
@@ -322,42 +322,25 @@ function buildSaleRecordHtml({ sale, isAr, profile, docUrl, docPages }) {
         <div style="color:#9ca3af">Station System — نظام المحطة</div>
       </div>
     </div>
-    ${(docUrl || !docPages) && sale?.balance_doc_path ? balanceAppendixHtml({ pages: docPages, pending: !docPages, docUrl, isAr, meta: `${stationName} · ${sale?.sale_date ?? '—'} · ${shiftLabel} · ${employeeName}` }) : ''}
+    ${docUrl ? balanceAppendixHtml({ pages: docPages, docUrl, isAr, meta: `${stationName} · ${sale?.sale_date ?? '—'} · ${shiftLabel} · ${employeeName}` }) : ''}
     </body></html>`
 
     return html
 }
 
 // طباعة يومية واحدة: إن كان لها صورة موازنة تُطبع معها في صفحة مرفقة بعد الكشف مباشرة
-export function printSaleRecord({ sale, isAr, profile }) {
+export async function printSaleRecord({ sale, isAr, profile }) {
   if (!sale?.balance_doc_path) { openDocWindow(buildSaleRecordHtml({ sale, isAr, profile })); return }
-  const w = window.open('', '_blank')   // تُفتح فوراً (قبل انتظار الرابط) حتى لا يحجبها المتصفح
-  ;(async () => {
-    const pending = getBalanceDoc(sale.balance_doc_path)   // غالباً جاهزة مسبقاً من فتح اليومية
-    const quick = await Promise.race([pending, new Promise(r => setTimeout(() => r(null), 350))])
-    if (quick) {
-      const html = buildSaleRecordHtml({ sale, isAr, profile, docUrl: quick.url, docPages: quick.pages })
-      if (w && !w.closed) { w.document.open(); w.document.write(html); w.document.close() } else openDocWindow(html)
-      return
-    }
-    // لم تجهز بعد: تظهر اليومية فوراً ويُملأ مكان الموازنة عند جاهزيتها، وزر الطباعة معطّل لحين ذلك
-    const html = buildSaleRecordHtml({ sale, isAr, profile, docUrl: null, docPages: null })
-    if (!w || w.closed) { const r = await pending; openDocWindow(buildSaleRecordHtml({ sale, isAr, profile, docUrl: r.url, docPages: r.pages })); return }
-    w.document.open(); w.document.write(html); w.document.close()
-    try { const pb = w.document.querySelector('.toolbar button[data-print]'); if (pb) { pb.disabled = true; pb.style.opacity = '.55'; pb.textContent = isAr ? 'جارٍ تحميل الموازنة...' : 'Loading balance...' } } catch { /* لا شي */ }
-    const r = await pending
-    fillAppendixSlot(w, { pages: r.pages, docUrl: r.url, isAr })
-    try { const pb = w.document.querySelector('.toolbar button[data-print]'); if (pb) pb.style.opacity = '' } catch { /* لا شي */ }
-  })()
+  // الموازنة تُجهَّز ونحن بالتبويب الظاهر (غالباً جاهزة مسبقاً فتفتح فوراً)، ثم تُفتح نافذة الطباعة مكتملة
+  const [d] = await awaitBalanceDocs([sale.balance_doc_path], isAr ? 'جارٍ تجهيز اليومية مع ورقة الموازنة...' : 'Preparing the daily sheet with the balance sheet...')
+  openDocWindow(buildSaleRecordHtml({ sale, isAr, profile, docUrl: d.url, docPages: d.pages }))
 }
 
 // طباعة ورقة الموازنة وحدها (صورة/PDF) بترويسة اليومية — معاينة تناسب الجوال مع مشاركة وحفظ PDF
-export function printBalanceSheet({ sale, isAr, profile }) {
+export async function printBalanceSheet({ sale, isAr, profile }) {
   if (!sale?.balance_doc_path) return
-  const w = window.open('', '_blank')
-  try { w?.document.write(loadingPageHtml(isAr ? 'جارٍ تجهيز ورقة الموازنة...' : 'Preparing the balance sheet...')) } catch { /* لا شي */ }
-  ;(async () => {
-    const { url, pages } = await getBalanceDoc(sale.balance_doc_path)
+  {
+    const [{ url, pages }] = await awaitBalanceDocs([sale.balance_doc_path], isAr ? 'جارٍ تجهيز ورقة الموازنة...' : 'Preparing the balance sheet...')
     const st = sale?.station?.name_ar ?? sale?.station?.name_en ?? '—'
     const shift = { A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج', D: 'الوردية د' }[sale?.shift] ?? sale?.shift ?? '—'
     const emp = sale?.employee_name || sale?.created_by_name || '—'
@@ -370,8 +353,8 @@ export function printBalanceSheet({ sale, isAr, profile }) {
       footerLeft: `طُبع: ${esc(new Date().toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' }))} · ${esc(profile?.full_name_ar ?? '')}`, footerRight: 'وثيقة داخلية',
       shareText: `ورقة الموازنة — ${st} · ${sale?.sale_date ?? ''} · ${shift}`,
     })
-    if (w && !w.closed) { w.document.open(); w.document.write(html); w.document.close() } else openDocWindow(html)
-  })()
+    openDocWindow(html)
+  }
 }
 
 // محطات الوكلاء: ليس لها يوميات إيرادات — تُستبعد من القوائم والإدخال (تُقرأ مرة واحدة بالجلسة)
@@ -1377,13 +1360,12 @@ export default function SalesPage() {
       shareText: `كشف الإيرادات اليومي — ${dayLabel}\nالقيود: ${records.length} · المحصَّل: ${fmt(tA)} ر.س · المبيعات: ${fmt(tE)} · الفرق: ${tD > 0 ? '+' : ''}${fmt(tD)}`,
     })
     if (!withDocs.length) { openDocWindow(html); return }
-    // أوراق الموازنة المرفقة تُطبع بعد الكشف، صفحة لكل يومية (تُفتح النافذة فوراً قبل انتظار الروابط)
-    const w = window.open('', '_blank')
-    try { w?.document.write(loadingPageHtml('جارٍ تجهيز الطباعة مع أوراق الموازنة...')) } catch { /* لا شي */ }
-    const docs = await Promise.all(withDocs.map(async r => [r, await getBalanceDoc(r.balance_doc_path)]))   // بالتوازي، والمُجهَّز مسبقاً فوري
-    const appendix = docs.filter(([, d]) => d.url).map(([r, d]) => balanceAppendixHtml({ pages: d.pages, docUrl: d.url, isAr: true, meta: `${sName(r)} · ${r.sale_date} · ${shiftLbl(r.shift)} · ${r.employee_name || r.created_by_name || '—'}` })).join('')
-    const full = html.replace('</body>', `${appendix}</body>`)
-    if (w && !w.closed) { w.document.open(); w.document.write(full); w.document.close() } else openDocWindow(full)
+    // أوراق الموازنة المرفقة تُطبع بعد الكشف، صفحة لكل يومية (تُجهَّز بالتبويب الظاهر ثم تُفتح النافذة مكتملة)
+    const uniq = [...new Set(withDocs.map(r => r.balance_doc_path))]
+    const docs = await awaitBalanceDocs(uniq, 'جارٍ تجهيز الطباعة مع أوراق الموازنة...')
+    const byPath = Object.fromEntries(uniq.map((path, i) => [path, docs[i]]))
+    const appendix = withDocs.filter(r => byPath[r.balance_doc_path]?.url).map(r => balanceAppendixHtml({ pages: byPath[r.balance_doc_path].pages, docUrl: byPath[r.balance_doc_path].url, isAr: true, meta: `${sName(r)} · ${r.sale_date} · ${shiftLbl(r.shift)} · ${r.employee_name || r.created_by_name || '—'}` })).join('')
+    openDocWindow(html.replace('</body>', `${appendix}</body>`))
   }
 
   const [xlBusy, setXlBusy] = useState(false)

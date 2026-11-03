@@ -65,21 +65,25 @@ export function getBalanceDoc(path) {
   return cache.get(path)
 }
 
-// صفحة انتظار أنيقة تظهر فوراً داخل نافذة الطباعة
-export const loadingPageHtml = msg => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f1f4f8;font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#264673}.b{text-align:center}.s{width:38px;height:38px;border:4px solid #dbe2ea;border-top-color:#EE712D;border-radius:50%;margin:0 auto 14px;animation:r .8s linear infinite}@keyframes r{to{transform:rotate(360deg)}}</style><div class="b"><div class="s"></div><b>${esc(msg)}</b></div>`
-
-// يملأ مكان الانتظار داخل نافذة الطباعة بعد جاهزية الصفحات، ويعيد زر الطباعة
-export function fillAppendixSlot(win, { pages, docUrl, isAr }) {
-  try {
-    const slot = win.document.getElementById('appx-slot')
-    if (slot) slot.outerHTML = balanceAppendixHtml({ pages, docUrl, isAr, meta: slot.getAttribute('data-meta') || '' })
-    const pb = win.document.querySelector('.toolbar button[data-print]')
-    if (pb) { pb.disabled = false; pb.textContent = pb.getAttribute('data-label') }
-  } catch { /* النافذة أُغلقت */ }
+// تحويل الصفحات يعتمد على رسم الشاشة، والمتصفح يوقف رسم التبويب إذا انفتحت نافذة الطباعة فوقه؛ لذلك ننتظر الجاهزية
+// ونحن في التبويب الظاهر (مع مؤشر انتظار)، وبعدها فقط تُفتح نافذة الطباعة والصفحات جاهزة فيها
+export async function awaitBalanceDocs(paths, msg) {
+  const list = [...new Set(paths.filter(Boolean))]
+  const ps = list.map(getBalanceDoc)
+  let box = null
+  const quick = await Promise.race([Promise.all(ps), new Promise(r => setTimeout(() => r(null), 120))])
+  if (!quick) {
+    box = document.createElement('div')
+    box.setAttribute('role', 'status')
+    box.style.cssText = "position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:rgba(15,23,42,.45);font-family:'IBM Plex Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif"
+    box.innerHTML = `<div style="background:#fff;border-radius:14px;padding:22px 28px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.25);color:#264673;font-weight:800;font-size:14px;max-width:86vw"><div style="width:34px;height:34px;border:4px solid #dbe2ea;border-top-color:#EE712D;border-radius:50%;margin:0 auto 12px;animation:bdspin .8s linear infinite"></div>${esc(msg)}<style>@keyframes bdspin{to{transform:rotate(360deg)}}</style></div>`
+    document.body.appendChild(box)
+  }
+  try { return await Promise.all(ps) } finally { box?.remove() }
 }
 
 // صفحات المرفق: صفحة لكل صورة، بشريط عنوان فيه بيانات اليومية وترقيم "صفحة i من n"
-export function balanceAppendixHtml({ pages, docUrl, isAr = true, meta = '', pending = false }) {
+export function balanceAppendixHtml({ pages, docUrl, isAr = true, meta = '' }) {
   const dir = isAr ? 'rtl' : 'ltr'
   const ff = "font-family:'IBM Plex Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif"
   const head = (n, total) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:3px solid #EE712D;padding:0 0 8px;margin-bottom:12px">
@@ -87,7 +91,6 @@ export function balanceAppendixHtml({ pages, docUrl, isAr = true, meta = '', pen
       <span style="font-size:11px;color:#475569">${esc(meta)}</span></div>`
   const wrap = inner => `<section class="appx" style="page-break-before:always;break-before:page;max-width:760px;margin:24px auto 0;padding:0 14px;direction:${dir};${ff}">${inner}</section>`
 
-  if (pending) return `<section id="appx-slot" class="appx" data-meta="${esc(meta)}" style="max-width:760px;margin:24px auto 0;padding:22px 14px;direction:${dir};${ff};text-align:center;color:#264673;border:1px dashed #94a3b8;border-radius:10px;font-weight:700;font-size:13px">${isAr ? 'جارٍ تحميل ورقة الموازنة... ستظهر هنا خلال لحظات، ولا تطبع قبل ظهورها' : 'Loading the balance sheet... it will appear here shortly — do not print before it does'}</section>`
   if (!pages?.length) {
     // تعذّر تحويل الورقة لصور: نبقي رابط الفتح كحل أخير مع تنبيه واضح
     return docUrl ? wrap(`${head(1, 1)}<p style="font-size:13px;color:#374151;line-height:1.9">${isAr ? 'تعذّر تضمين ورقة الموازنة داخل هذا المستند. ' : 'The balance sheet could not be embedded. '}<a href="${esc(docUrl)}" target="_blank">${isAr ? 'افتح الملف' : 'Open the file'}</a></p>`) : ''
