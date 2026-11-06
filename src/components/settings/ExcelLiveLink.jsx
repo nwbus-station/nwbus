@@ -9,6 +9,8 @@ import sheetFeedSource from '../../../supabase/functions/sheet-feed/index.ts?raw
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL
 const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+const isOpen = d => !!d && new Date(d).getFullYear() > new Date().getFullYear() + 50   // بدون انتهاء
+const fmtExp = (d, isAr) => (isOpen(d) ? (isAr ? 'بدون انتهاء' : 'no expiry') : fmtDT(d))
 const fmtDT = d => (d ? new Date(d).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' }) : '—')
 const inputStyle = { border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 12px', background: 'var(--surface)', color: 'var(--text-1)', fontSize: '0.85rem', fontFamily: 'inherit', minHeight: 44 }
 const btn = (primary, disabled) => ({ minHeight: 44, padding: '0 18px', borderRadius: 10, border: primary ? 'none' : '1px solid var(--border-2)', background: primary ? 'var(--solid-btn, #1C2B4A)' : 'var(--card)', color: primary ? '#fff' : 'var(--text-1)', fontWeight: 800, fontSize: '0.84rem', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.55 : 1, fontFamily: 'inherit' })
@@ -90,7 +92,7 @@ export default function ExcelLiveLink({ isAr = true }) {
             <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-3)' }}>
               {T('الصلاحية', 'Valid for')}
               <select value={days} onChange={e => setDays(Number(e.target.value))} style={inputStyle}>
-                <option value={30}>{T('30 يوماً', '30 days')}</option><option value={90}>{T('90 يوماً', '90 days')}</option><option value={180}>{T('180 يوماً', '180 days')}</option><option value={365}>{T('سنة', '1 year')}</option>
+                <option value={0}>{T('بدون انتهاء (يُلغى يدوياً)', 'No expiry (revoke manually)')}</option><option value={30}>{T('30 يوماً', '30 days')}</option><option value={90}>{T('90 يوماً', '90 days')}</option><option value={180}>{T('180 يوماً', '180 days')}</option><option value={365}>{T('سنة', '1 year')}</option>
               </select>
             </label>
             <button type="button" onClick={create} disabled={busy} style={btn(true, busy)}>{busy ? T('جارٍ الإنشاء…', 'Creating…') : T('إنشاء مفتاح جديد', 'Create new key')}</button>
@@ -100,7 +102,7 @@ export default function ExcelLiveLink({ isAr = true }) {
           {fresh && (
             <div style={{ marginTop: 16, border: '1px solid var(--border-2)', borderRadius: 12, padding: 16, background: 'var(--surface)' }}>
               <p style={{ margin: '0 0 8px', fontSize: '0.82rem', fontWeight: 800, color: 'var(--success)' }}>{T('تم إنشاء المفتاح. انسخ الكود الآن: لن يظهر المفتاح مرة ثانية.', 'Key created. Copy the code now — the key will not be shown again.')}</p>
-              <p style={{ margin: '0 0 12px', fontSize: '0.74rem', color: 'var(--text-3)' }}>{T(`ينتهي: ${fmtDT(fresh.expires_at)}. لا ترسل ملف Excel لأحد بعد لصق الكود: المفتاح داخل الملف.`, `Expires: ${fmtDT(fresh.expires_at)}. Do not share the Excel file after pasting — the key is inside it.`)}</p>
+              <p style={{ margin: '0 0 12px', fontSize: '0.74rem', color: 'var(--text-3)' }}>{T(`ينتهي: ${fmtExp(fresh.expires_at, true)}. لا ترسل ملف Excel لأحد بعد لصق الكود: المفتاح داخل الملف.`, `Expires: ${fmtExp(fresh.expires_at, false)}. Do not share the Excel file after pasting — the key is inside it.`)}</p>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
                 <b style={{ fontSize: '0.8rem', color: 'var(--text-1)' }}>{T('1) كود الاتصال (الصقه مرة واحدة في Excel)', '1) Connection code (paste once in Excel)')}</b>
@@ -198,7 +200,7 @@ export default function ExcelLiveLink({ isAr = true }) {
                     <b style={{ fontSize: '0.82rem', color: 'var(--text-1)' }}>{k.label || 'Excel'}</b>
                     <span dir="ltr" style={{ marginInlineStart: 8, fontFamily: 'monospace', fontSize: '0.74rem', color: 'var(--text-3)' }}>nwx_…{k.token_hint}</span>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 3, lineHeight: 1.7 }}>
-                      {T(`أُنشئ ${fmtDT(k.created_at)} · ينتهي ${fmtDT(k.expires_at)}`, `Created ${fmtDT(k.created_at)} · expires ${fmtDT(k.expires_at)}`)}<br />
+                      {T(`أُنشئ ${fmtDT(k.created_at)} · ينتهي ${fmtExp(k.expires_at, true)}`, `Created ${fmtDT(k.created_at)} · expires ${fmtExp(k.expires_at, false)}`)}<br />
                       {k.last_used_at ? T(`آخر استخدام ${fmtDT(k.last_used_at)} · ${k.use_count} مرة`, `Last used ${fmtDT(k.last_used_at)} · ${k.use_count} times`) : T('لم يُستخدم بعد', 'Never used')}
                     </div>
                   </div>

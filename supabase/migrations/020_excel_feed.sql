@@ -33,9 +33,9 @@ declare
 begin
   select id into uid from users where auth_id = auth.uid() and role = 'general_admin' and is_active;
   if uid is null then raise exception 'not allowed'; end if;
-  if p_days is null or p_days < 1 or p_days > 365 then p_days := 90; end if;
+  if p_days is null or p_days < 0 or p_days > 365 then p_days := 90; end if;   -- 0 = بدون انتهاء (يُلغى يدوياً)
   tok := 'nwx_' || replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
-  exp := now() + make_interval(days => p_days);
+  if p_days = 0 then exp := now() + interval '100 years'; else exp := now() + make_interval(days => p_days); end if;
   insert into excel_keys (user_id, label, token_hash, token_hint, expires_at)
   values (uid, left(coalesce(p_label, ''), 60), encode(sha256(convert_to(tok, 'UTF8')), 'hex'), right(tok, 4), exp);
   return jsonb_build_object('token', tok, 'expires_at', exp);
