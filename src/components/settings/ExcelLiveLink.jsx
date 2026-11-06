@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import { FEED_DATASETS, feedCode } from '../../utils/excelFeedCode'
+import sheetFeedSource from '../../../supabase/functions/sheet-feed/index.ts?raw'
 
 // اتصال Excel المباشر (للأدمن العام): مفتاح قراءة فقط يُنشأ هنا ويُلصق في Excel مرة واحدة،
 // وبعدها ملف Excel واحد يسحب أحدث البيانات بزر «تحديث» (أو تلقائياً كل عدة دقائق).
@@ -20,6 +21,8 @@ function downloadText(name, text) {
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => window.URL.revokeObjectURL(a.href), 4000)
 }
+// صيغة قوقل شيت لتبويب بيانات: تقرأ الرابط والمفتاح من تبويب Settings
+const sheetFormula = id => `=IMPORTDATA(Settings!$B$1&"?key="&Settings!$B$2&"&d=${id}&days="&Settings!$B$4&"&t="&Settings!$B$3)`
 const sheetCode = id => `let\n    Source = fnFeed("${id}")\nin\n    Source`
 
 function CopyBtn({ text, label = 'نسخ', done = 'تم النسخ' }) {
@@ -115,9 +118,51 @@ export default function ExcelLiveLink({ isAr = true }) {
                   </div>
                 ))}
               </div>
+
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                <b style={{ display: 'block', fontSize: '0.84rem', color: 'var(--text-1)', marginBottom: 6 }}>{T('أو: قوقل شيت (أسهل على أجهزة الشركات)', 'Or: Google Sheets (easier on locked-down PCs)')}</b>
+                <p style={{ margin: '0 0 10px', fontSize: '0.76rem', lineHeight: 1.8, color: 'var(--text-3)' }}>
+                  {T('ينفع بدون Power Query ولا كود. في الشيت تبويب اسمه Settings بأربع خلايا، وكل تبويب بيانات فيه صيغة واحدة. التحديث تلقائي تقريباً كل ساعة، أو غيّر الرقم في Settings!B3 لتحديث فوري. بيانات النظام تصير داخل قوقل، فلا تشارك الشيت إلا مع من يحق له.', 'No Power Query or code. The sheet has a Settings tab with four cells, and each data tab holds one formula. It refreshes about hourly, or change the number in Settings!B3 to force it. System data will live in Google, so share the sheet only with authorised people.')}
+                </p>
+                <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+                  {[
+                    ['B1', T('رابط الدالة', 'Function URL'), `${SUPA_URL}/functions/v1/sheet-feed`],
+                    ['B2', T('المفتاح', 'Key'), fresh.token],
+                    ['B3', T('عدّاد التحديث (غيّره للتحديث الفوري)', 'Refresh counter (change to refresh now)'), '1'],
+                    ['B4', T('عدد الأيام للخلف', 'Days back'), '365'],
+                  ].map(([cellId, lbl, val]) => (
+                    <div key={cellId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 9, background: 'var(--card)', border: '1px solid var(--border)' }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)' }}>Settings!{cellId} <span style={{ fontWeight: 500, color: 'var(--text-3)' }}>· {lbl}</span></span>
+                      <CopyBtn text={val} label={T('نسخ', 'Copy')} />
+                    </div>
+                  ))}
+                </div>
+                <b style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-1)', marginBottom: 8 }}>{T('صيغة كل تبويب (الصقها في الخلية A1 من التبويب)', 'Formula per tab (paste into cell A1)')}</b>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 8 }}>
+                  {FEED_DATASETS.map(d => (
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 9, background: 'var(--card)', border: '1px solid var(--border)' }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)' }}>{isAr ? d.ar : d.en}</span>
+                      <CopyBtn text={sheetFormula(d.id)} label={T('نسخ', 'Copy')} />
+                    </div>
+                  ))}
+                </div>
+              </div>
               <button type="button" onClick={() => setFresh(null)} style={{ ...btn(false), marginTop: 14 }}>{T('تم، إخفاء المفتاح', 'Done — hide key')}</button>
             </div>
           )}
+
+          <details style={{ marginTop: 14 }}>
+            <summary style={{ cursor: 'pointer', fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-1)', minHeight: 40, display: 'flex', alignItems: 'center' }}>{T('تفعيل قوقل شيت (مرة واحدة في Supabase)', 'Enable Google Sheets (one time in Supabase)')}</summary>
+            <ol style={{ margin: '8px 0 0', paddingInlineStart: 20, fontSize: '0.8rem', lineHeight: 2, color: 'var(--text-2)' }}>
+              <li>{T('في لوحة Supabase: Edge Functions ← Deploy a new function ← Via Editor، اسم الدالة sheet-feed بالضبط.', 'In Supabase: Edge Functions → Deploy a new function → Via Editor, name it exactly sheet-feed.')}</li>
+              <li>{T('امسح الكود الموجود والصق كود الدالة (الزر تحت)، ثم Deploy.', 'Replace the sample code with the function code (button below), then Deploy.')}</li>
+              <li>{T('افتح الدالة ← Details ← أطفئ «Enforce JWT Verification» واحفظ. (ضروري: قوقل شيت لا يرسل ترويسات.)', 'Open the function → Details → turn OFF “Enforce JWT Verification” and save (required: Google Sheets sends no headers).')}</li>
+            </ol>
+            <div style={{ marginTop: 8 }}>
+              <CopyBtn text={sheetFeedSource} label={T('نسخ كود الدالة', 'Copy function code')} />
+              <button type="button" onClick={() => downloadText('sheet-feed.ts', sheetFeedSource)} style={{ ...btn(false), minHeight: 38, padding: '0 14px', fontSize: '0.78rem', marginInlineStart: 8 }}>{T('تنزيل كملف', 'Download file')}</button>
+            </div>
+          </details>
 
           <button type="button" onClick={() => setSteps(s => !s)} aria-expanded={steps} style={{ ...btn(false), marginTop: 14, minHeight: 40 }}>
             {steps ? T('إخفاء خطوات الإعداد', 'Hide setup steps') : T('خطوات الإعداد في Excel (مرة واحدة)', 'Excel setup steps (one time)')}
