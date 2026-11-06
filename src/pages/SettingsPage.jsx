@@ -5,6 +5,7 @@ import { useAppSettings } from '../context/AppSettingsContext'
 import BackupSettings from '../components/settings/BackupSettings'
 import OperationsReportDownload from '../components/settings/OperationsReportDownload'
 import SalesDaySettings from '../components/settings/SalesDaySettings'
+import ExcelLiveLink from '../components/settings/ExcelLiveLink'
 
 const THEMES = [
   { id:'bw',     labelAr:'أسود وأبيض',    labelEn:'Black & White',   preview:['#0a0a0a','#ffffff','#f0f0f0'] },
@@ -17,7 +18,7 @@ const THEMES = [
 
 export default function SettingsPage() {
   const { i18n } = useTranslation()
-  const { profile, isAdmin: isAdminRole, allowCap } = useAuth()
+  const { profile, isAdmin: isAdminRole, isGeneralAdmin, allowCap } = useAuth()
   const isAdmin = isAdminRole && allowCap('settings_access')
   const { settings, saveSetting } = useAppSettings()
   const isAr = i18n.language === 'ar'
@@ -95,6 +96,9 @@ const Section = ({ titleAr, titleEn, children }) => (
       </Section>
 
       <SalesDaySettings isAr={isAr} />
+
+      {/* ── اتصال Excel المباشر (الأدمن العام فقط) ── */}
+      {isGeneralAdmin && <ExcelLiveLink isAr={isAr} />}
 
       {/* ── النسخ الاحتياطي والتقرير اليومي ── */}
       <OperationsReportDownload isAr={isAr} />
