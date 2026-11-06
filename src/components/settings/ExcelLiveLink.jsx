@@ -12,6 +12,16 @@ const fmtDT = d => (d ? new Date(d).toLocaleString('ar-SA-u-ca-gregory-nu-latn',
 const inputStyle = { border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 12px', background: 'var(--surface)', color: 'var(--text-1)', fontSize: '0.85rem', fontFamily: 'inherit', minHeight: 44 }
 const btn = (primary, disabled) => ({ minHeight: 44, padding: '0 18px', borderRadius: 10, border: primary ? 'none' : '1px solid var(--border-2)', background: primary ? 'var(--solid-btn, #1C2B4A)' : 'var(--card)', color: primary ? '#fff' : 'var(--text-1)', fontWeight: 800, fontSize: '0.84rem', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.55 : 1, fontFamily: 'inherit' })
 
+// تنزيل نص كملف (للأجهزة اللي تمنع النسخ بين المتصفح وأوفيس): يُفتح بالمفكرة ومنها يُنسخ
+function downloadText(name, text) {
+  const blob = new Blob(['\ufeff' + text], { type: 'text/plain;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = window.URL.createObjectURL(blob); a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => window.URL.revokeObjectURL(a.href), 4000)
+}
+const sheetCode = id => `let\n    Source = fnFeed("${id}")\nin\n    Source`
+
 function CopyBtn({ text, label = 'نسخ', done = 'تم النسخ' }) {
   const [ok, setOk] = useState(false)
   return (
@@ -92,15 +102,16 @@ export default function ExcelLiveLink({ isAr = true }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
                 <b style={{ fontSize: '0.8rem', color: 'var(--text-1)' }}>{T('1) كود الاتصال (الصقه مرة واحدة في Excel)', '1) Connection code (paste once in Excel)')}</b>
                 <CopyBtn text={code} label={T('نسخ كود الاتصال', 'Copy code')} />
+                <button type="button" onClick={() => downloadText('fnFeed.txt', code)} style={{ ...btn(false), minHeight: 38, padding: '0 14px', fontSize: '0.78rem' }}>{T('تنزيل كملف نصي', 'Download as .txt')}</button>
               </div>
               <pre dir="ltr" style={{ margin: '0 0 16px', maxHeight: 130, overflow: 'auto', padding: 10, borderRadius: 8, background: 'var(--card)', border: '1px solid var(--border)', fontSize: '0.68rem', color: 'var(--text-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{code.replace(fresh.token, fresh.token.slice(0, 8) + '…' + fresh.token.slice(-4))}</pre>
 
-              <b style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-1)', marginBottom: 8 }}>{T('2) لكل ورقة بيانات: انسخ السطر واكتبه في شريط الصيغة', '2) For each data sheet: copy the line into the formula bar')}</b>
+              <b style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-1)', marginBottom: 8 }}>{T('2) لكل ورقة بيانات: استعلام فارغ جديد ← المحرر المتقدم ← الصق هذا الكود', '2) For each data sheet: new Blank Query → Advanced Editor → paste this code')}</b>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 8 }}>
                 {FEED_DATASETS.map(d => (
                   <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 9, background: 'var(--card)', border: '1px solid var(--border)' }}>
                     <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)' }}>{isAr ? d.ar : d.en}</span>
-                    <CopyBtn text={`= fnFeed("${d.id}")`} label={T('نسخ', 'Copy')} />
+                    <CopyBtn text={sheetCode(d.id)} label={T('نسخ', 'Copy')} />
                   </div>
                 ))}
               </div>
@@ -114,9 +125,9 @@ export default function ExcelLiveLink({ isAr = true }) {
           {steps && (
             <ol style={{ margin: '12px 0 0', paddingInlineStart: 20, fontSize: '0.8rem', lineHeight: 2, color: 'var(--text-2)' }}>
               <li>{T('افتح Excel (ملف جديد)، ثم «بيانات» ← «الحصول على البيانات» ← «من مصادر أخرى» ← «استعلام فارغ».', 'Open a new Excel file → Data → Get Data → From Other Sources → Blank Query.')}</li>
-              <li>{T('اضغط «محرر متقدم»، احذف كل شي، والصق كود الاتصال، ثم «تم». سمِّ الاستعلام fnFeed (بهذا الاسم بالضبط).', 'Open Advanced Editor, delete everything, paste the connection code, Done. Name the query exactly fnFeed.')}</li>
+              <li>{T('اضغط «المحرر المتقدم»، احذف كل شي، والصق كود الاتصال، ثم «تم». سمِّ الاستعلام fnFeed (بهذا الاسم بالضبط). إن ما انلصق: نزّل الكود كملف نصي، افتحه بالمفكرة وانسخه منها.', 'Open Advanced Editor, delete everything, paste the connection code, Done. Name the query exactly fnFeed. If paste fails, download the code as .txt, open it in Notepad and copy from there.')}</li>
               <li>{T('إن طلب بيانات اعتماد اختر «مجهول» (Anonymous). ثم «إغلاق وتحميل إلى…» ← «إنشاء اتصال فقط».', 'If asked for credentials choose Anonymous. Then Close & Load To… → Only Create Connection.')}</li>
-              <li>{T('لكل نوع بيانات: «استعلام فارغ» جديد، اكتب في شريط الصيغة السطر المنسوخ مثل = fnFeed("sales")، سمِّه باسم البيانات، ثم «إغلاق وتحميل».', 'For each dataset: new Blank Query, type the copied line such as = fnFeed("sales") in the formula bar, name it, Close & Load.')}</li>
+              <li>{T('لكل نوع بيانات: «استعلام فارغ» جديد ← «المحرر المتقدم»، الصق كود النوع (يبدأ بـ let وفيه fnFeed("sales") مثلاً)، «تم»، سمِّه باسم البيانات، ثم «إغلاق وتحميل». لا تكتب الكود في خلية بالورقة.', 'For each dataset: new Blank Query → Advanced Editor, paste the dataset code (starts with let and contains fnFeed("sales")), Done, name it, Close & Load. Do not type the code into a worksheet cell.')}</li>
               <li>{T('للتحديث التلقائي: «بيانات» ← «الاستعلامات والاتصالات» ← خصائص الاتصال ← «تحديث كل … دقيقة» و«تحديث عند فتح الملف».', 'Auto refresh: Data → Queries & Connections → connection properties → Refresh every … minutes and Refresh on open.')}</li>
               <li>{T('احفظ الملف: هذا هو ملفك الحي الوحيد. افتحه واضغط «تحديث الكل» كل ما تبي أحدث البيانات.', 'Save the file: it is your single live file. Open it and press Refresh All any time.')}</li>
             </ol>
