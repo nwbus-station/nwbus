@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import ConfirmDialog from '../shared/ConfirmDialog'
-import { FEED_DATASETS, feedCode } from '../../utils/excelFeedCode'
+import { FEED_DATASETS, feedCode, sheetsScript } from '../../utils/excelFeedCode'
 import sheetFeedSource from '../../../supabase/functions/sheet-feed/index.ts?raw'
 
 // اتصال Excel المباشر (للأدمن العام): مفتاح قراءة فقط يُنشأ هنا ويُلصق في Excel مرة واحدة،
@@ -162,6 +162,15 @@ export default function ExcelLiveLink({ isAr = true }) {
               <CopyBtn text={sheetFeedSource} label={T('نسخ كود الدالة', 'Copy function code')} />
               <button type="button" onClick={() => downloadText('sheet-feed.ts', sheetFeedSource)} style={{ ...btn(false), minHeight: 38, padding: '0 14px', fontSize: '0.78rem', marginInlineStart: 8 }}>{T('تنزيل كملف', 'Download file')}</button>
             </div>
+            <b style={{ display: 'block', margin: '18px 0 6px', fontSize: '0.82rem', color: 'var(--text-1)' }}>{T('الشيت الجاهز بنقرة واحدة (كل الأقسام + تحديث تلقائي)', 'One-click ready sheet (all sections + auto refresh)')}</b>
+            <ol style={{ margin: '0 0 8px', paddingInlineStart: 20, fontSize: '0.8rem', lineHeight: 2, color: 'var(--text-2)' }}>
+              <li>{T('في قوقل شيت جديد: Extensions ← Apps Script.', 'In a new Google Sheet: Extensions → Apps Script.')}</li>
+              <li>{T('امسح الكود الموجود والصق كود السكربت (الزر تحت)، ثم Save.', 'Replace the sample with the script code (button below), then Save.')}</li>
+              <li>{T('اختر الدالة setup من القائمة العلوية واضغط Run، واسمح بالصلاحيات. تظهر نافذة: الصق مفتاحك.', 'Pick the function setup in the top bar and Run; allow permissions. A box appears: paste your key.')}</li>
+              <li>{T('تنبني كل التبويبات تلقائياً وتتحدث كل 15 دقيقة، حتى والملف مقفل. من قائمة NW Station تقدر تحدّث فوراً.', 'All tabs are built automatically and refresh every 15 minutes, even when closed. Use the NW Station menu to refresh now.')}</li>
+            </ol>
+            <CopyBtn text={sheetsScript({ baseUrl: SUPA_URL })} label={T('نسخ كود السكربت', 'Copy script code')} />
+            <button type="button" onClick={() => downloadText('nw-sheet-setup.gs', sheetsScript({ baseUrl: SUPA_URL }))} style={{ ...btn(false), minHeight: 38, padding: '0 14px', fontSize: '0.78rem', marginInlineStart: 8 }}>{T('تنزيل كملف', 'Download file')}</button>
           </details>
 
           <button type="button" onClick={() => setSteps(s => !s)} aria-expanded={steps} style={{ ...btn(false), marginTop: 14, minHeight: 40 }}>
