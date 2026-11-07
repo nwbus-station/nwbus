@@ -42,7 +42,7 @@ async function htmlToPdfBlob(bodyHtml, css, { fit = false } = {}) {
 
     // ملف الملخص: إن زاد قليلاً عن صفحة نصغّره ليدخل صفحة واحدة (بدل صفحة ثانية بصفوف مقطوعة)
     const fitScale = fit && totalH > PAGE_H ? PAGE_H / totalH : 1
-    const fitOne = fit && fitScale >= 0.55
+    const fitOne = fit && fitScale >= 0.45
 
     const canvas = await html2canvas(body, { scale: SCALE, backgroundColor: '#ffffff', useCORS: true, logging: false, foreignObjectRendering: true, width: PAGE_W, windowWidth: PAGE_W, height: totalH, windowHeight: totalH })
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true })

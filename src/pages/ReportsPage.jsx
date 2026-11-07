@@ -1250,7 +1250,7 @@ export default function ReportsPage() {
         <div style="font-size:14.5px;font-weight:900;color:#0f172a;margin-top:3px">${escapeHtml(name)}</div>
         <div style="font-size:12px;font-weight:700;color:${c};margin-top:2px">${val}</div></div>`
       summaryPage = `
-        <div style="page-break-after:always">
+        <div class="${outMode === 'pdf' ? 'sum-compact' : ''}" style="page-break-after:always">
           ${brandHeader({ title: isAr ? 'ملخص المحطات المحددة' : 'Selected stations summary', subtitle: isAr ? `${targetStations.length} محطة` : `${targetStations.length} stations`, lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
           <div style="padding:0 4px">
             <div style="display:flex;gap:10px;align-items:stretch;margin-top:4px">
@@ -1299,7 +1299,8 @@ export default function ReportsPage() {
       const files = []
       if (summaryPage) files.push({ name: `00 - ${isAr ? 'ملخص المحطات' : 'Stations summary'}`, html: wrapSheet(summaryPage), fit: true })   // الملخص يدخل صفحة واحدة بدل ما يتقطع
       targetStations.forEach((stn, i) => files.push({ name: `${String(i + 1).padStart(2, '0')} - ${isAr ? (stn.name_ar || stn.name_en) : (stn.name_en || stn.name_ar)} - ${modeWord(modeById[stn.id])}`, html: wrapSheet(pageList[i]) }))
-      return { files, css: SHEET_CSS }
+      // ملف الملخص أكثر إحكاماً (صفوف أقل ارتفاعاً) ليدخل صفحة واحدة مقروءة
+      return { files, css: `${SHEET_CSS} .sum-compact tbody td{padding-top:3px!important;padding-bottom:3px!important}` }
     }
     const html = wrapSheet(`${summaryPage}${pages}`)
     const kindS = reportKindName()
