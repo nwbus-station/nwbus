@@ -6,6 +6,7 @@ import BackupSettings from '../components/settings/BackupSettings'
 import OperationsReportDownload from '../components/settings/OperationsReportDownload'
 import SalesDaySettings from '../components/settings/SalesDaySettings'
 import ExcelLiveLink from '../components/settings/ExcelLiveLink'
+import TransportOverviewAccess from '../components/settings/TransportOverviewAccess'
 
 const THEMES = [
   { id:'bw',     labelAr:'أسود وأبيض',    labelEn:'Black & White',   preview:['#0a0a0a','#ffffff','#f0f0f0'] },
@@ -96,6 +97,9 @@ const Section = ({ titleAr, titleEn, children }) => (
       </Section>
 
       <SalesDaySettings isAr={isAr} />
+
+      {/* ── من يرى الجدول الشامل في الترحيل ── */}
+      <TransportOverviewAccess isAr={isAr} />
 
       {/* ── اتصال Excel المباشر (الأدمن العام فقط) ── */}
       {isGeneralAdmin && <ExcelLiveLink isAr={isAr} />}

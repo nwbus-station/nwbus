@@ -17,6 +17,8 @@ import QRScannerModal from '../components/shared/QRScannerModal'
 import NewTripModal from '../components/transportation/NewTripModal'
 import ManualTripsModal from '../components/transportation/ManualTripsModal'
 import { applyDueSchedules } from '../utils/importSchedule'
+import { useAppSettings } from '../context/AppSettingsContext'
+import { overviewState } from '../utils/transportOverview'
 
 /* ─── helpers ────────────────────────────────────────────── */
 import { todayStr } from '../utils/dates'
@@ -684,6 +686,22 @@ function TripModal({ trip, record, stationId, stationName, stations = [], isArri
 }
 
 /* ─── Main Page ─────────────────────────────────────────── */
+// بيانات الجدول الشامل الثابتة (رحلات المحطات والتوقفات والرحلات والمحطات) لا تتغيّر بتغيير اليوم:
+// تُقرأ مرة وتُحفظ بالذاكرة، فتبديل اليوم أو التحديث الفوري يقرأ سجلات اليوم فقط
+let SCHED_STATIC = null
+const STATIC_TTL = 5 * 60 * 1000
+
+// قراءة جدول كامل: الصفحة الأولى مع العدد الكلي، ثم بقية الصفحات (1000 صف كل مرة) بالتوازي بدل التسلسل
+async function pageAllFast(make) {
+  const PAGE = 1000
+  const first = await make({ count: 'exact' }).range(0, PAGE - 1)
+  if (first.error) throw first.error
+  const total = Math.min(first.count ?? (first.data ?? []).length, 80000)
+  const rest = []
+  for (let f = PAGE; f < total; f += PAGE) rest.push(make(undefined).range(f, f + PAGE - 1).then(r => { if (r.error) throw r.error; return r.data ?? [] }))
+  return [...(first.data ?? []), ...(await Promise.all(rest)).flat()]
+}
+
 export default function TransportationPage() {
   const { profile, isGeneralAdmin, isRestricted, isStationAdmin, isAccountant, isAreaSupervisor, allowedStationIds, allowCap, grantCap, supervisedStationIds, workStations } = useAuth()
   // الحساب المقيّد (مسمى مخصص) يستخدم أزرار الأدمن حسب المفاتيح المفعّلة له فقط
@@ -717,10 +735,32 @@ export default function TransportationPage() {
   const [schedStations, setSchedStations] = useState(() => { try { return JSON.parse(localStorage.getItem('nwbus_sched_stations') || '[]') } catch { return [] } })   // فارغ = كل المحطات
   const [stPanel, setStPanel] = useState(false)
   const [stTab, setStTab] = useState('stations')   // صفحتا الاختيار: stations | agents
-  const [schedScope, setSchedScope] = useState(() => localStorage.getItem('nwbus_sched_scope') || 'stations')   // عند عدم اختيار محطات: stations (بدون وكلاء) | agents | all
+  const [schedScope, setSchedScope] = useState(() => localStorage.getItem('nwbus_sched_scope') || 'staffed')   // عند عدم اختيار محطات: stations (بدون وكلاء) | agents | all
   const [stQ, setStQ] = useState('')
   const [userCounts, setUserCounts] = useState({})   // عدد مستخدمي كل محطة
   const [openNotes, setOpenNotes] = useState(() => new Set())   // الحركات المفتوحة ملاحظاتها بالجدول الشامل
+  const [followNotes, setFollowNotes] = useState({})   // key → ملاحظات المتابعة لهذه الحركة
+  const [notesReady, setNotesReady] = useState(true)    // false إذا لم يُنشأ جدول الملاحظات بعد
+  const [noteDraft, setNoteDraft] = useState(null)      // { key, text }
+  const [noteBusy, setNoteBusy] = useState(false)
+  const [delNote, setDelNote] = useState(null)
+  const [schedLimit, setSchedLimit] = useState(100)     // عدد الحركات المعروضة (يزيد تلقائياً مع التمرير)
+  const [sentinel, setSentinel] = useState(null)
+  const [isDesktop, setIsDesktop] = useState(() => typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches)
+  const { settings, loading: settingsLoading } = useAppSettings()
+  const ov = overviewState(settings, profile?.id, allowCap('transport_schedule_view'))   // من يرى الجدول الشامل
+  const ovAppliedRef = useRef(false)
+  // المخصَّصون لهم يفتح الجدول الشامل أول ما يدخلون الترحيل (مرة واحدة، فلا نصادر اختيارهم بعدها)
+  useEffect(() => { if (ovAppliedRef.current || settingsLoading) return; ovAppliedRef.current = true; if (ov.assigned) setViewMode('schedule') }, [settingsLoading, ov.assigned]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!settingsLoading && !ov.visible && viewMode === 'schedule') setViewMode('station') }, [settingsLoading, ov.visible, viewMode])
+  useEffect(() => { const mq = window.matchMedia('(min-width: 768px)'); const f = () => setIsDesktop(mq.matches); mq.addEventListener('change', f); return () => mq.removeEventListener('change', f) }, [])
+  useEffect(() => { setSchedLimit(100) }, [schedStatus, schedShift, schedQ, schedDir, schedScope, schedStations, date])
+  useEffect(() => {
+    if (!sentinel) return
+    const io = new IntersectionObserver(e => { if (e[0].isIntersecting) setSchedLimit(n => n + 100) }, { rootMargin: '700px' })
+    io.observe(sentinel)
+    return () => io.disconnect()
+  }, [sentinel])
   const scheduleDateRef = useRef('')   // التحميل الأول لليوم فقط يُظهر «جارٍ التحميل»؛ التحديثات بعده صامتة (بدون وميض)
   const [boardMode, setBoardMode] = useState('now')   // now = الأحدث/القادمة فوق · shift = حسب الوردية
   const [showPast, setShowPast] = useState(false)
@@ -989,44 +1029,44 @@ export default function TransportationPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const fetchSchedule = useCallback(async () => {
+  // ملاحظات المتابعة لليوم (جدول منفصل؛ إن لم يُنشأ بعد تُخفى الميزة بصمت)
+  const loadFollowNotes = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('transport_notes')
+        .select('id, trip_schedule_id, station_id, role, text, created_by, created_by_name, created_at')
+        .eq('note_date', date).order('created_at')
+      if (error) { setNotesReady(false); setFollowNotes({}); return }
+      const m = {}
+      ;(data ?? []).forEach(n => { (m[`${n.trip_schedule_id}|${n.station_id}|${n.role}`] ??= []).push({ id: n.id, text: n.text, by: n.created_by_name, byId: n.created_by, at: n.created_at }) })
+      setNotesReady(true); setFollowNotes(m)
+    } catch { setNotesReady(false) }
+  }, [date])
+
+  const fetchSchedule = useCallback(async (opts = {}) => {
     if (scheduleDateRef.current !== date) setScheduleLoading(true)
-
-    // الخادم يقصّ كل استجابة عند 1000 صف وهذا الجدول يضم رحلات كل المحطات — نقرأ على دفعات حتى نكمل
-    const pageAll = async make => {
-      const out = []
-      for (let f = 0; f < 80000; f += 1000) {
-        const { data, error } = await make().range(f, f + 999)
-        if (error) break
-        out.push(...(data ?? []))
-        if ((data ?? []).length < 1000) break
+    try {
+      // الجزء الثابت: من الذاكرة إن كان حديثاً، وإلا يُقرأ بالتوازي بأعمدة خفيفة (بدون تداخل متكرر في كل صف)
+      let st = SCHED_STATIC
+      if (opts.force || !st || Date.now() - st.at > STATIC_TTL) {
+        const [stRaw, stopRows, tripRows, stationRows] = await Promise.all([
+          pageAllFast(m => supabase.from('station_trips').select('station_id, trip_schedule_id, departure_time, arrival_time, dep_enabled, arr_enabled', m).order('trip_schedule_id').order('station_id')),
+          pageAllFast(m => supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time', m).order('trip_schedule_id').order('station_id')),
+          pageAllFast(m => supabase.from('trip_schedule').select('id, trip_number, trip_name, scheduled_departure, scheduled_arrival, is_active, is_rf, rf_date, start_date, end_date, days_of_week, from_station_id, to_station_id', m).order('id')),
+          pageAllFast(m => supabase.from('stations').select('id, name_ar, name_en, city_group, is_agent', m).order('id')),
+        ])
+        const stMap = {}; stationRows.forEach(x => { stMap[x.id] = x })
+        const tripMap = {}; tripRows.forEach(t => { tripMap[t.id] = { ...t, from_station: stMap[t.from_station_id] || null, to_station: stMap[t.to_station_id] || null } })
+        const stopMap = {}; stopRows.forEach(x => { stopMap[`${x.trip_schedule_id}|${x.station_id}`] = x })
+        st = { at: Date.now(), stopMap, rows: stRaw.map(r => ({ ...r, station: stMap[r.station_id] || null, trip: tripMap[r.trip_schedule_id] || null })) }
+        SCHED_STATIC = st
       }
-      return out
-    }
-    const [stRows, stopRows, recRows] = await Promise.all([
-      pageAll(() => supabase.from('station_trips')
-        .select(`
-          station_id, departure_time, arrival_time, dep_enabled, arr_enabled,
-          station:station_id(id, name_ar, name_en, city_group, is_agent),
-          trip:trip_schedule_id(
-            id, trip_number, trip_name, scheduled_departure, scheduled_arrival,
-            is_active, is_rf, rf_date, start_date, end_date, days_of_week, from_station_id, to_station_id,
-            from_station:from_station_id(id, name_ar, name_en, city_group),
-            to_station:to_station_id(id, name_ar, name_en, city_group)
-          )
-        `)
-        .order('trip_schedule_id').order('station_id')),
-      pageAll(() => supabase.from('trip_schedule_stops')
-        .select('trip_schedule_id, station_id, arrival_time, departure_time')
-        .order('trip_schedule_id').order('station_id')),
-      pageAll(() => supabase.from('trip_records')
-        .select('trip_schedule_id, station_id, is_arrival, actual_departure, actual_arrival, is_cancelled, bus_number, passenger_count, missed_count, operational_status, notes, created_by_name, updated_by_name, created_at, updated_at')
-        .eq('record_date', date)
-        .order('id')),
-    ])
-
-    const stopMap = {}
-    stopRows.forEach(x => { stopMap[`${x.trip_schedule_id}|${x.station_id}`] = x })
+      const { rows: stRows, stopMap } = st
+      const [recRows] = await Promise.all([
+        pageAllFast(m => supabase.from('trip_records')
+          .select('trip_schedule_id, station_id, is_arrival, actual_departure, actual_arrival, is_cancelled, bus_number, passenger_count, missed_count, operational_status, notes, created_by_name, updated_by_name, created_at, updated_at', m)
+          .eq('record_date', date).order('id')),
+        loadFollowNotes(),
+      ])
     const recMap = {}
     recRows.forEach(r => { recMap[`${r.trip_schedule_id}|${r.station_id}|${r.is_arrival ? 'arrival' : 'departure'}`] = r })
     const s5 = t => (t ? String(t).slice(0, 5) : '')
@@ -1093,8 +1133,12 @@ export default function TransportationPage() {
     entries.sort((a, b) => (a.schedTime || '').localeCompare(b.schedTime || '') || (a.role === b.role ? 0 : a.role === 'arrival' ? -1 : 1))
     scheduleDateRef.current = date
     setScheduleData(entries)
-    setScheduleLoading(false)
-  }, [date])
+    } catch (err) {
+      console.error('fetchSchedule failed', err)
+    } finally {
+      setScheduleLoading(false)
+    }
+  }, [date, loadFollowNotes])
 
   useEffect(() => { if (viewMode === 'schedule') fetchSchedule() }, [viewMode, fetchSchedule])
 
@@ -1113,10 +1157,11 @@ export default function TransportationPage() {
     if (viewMode !== 'schedule') return
     let t = null
     const ch = supabase.channel('global_schedule_rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_records' }, () => { clearTimeout(t); t = setTimeout(fetchSchedule, 700) })   // تجميع التحديثات المتقاربة بلا وميض
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_records' }, () => { clearTimeout(t); t = setTimeout(() => fetchSchedule(), 700) })   // تجميع التحديثات المتقاربة بلا وميض
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transport_notes' }, () => loadFollowNotes())
       .subscribe()
     return () => { clearTimeout(t); supabase.removeChannel(ch) }
-  }, [viewMode, fetchSchedule])
+  }, [viewMode, fetchSchedule, loadFollowNotes])
 
   // عدد مستخدمي كل محطة (لاختيار «المحطات التي فيها مستخدمون» بالجدول الشامل)
   useEffect(() => {
@@ -1467,6 +1512,24 @@ export default function TransportationPage() {
   }
 
 
+  // ملاحظات المتابعة على حركات الجدول الشامل (جدول منفصل عن سجلات المرحّل)
+  const canNote = ov.visible && notesReady && !!profile?.id
+  async function addFollowNote(r) {
+    const text = (noteDraft?.text || '').trim()
+    if (!text || noteBusy) return
+    setNoteBusy(true)
+    const { error } = await supabase.from('transport_notes').insert({ note_date: date, trip_schedule_id: r.id, station_id: r.station.id, role: r.role, text, created_by: profile.id, created_by_name: profile.full_name_ar })
+    setNoteBusy(false)
+    if (error) { alert((isAr ? 'تعذّر حفظ الملاحظة: ' : 'Could not save the note: ') + error.message); return }
+    setNoteDraft(null); loadFollowNotes()
+  }
+  async function doDeleteFollowNote(id) {
+    setDelNote(null)
+    const { error } = await supabase.from('transport_notes').delete().eq('id', id)
+    if (error) { alert((isAr ? 'تعذّر الحذف: ' : 'Delete failed: ') + error.message); return }
+    loadFollowNotes()
+  }
+
   // ── الجدول الشامل: لوحة تحكم + تصفية + ورديات + مؤشر الآن (كمبيوتر) وبطاقات (جوال) ───────────
   const renderSchedule = () => {
     const isToday = date === todayStr()
@@ -1480,13 +1543,15 @@ export default function TransportationPage() {
       if (sm != null && am != null) { dly = am - sm; if (dly < -720) dly += 1440; else if (dly > 720) dly -= 1440 }
       const departed = t.status === 'departed'
       const overdue = isToday && !departed && sm != null && sm < nowMin - 5
-      return { ...t, sm: sm ?? 0, dly, departed, overdue, late: departed && dly != null && dly > 5 }
+      return { ...t, sm: sm ?? 0, dly, departed, overdue, late: departed && dly != null && dly > 5, follow: followNotes[t.key] || [] }
     })
     const agentIds = new Set(stations.filter(x => x.is_agent).map(x => x.id))
     const isAgentRow = r => agentIds.has(r.station?.id) || !!r.station?.is_agent
+    const usersReady = Object.keys(userCounts).length > 0   // قبل وصول أعداد المستخدمين لا نُفرغ الجدول
+    const staffedStations = stations.filter(x => !x.is_agent && (userCounts[x.id] || 0) > 0).length
     const rows = selSet.size
       ? allRows.filter(r => selSet.has(r.station?.id))
-      : allRows.filter(r => schedScope === 'all' || (schedScope === 'agents' ? isAgentRow(r) : !isAgentRow(r)))
+      : allRows.filter(r => schedScope === 'all' || (schedScope === 'agents' ? isAgentRow(r) : schedScope === 'staffed' && usersReady ? (!isAgentRow(r) && (userCounts[r.station?.id] || 0) > 0) : !isAgentRow(r)))
     const total = rows.length
     const departedN = rows.filter(r => r.departed).length
     const arrN = rows.filter(r => r.role === 'arrival').length, depN = rows.length - arrN
@@ -1510,7 +1575,7 @@ export default function TransportationPage() {
       if (schedStatus === 'scheduled' && r.departed) return false
       if (schedStatus === 'late' && !(r.late || r.overdue)) return false
       if (schedDir !== 'all' && r.role !== schedDir) return false
-      if (schedStatus === 'notes' && !r.tripNotes?.some(n => n.text)) return false
+      if (schedStatus === 'notes' && !r.tripNotes?.some(n => n.text) && !r.follow?.length) return false
       if (schedStatus === 'issue' && !(r.opStatus && r.opStatus !== 'Normal') && !r.tripNotes?.some(n => n.status && n.status !== 'Normal')) return false
       if (schedShift !== 'all' && shiftOf(r) !== schedShift) return false
       if (q && !`${r.trip_number} ${r.trip_name || ''} ${r.station?.name_ar || ''} ${r.station?.name_en || ''} ${r.from_station?.name_ar || ''} ${r.from_station?.name_en || ''} ${r.to_station?.name_ar || ''} ${r.to_station?.name_en || ''} ${r.bus_number || ''}`.toLowerCase().includes(q)) return false
@@ -1520,6 +1585,9 @@ export default function TransportationPage() {
     const hMax = Math.max(...hours.map(h => h.dep + h.sch), 1)
     const next = isToday ? rows.filter(r => !r.departed && r.sm >= nowMin - 5).sort((a, b) => a.sm - b.sm)[0] : null
     const nextIn = next ? next.sm - nowMin : null
+    const statusCount = k => k === 'all' ? total : k === 'departed' ? departedN : k === 'scheduled' ? total - departedN
+      : k === 'late' ? lateN + overdueN : k === 'notes' ? rows.filter(r => r.tripNotes?.some(n => n.text) || r.follow?.length).length
+      : rows.filter(r => (r.opStatus && r.opStatus !== 'Normal') || r.tripNotes?.some(n => n.status && n.status !== 'Normal')).length
     const chipS = (bg, c) => ({ background: bg, color: c, borderRadius: 99, padding: '2px 10px', fontSize: '0.66rem', fontWeight: 800, whiteSpace: 'nowrap' })
     const pill = on => ({ padding: '6px 14px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--accent)' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' })
     const statusChip = r => r.departed
@@ -1532,12 +1600,47 @@ export default function TransportationPage() {
     const opLabel = st => (isAr ? (opMeta(st)?.ar || st) : (opMeta(st)?.en || st))
     const initials = n => String(n || '؟').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
     const toggleNotes = k => setOpenNotes(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+    // ملاحظات المتابعة على الحركة + زر إضافة (لمن يرى الجدول الشامل)
+    const followBlock = r => {
+      const fl = r.follow || []
+      const drafting = noteDraft?.key === r.key
+      if (!fl.length && !canNote) return null
+      return (
+        <div style={{ marginTop: 9, display: 'grid', gap: 8 }}>
+          {fl.map(n => (
+            <div key={n.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: 'var(--info-bg)', border: '1px solid var(--border-2)', borderInlineStart: '4px solid var(--info)', borderRadius: 12, padding: '9px 12px' }}>
+              <span style={{ ...chipS('var(--card)', 'var(--info)'), flexShrink: 0 }}>{isAr ? 'متابعة' : 'Follow-up'}</span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p dir="auto" style={{ margin: 0, fontSize: '0.82rem', lineHeight: 1.7, color: 'var(--text-1)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.text}</p>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: 3 }}>{n.by} · <span dir="ltr" style={{ fontFamily: MONO }}>{hhmmRiyadh(n.at)}</span></div>
+              </div>
+              {(n.byId === profile?.id || isGeneralAdmin) && (
+                <button type="button" onClick={() => setDelNote(n)} aria-label={isAr ? 'حذف الملاحظة' : 'Delete note'} style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--border-2)', background: 'var(--card)', color: 'var(--danger)', cursor: 'pointer', fontSize: 16, flexShrink: 0 }}>&times;</button>
+              )}
+            </div>
+          ))}
+          {canNote && (drafting ? (
+            <div style={{ display: 'grid', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-2)', borderRadius: 12, padding: 10 }}>
+              <textarea value={noteDraft.text} onChange={e => setNoteDraft({ key: r.key, text: e.target.value })} maxLength={1000} rows={3} autoFocus dir="auto"
+                placeholder={isAr ? 'اكتب ملاحظة المتابعة على هذه الحركة…' : 'Write a follow-up note for this movement…'} aria-label={isAr ? 'ملاحظة المتابعة' : 'Follow-up note'}
+                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--border-2)', borderRadius: 10, padding: '9px 12px', fontSize: '0.84rem', fontFamily: 'inherit', background: 'var(--card)', color: 'var(--text-1)', resize: 'vertical' }} />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => addFollowNote(r)} disabled={noteBusy || !noteDraft.text.trim()} style={{ ...pill(true), minHeight: 40, opacity: noteBusy || !noteDraft.text.trim() ? 0.55 : 1 }}>{noteBusy ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : (isAr ? 'حفظ الملاحظة' : 'Save note')}</button>
+                <button type="button" onClick={() => setNoteDraft(null)} style={{ ...pill(false), minHeight: 40 }}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setNoteDraft({ key: r.key, text: '' })} style={{ ...pill(false), minHeight: 38, justifySelf: 'start' }}>+ {isAr ? 'ملاحظة متابعة' : 'Follow-up note'}</button>
+          ))}
+        </div>
+      )
+    }
     // الحالة التشغيلية + ملاحظات الرحلة (من أي محطة) — بطاقات بالمحطة واسم المرحّل
     const opStrip = r => {
       const hasRec = !!r.opStatus
       const notes = r.tripNotes || []
       const textNotes = notes.filter(n => n.text)
-      if (!hasRec && !notes.length) return null
+      if (!hasRec && !notes.length && !(r.follow || []).length && !canNote) return null
       const normal = r.opStatus === 'Normal'
       const isOpen = openNotes.has(r.key)
       return (
@@ -1590,6 +1693,7 @@ export default function TransportationPage() {
               })}
             </div>
           )}
+          {followBlock(r)}
         </div>
       )
     }
@@ -1657,6 +1761,7 @@ export default function TransportationPage() {
         </div>
       </div>
     )
+    const vList = list.slice(0, schedLimit)   // نعرض أول دفعة فقط ونزيد مع التمرير، فلا تُرسم آلاف الحركات دفعة واحدة
     let nowPlaced = false
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1674,8 +1779,10 @@ export default function TransportationPage() {
           </div>
           <div className="tp-head">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 10px', flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{isAr ? `الجدول الشامل — ${selSet.size ? `${selSet.size} ${selSet.size === 1 ? 'محطة' : 'محطات'}` : schedScope === 'agents' ? 'الوكلاء' : schedScope === 'all' ? 'المحطات والوكلاء' : 'كل المحطات (بدون الوكلاء)'}` : `Global schedule — ${selSet.size ? selSet.size + ' station(s)' : schedScope === 'agents' ? 'agents' : schedScope === 'all' ? 'stations & agents' : 'all stations (no agents)'}`}</span>
+              <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{isAr ? `الجدول الشامل — ${selSet.size ? `${selSet.size} ${selSet.size === 1 ? 'محطة' : 'محطات'}` : schedScope === 'agents' ? 'الوكلاء' : schedScope === 'all' ? 'المحطات والوكلاء' : schedScope === 'staffed' ? 'المحطات التي فيها يوزر' : 'كل المحطات (بدون الوكلاء)'}` : `Global schedule — ${selSet.size ? selSet.size + ' station(s)' : schedScope === 'agents' ? 'agents' : schedScope === 'all' ? 'stations & agents' : schedScope === 'staffed' ? 'stations with users' : 'all stations (no agents)'}`}</span>
               <span style={{ fontSize: '0.72rem', opacity: 0.75 }} dir="ltr">{date}</span>
+              <button type="button" onClick={() => fetchSchedule({ force: true })} title={isAr ? 'تحديث الجدول من جديد' : 'Reload the schedule'} aria-label={isAr ? 'تحديث' : 'Refresh'}
+                style={{ marginInlineStart: 'auto', minHeight: 36, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.12)', color: '#fff', fontWeight: 800, fontSize: '0.74rem', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'تحديث' : 'Refresh'}</button>
             </div>
           </div>
           <div className="tp-kpis">
@@ -1717,7 +1824,7 @@ export default function TransportationPage() {
         {/* التصفية والبحث */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
-            {[['all', isAr ? 'الكل' : 'All'], ['departed', isAr ? 'غادرت' : 'Departed'], ['scheduled', isAr ? 'مجدولة' : 'Scheduled'], ['late', isAr ? 'متأخرة / بانتظار' : 'Late / awaiting'], ['notes', isAr ? 'فيها ملاحظات' : 'With notes'], ['issue', isAr ? 'حالة غير عادية' : 'Irregular']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedStatus === k), flexShrink: 0 }} onClick={() => setSchedStatus(k)}>{l}</button>)}
+            {[['all', isAr ? 'الكل' : 'All'], ['departed', isAr ? 'غادرت' : 'Departed'], ['scheduled', isAr ? 'مجدولة' : 'Scheduled'], ['late', isAr ? 'متأخرة / بانتظار' : 'Late / awaiting'], ['notes', isAr ? 'فيها ملاحظات' : 'With notes'], ['issue', isAr ? 'حالة غير عادية' : 'Irregular']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedStatus === k), flexShrink: 0 }} onClick={() => setSchedStatus(k)}>{l} <b style={{ fontFamily: MONO, opacity: 0.8, marginInlineStart: 4 }}>{statusCount(k)}</b></button>)}
             <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
             {[['all', isAr ? 'كل الورديات' : 'All shifts'], ...SH.map(x => [x[0], isAr ? x[1] : x[2]])].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedShift === k), flexShrink: 0 }} onClick={() => setSchedShift(k)}>{l}</button>)}
             <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
@@ -1727,6 +1834,12 @@ export default function TransportationPage() {
             <button type="button" onClick={() => setStPanel(o => !o)} aria-expanded={stPanel} style={{ ...pill(stPanel || selSet.size > 0), flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               {isAr ? 'المحطات' : 'Stations'} <span style={{ fontFamily: MONO }}>{selSet.size ? (() => { const a = stations.filter(x => x.is_agent && selSet.has(x.id)).length; const n = selSet.size - a; return isAr ? `${n}${a ? ` + ${a} وكيل` : ''}` : `${n}${a ? ` + ${a} agents` : ''}` })() : (schedScope === 'agents' ? (isAr ? 'الوكلاء' : 'Agents') : schedScope === 'all' ? (isAr ? 'الكل' : 'All') : (isAr ? 'بدون وكلاء' : 'No agents'))}</span>
             </button>
+            {!selSet.size && (
+              <button type="button" aria-pressed={schedScope === 'staffed'} style={{ ...pill(schedScope === 'staffed'), flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                onClick={() => { const v = schedScope === 'staffed' ? 'stations' : 'staffed'; setSchedScope(v); try { localStorage.setItem('nwbus_sched_scope', v) } catch { /* بدون تخزين */ } }}>
+                {isAr ? 'فيها يوزر' : 'With users'} <span style={{ fontFamily: MONO }}>{staffedStations}</span>
+              </button>
+            )}
             <input value={schedQ} onChange={e => setSchedQ(e.target.value)} placeholder={isAr ? 'بحث: رقم الرحلة / المحطة / الحافلة' : 'Search trip / station / bus'} aria-label={isAr ? 'بحث بالجدول' : 'Search schedule'}
               style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-2)', borderRadius: 10, padding: '9px 12px', fontSize: '0.82rem', fontFamily: 'inherit', background: 'var(--card)' }} />
             <span style={{ fontFamily: MONO, fontSize: '0.76rem', color: 'var(--text-3)', flexShrink: 0 }} dir="ltr">{list.length} / {total}</span>
@@ -1803,7 +1916,7 @@ export default function TransportationPage() {
                   ) : (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-2)' }}>{isAr ? 'لم تختر شيئاً، فيُعرض:' : 'Nothing selected, showing:'}</span>
-                      {[['stations', isAr ? 'المحطات (بدون الوكلاء)' : 'Stations (no agents)'], ['agents', isAr ? 'الوكلاء فقط' : 'Agents only'], ['all', isAr ? 'الكل' : 'All']].map(([k, l]) => (
+                      {[['staffed', isAr ? 'التي فيها يوزر' : 'With users'], ['stations', isAr ? 'المحطات (بدون الوكلاء)' : 'Stations (no agents)'], ['agents', isAr ? 'الوكلاء فقط' : 'Agents only'], ['all', isAr ? 'الكل' : 'All']].map(([k, l]) => (
                         <button key={k} type="button" onClick={() => { setSchedScope(k); try { localStorage.setItem('nwbus_sched_scope', k) } catch { /* بدون تخزين */ } }} style={{ ...pill(schedScope === k), minHeight: 34 }}>{l}</button>
                       ))}
                     </div>
@@ -1829,11 +1942,11 @@ export default function TransportationPage() {
           <p className="text-center py-16 text-gray-400 text-sm">{isAr ? 'لا نتائج مطابقة' : 'No matching trips'}</p>
         ) : (
           <>
-            <div className="md:hidden"><div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{list.map(card)}</div></div>
-            <div className="hidden md:block">
+            {!isDesktop && <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{vList.map(card)}</div>}
+            {isDesktop && <div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 {SH.map(([k, ar, enL, from, to, range]) => {
-                  const grp = list.filter(r => shiftOf(r) === k)
+                  const grp = vList.filter(r => shiftOf(r) === k)
                   if (!grp.length) return null
                   const all = rows.filter(r => shiftOf(r) === k)
                   const done = all.filter(r => r.departed).length
@@ -1873,7 +1986,12 @@ export default function TransportationPage() {
                   )
                 })}
               </div>
-            </div>
+            </div>}
+            {list.length > schedLimit && (
+              <div ref={setSentinel} style={{ display: 'grid', placeItems: 'center', padding: 16 }}>
+                <button type="button" onClick={() => setSchedLimit(n => n + 100)} style={{ ...pill(false), minHeight: 40 }}>{isAr ? `عرض المزيد (${list.length - schedLimit})` : `Show more (${list.length - schedLimit})`}</button>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -2214,7 +2332,7 @@ const MONO = "'IBM Plex Mono', ui-monospace, monospace"
           className={`px-4 py-2 text-xs font-semibold transition-colors border-e border-gray-300 ${viewMode === 'station' ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
           {isAr ? 'المحطة' : 'Station'}
         </button>
-        {allowCap('transport_schedule_view') && <button onClick={() => setViewMode('schedule')}
+        {ov.visible && <button onClick={() => setViewMode('schedule')}
           className={`px-4 py-2 text-xs font-semibold transition-colors ${viewMode === 'schedule' ? 'bg-nwbus-primary text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
           {isAr ? 'الجدول الشامل' : 'Schedule'}
         </button>}
@@ -2281,7 +2399,7 @@ const MONO = "'IBM Plex Mono', ui-monospace, monospace"
       )}
 
       {/* الجدول الشامل */}
-      {viewMode === 'schedule' && (
+      {viewMode === 'schedule' && ov.visible && (
         scheduleLoading
           ? <p className="text-center py-20 text-gray-400 text-sm">{isAr ? 'جارٍ تحميل الجدول…' : 'Loading schedule…'}</p>
           : renderSchedule()
@@ -2346,6 +2464,15 @@ const MONO = "'IBM Plex Mono', ui-monospace, monospace"
           isAr={isAr}
           onClose={() => setShowManualTrips(false)}
           onChanged={fetchData}
+        />
+      )}
+
+      {delNote && (
+        <ConfirmDialog
+          message={isAr ? 'حذف ملاحظة المتابعة هذه؟ لا يمكن التراجع.' : 'Delete this follow-up note? This cannot be undone.'}
+          confirmLabel={isAr ? 'نعم، حذف' : 'Yes, delete'} cancelLabel={isAr ? 'تراجع' : 'Back'}
+          onConfirm={() => doDeleteFollowNote(delNote.id)}
+          onCancel={() => setDelNote(null)}
         />
       )}
 
