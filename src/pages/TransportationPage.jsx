@@ -1779,7 +1779,7 @@ export default function TransportationPage() {
           </div>
           <div className="tp-head">
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 10px', flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{isAr ? `الجدول الشامل — ${selSet.size ? `${selSet.size} ${selSet.size === 1 ? 'محطة' : 'محطات'}` : schedScope === 'agents' ? 'الوكلاء' : schedScope === 'all' ? 'المحطات والوكلاء' : schedScope === 'staffed' ? 'المحطات التي فيها يوزر' : 'كل المحطات (بدون الوكلاء)'}` : `Global schedule — ${selSet.size ? selSet.size + ' station(s)' : schedScope === 'agents' ? 'agents' : schedScope === 'all' ? 'stations & agents' : schedScope === 'staffed' ? 'stations with users' : 'all stations (no agents)'}`}</span>
+              <span style={{ fontWeight: 900, fontSize: '1.02rem' }}>{isAr ? `الجدول الشامل — ${selSet.size ? `${selSet.size} ${selSet.size === 1 ? 'محطة' : 'محطات'}` : schedScope === 'agents' ? 'الوكلاء' : schedScope === 'all' ? 'المحطات والوكلاء' : schedScope === 'staffed' ? 'المحطات التي فيها موظفين' : 'كل المحطات (بدون الوكلاء)'}` : `Global schedule — ${selSet.size ? selSet.size + ' station(s)' : schedScope === 'agents' ? 'agents' : schedScope === 'all' ? 'stations & agents' : schedScope === 'staffed' ? 'stations with staff' : 'all stations (no agents)'}`}</span>
               <span style={{ fontSize: '0.72rem', opacity: 0.75 }} dir="ltr">{date}</span>
               <button type="button" onClick={() => fetchSchedule({ force: true })} title={isAr ? 'تحديث الجدول من جديد' : 'Reload the schedule'} aria-label={isAr ? 'تحديث' : 'Refresh'}
                 style={{ marginInlineStart: 'auto', minHeight: 36, padding: '0 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.12)', color: '#fff', fontWeight: 800, fontSize: '0.74rem', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'تحديث' : 'Refresh'}</button>
@@ -1837,7 +1837,7 @@ export default function TransportationPage() {
             {!selSet.size && (
               <button type="button" aria-pressed={schedScope === 'staffed'} style={{ ...pill(schedScope === 'staffed'), flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 onClick={() => { const v = schedScope === 'staffed' ? 'stations' : 'staffed'; setSchedScope(v); try { localStorage.setItem('nwbus_sched_scope', v) } catch { /* بدون تخزين */ } }}>
-                {isAr ? 'فيها يوزر' : 'With users'} <span style={{ fontFamily: MONO }}>{staffedStations}</span>
+                {isAr ? 'فيها موظفين' : 'With staff'} <span style={{ fontFamily: MONO }}>{staffedStations}</span>
               </button>
             )}
             <input value={schedQ} onChange={e => setSchedQ(e.target.value)} placeholder={isAr ? 'بحث: رقم الرحلة / المحطة / الحافلة' : 'Search trip / station / bus'} aria-label={isAr ? 'بحث بالجدول' : 'Search schedule'}
@@ -1916,7 +1916,7 @@ export default function TransportationPage() {
                   ) : (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-2)' }}>{isAr ? 'لم تختر شيئاً، فيُعرض:' : 'Nothing selected, showing:'}</span>
-                      {[['staffed', isAr ? 'التي فيها يوزر' : 'With users'], ['stations', isAr ? 'المحطات (بدون الوكلاء)' : 'Stations (no agents)'], ['agents', isAr ? 'الوكلاء فقط' : 'Agents only'], ['all', isAr ? 'الكل' : 'All']].map(([k, l]) => (
+                      {[['staffed', isAr ? 'التي فيها موظفين' : 'With staff'], ['stations', isAr ? 'المحطات (بدون الوكلاء)' : 'Stations (no agents)'], ['agents', isAr ? 'الوكلاء فقط' : 'Agents only'], ['all', isAr ? 'الكل' : 'All']].map(([k, l]) => (
                         <button key={k} type="button" onClick={() => { setSchedScope(k); try { localStorage.setItem('nwbus_sched_scope', k) } catch { /* بدون تخزين */ } }} style={{ ...pill(schedScope === k), minHeight: 34 }}>{l}</button>
                       ))}
                     </div>
