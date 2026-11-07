@@ -734,6 +734,9 @@ export default function TransportationPage() {
   const [schedDir, setSchedDir] = useState('all')   // all | arrival | departure
   const [schedKind, setSchedKind] = useState('all')  // all | core (أساسية) | transit (عبور)
   const [schedStations, setSchedStations] = useState(() => { try { return JSON.parse(localStorage.getItem('nwbus_sched_stations') || '[]') } catch { return [] } })   // فارغ = كل المحطات
+  const [schedTrips, setSchedTrips] = useState(() => { try { return JSON.parse(localStorage.getItem('nwbus_sched_trips') || '[]') } catch { return [] } })   // رحلات محددة (فارغ = كل الرحلات)
+  const [tpPanel, setTpPanel] = useState(false)
+  const [tpQ, setTpQ] = useState('')
   const [stPanel, setStPanel] = useState(false)
   const [stTab, setStTab] = useState('stations')   // صفحتا الاختيار: stations | agents
   const [schedScope, setSchedScope] = useState(() => localStorage.getItem('nwbus_sched_scope') || 'staffed')   // عند عدم اختيار محطات: stations (بدون وكلاء) | agents | all
@@ -755,7 +758,7 @@ export default function TransportationPage() {
   useEffect(() => { if (ovAppliedRef.current || settingsLoading) return; ovAppliedRef.current = true; if (ov.assigned) setViewMode('schedule') }, [settingsLoading, ov.assigned]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!settingsLoading && !ov.visible && viewMode === 'schedule') setViewMode('station') }, [settingsLoading, ov.visible, viewMode])
   useEffect(() => { const mq = window.matchMedia('(min-width: 768px)'); const f = () => setIsDesktop(mq.matches); mq.addEventListener('change', f); return () => mq.removeEventListener('change', f) }, [])
-  useEffect(() => { setSchedLimit(100) }, [schedStatus, schedShift, schedQ, schedDir, schedKind, schedScope, schedStations, date])
+  useEffect(() => { setSchedLimit(100) }, [schedStatus, schedShift, schedQ, schedDir, schedKind, schedScope, schedStations, schedTrips, date])
   useEffect(() => {
     if (!sentinel) return
     const io = new IntersectionObserver(e => { if (e[0].isIntersecting) setSchedLimit(n => n + 100) }, { rootMargin: '700px' })
@@ -1554,9 +1557,11 @@ export default function TransportationPage() {
     const isAgentRow = r => agentIds.has(r.station?.id) || !!r.station?.is_agent
     const usersReady = Object.keys(userCounts).length > 0   // قبل وصول أعداد المستخدمين لا نُفرغ الجدول
     const staffedStations = stations.filter(x => !x.is_agent && (userCounts[x.id] || 0) > 0).length
-    const rows = selSet.size
+    const tripSet = new Set(schedTrips)
+    const rows0 = selSet.size
       ? allRows.filter(r => selSet.has(r.station?.id))
       : allRows.filter(r => schedScope === 'all' || (schedScope === 'agents' ? isAgentRow(r) : schedScope === 'staffed' && usersReady ? (!isAgentRow(r) && (userCounts[r.station?.id] || 0) > 0) : !isAgentRow(r)))
+    const rows = tripSet.size ? rows0.filter(r => tripSet.has(r.id)) : rows0
     const total = rows.length
     const departedN = rows.filter(r => r.departed).length
     const arrN = rows.filter(r => r.role === 'arrival').length, depN = rows.length - arrN
@@ -1811,14 +1816,16 @@ export default function TransportationPage() {
           </div>
           <div className="tp-kpis">
             {[
-              [isAr ? 'إجمالي الحركات' : 'Movements', total, '#fff'],
-              [isAr ? 'وصول' : 'Arrivals', arrN, '#fff'],
-              [isAr ? 'مغادرة' : 'Departures', depN, '#fff'],
-              [isAr ? 'تمّت' : 'Done', departedN, '#34D399'],
-              [isAr ? 'متأخرة / بانتظار' : 'Late / awaiting', `${lateN} / ${overdueN}`, lateN + overdueN > 0 ? '#F87171' : '#fff'],
+              [isAr ? 'إجمالي الحركات' : 'Movements', total, '#fff', () => { setSchedStatus('all'); setSchedDir('all') }],
+              [isAr ? 'وصول' : 'Arrivals', arrN, '#fff', () => setSchedDir('arrival')],
+              [isAr ? 'مغادرة' : 'Departures', depN, '#fff', () => setSchedDir('departure')],
+              [isAr ? 'تمّت' : 'Done', departedN, '#34D399', () => setSchedStatus('departed')],
+              [isAr ? 'متأخرة / بانتظار' : 'Late / awaiting', `${lateN} / ${overdueN}`, lateN + overdueN > 0 ? '#F87171' : '#fff', () => setSchedStatus('late')],
               [isAr ? 'التزام بالموعد' : 'On-time', punct != null ? `${punct}%` : '—', punct != null && punct >= 85 ? '#34D399' : punct != null && punct < 70 ? '#F87171' : '#fff'],
-            ].map(([l, v, c]) => (
-              <div key={l} style={{ background: 'rgba(255,255,255,0.10)', borderRadius: 12, padding: '8px 10px', textAlign: 'center' }}>
+            ].map(([l, v, c, act]) => (
+              <div key={l} role={act ? 'button' : undefined} tabIndex={act ? 0 : undefined} onClick={act} onKeyDown={act ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act() } }) : undefined}
+                title={act ? (isAr ? 'اضغط لتصفية الجدول' : 'Click to filter') : undefined}
+                style={{ background: 'rgba(255,255,255,0.10)', borderRadius: 12, padding: '8px 10px', textAlign: 'center', cursor: act ? 'pointer' : 'default', transition: 'background .15s' }}>
                 <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.15rem', lineHeight: 1.2, color: c }} dir="ltr">{v}</div>
                 <div style={{ fontSize: '0.62rem', opacity: 0.75, fontWeight: 700, marginTop: 2 }}>{l}</div>
               </div>
@@ -1845,31 +1852,78 @@ export default function TransportationPage() {
           </div>
         </div>
 
-        {/* التصفية والبحث */}
+        {/* لوحة التحكم: بحث + نطاق (محطات/رحلات) + مجموعات الفلاتر + ملخص الفلاتر الفعّالة */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
-            {[['all', isAr ? 'كل الرحلات' : 'All trips'], ['core', isAr ? '★ الأساسية' : '★ Core'], ['transit', isAr ? 'عبور' : 'Transit']].map(([k, l]) => <button key={k} type="button" aria-pressed={schedKind === k} style={{ ...pill(schedKind === k), flexShrink: 0 }} onClick={() => setSchedKind(k)}>{l} <b style={{ fontFamily: MONO, opacity: 0.8, marginInlineStart: 4 }}>{kindCount(k)}</b></button>)}
-            <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
-            {[['all', isAr ? 'الكل' : 'All'], ['departed', isAr ? 'غادرت' : 'Departed'], ['scheduled', isAr ? 'مجدولة' : 'Scheduled'], ['late', isAr ? 'متأخرة / بانتظار' : 'Late / awaiting'], ['notes', isAr ? 'فيها ملاحظات' : 'With notes'], ['issue', isAr ? 'حالة غير عادية' : 'Irregular']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedStatus === k), flexShrink: 0 }} onClick={() => setSchedStatus(k)}>{l} <b style={{ fontFamily: MONO, opacity: 0.8, marginInlineStart: 4 }}>{statusCount(k)}</b></button>)}
-            <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
-            {[['all', isAr ? 'كل الورديات' : 'All shifts'], ...SH.map(x => [x[0], isAr ? x[1] : x[2]])].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedShift === k), flexShrink: 0 }} onClick={() => setSchedShift(k)}>{l}</button>)}
-            <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
-            {[['all', isAr ? 'وصول ومغادرة' : 'Both'], ['arrival', isAr ? 'وصول' : 'Arrivals'], ['departure', isAr ? 'مغادرة' : 'Departures']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedDir === k), flexShrink: 0 }} onClick={() => setSchedDir(k)}>{l}</button>)}
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button type="button" onClick={() => setStPanel(o => !o)} aria-expanded={stPanel} style={{ ...pill(stPanel || selSet.size > 0), flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              {isAr ? 'المحطات' : 'Stations'} <span style={{ fontFamily: MONO }}>{selSet.size ? (() => { const a = stations.filter(x => x.is_agent && selSet.has(x.id)).length; const n = selSet.size - a; return isAr ? `${n}${a ? ` + ${a} وكيل` : ''}` : `${n}${a ? ` + ${a} agents` : ''}` })() : (schedScope === 'agents' ? (isAr ? 'الوكلاء' : 'Agents') : schedScope === 'all' ? (isAr ? 'الكل' : 'All') : (isAr ? 'بدون وكلاء' : 'No agents'))}</span>
-            </button>
-            {!selSet.size && (
-              <button type="button" aria-pressed={schedScope === 'staffed'} style={{ ...pill(schedScope === 'staffed'), flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                onClick={() => { const v = schedScope === 'staffed' ? 'stations' : 'staffed'; setSchedScope(v); try { localStorage.setItem('nwbus_sched_scope', v) } catch { /* بدون تخزين */ } }}>
-                {isAr ? 'محطات فعّالة' : 'Active stations'} <span style={{ fontFamily: MONO }}>{staffedStations}</span>
-              </button>
-            )}
-            <input value={schedQ} onChange={e => setSchedQ(e.target.value)} placeholder={isAr ? 'بحث: رقم الرحلة / المحطة / الحافلة' : 'Search trip / station / bus'} aria-label={isAr ? 'بحث بالجدول' : 'Search schedule'}
-              style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-2)', borderRadius: 10, padding: '9px 12px', fontSize: '0.82rem', fontFamily: 'inherit', background: 'var(--card)' }} />
-            <span style={{ fontFamily: MONO, fontSize: '0.76rem', color: 'var(--text-3)', flexShrink: 0 }} dir="ltr">{list.length} / {total}</span>
-          </div>
+          {(() => {
+            const setTrips = arr => { setSchedTrips(arr); try { localStorage.setItem('nwbus_sched_trips', JSON.stringify(arr)) } catch { /* بدون تخزين */ } }
+            const seg = (items, cur, set) => (
+              <div role="group" style={{ display: 'inline-flex', flexWrap: 'wrap', background: 'var(--surface-2)', borderRadius: 12, padding: 3, gap: 2 }}>
+                {items.map(([k, l, n]) => (
+                  <button key={k} type="button" aria-pressed={cur === k} onClick={() => set(k)}
+                    style={{ border: 'none', borderRadius: 9, padding: '7px 13px', minHeight: 38, fontFamily: 'inherit', fontWeight: 800, fontSize: '0.76rem', cursor: 'pointer', background: cur === k ? 'var(--card)' : 'transparent', color: cur === k ? 'var(--text-1)' : 'var(--text-3)', boxShadow: cur === k ? '0 1px 4px rgba(0,0,0,0.16)' : 'none', transition: 'background .15s' }}>
+                    {l}{n != null && <b style={{ fontFamily: MONO, marginInlineStart: 6, opacity: 0.7 }}>{n}</b>}
+                  </button>
+                ))}
+              </div>
+            )
+            const group = (title, body) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0 }}>
+                <span style={{ fontSize: '0.64rem', fontWeight: 900, letterSpacing: '.06em', color: 'var(--text-3)' }}>{title}</span>
+                {body}
+              </div>
+            )
+            const statusLabel = { departed: isAr ? 'غادرت' : 'Departed', scheduled: isAr ? 'مجدولة' : 'Scheduled', late: isAr ? 'متأخرة / بانتظار' : 'Late / awaiting', notes: isAr ? 'فيها ملاحظات' : 'With notes', issue: isAr ? 'حالة غير عادية' : 'Irregular' }
+            const dirLabel = { arrival: isAr ? 'وصول' : 'Arrivals', departure: isAr ? 'مغادرة' : 'Departures' }
+            const active = []
+            if (schedKind !== 'all') active.push([schedKind === 'core' ? (isAr ? '★ الأساسية' : '★ Core') : (isAr ? 'عبور' : 'Transit'), () => setSchedKind('all')])
+            if (schedStatus !== 'all') active.push([statusLabel[schedStatus], () => setSchedStatus('all')])
+            if (schedShift !== 'all') active.push([isAr ? SHIFT_AR[schedShift] : SHIFT_EN[schedShift], () => setSchedShift('all')])
+            if (schedDir !== 'all') active.push([dirLabel[schedDir], () => setSchedDir('all')])
+            if (selSet.size) active.push([isAr ? `${selSet.size} محطة محددة` : `${selSet.size} stations`, () => setSel([])])
+            if (tripSet.size) active.push([isAr ? `${tripSet.size} رحلة محددة` : `${tripSet.size} trips`, () => setTrips([])])
+            if (schedQ.trim()) active.push([`${isAr ? 'بحث' : 'Search'}: ${schedQ.trim()}`, () => setSchedQ('')])
+            const clearAll = () => { setSchedKind('all'); setSchedStatus('all'); setSchedShift('all'); setSchedDir('all'); setSchedQ(''); setSel([]); setTrips([]) }
+            const scopeText = selSet.size ? (() => { const a = stations.filter(x => x.is_agent && selSet.has(x.id)).length; const n = selSet.size - a; return isAr ? `${n}${a ? ` + ${a} وكيل` : ''}` : `${n}${a ? ` + ${a} agents` : ''}` })() : (schedScope === 'agents' ? (isAr ? 'الوكلاء' : 'Agents') : schedScope === 'all' ? (isAr ? 'الكل' : 'All') : (isAr ? 'بدون وكلاء' : 'No agents'))
+            const scopeBtn = (on, onClick, children, expanded) => <button type="button" onClick={onClick} aria-expanded={expanded} aria-pressed={expanded === undefined ? on : undefined} style={{ ...pill(on), flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 42 }}>{children}</button>
+            return (
+              <div style={{ background: 'var(--card)', border: '1px solid var(--border-2)', borderRadius: 18, boxShadow: 'var(--shadow-md)', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid var(--border-2)' }}>
+                  <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200 }}>
+                    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)' }}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+                    <input value={schedQ} onChange={e => setSchedQ(e.target.value)} placeholder={isAr ? 'بحث: رقم الرحلة / المحطة / الحافلة' : 'Search trip / station / bus'} aria-label={isAr ? 'بحث بالجدول' : 'Search schedule'}
+                      style={{ width: '100%', boxSizing: 'border-box', minHeight: 42, border: '1px solid var(--border-2)', borderRadius: 12, padding: '9px 14px', paddingInlineStart: 36, fontSize: '0.84rem', fontFamily: 'inherit', background: 'var(--surface)', color: 'var(--text-1)' }} />
+                  </div>
+                  {scopeBtn(stPanel || selSet.size > 0, () => setStPanel(o => !o), <>{isAr ? 'المحطات' : 'Stations'} <span style={{ fontFamily: MONO }}>{scopeText}</span></>, stPanel)}
+                  {scopeBtn(tpPanel || tripSet.size > 0, () => setTpPanel(o => !o), <>{isAr ? 'الرحلات' : 'Trips'} <span style={{ fontFamily: MONO }}>{tripSet.size ? tripSet.size : (isAr ? 'الكل' : 'All')}</span></>, tpPanel)}
+                  {!selSet.size && scopeBtn(schedScope === 'staffed', () => { const v = schedScope === 'staffed' ? 'stations' : 'staffed'; setSchedScope(v); try { localStorage.setItem('nwbus_sched_scope', v) } catch { /* بدون تخزين */ } }, <>{isAr ? 'محطات فعّالة' : 'Active stations'} <span style={{ fontFamily: MONO }}>{staffedStations}</span></>)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '14px 20px', padding: '14px' }}>
+                  {group(isAr ? 'نوع الرحلة' : 'TRIP TYPE', seg([['all', isAr ? 'الكل' : 'All', kindCount('all')], ['core', isAr ? '★ أساسية' : '★ Core', kindCount('core')], ['transit', isAr ? 'عبور' : 'Transit', kindCount('transit')]], schedKind, setSchedKind))}
+                  {group(isAr ? 'الاتجاه' : 'DIRECTION', seg([['all', isAr ? 'الكل' : 'Both'], ['departure', isAr ? 'مغادرة' : 'Departures'], ['arrival', isAr ? 'وصول' : 'Arrivals']], schedDir, setSchedDir))}
+                  {group(isAr ? 'الوردية' : 'SHIFT', seg([['all', isAr ? 'الكل' : 'All'], ...SH.map(x => [x[0], isAr ? x[1].replace('الوردية ', '') : x[2]])], schedShift, setSchedShift))}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    {group(isAr ? 'الحالة' : 'STATUS', (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {[['all', isAr ? 'الكل' : 'All'], ['departed', statusLabel.departed], ['scheduled', statusLabel.scheduled], ['late', statusLabel.late], ['notes', statusLabel.notes], ['issue', statusLabel.issue]].map(([k, l]) => (
+                          <button key={k} type="button" aria-pressed={schedStatus === k} style={pill(schedStatus === k)} onClick={() => setSchedStatus(k)}>{l} <b style={{ fontFamily: MONO, opacity: 0.8, marginInlineStart: 4 }}>{statusCount(k)}</b></button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 14px', borderTop: '1px solid var(--border-2)', background: 'var(--surface)' }}>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)' }}>{isAr ? 'النتائج' : 'Results'}: <b dir="ltr" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{list.length}</b> <span style={{ color: 'var(--text-3)' }}>/ {total}</span></span>
+                  {active.map(([label, off]) => (
+                    <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 4px 3px 11px', borderRadius: 99, background: 'var(--card)', border: '1px solid var(--border-2)', fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-1)' }}>
+                      {label}
+                      <button type="button" onClick={off} aria-label={isAr ? 'إزالة الفلتر' : 'Remove filter'} style={{ width: 24, height: 24, borderRadius: '50%', border: 'none', background: 'var(--surface-2)', color: 'var(--text-2)', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>&times;</button>
+                    </span>
+                  ))}
+                  {active.length > 0 && <button type="button" onClick={clearAll} style={{ marginInlineStart: 'auto', ...chipS('var(--danger-bg)', 'var(--danger)'), border: 'none', cursor: 'pointer', fontFamily: 'inherit', minHeight: 30 }}>{isAr ? 'مسح الكل' : 'Clear all'}</button>}
+                </div>
+              </div>
+            )
+          })()}
           {stPanel && (() => {
             const term = stQ.trim().toLowerCase()
             const plain = stations.filter(x => !x.is_agent), agents = stations.filter(x => x.is_agent)
@@ -1951,6 +2005,68 @@ export default function TransportationPage() {
               </div>
             )
           })()}
+          {tpPanel && (() => {
+            const setTrips = arr => { setSchedTrips(arr); try { localStorage.setItem('nwbus_sched_trips', JSON.stringify(arr)) } catch { /* بدون تخزين */ } }
+            const byId = new Map()
+            allRows.forEach(r => { const t = byId.get(r.id) ?? { id: r.id, no: r.trip_number, name: r.trip_name, from: r.full_from, to: r.full_to, n: 0 }; t.n++; byId.set(r.id, t) })
+            const term = tpQ.trim().toLowerCase()
+            const all = [...byId.values()].sort((a, b) => String(a.no).localeCompare(String(b.no), undefined, { numeric: true }))
+            const shown = all.filter(t => !term || `${t.no} ${t.name || ''} ${en(t.from)} ${en(t.to)}`.toLowerCase().includes(term))
+            const cap = shown.slice(0, 300)
+            const addMany = ids => setTrips([...new Set([...schedTrips, ...ids])])
+            const dropMany = ids => setTrips(schedTrips.filter(i => !ids.includes(i)))
+            const picked = all.filter(t => tripSet.has(t.id))
+            return (
+              <div style={{ border: '1px solid var(--border-2)', borderRadius: 16, background: 'var(--card)', overflow: 'hidden', boxShadow: 'var(--shadow-md)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '11px 14px', borderBottom: '1px solid var(--border-2)' }}>
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? 'اختيار الرحلات' : 'Choose trips'}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{isAr ? 'المحددة فقط تظهر بالجدول (تُحفظ على جهازك). وبدون تحديد تظهر كل الرحلات.' : 'Only selected trips are shown (saved on this device). With none selected, all trips show.'}</div>
+                  </div>
+                  <button type="button" onClick={() => setTpPanel(false)} aria-label={isAr ? 'إغلاق' : 'Close'} style={{ width: 40, height: 40, borderRadius: 12, border: '1px solid var(--border-2)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', fontSize: 18 }}>&times;</button>
+                </div>
+                <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button type="button" onClick={() => addMany(shown.map(t => t.id))} disabled={!shown.length} style={{ ...pill(false), minHeight: 36, opacity: shown.length ? 1 : 0.45 }}>{isAr ? `تحديد الظاهر (${shown.length})` : `Select shown (${shown.length})`}</button>
+                    <button type="button" onClick={() => dropMany(shown.map(t => t.id))} disabled={!shown.some(t => tripSet.has(t.id))} style={{ ...pill(false), minHeight: 36, opacity: shown.some(t => tripSet.has(t.id)) ? 1 : 0.45 }}>{isAr ? 'إلغاء الظاهر' : 'Unselect shown'}</button>
+                    <input value={tpQ} onChange={e => setTpQ(e.target.value)} placeholder={isAr ? 'ابحث برقم الرحلة أو المحطة…' : 'Find by trip number or station…'} aria-label={isAr ? 'بحث عن رحلة' : 'Find a trip'}
+                      style={{ flex: 1, minWidth: 180, minHeight: 36, border: '1px solid var(--border-2)', borderRadius: 10, padding: '7px 11px', fontSize: '0.8rem', fontFamily: 'inherit', background: 'var(--card)' }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8, maxHeight: 300, overflowY: 'auto', paddingInlineEnd: 2 }}>
+                    {cap.map(t => {
+                      const on = tripSet.has(t.id)
+                      return (
+                        <button key={t.id} type="button" aria-pressed={on} onClick={() => setTrips(on ? schedTrips.filter(i => i !== t.id) : [...schedTrips, t.id])}
+                          style={{ display: 'flex', alignItems: 'center', gap: 9, minHeight: 50, padding: '8px 11px', borderRadius: 12, border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-1)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
+                          <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--accent)' : 'transparent', color: '#fff', fontSize: 12, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{on ? '✓' : ''}</span>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <b style={{ display: 'block', fontFamily: MONO, fontSize: '0.84rem' }}>{t.no}</b>
+                            <span dir="ltr" style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{en(t.from)} &rarr; {en(t.to)}</span>
+                          </span>
+                          <span title={isAr ? 'عدد الحركات' : 'Movements'} style={{ ...chipS('var(--surface-2)', 'var(--text-2)'), fontFamily: MONO }}>{t.n}</span>
+                        </button>
+                      )
+                    })}
+                    {cap.length === 0 && <span style={{ fontSize: '0.8rem', color: 'var(--text-3)', padding: 10 }}>{isAr ? 'لا نتائج' : 'No results'}</span>}
+                  </div>
+                  {shown.length > cap.length && <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{isAr ? `يُعرض أول ${cap.length} من ${shown.length} — استخدم البحث لتضييق القائمة` : `Showing first ${cap.length} of ${shown.length} — use search to narrow`}</span>}
+                </div>
+                {picked.length > 0 && (
+                  <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border-2)', background: 'var(--surface)', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-3)' }}>{isAr ? `المحددة (${picked.length})` : `Selected (${picked.length})`}</span>
+                    {picked.slice(0, 30).map(t => (
+                      <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 4px 3px 10px', borderRadius: 99, background: 'var(--card)', border: '1px solid var(--border-2)', fontSize: '0.72rem', fontWeight: 800 }}>
+                        <span style={{ fontFamily: MONO }}>{t.no}</span>
+                        <button type="button" onClick={() => dropMany([t.id])} aria-label={isAr ? 'إزالة' : 'Remove'} style={{ width: 22, height: 22, borderRadius: '50%', border: 'none', background: 'var(--surface-2)', color: 'var(--text-2)', cursor: 'pointer', fontSize: 12 }}>&times;</button>
+                      </span>
+                    ))}
+                    {picked.length > 30 && <span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>+{picked.length - 30}</span>}
+                    <button type="button" onClick={() => setTrips([])} style={{ marginInlineStart: 'auto', ...chipS('var(--danger-bg)', 'var(--danger)'), border: 'none', cursor: 'pointer', fontFamily: 'inherit', minHeight: 30 }}>{isAr ? 'مسح التحديد' : 'Clear selection'}</button>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
 
         {next && schedStatus === 'all' && schedShift === 'all' && !q && (
@@ -1960,6 +2076,7 @@ export default function TransportationPage() {
             <span style={chipS('var(--card)', 'var(--text-2)')}>{next.role === 'arrival' ? (isAr ? 'وصول' : 'Arrival') : (isAr ? 'مغادرة' : 'Departure')} · {en(next.station)}</span>
             <span dir="ltr" style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-2)' }}>{en(next.from_station)} → {en(next.to_station)}</span>
             <span style={{ marginInlineStart: 'auto', fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }} dir="ltr">{next.schedTime}</span>
+            {isDesktop && !coreMode && <button type="button" onClick={() => document.querySelector('[data-now]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} style={{ ...pill(false), minHeight: 34 }}>{isAr ? 'اذهب للآن' : 'Jump to now'}</button>}
             <span style={chipS('var(--card)', 'var(--text-1)')}>{nextIn <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${nextIn >= 60 ? `${Math.floor(nextIn / 60)}س ${nextIn % 60}د` : `${nextIn} د`}` : `in ${nextIn} min`)}</span>
           </div>
         )}
@@ -2013,7 +2130,7 @@ export default function TransportationPage() {
                             nowPlaced = true
                             return (
                               <div key={`now-${r.id}`} style={{ display: 'contents' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--danger)', fontFamily: MONO, fontSize: '0.7rem', fontWeight: 800 }}>
+                                <div data-now="1" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--danger)', fontFamily: MONO, fontSize: '0.7rem', fontWeight: 800 }}>
                                   <i style={{ flex: 1, height: 0, borderTop: '2px solid var(--danger)', opacity: 0.6 }} />
                                   <span dir="ltr" style={{ background: 'var(--danger-bg)', borderRadius: 99, padding: '1px 12px' }}>{isAr ? 'الآن' : 'NOW'} {String(nowD.getHours()).padStart(2, '0')}:{String(nowD.getMinutes()).padStart(2, '0')}</span>
                                   <i style={{ flex: 1, height: 0, borderTop: '2px solid var(--danger)', opacity: 0.6 }} />
