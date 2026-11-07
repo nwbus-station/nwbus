@@ -1113,7 +1113,10 @@ export default function TransportationPage() {
         const stamp = role === 'arrival' ? rec?.actual_arrival : rec?.actual_departure
         entries.push({
           key: `${tr.id}|${r.station_id}|${role}`, id: tr.id, role, station: st,
-          trip_number: tr.trip_number, trip_name: tr.trip_name, from_station: tr.from_station, to_station: tr.to_station,
+          trip_number: tr.trip_number, trip_name: tr.trip_name,
+          // نفس عرض شاشة المحطة: المغادرة تبدأ من هذه المحطة، والوصول ينتهي فيها (والمسار الكامل يظهر تحته)
+          from_station: role === 'departure' && !isOrigin ? st : tr.from_station, to_station: role === 'arrival' && !isDest ? st : tr.to_station,
+          full_from: tr.from_station, full_to: tr.to_station,
           schedTime: hhmm, rec, status: stamp ? 'departed' : 'scheduled',
           actual_departure: stamp ? new Date(stamp).toISOString().slice(11, 16) : null,
           bus_number: rec?.bus_number, passenger_count: rec?.passenger_count, missed: rec?.missed_count,
@@ -1697,6 +1700,10 @@ export default function TransportationPage() {
         </div>
       )
     }
+    // مسار الرحلة الكامل (يظهر فقط إذا اختلف عن المسار المعروض من منظور المحطة)
+    const fullRoute = r => (r.full_from && r.full_to && (r.full_from.id !== r.from_station?.id || r.full_to.id !== r.to_station?.id)
+      ? <div dir="ltr" title={isAr ? 'مسار الرحلة الكامل' : 'Full trip route'} style={{ fontSize: '0.66rem', color: 'var(--text-3)', marginTop: 3, fontFamily: MONO }}>{en(r.full_from)} &rarr; {en(r.full_to)}</div>
+      : null)
     const setSel = arr => { setSchedStations(arr); try { localStorage.setItem('nwbus_sched_stations', JSON.stringify(arr)) } catch { /* بدون تخزين */ } }
     const stationTag = r => (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
@@ -1732,6 +1739,7 @@ export default function TransportationPage() {
           {stationTag(r)}
           <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.02rem', color: 'var(--text-1)' }}>{r.trip_number}</span>
           {r.trip_name && <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 2 }}>{r.trip_name}</div>}
+          {fullRoute(r)}
         </div>
         <div className="tp-route">{track(r.from_station, r.to_station)}</div>
         <div className="tp-exec">{exec(r)}</div>
@@ -1745,6 +1753,7 @@ export default function TransportationPage() {
             {stationTag(r)}
             <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{r.trip_number}</span>
             {r.trip_name && <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{r.trip_name}</div>}
+            {fullRoute(r)}
             <div style={{ marginTop: 5 }}>{statusChip(r)}</div>
           </div>
           <div style={{ textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '6px 12px' }}>
