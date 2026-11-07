@@ -426,9 +426,10 @@ export default function ReportsPage() {
   const setOnlyStaffed = v => { localStorage.setItem('rpt_only_staffed', v ? '1' : '0'); _setOnlyStaffed(v) }
   // عدد الموظفين النشطين لكل محطة (لقوائم الطباعة المتعددة)
   const [staffByStation, setStaffByStation] = useState({})
+  const [staffReady, setStaffReady] = useState(false)
   useEffect(() => {
     supabase.from('users').select('station_id').eq('is_active', true).not('station_id', 'is', null).limit(5000)
-      .then(({ data }) => { const m = {}; for (const u of data ?? []) m[u.station_id] = (m[u.station_id] || 0) + 1; setStaffByStation(m) })
+      .then(({ data }) => { const m = {}; for (const u of data ?? []) m[u.station_id] = (m[u.station_id] || 0) + 1; setStaffByStation(m); setStaffReady(true) })
   }, [])
   const [showUnenteredWarn, setShowUnenteredWarn] = useState(false)
 
@@ -553,7 +554,12 @@ export default function ReportsPage() {
 
 
   const runReport = useCallback(async () => {
-    const cacheKey = `reports_${dateFrom}_${dateTo}_${station}`
+    // «فقط المحطات اللي فيها يوزر»: التقرير العام (كل المحطات) يشمل المحطات التي فيها موظفون فقط
+    const staffedOnly = onlyStaffed && station === 'all'
+    if (staffedOnly && !staffReady) return   // ننتظر وصول أعداد المستخدمين
+    const staffedIds = staffedOnly ? Object.keys(staffByStation).filter(id => staffByStation[id] > 0) : null
+    const NONE = '00000000-0000-0000-0000-000000000000'
+    const cacheKey = `reports_${dateFrom}_${dateTo}_${station}${staffedOnly ? '_staffed' : ''}`
     // غير الأدمن: ما نجيب أي بيانات قبل ما تتحدد محطاته (وإلا يطلع الاستعلام بدون تقييد نطاق)
     if (!seesAll && !scopedIds && !myStationIds.length) return
     const cached = getCached(cacheKey)
@@ -567,6 +573,7 @@ export default function ReportsPage() {
     const scope = q => {
       if (station !== 'all') return q.eq('station_id', station)
       if (scopedIds && !myStationIds.length) return q.in('station_id', ['00000000-0000-0000-0000-000000000000'])
+      if (staffedIds) { const base = !seesAll && myStationIds.length ? staffedIds.filter(i => myStationIds.includes(i)) : staffedIds; return q.in('station_id', base.length ? base : [NONE]) }
       if (!seesAll && myStationIds.length) return q.in('station_id', myStationIds)
       return q
     }
@@ -612,6 +619,7 @@ export default function ReportsPage() {
             to_station:to_station_id(id, name_ar,name_en, city_group))
         `)
         if (station !== 'all') q = q.eq('station_id', station)
+        else if (staffedIds) { const base = !seesAll && myStationIds.length ? staffedIds.filter(i => myStationIds.includes(i)) : staffedIds; q = q.in('station_id', base.length ? base : [NONE]) }
         else if (!seesAll && myStationIds.length) q = q.in('station_id', myStationIds)
         return q.order('trip_schedule_id').order('station_id')
       }),
@@ -858,7 +866,7 @@ export default function ReportsPage() {
     setCached(cacheKey, reportResult)
     setData(reportResult)
     setLoading(false)
-  }, [dateFrom, dateTo, station, seesAll, stations])
+  }, [dateFrom, dateTo, station, seesAll, stations, onlyStaffed, staffByStation, staffReady])
 
   // تشغيل تلقائي عند تغيّر التاريخ/المحطة
   useEffect(() => { runReport() }, [runReport])
@@ -1250,7 +1258,8 @@ export default function ReportsPage() {
         <div style="font-size:14.5px;font-weight:900;color:#0f172a;margin-top:3px">${escapeHtml(name)}</div>
         <div style="font-size:12px;font-weight:700;color:${c};margin-top:2px">${val}</div></div>`
       summaryPage = `
-        <div class="${outMode === 'pdf' ? 'sum-compact' : ''}" style="page-break-after:always">
+        <div class="sum-compact" style="page-break-after:always">
+          <style>.sum-compact tbody td{padding-top:3px!important;padding-bottom:3px!important}</style>
           ${brandHeader({ title: isAr ? 'ملخص المحطات المحددة' : 'Selected stations summary', subtitle: isAr ? `${targetStations.length} محطة` : `${targetStations.length} stations`, lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
           <div style="padding:0 4px">
             <div style="display:flex;gap:10px;align-items:stretch;margin-top:4px">

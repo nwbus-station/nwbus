@@ -42,9 +42,10 @@ async function htmlToPdfBlob(bodyHtml, css, { fit = false } = {}) {
 
     // ملف الملخص: إن زاد قليلاً عن صفحة نصغّره ليدخل صفحة واحدة (بدل صفحة ثانية بصفوف مقطوعة)
     const fitScale = fit && totalH > PAGE_H ? PAGE_H / totalH : 1
-    const fitOne = fit && fitScale >= 0.45
+    const fitOne = fit && fitScale >= 0.3   // الملخص يدخل صفحة واحدة حتى لو احتاج تصغيراً كبيراً (بدقة رسم أعلى ليبقى مقروءاً)
+    const SC = fitOne ? 3 : SCALE
 
-    const canvas = await html2canvas(body, { scale: SCALE, backgroundColor: '#ffffff', useCORS: true, logging: false, foreignObjectRendering: true, width: PAGE_W, windowWidth: PAGE_W, height: totalH, windowHeight: totalH })
+    const canvas = await html2canvas(body, { scale: SC, backgroundColor: '#ffffff', useCORS: true, logging: false, foreignObjectRendering: true, width: PAGE_W, windowWidth: PAGE_W, height: totalH, windowHeight: totalH })
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true })
     if (fitOne) {
       const w = MM_W * fitScale
@@ -56,8 +57,8 @@ async function htmlToPdfBlob(bodyHtml, css, { fit = false } = {}) {
       const y0 = breaks[i], y1 = breaks[i + 1], h = y1 - y0
       if (h <= 0) continue
       const slice = document.createElement('canvas')
-      slice.width = canvas.width; slice.height = Math.round(h * SCALE)
-      slice.getContext('2d').drawImage(canvas, 0, Math.round(y0 * SCALE), canvas.width, slice.height, 0, 0, canvas.width, slice.height)
+      slice.width = canvas.width; slice.height = Math.round(h * SC)
+      slice.getContext('2d').drawImage(canvas, 0, Math.round(y0 * SC), canvas.width, slice.height, 0, 0, canvas.width, slice.height)
       if (i > 0) pdf.addPage('a4', 'landscape')
       pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 8, 8, MM_W, (h / PAGE_W) * MM_W, undefined, 'FAST')
       if (pages > 1) { pdf.setFontSize(8); pdf.setTextColor(140); pdf.text(`${i + 1} / ${pages}`, 148.5, 205, { align: 'center' }) }
