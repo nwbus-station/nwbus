@@ -732,6 +732,7 @@ export default function TransportationPage() {
   const [schedShift, setSchedShift] = useState('all')    // all | A | B | C | D
   const [schedQ, setSchedQ] = useState('')
   const [schedDir, setSchedDir] = useState('all')   // all | arrival | departure
+  const [schedKind, setSchedKind] = useState('all')  // all | core (أساسية) | transit (عبور)
   const [schedStations, setSchedStations] = useState(() => { try { return JSON.parse(localStorage.getItem('nwbus_sched_stations') || '[]') } catch { return [] } })   // فارغ = كل المحطات
   const [stPanel, setStPanel] = useState(false)
   const [stTab, setStTab] = useState('stations')   // صفحتا الاختيار: stations | agents
@@ -754,7 +755,7 @@ export default function TransportationPage() {
   useEffect(() => { if (ovAppliedRef.current || settingsLoading) return; ovAppliedRef.current = true; if (ov.assigned) setViewMode('schedule') }, [settingsLoading, ov.assigned]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!settingsLoading && !ov.visible && viewMode === 'schedule') setViewMode('station') }, [settingsLoading, ov.visible, viewMode])
   useEffect(() => { const mq = window.matchMedia('(min-width: 768px)'); const f = () => setIsDesktop(mq.matches); mq.addEventListener('change', f); return () => mq.removeEventListener('change', f) }, [])
-  useEffect(() => { setSchedLimit(100) }, [schedStatus, schedShift, schedQ, schedDir, schedScope, schedStations, date])
+  useEffect(() => { setSchedLimit(100) }, [schedStatus, schedShift, schedQ, schedDir, schedKind, schedScope, schedStations, date])
   useEffect(() => {
     if (!sentinel) return
     const io = new IntersectionObserver(e => { if (e[0].isIntersecting) setSchedLimit(n => n + 100) }, { rootMargin: '700px' })
@@ -1113,6 +1114,7 @@ export default function TransportationPage() {
         const stamp = role === 'arrival' ? rec?.actual_arrival : rec?.actual_departure
         entries.push({
           key: `${tr.id}|${r.station_id}|${role}`, id: tr.id, role, station: st,
+          core: role === 'departure' ? isOrigin : isDest,   // رحلة أساسية: تبدأ أو تنتهي في هذه المحطة (غير محطة العبور)
           trip_number: tr.trip_number, trip_name: tr.trip_name,
           // نفس عرض شاشة المحطة: المغادرة تبدأ من هذه المحطة، والوصول ينتهي فيها (والمسار الكامل يظهر تحته)
           from_station: role === 'departure' && !isOrigin ? st : tr.from_station, to_station: role === 'arrival' && !isDest ? st : tr.to_station,
@@ -1578,6 +1580,8 @@ export default function TransportationPage() {
       if (schedStatus === 'scheduled' && r.departed) return false
       if (schedStatus === 'late' && !(r.late || r.overdue)) return false
       if (schedDir !== 'all' && r.role !== schedDir) return false
+      if (schedKind === 'core' && !r.core) return false
+      if (schedKind === 'transit' && r.core) return false
       if (schedStatus === 'notes' && !r.tripNotes?.some(n => n.text) && !r.follow?.length) return false
       if (schedStatus === 'issue' && !(r.opStatus && r.opStatus !== 'Normal') && !r.tripNotes?.some(n => n.status && n.status !== 'Normal')) return false
       if (schedShift !== 'all' && shiftOf(r) !== schedShift) return false
@@ -1709,6 +1713,7 @@ export default function TransportationPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
         <span style={chipS(r.role === 'arrival' ? 'var(--info-bg)' : 'var(--success-bg)', r.role === 'arrival' ? 'var(--info)' : 'var(--success)')}>{r.role === 'arrival' ? (isAr ? 'وصول' : 'Arrival') : (isAr ? 'مغادرة' : 'Departure')}</span>
         <span dir="auto" style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)' }}>{en(r.station)}</span>
+        {r.core && <span title={isAr ? 'رحلة أساسية: تبدأ أو تنتهي في هذه المحطة' : 'Core trip: starts or ends at this station'} style={{ ...chipS('var(--gold-dim)', 'var(--accent)'), display: 'inline-flex', alignItems: 'center', gap: 4 }}>&#9733; {isAr ? 'أساسية' : 'Core'}</span>}
       </div>
     )
     const track = (from, to) => (
@@ -1770,7 +1775,17 @@ export default function TransportationPage() {
         </div>
       </div>
     )
-    const vList = list.slice(0, schedLimit)   // نعرض أول دفعة فقط ونزيد مع التمرير، فلا تُرسم آلاف الحركات دفعة واحدة
+    const coreN = rows.filter(r => r.core).length
+    const kindCount = k => (k === 'all' ? total : k === 'core' ? coreN : total - coreN)
+    // وضع «الأساسية»: قائمة مستقلة مفصولة إلى مغادرة ووصول بدل الورديات
+    const coreMode = schedKind === 'core'
+    const SECT = coreMode
+      ? [['departure', 'مغادرة — الرحلات الأساسية', 'Core departures', 0, 0, ''], ['arrival', 'وصول — الرحلات الأساسية', 'Core arrivals', 0, 0, '']]
+      : SH
+    const inSect = (r, k) => (coreMode ? r.role === k : shiftOf(r) === k)
+    // في وضع الأساسية نحدّ كل قسم (مغادرة/وصول) على حدة حتى يظهر القسمان معاً من البداية
+    const vList = coreMode ? SECT.flatMap(([k]) => list.filter(r => r.role === k).slice(0, schedLimit)) : list.slice(0, schedLimit)
+    const moreLeft = coreMode ? SECT.reduce((a, [k]) => a + Math.max(0, list.filter(r => r.role === k).length - schedLimit), 0) : Math.max(0, list.length - schedLimit)   // نعرض أول دفعة فقط ونزيد مع التمرير، فلا تُرسم آلاف الحركات دفعة واحدة
     let nowPlaced = false
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1833,6 +1848,8 @@ export default function TransportationPage() {
         {/* التصفية والبحث */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
+            {[['all', isAr ? 'كل الرحلات' : 'All trips'], ['core', isAr ? '★ الأساسية' : '★ Core'], ['transit', isAr ? 'عبور' : 'Transit']].map(([k, l]) => <button key={k} type="button" aria-pressed={schedKind === k} style={{ ...pill(schedKind === k), flexShrink: 0 }} onClick={() => setSchedKind(k)}>{l} <b style={{ fontFamily: MONO, opacity: 0.8, marginInlineStart: 4 }}>{kindCount(k)}</b></button>)}
+            <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
             {[['all', isAr ? 'الكل' : 'All'], ['departed', isAr ? 'غادرت' : 'Departed'], ['scheduled', isAr ? 'مجدولة' : 'Scheduled'], ['late', isAr ? 'متأخرة / بانتظار' : 'Late / awaiting'], ['notes', isAr ? 'فيها ملاحظات' : 'With notes'], ['issue', isAr ? 'حالة غير عادية' : 'Irregular']].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedStatus === k), flexShrink: 0 }} onClick={() => setSchedStatus(k)}>{l} <b style={{ fontFamily: MONO, opacity: 0.8, marginInlineStart: 4 }}>{statusCount(k)}</b></button>)}
             <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
             {[['all', isAr ? 'كل الورديات' : 'All shifts'], ...SH.map(x => [x[0], isAr ? x[1] : x[2]])].map(([k, l]) => <button key={k} type="button" style={{ ...pill(schedShift === k), flexShrink: 0 }} onClick={() => setSchedShift(k)}>{l}</button>)}
@@ -1951,16 +1968,33 @@ export default function TransportationPage() {
           <p className="text-center py-16 text-gray-400 text-sm">{isAr ? 'لا نتائج مطابقة' : 'No matching trips'}</p>
         ) : (
           <>
-            {!isDesktop && <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{vList.map(card)}</div>}
+            {!isDesktop && (coreMode
+              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {SECT.map(([k, ar, enL]) => {
+                  const g = vList.filter(r => r.role === k)
+                  if (!g.length) return null
+                  return (
+                    <section key={k}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                        <span style={{ width: 4, height: 18, background: k === 'arrival' ? 'var(--info)' : 'var(--success)', borderRadius: 2 }} />
+                        <b style={{ fontSize: '0.9rem', color: 'var(--text-1)' }}>{isAr ? ar : enL}</b>
+                        <span style={{ marginInlineStart: 'auto', fontFamily: MONO, fontSize: '0.74rem', color: 'var(--text-3)' }} dir="ltr">{rows.filter(r => r.core && r.role === k).length}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{g.map(card)}</div>
+                    </section>
+                  )
+                })}
+              </div>
+              : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{vList.map(card)}</div>)}
             {isDesktop && <div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                {SH.map(([k, ar, enL, from, to, range]) => {
-                  const grp = vList.filter(r => shiftOf(r) === k)
+                {SECT.map(([k, ar, enL, from, to, range]) => {
+                  const grp = vList.filter(r => inSect(r, k))
                   if (!grp.length) return null
-                  const all = rows.filter(r => shiftOf(r) === k)
+                  const all = rows.filter(r => (coreMode ? r.core && r.role === k : shiftOf(r) === k))
                   const done = all.filter(r => r.departed).length
                   const sp = all.length ? Math.round((done / all.length) * 100) : 0
-                  const nowHere = isToday && all.some(r => { const sh = rowShift(r); return sh.from <= nowMin && nowMin <= sh.to })
+                  const nowHere = !coreMode && isToday && all.some(r => { const sh = rowShift(r); return sh.from <= nowMin && nowMin <= sh.to })
                   return (
                     <section key={k}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -1996,9 +2030,9 @@ export default function TransportationPage() {
                 })}
               </div>
             </div>}
-            {list.length > schedLimit && (
+            {moreLeft > 0 && (
               <div ref={setSentinel} style={{ display: 'grid', placeItems: 'center', padding: 16 }}>
-                <button type="button" onClick={() => setSchedLimit(n => n + 100)} style={{ ...pill(false), minHeight: 40 }}>{isAr ? `عرض المزيد (${list.length - schedLimit})` : `Show more (${list.length - schedLimit})`}</button>
+                <button type="button" onClick={() => setSchedLimit(n => n + 100)} style={{ ...pill(false), minHeight: 40 }}>{isAr ? `عرض المزيد (${moreLeft})` : `Show more (${moreLeft})`}</button>
               </div>
             )}
           </>
