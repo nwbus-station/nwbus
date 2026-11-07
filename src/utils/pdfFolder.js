@@ -9,7 +9,7 @@ const SCALE = 2
 export const canPickFolder = () => typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function'
 
 // يرسم HTML داخل إطار مخفي ويُرجع PDF بصفحات A4 أفقية، مع قص الصفحات عند حدود الصفوف والعناوين لا في وسط سطر
-async function htmlToPdfBlob(bodyHtml, css) {
+async function htmlToPdfBlob(bodyHtml, css, { fit = false } = {}) {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')])
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
@@ -40,8 +40,17 @@ async function htmlToPdfBlob(bodyHtml, css) {
     }
     breaks.push(totalH)
 
+    // ملف الملخص: إن زاد قليلاً عن صفحة نصغّره ليدخل صفحة واحدة (بدل صفحة ثانية بصفوف مقطوعة)
+    const fitScale = fit && totalH > PAGE_H ? PAGE_H / totalH : 1
+    const fitOne = fit && fitScale >= 0.55
+
     const canvas = await html2canvas(body, { scale: SCALE, backgroundColor: '#ffffff', useCORS: true, logging: false, foreignObjectRendering: true, width: PAGE_W, windowWidth: PAGE_W, height: totalH, windowHeight: totalH })
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true })
+    if (fitOne) {
+      const w = MM_W * fitScale
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 8 + (MM_W - w) / 2, 8, w, MM_H, undefined, 'FAST')
+      return pdf.output('blob')
+    }
     const pages = breaks.length - 1
     for (let i = 0; i < pages; i++) {
       const y0 = breaks[i], y1 = breaks[i + 1], h = y1 - y0
@@ -80,7 +89,7 @@ export async function savePdfFolder(files, { folderName, css, via, dirHandle, on
   for (let i = 0; i < total; i++) {
     const f = files[i]
     onProgress?.(i, total, f.name)
-    const blob = await htmlToPdfBlob(f.html, css)
+    const blob = await htmlToPdfBlob(f.html, css, { fit: !!f.fit })
     const fileName = uniq(f.name)
     if (sub) {
       const fh = await sub.getFileHandle(fileName, { create: true })

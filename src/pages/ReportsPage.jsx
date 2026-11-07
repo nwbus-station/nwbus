@@ -1285,7 +1285,9 @@ export default function ReportsPage() {
                 <tr class="tot-row" style="background:#1C2B36"><td></td><td style="padding:10px;font-size:14px;font-weight:900;color:#fff">${isAr ? 'الإجمالي' : 'Total'}</td>${[tot.dT, tot.aT, tot.dP.toLocaleString('en-US'), tot.aP.toLocaleString('en-US'), depRateAll === null ? '—' : depRateAll + '%', arrRateAll === null ? '—' : arrRateAll + '%', tot.miss].map(v => `<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#fff">${v}</td>`).join('')}</tr>
               </tbody>
             </table>
-            <div style="margin-top:8px;font-size:11px;color:#64748b">${isAr ? 'ركاب المغادرة والوصول يُعرضان منفصلين دائماً — تفاصيل كل محطة في الصفحات التالية' : 'Departing and arriving passengers are always shown separately — station details on the following pages'}</div>
+            <div style="margin-top:10px;font-size:12.5px;color:#475569">${outMode === 'pdf'
+              ? (isAr ? 'ركاب المغادرة والوصول يُعرضان منفصلين دائماً — وتفاصيل كل محطة في ملفها المستقل' : 'Departing and arriving passengers are always shown separately — each station has its own file')
+              : (isAr ? 'ركاب المغادرة والوصول يُعرضان منفصلين دائماً — تفاصيل كل محطة في الصفحات التالية' : 'Departing and arriving passengers are always shown separately — station details on the following pages')}</div>
           </div>
         </div>`
     }
@@ -1295,7 +1297,7 @@ export default function ReportsPage() {
     if (outMode === 'pdf') {
       const modeWord = m => (m === 'summary' ? (isAr ? 'ملخص وصول ومغادرة' : 'Arr-Dep summary') : (isAr ? 'وصول ومغادرة' : 'Arrivals-Departures'))
       const files = []
-      if (summaryPage) files.push({ name: `00 - ${isAr ? 'ملخص المحطات' : 'Stations summary'}`, html: wrapSheet(summaryPage) })
+      if (summaryPage) files.push({ name: `00 - ${isAr ? 'ملخص المحطات' : 'Stations summary'}`, html: wrapSheet(summaryPage), fit: true })   // الملخص يدخل صفحة واحدة بدل ما يتقطع
       targetStations.forEach((stn, i) => files.push({ name: `${String(i + 1).padStart(2, '0')} - ${isAr ? (stn.name_ar || stn.name_en) : (stn.name_en || stn.name_ar)} - ${modeWord(modeById[stn.id])}`, html: wrapSheet(pageList[i]) }))
       return { files, css: SHEET_CSS }
     }
