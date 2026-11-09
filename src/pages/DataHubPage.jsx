@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import DataGrid from '../components/datahub/DataGrid'
@@ -31,6 +31,14 @@ export default function DataHubPage() {
   const [vh, setVh] = useState(() => window.innerHeight)
   const viewRef = useRef({ rows: [], cols: [] })
   const seq = useRef(0)
+  const slotRef = useRef(null)
+  const [slotTop, setSlotTop] = useState(0)
+  // الجدول يملأ الشاشة من مكانه الفعلي حتى أسفلها (بدون تمرير للصفحة)
+  useLayoutEffect(() => {
+    const m = () => { const el = slotRef.current; if (el) setSlotTop(Math.round(el.getBoundingClientRect().top + window.scrollY)) }
+    m(); window.addEventListener('resize', m)
+    return () => window.removeEventListener('resize', m)
+  })
   const def = HUB_SETS.find(s => s.id === setId) || HUB_SETS[0]
 
   useEffect(() => {
@@ -89,7 +97,8 @@ export default function DataHubPage() {
 
   const dateInput = { minHeight: 38, border: '1px solid var(--border-2)', borderRadius: 9, padding: '0 10px', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.84rem' }
   const groupColor = HUB_GROUPS.find(g => g.id === def.group)?.color || 'var(--accent)'
-  const gridH = Math.max(420, vh - (isDesktop ? 330 : 420) - (def.dated ? 50 : 0))
+  // 92 = شريط أدوات الشبكة + شريط الحالة، والباقي هامش سفلي (وشريط التنقل السفلي بالجوال)
+  const gridH = Math.max(300, vh - slotTop - 92 - (isDesktop ? 22 : 80))
   const chip = (on) => ({ minHeight: 40, padding: '0 14px', borderRadius: 10, border: `1px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-1)', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 7 })
 
   return (
@@ -165,7 +174,7 @@ export default function DataHubPage() {
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop && navOpen ? '230px minmax(0, 1fr)' : '1fr', gap: 14, alignItems: 'start' }}>
         {/* قائمة الأقسام */}
         {isDesktop && navOpen ? (
-          <nav aria-label={T('أقسام البيانات', 'Data sections')} style={{ background: 'var(--card)', border: '1px solid var(--border-2)', borderRadius: 16, padding: 8, maxHeight: gridH + 100, overflowY: 'auto', position: 'sticky', top: 8 }}>
+          <nav aria-label={T('أقسام البيانات', 'Data sections')} style={{ background: 'var(--card)', border: '1px solid var(--border-2)', borderRadius: 16, padding: 8, maxHeight: gridH + 92, overflowY: 'auto', position: 'sticky', top: 8 }}>
             {HUB_GROUPS.map(g => (
               <div key={g.id} style={{ marginBottom: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px 4px', fontSize: '0.72rem', fontWeight: 900, color: 'var(--text-3)' }}>
@@ -199,11 +208,13 @@ export default function DataHubPage() {
           )}
           {err && err !== 'SETUP' && <div role="alert" style={{ padding: '12px 16px', borderRadius: 12, background: 'var(--danger-bg, #fef2f2)', color: 'var(--danger, #dc2626)', fontWeight: 700, fontSize: '0.84rem' }}>{err}</div>}
 
+          <div ref={slotRef}>
           {loading && !rows.length && !err
             ? <div style={{ display: 'grid', placeItems: 'center', height: gridH, border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', color: 'var(--text-3)', fontWeight: 800 }}>{T('جارٍ تحميل البيانات…', 'Loading data…')}</div>
             : !err && (rows.length === 0
               ? <div style={{ display: 'grid', placeItems: 'center', height: 240, border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', color: 'var(--text-3)', fontWeight: 800 }}>{period.mode === 'today' ? T('لا توجد بيانات اليوم حتى الآن — تظهر هنا لحظياً فور تسجيلها', 'Nothing today yet — new records appear here live') : T('لا توجد بيانات في هذا القسم للفترة المختارة', 'No data in this section for the selected period')}</div>
               : <DataGrid key={setId} cols={cols} rows={rows} isAr={isAr} rowH={density} search={q} height={gridH} onView={v => { viewRef.current = v }} />)}
+          </div>
         </div>
       </div>
     </div>
