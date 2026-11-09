@@ -78,7 +78,7 @@ export default function DataHubPage() {
     return () => { clearTimeout(t); clearInterval(poll); supabase.removeChannel(ch) }
   }, [live, def.table, load])
 
-  const cols = useMemo(() => inferCols(rows), [rows])
+  const cols = useMemo(() => inferCols(rows, setId), [rows, setId])
   const pick = id => { setSetId(id); localStorage.setItem('hub_set', id) }
   const [pf, pt] = resolvePeriod(period)
   const periodText = period.mode === 'all' ? T('كل الفترات', 'All time') : pf === pt ? pf : `${pf} ← ${pt}`

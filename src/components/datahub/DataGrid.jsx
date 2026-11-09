@@ -334,7 +334,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
                         onMouseEnter={() => { if (drag.current && !resize.current) setSel(s => (s ? { ...s, r2: r, c2: ci } : s)) }}
                         style={cellStyle(c, ci, r)}>
                         {c.type === 'bool'
-                          ? (v === null || v === undefined ? null : <span style={{ borderRadius: 99, padding: '1px 9px', fontSize: '0.68rem', fontWeight: 800, background: v ? 'var(--success-bg)' : 'var(--surface-2)', color: v ? 'var(--success)' : 'var(--text-3)' }}>{text}</span>)
+                          ? (v === null || v === undefined ? null : <span style={{ borderRadius: 99, padding: '1px 9px', fontSize: '0.68rem', fontWeight: 800, background: c.tones ? c.tones[!!v][0] : v ? 'var(--success-bg)' : 'var(--surface-2)', color: c.tones ? c.tones[!!v][1] : v ? 'var(--success)' : 'var(--text-3)' }}>{text}</span>)
                           : <span dir={c.type === 'text' ? 'auto' : 'ltr'} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.88rem', color: 'var(--text-1)', fontFamily: c.type === 'num' || c.type === 'stamp' || c.type === 'date' ? MONO : 'inherit', fontWeight: c.type === 'num' ? 700 : 500 }}>{text}</span>}
                       </div>
                     )

@@ -153,8 +153,27 @@ export function smartLabel(k) {
 const TECH_KEY = /(^id$|_id$|^updated_at$|updated_by|token|password|hash|^auth_|push|fcm|avatar|signature|^is_cancelled$|^deleted|lat$|lng$|^lang$|_url$|^sort|^order_index|^version$)/i
 const isEmpty = v => v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length)
 
+// ترتيب وتسميات وقيم عربية جاهزة لأقسام معيّنة (الأعمدة في force تظهر دائماً حتى لو كانت قيمها فارغة)
+const STATUS_AR = {
+  Normal: 'طبيعية', 'Traffic Jam': 'ازدحام مروري', Weather: 'أحوال جوية', 'Police Control': 'نقطة تفتيش / ضبط', 'Health (Driver/Passengers)': 'حالة صحية (سائق/ركاب)',
+  'Passenger Misbehavior': 'سلوك راكب', 'Accident between other vehicles': 'حادث بين مركبات أخرى', 'Accident with NWB bus': 'حادث مع حافلة NWB',
+  'Malfunction inside the station': 'عطل داخل المحطة', 'Out-of-station malfunction': 'عطل خارج المحطة',
+}
+const ACC_AR = { Early: 'مبكرة', 'On Time': 'في الموعد', 'Not On Time': 'خارج الموعد', Delayed: 'متأخرة' }
+const ARR_TONES = { true: ['var(--gold-dim)', 'var(--accent)'], false: ['var(--surface-2)', 'var(--text-2)'] }
+export const PRESETS = {
+  trips: {
+    order: ['record_date', 'station_name', 'trip_number', 'bus_number', 'is_arrival', 'from_station', 'to_station', 'passenger_count', 'operational_status', 'created_by_name', 'scheduled_departure', 'actual_departure', 'actual_arrival', 'departure_accuracy', 'delay_minutes', 'missed_count', 'is_extra_trip', 'notes'],
+    force: ['record_date', 'station_name', 'trip_number', 'bus_number', 'is_arrival', 'from_station', 'to_station', 'passenger_count', 'operational_status', 'created_by_name'],
+    labels: { is_arrival: 'النوع', bus_number: 'الحافلة', trip_number: 'رقم الرحلة', from_station: 'من', to_station: 'إلى', passenger_count: 'عدد الركاب', operational_status: 'حالة الحافلة', created_by_name: 'أدخلها', scheduled_departure: 'موعد الجدول', actual_departure: 'المغادرة الفعلية', actual_arrival: 'الوصول الفعلي', departure_accuracy: 'الالتزام بالموعد', delay_minutes: 'التأخير (د)', missed_count: 'المتخلفون', is_extra_trip: 'إضافية' },
+    fmt: { is_arrival: v => (v ? 'وصول' : 'مغادرة'), operational_status: v => STATUS_AR[v] || v, departure_accuracy: v => ACC_AR[v] || v },
+    tones: { is_arrival: ARR_TONES },
+  },
+}
+
 // أعمدة القسم من عيّنة الصفوف: النوع يحدد المحاذاة والتنسيق والفرز والتصفية
-export function inferCols(rows) {
+export function inferCols(rows, setId) {
+  const P = PRESETS[setId]
   const keys = [...new Set(rows.slice(0, 300).flatMap(r => Object.keys(r)))]
   const cols = keys.map(key => {
     const sample = rows.find(r => !isEmpty(r[key]))?.[key]
@@ -162,21 +181,28 @@ export function inferCols(rows) {
     if (typeof sample === 'number') type = 'num'
     else if (typeof sample === 'boolean') type = 'bool'
     else if (typeof sample === 'string') type = TS.test(sample) ? 'stamp' : DATE.test(sample) ? 'date' : UUID.test(sample) ? 'id' : 'text'
-    const label = smartLabel(key)
-    const lens = rows.slice(0, 80).map(r => display({ type }, r[key]).length)
+    const label = P?.labels?.[key] || smartLabel(key)
+    const fmt = P?.fmt?.[key]
+    const lens = rows.slice(0, 80).map(r => display({ type, fmt }, r[key]).length)
     const textW = Math.min(Math.max(label.length * 9 + 34, Math.max(0, ...lens) * 7.5 + 24), 240)
     const width = { num: Math.max(96, label.length * 8 + 40), date: 112, stamp: 142, bool: 86, id: 120 }[type] ?? Math.max(110, textW)
     // فارغ أو صفر في كل الصفوف المحمَّلة ← مخفي افتراضياً
     const empty = rows.every(r => isEmpty(r[key]) || r[key] === false || r[key] === 0)
-    return { key, label, type, width, hidden: type === 'id' || TECH_KEY.test(key) || empty }
+    const hidden = P?.force?.includes(key) ? false : (type === 'id' || TECH_KEY.test(key) || empty)
+    return { key, label, type, width, hidden, fmt, tones: P?.tones?.[key] }
   })
   // الأعمدة المهمة أولاً: التاريخ ثم المحطة/الاسم ثم الباقي، وأوقات التسجيل التقنية في الآخر
   const rank = c => (c.hidden ? 9 : /(^|_)date$|^date$/.test(c.key) ? 0 : /station_name|^name_|full_name|_name$/.test(c.key) ? 1 : /(^|_)at$/.test(c.key) ? 3 : 2)
+  if (P?.order) {
+    const o = k => { const i = P.order.indexOf(k); return i < 0 ? 999 : i }
+    return cols.map((c, i) => ({ ...c, i })).sort((a, b) => (a.hidden - b.hidden) || (o(a.key) - o(b.key)) || (rank(a) - rank(b)) || (a.i - b.i))
+  }
   return cols.map((c, i) => ({ ...c, i })).sort((a, b) => rank(a) - rank(b) || a.i - b.i)
 }
 
 export function display(col, v) {
   if (v === null || v === undefined || v === '') return ''
+  if (col.fmt) return String(col.fmt(v))
   if (col.type === 'num') return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
   if (col.type === 'bool') return v ? 'نعم' : 'لا'
   if (col.type === 'stamp') return riyadhText(v)
@@ -218,6 +244,7 @@ export async function exportViewXlsx({ isAr = true, title, subtitle = '', cols, 
     ws.addRow(cols.map(c => {
       const v = r[c.key]
       if (v === null || v === undefined) return null
+      if (c.fmt) return display(c, v)
       if (c.type === 'bool') return v ? 'نعم' : 'لا'
       if (c.type === 'stamp') return riyadhText(v)
       if (c.type === 'date') return new Date(Date.UTC(+v.slice(0, 4), +v.slice(5, 7) - 1, +v.slice(8, 10)))
