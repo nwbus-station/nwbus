@@ -17,28 +17,19 @@ export const HUB_SETS = [
   { id: 'trips', ar: 'سجلات الترحيل', en: 'Trip records', group: 'ops', table: 'trip_records', dated: true },
   { id: 'station_trips', ar: 'رحلات المحطات', en: 'Station trips', group: 'ops', table: 'station_trips' },
   { id: 'schedule', ar: 'جدول الرحلات الثابت', en: 'Trip schedule', group: 'ops', table: 'trip_schedule' },
-  { id: 'schedule_stops', ar: 'توقفات الرحلات', en: 'Trip stops', group: 'ops', table: 'trip_schedule_stops' },
-  { id: 'schedule_uploads', ar: 'رفع الجداول', en: 'Schedule uploads', group: 'ops', table: 'schedule_uploads', dated: true },
   { id: 'shipments', ar: 'الشحنات', en: 'Shipments', group: 'ops', table: 'shipments', dated: true },
   { id: 'sales', ar: 'الإيرادات اليومية', en: 'Daily revenue', group: 'sales', table: 'sales_records', dated: true },
-  { id: 'charity', ar: 'التبرعات', en: 'Donations', group: 'sales', table: 'charity_donations', dated: true },
   { id: 'employees', ar: 'الموظفون', en: 'Employees', group: 'hr', table: 'users' },
   { id: 'leaves', ar: 'الإجازات', en: 'Leaves', group: 'hr', table: 'leaves', dated: true },
   { id: 'evaluations', ar: 'تقييمات الأداء', en: 'Performance evaluations', group: 'hr', table: 'employee_evaluations', dated: true },
   { id: 'supervisor_evals', ar: 'تقييمات المشرفين', en: 'Supervisor evaluations', group: 'hr', table: 'supervisor_evaluations', dated: true },
   { id: 'station_evals', ar: 'تقييمات المحطات', en: 'Station evaluations', group: 'hr', table: 'station_evaluations', dated: true },
-  { id: 'supervisor_assign', ar: 'تعيينات مشرفي الورديات', en: 'Shift supervisor assignments', group: 'hr', table: 'shift_supervisor_assignments' },
-  { id: 'user_stations', ar: 'محطات الموظفين', en: 'User stations', group: 'hr', table: 'user_stations' },
-  { id: 'titles', ar: 'المسميات المخصصة', en: 'Custom titles', group: 'hr', table: 'custom_titles' },
   { id: 'customer_ratings', ar: 'تقييمات العملاء', en: 'Customer ratings', group: 'cust', table: 'customer_ratings', dated: true },
   { id: 'customer_surveys', ar: 'استبيانات العملاء', en: 'Customer surveys', group: 'cust', table: 'customer_surveys', dated: true },
-  { id: 'rating_messages', ar: 'رسائل تقييم المحطات', en: 'Station rating messages', group: 'cust', table: 'station_rating_messages', dated: true },
   { id: 'daily_survey', ar: 'الاستبيان اليومي', en: 'Daily survey', group: 'cust', table: 'user_daily_survey', dated: true },
-  { id: 'survey_cities', ar: 'مدن الاستبيان', en: 'Survey cities', group: 'cust', table: 'survey_cities' },
   { id: 'lost_found', ar: 'المفقودات والموجودات', en: 'Lost & found items', group: 'lost', table: 'lost_found_items', dated: true },
   { id: 'lost_reports', ar: 'بلاغات المفقودات', en: 'Lost reports', group: 'lost', table: 'lost_reports', dated: true },
   { id: 'stations', ar: 'المحطات', en: 'Stations', group: 'sys', table: 'stations' },
-  { id: 'magazine', ar: 'منشورات Event', en: 'Event posts', group: 'sys', table: 'magazine_posts', dated: true },
   { id: 'audit', ar: 'سجل النشاط', en: 'Activity log', group: 'sys', table: 'audit_log', dated: true },
 ]
 
@@ -49,6 +40,20 @@ const pad = n => String(n).padStart(2, '0')
 export const riyadhText = s => { const d = new Date(new Date(s).getTime() + 3 * 3600 * 1000); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}` }
 
 const isoDay = x => x.toISOString().slice(0, 10)
+
+// الفترة: «اليوم» بتوقيت الرياض افتراضياً، أو أمس، أو آخر N يوماً، أو الكل، أو تاريخ/فترة محددة
+export const riyadhToday = () => isoDay(new Date(Date.now() + 3 * 3600 * 1000))
+export const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return isoDay(d) }
+export const PERIODS = [['today', 'اليوم', 'Today'], ['yesterday', 'أمس', 'Yesterday'], ['7', '7 أيام', '7 days'], ['30', '30 يوماً', '30 days'], ['90', '90 يوماً', '90 days'], ['all', 'الكل', 'All']]
+export function resolvePeriod(p) {
+  const t = riyadhToday()
+  const m = p?.mode || 'today'
+  if (m === 'today') return [t, t]
+  if (m === 'yesterday') { const y = addDays(t, -1); return [y, y] }
+  if (m === 'all') return [addDays(t, -1500), addDays(t, 31)]
+  if (m === 'custom') { const f = p.from || t, e = p.to || f; return f <= e ? [f, e] : [e, f] }
+  return [addDays(t, -(Number(m) - 1)), t]
+}
 
 async function rpcRaw(id, from, to) {
   const { data, error } = await supabase.rpc('excel_feed_admin', { p_dataset: id, p_from: from ?? null, p_to: to ?? null })
@@ -102,14 +107,29 @@ function enrich(id, rows, L) {
   })
 }
 
-export async function loadHubSet(id, days) {
-  const now = Date.now()
+// عمود التاريخ لكل قسم (نفس ترتيب الخادم) لتصفية «اليوم» بتوقيت الرياض بدقة
+const DATE_KEYS = {
+  sales: ['sale_date'], trips: ['record_date'], leaves: ['start_date', 'from_date', 'created_at'],
+  evaluations: ['evaluation_date', 'eval_date', 'created_at'], supervisor_evals: ['evaluation_date', 'eval_date', 'created_at'], station_evals: ['evaluation_date', 'eval_date', 'created_at'],
+  customer_ratings: ['created_at'], customer_surveys: ['created_at'], lost_found: ['found_date', 'created_at'], lost_reports: ['created_at'],
+  daily_survey: ['survey_date', 'created_at'], audit: ['created_at'], shipments: ['created_at'],
+}
+const dayOf = (r, keys) => {
+  for (const k of keys) if (k in r) { const v = r[k]; return !v ? null : TS.test(v) ? riyadhText(v).slice(0, 10) : String(v).slice(0, 10) }
+  return null
+}
+
+export async function loadHubSet(id, from, to) {
+  const keys = DATE_KEYS[id]
+  // نوسّع الطلب يوماً من كل جهة (توقيت الخادم UTC) ثم نصفّي بتاريخ الرياض هنا
   const [rows, L] = await Promise.all([
-    rpcRaw(id, isoDay(new Date(now - days * 86400000)), isoDay(new Date(now + 31 * 86400000))),
+    rpcRaw(id, keys ? addDays(from, -1) : null, keys ? addDays(to, 1) : null),
     lookups(),
   ])
-  return enrich(id, rows, L)
+  const kept = keys ? rows.filter(r => { const d = dayOf(r, keys); return d && d >= from && d <= to }) : rows
+  return enrich(id, kept, L)
 }
+
 
 // ترجمة أسماء الأعمدة: القاموس الجاهز أولاً، وإلا ترجمة كلمات الاسم وعكس ترتيبها بالإضافة العربية (ticket_number ← رقم التذكرة)
 const TOK = {

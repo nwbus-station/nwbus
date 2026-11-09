@@ -2,11 +2,10 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import DataGrid from '../components/datahub/DataGrid'
-import { HUB_GROUPS, HUB_SETS, loadHubSet, inferCols, exportViewXlsx } from '../utils/dataHub'
+import { HUB_GROUPS, HUB_SETS, PERIODS, resolvePeriod, riyadhToday, loadHubSet, inferCols, exportViewXlsx } from '../utils/dataHub'
 
 // مركز البيانات المباشر: كل أقسام النظام في شبكة بنمط Excel، تتحدث لحظياً عند أي تغيير (أدمن عام فقط).
 const MONO = "'IBM Plex Mono', ui-monospace, monospace"
-const DAY_OPTS = [[30, '30 يوماً', '30 days'], [90, '90 يوماً', '90 days'], [180, '180 يوماً', '180 days'], [365, 'سنة', '1 year'], [1500, 'كل المتاح', 'All']]
 
 export default function DataHubPage() {
   const { i18n } = useTranslation()
@@ -14,7 +13,9 @@ export default function DataHubPage() {
   const T = (a, e) => (isAr ? a : e)
 
   const [setId, setSetId] = useState(() => { const s = localStorage.getItem('hub_set'); return HUB_SETS.some(x => x.id === s) ? s : 'sales' })
-  const [days, setDays] = useState(() => Number(localStorage.getItem('hub_days')) || 90)
+  // الفترة: اليوم افتراضياً (المباشر = حق اليوم). لا تُحفظ بين الزيارات حتى لا يفتح المستخدم على فترة قديمة بالخطأ
+  const [period, setPeriod] = useState({ mode: 'today' })
+  const pKey = `${period.mode}|${period.from || ''}|${period.to || ''}`
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
@@ -43,7 +44,8 @@ export default function DataHubPage() {
     const my = ++seq.current
     if (!silent) { setLoading(true); setErr('') }
     try {
-      const data = await loadHubSet(setId, days)
+      const [pf, pt] = resolvePeriod(period)
+      const data = await loadHubSet(setId, pf, pt)
       if (my !== seq.current) return
       setRows(data); setLastAt(new Date()); setErr('')
       setCounts(c => ({ ...c, [setId]: data.length }))
@@ -52,7 +54,7 @@ export default function DataHubPage() {
       if (!silent) { setRows([]); setErr(e.message) }
     }
     if (my === seq.current) setLoading(false)
-  }, [setId, days])
+  }, [setId, pKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // تحميل عند تغيير القسم أو الفترة
   useEffect(() => { setRows([]); setQ(''); load(false) }, [load])
@@ -70,7 +72,8 @@ export default function DataHubPage() {
 
   const cols = useMemo(() => inferCols(rows), [rows])
   const pick = id => { setSetId(id); localStorage.setItem('hub_set', id) }
-  const changeDays = v => { setDays(v); localStorage.setItem('hub_days', String(v)) }
+  const [pf, pt] = resolvePeriod(period)
+  const periodText = period.mode === 'all' ? T('كل الفترات', 'All time') : pf === pt ? pf : `${pf} ← ${pt}`
   const changeDensity = v => { setDensity(v); localStorage.setItem('hub_density', String(v)) }
 
   async function exportView() {
@@ -84,8 +87,9 @@ export default function DataHubPage() {
     setExporting(false)
   }
 
+  const dateInput = { minHeight: 38, border: '1px solid var(--border-2)', borderRadius: 9, padding: '0 10px', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.84rem' }
   const groupColor = HUB_GROUPS.find(g => g.id === def.group)?.color || 'var(--accent)'
-  const gridH = Math.max(420, vh - (isDesktop ? 330 : 420))
+  const gridH = Math.max(420, vh - (isDesktop ? 330 : 420) - (def.dated ? 50 : 0))
   const chip = (on) => ({ minHeight: 40, padding: '0 14px', borderRadius: 10, border: `1px solid ${on ? 'var(--accent)' : 'var(--border-2)'}`, background: on ? 'var(--gold-dim)' : 'var(--card)', color: 'var(--text-1)', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 7 })
 
   return (
@@ -124,11 +128,6 @@ export default function DataHubPage() {
           <input value={q} onChange={e => setQ(e.target.value)} placeholder={T('بحث في القسم…', 'Search this section…')} aria-label={T('بحث', 'Search')}
             style={{ width: '100%', boxSizing: 'border-box', minHeight: 40, border: '1px solid var(--border-2)', borderRadius: 10, padding: '0 12px', paddingInlineStart: 36, fontSize: '0.84rem', fontFamily: 'inherit', background: 'var(--card)', color: 'var(--text-1)' }} />
         </div>
-        {def.dated && (
-          <select value={days} onChange={e => changeDays(Number(e.target.value))} aria-label={T('الفترة', 'Period')} style={{ ...chip(false), paddingInlineEnd: 8 }}>
-            {DAY_OPTS.map(([d, ar, en]) => <option key={d} value={d}>{isAr ? ar : en}</option>)}
-          </select>
-        )}
         <div role="group" aria-label={T('الكثافة', 'Density')} style={{ display: 'inline-flex', background: 'var(--surface-2)', borderRadius: 10, padding: 3, gap: 2 }}>
           {[[28, T('مضغوط', 'Compact')], [34, T('عادي', 'Normal')], [44, T('مريح', 'Comfortable')]].map(([h, l]) => (
             <button key={h} type="button" aria-pressed={density === h} onClick={() => changeDensity(h)} style={{ border: 'none', borderRadius: 8, minHeight: 34, padding: '0 11px', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer', background: density === h ? 'var(--card)' : 'transparent', color: density === h ? 'var(--text-1)' : 'var(--text-3)', boxShadow: density === h ? '0 1px 4px rgba(0,0,0,.16)' : 'none' }}>{l}</button>
@@ -138,22 +137,46 @@ export default function DataHubPage() {
         <button type="button" onClick={exportView} disabled={exporting || !rows.length} style={{ ...chip(true), opacity: exporting || !rows.length ? 0.55 : 1 }}>{exporting ? T('جارٍ التجهيز…', 'Preparing…') : T('تنزيل Excel', 'Download Excel')}</button>
       </div>
 
+      {def.dated && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div role="group" aria-label={T('الفترة', 'Period')} style={{ display: 'inline-flex', flexWrap: 'wrap', background: 'var(--surface-2)', borderRadius: 10, padding: 3, gap: 2 }}>
+            {PERIODS.map(([m, ar, en]) => {
+              const on = period.mode === m
+              return <button key={m} type="button" aria-pressed={on} onClick={() => setPeriod({ mode: m })}
+                style={{ border: 'none', borderRadius: 8, minHeight: 36, padding: '0 14px', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', background: on ? 'var(--solid-btn)' : 'transparent', color: on ? '#fff' : 'var(--text-2)' }}>{isAr ? ar : en}</button>
+            })}
+            <button type="button" aria-pressed={period.mode === 'custom'} onClick={() => setPeriod(p => (p.mode === 'custom' ? p : { mode: 'custom', from: pf, to: pt }))}
+              style={{ border: 'none', borderRadius: 8, minHeight: 36, padding: '0 14px', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', background: period.mode === 'custom' ? 'var(--solid-btn)' : 'transparent', color: period.mode === 'custom' ? '#fff' : 'var(--text-2)' }}>{T('تاريخ محدد', 'Custom')}</button>
+          </div>
+          {period.mode === 'custom' && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-2)' }}>{T('من', 'From')}
+                <input type="date" value={period.from || ''} max={riyadhToday()} onChange={e => setPeriod(p => ({ ...p, from: e.target.value, to: p.to && p.to < e.target.value ? e.target.value : p.to }))} style={dateInput} />
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-2)' }}>{T('إلى', 'To')}
+                <input type="date" value={period.to || ''} min={period.from || ''} onChange={e => setPeriod(p => ({ ...p, to: e.target.value }))} style={dateInput} />
+              </label>
+            </div>
+          )}
+          <span dir="ltr" style={{ fontFamily: MONO, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-2)' }}>{periodText}</span>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: isDesktop && navOpen ? '230px minmax(0, 1fr)' : '1fr', gap: 14, alignItems: 'start' }}>
         {/* قائمة الأقسام */}
         {isDesktop && navOpen ? (
           <nav aria-label={T('أقسام البيانات', 'Data sections')} style={{ background: 'var(--card)', border: '1px solid var(--border-2)', borderRadius: 16, padding: 8, maxHeight: gridH + 100, overflowY: 'auto', position: 'sticky', top: 8 }}>
             {HUB_GROUPS.map(g => (
               <div key={g.id} style={{ marginBottom: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px 4px', fontSize: '0.66rem', fontWeight: 900, letterSpacing: '.06em', color: 'var(--text-3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px 4px', fontSize: '0.72rem', fontWeight: 900, color: 'var(--text-3)' }}>
                   <i style={{ width: 8, height: 8, borderRadius: 2, background: g.color }} />{isAr ? g.ar : g.en}
                 </div>
                 {HUB_SETS.filter(s => s.group === g.id).map(s => {
                   const on = s.id === setId
                   return (
                     <button key={s.id} type="button" onClick={() => pick(s.id)} aria-current={on ? 'page' : undefined}
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, minHeight: 40, padding: '6px 10px', border: 'none', borderRadius: 10, background: on ? 'var(--gold-dim)' : 'transparent', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.82rem', fontWeight: on ? 900 : 600, cursor: 'pointer', textAlign: 'start', borderInlineStart: `3px solid ${on ? g.color : 'transparent'}` }}>
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, minHeight: 42, padding: '6px 10px', border: 'none', borderRadius: 10, background: on ? 'var(--gold-dim)' : 'transparent', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.88rem', fontWeight: on ? 900 : 600, cursor: 'pointer', textAlign: 'start', borderInlineStart: `3px solid ${on ? g.color : 'transparent'}` }}>
                       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{isAr ? s.ar : s.en}</span>
-                      {counts[s.id] !== undefined && <span style={{ fontFamily: MONO, fontSize: '0.66rem', color: 'var(--text-3)' }}>{counts[s.id].toLocaleString('en-US')}</span>}
                     </button>
                   )
                 })}
@@ -179,7 +202,7 @@ export default function DataHubPage() {
           {loading && !rows.length && !err
             ? <div style={{ display: 'grid', placeItems: 'center', height: gridH, border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', color: 'var(--text-3)', fontWeight: 800 }}>{T('جارٍ تحميل البيانات…', 'Loading data…')}</div>
             : !err && (rows.length === 0
-              ? <div style={{ display: 'grid', placeItems: 'center', height: 240, border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', color: 'var(--text-3)', fontWeight: 800 }}>{T('لا توجد بيانات في هذا القسم للفترة المختارة', 'No data in this section for the selected period')}</div>
+              ? <div style={{ display: 'grid', placeItems: 'center', height: 240, border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', color: 'var(--text-3)', fontWeight: 800 }}>{period.mode === 'today' ? T('لا توجد بيانات اليوم حتى الآن — تظهر هنا لحظياً فور تسجيلها', 'Nothing today yet — new records appear here live') : T('لا توجد بيانات في هذا القسم للفترة المختارة', 'No data in this section for the selected period')}</div>
               : <DataGrid key={setId} cols={cols} rows={rows} isAr={isAr} rowH={density} search={q} height={gridH} onView={v => { viewRef.current = v }} />)}
         </div>
       </div>

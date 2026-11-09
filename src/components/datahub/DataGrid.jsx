@@ -192,7 +192,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
           )}
         </div>
         <button type="button" style={tb(pin)} aria-pressed={pin} onClick={() => setPin(o => !o)}>{T('تثبيت أول عمود', 'Freeze first column')}</button>
-        <span style={{ marginInlineStart: 'auto', fontSize: '0.7rem', color: 'var(--text-3)' }}>{T('اضغط رقم الصف لعرض كل تفاصيله · Ctrl+C للنسخ إلى Excel · اضغط العنوان للفرز', 'Click a row number for full details · Ctrl+C to copy to Excel · click a header to sort')}</span>
+
       </div>
 
       {/* الشبكة */}
@@ -208,7 +208,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
                 <div key={c.key} role="columnheader" aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}
                   style={{ position: pin && ci === 0 ? 'sticky' : 'relative', ...(pin && ci === 0 ? { insetInlineStart: NUM_W, zIndex: 5 } : null), width: c.w, minWidth: c.w, background: 'var(--surface)', borderInlineEnd: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <button type="button" onClick={() => toggleSort(c.key)} title={T('اضغط للفرز', 'Click to sort')}
-                    style={{ flex: 1, minWidth: 0, height: '100%', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.74rem', color: 'var(--text-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '0 8px' }}>
+                    style={{ flex: 1, minWidth: 0, height: '100%', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 900, fontSize: '0.82rem', color: 'var(--text-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '0 8px' }}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.label}</span>
                     <span aria-hidden="true" style={{ color: sort?.key === c.key ? 'var(--accent)' : 'var(--text-3)', fontSize: 10, opacity: sort?.key === c.key ? 1 : 0.4 }}>{sort?.key === c.key ? (sort.dir === 1 ? '▲' : '▼') : '⇅'}</span>
                   </button>
@@ -248,7 +248,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
                         style={cellStyle(c, ci, r)}>
                         {c.type === 'bool'
                           ? (v === null || v === undefined ? null : <span style={{ borderRadius: 99, padding: '1px 9px', fontSize: '0.68rem', fontWeight: 800, background: v ? 'var(--success-bg)' : 'var(--surface-2)', color: v ? 'var(--success)' : 'var(--text-3)' }}>{text}</span>)
-                          : <span dir={c.type === 'text' ? 'auto' : 'ltr'} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem', color: 'var(--text-1)', fontFamily: c.type === 'num' || c.type === 'stamp' || c.type === 'date' ? MONO : 'inherit', fontWeight: c.type === 'num' ? 700 : 500 }}>{text}</span>}
+                          : <span dir={c.type === 'text' ? 'auto' : 'ltr'} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.88rem', color: 'var(--text-1)', fontFamily: c.type === 'num' || c.type === 'stamp' || c.type === 'date' ? MONO : 'inherit', fontWeight: c.type === 'num' ? 700 : 500 }}>{text}</span>}
                       </div>
                     )
                   })}
