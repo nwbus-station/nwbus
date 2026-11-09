@@ -16,7 +16,11 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
   const [filters, setFilters] = useState({})
   const [showFilters, setShowFilters] = useState(false)
   const [menu, setMenu] = useState(false)
-  const [pin, setPin] = useState(false)                 // تثبيت أول عمود بيانات
+  const [pin, setPin] = useState(true)                  // تثبيت أول عمود بيانات (يبقى ظاهراً أثناء التحريك الأفقي)
+  const [edge, setEdge] = useState({ s: false, e: false }) // هل يوجد محتوى مخفي قبل/بعد (للظلال والأسهم)
+  const [panMode, setPanMode] = useState(false)             // وضع اليد: السحب يحرّك الجدول بدل تحديد الخلايا
+  const [panning, setPanning] = useState(false)
+  const pan = useRef(null), momentum = useRef(0), auto = useRef(null), ptr = useRef({ x: 0, y: 0 }), justPanned = useRef(false)
   const [sel, setSel] = useState(null)                  // { r1, c1, r2, c2 }
   const [scroll, setScroll] = useState({ top: 0, left: 0 })
   const [copied, setCopied] = useState(false)
@@ -26,10 +30,21 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
 
   useEffect(() => {
     const el = box.current; if (!el) return
-    const ro = new ResizeObserver(() => setCw(el.clientWidth))
-    ro.observe(el); setCw(el.clientWidth)
+    const ro = new ResizeObserver(() => { setCw(el.clientWidth); measureEdge() })
+    ro.observe(el); setCw(el.clientWidth); measureEdge()
     return () => ro.disconnect()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function measureEdge() {
+    const el = box.current; if (!el) return
+    const pos = Math.abs(el.scrollLeft), max = el.scrollWidth - el.clientWidth
+    const s = pos > 3, e = pos < max - 3
+    setEdge(p => (p.s === s && p.e === e ? p : { s, e }))
+  }
+  // اتجاهات فيزيائية: يسار/يمين الشاشة (في RTL بداية المحتوى يمين الشاشة)
+  const canL = isAr ? edge.e : edge.s
+  const canR = isAr ? edge.s : edge.e
+  const panBy = dir => { const el = box.current; if (el) el.scrollBy({ left: dir * Math.max(240, el.clientWidth * 0.72), behavior: 'smooth' }) }
 
   const vcols = useMemo(() => {
     const vis = cols.filter(c => !hidden.has(c.key))
@@ -75,6 +90,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
   }, [view, vcols])
 
   const totalW = NUM_W + vcols.reduce((a, c) => a + c.w, 0)
+  useEffect(() => { measureEdge() }, [totalW, cw]) // eslint-disable-line react-hooks/exhaustive-deps
   const bodyH = view.length * rowH
   const vh = height - 38 - (showFilters ? 40 : 0) - (totals ? rowH + 2 : 0)
   const first = Math.max(0, Math.floor(scroll.top / rowH) - 6)
@@ -118,7 +134,16 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
     const top = r * rowH, bottom = top + rowH
     if (top < el.scrollTop) el.scrollTop = top
     else if (bottom > el.scrollTop + vh) el.scrollTop = bottom - vh
-    void c
+    // أفقياً: نُبقي العمود المحدد ظاهراً (مع مراعاة عمود الأرقام والعمود المثبّت)
+    let off = NUM_W
+    for (let i = 0; i < c && i < vcols.length; i++) off += vcols[i].w
+    const w = vcols[c]?.w || 0
+    const pos = Math.abs(el.scrollLeft), cwid = el.clientWidth
+    const lead = NUM_W + (pin && c > 0 ? (vcols[0]?.w || 0) : 0)
+    let np = pos
+    if (off - lead < pos) np = Math.max(0, off - lead)
+    else if (off + w > pos + cwid) np = off + w - cwid
+    if (np !== pos) el.scrollLeft = isAr ? -np : np
   }
   function onKey(e) {
     if (e.key === 'Enter' && sel && view[sel.r2]) { setDetail(sel.r2); return }
@@ -143,19 +168,65 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
     return () => window.removeEventListener('keydown', k)
   }, [detail])
 
-  // ── تغيير عرض العمود بالسحب
+  // ── تغيير عرض العمود بالسحب + تحريك الجدول باليد (مع زخم) + تمرير تلقائي أثناء سحب التحديد قرب الحافة
   useEffect(() => {
     const move = e => {
-      const rs = resize.current; if (!rs) return
-      const d = (isAr ? rs.x - e.clientX : e.clientX - rs.x)
-      setWidths(w => ({ ...w, [rs.key]: Math.max(60, Math.min(600, rs.w + d)) }))
+      ptr.current = { x: e.clientX, y: e.clientY }
+      const rs = resize.current
+      if (rs) {
+        const d = (isAr ? rs.x - e.clientX : e.clientX - rs.x)
+        setWidths(w => ({ ...w, [rs.key]: Math.max(60, Math.min(600, rs.w + d)) }))
+        return
+      }
+      const p = pan.current, el = box.current
+      if (p && el) {
+        const dx = e.clientX - p.x, dy = e.clientY - p.y
+        if (!p.moved && Math.hypot(dx, dy) > 4) { p.moved = true; setPanning(true) }
+        if (p.moved) {
+          el.scrollLeft = p.sl - dx
+          if (p.both) el.scrollTop = p.st - dy
+          const now = performance.now(), dt = Math.max(1, now - p.t)
+          p.vx = 0.8 * p.vx + 0.2 * ((p.lx - e.clientX) / dt * 16)
+          p.lx = e.clientX; p.t = now
+        }
+      }
     }
-    const up = () => { resize.current = null; drag.current = false }
+    const up = () => {
+      const p = pan.current
+      if (p?.moved) {
+        justPanned.current = true; setTimeout(() => { justPanned.current = false }, 60)
+        let v = p.vx
+        const step = () => { const el = box.current; if (!el || Math.abs(v) < 0.4) return; el.scrollLeft += v; v *= 0.94; momentum.current = requestAnimationFrame(step) }
+        cancelAnimationFrame(momentum.current); momentum.current = requestAnimationFrame(step)
+      }
+      pan.current = null; setPanning(false)
+      resize.current = null; drag.current = false
+      clearInterval(auto.current); auto.current = null
+    }
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up)
-    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); cancelAnimationFrame(momentum.current); clearInterval(auto.current) }
   }, [isAr])
 
-  const toggleSort = key => setSort(s => (!s || s.key !== key ? { key, dir: 1 } : s.dir === 1 ? { key, dir: -1 } : null))
+  const startPan = (e, both) => {
+    const el = box.current; if (!el) return
+    cancelAnimationFrame(momentum.current)
+    pan.current = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop, moved: false, both, vx: 0, lx: e.clientX, t: performance.now() }
+  }
+  // أثناء سحب تحديد الخلايا: إذا اقترب المؤشر من حافة الشبكة يتحرك الجدول تلقائياً
+  const startAutoScroll = () => {
+    clearInterval(auto.current)
+    auto.current = setInterval(() => {
+      const el = box.current; if (!el || !drag.current || pan.current) return
+      const r = el.getBoundingClientRect(), { x, y } = ptr.current, edgeZ = 56
+      const sp = d => Math.min(26, 4 + (edgeZ - d) / 2)
+      if (x < r.left + edgeZ) el.scrollLeft -= sp(Math.max(0, x - r.left))
+      else if (x > r.right - edgeZ) el.scrollLeft += sp(Math.max(0, r.right - x))
+      if (y < r.top + 38 + edgeZ / 2) el.scrollTop -= 14
+      else if (y > r.bottom - edgeZ / 2) el.scrollTop += 14
+    }, 16)
+  }
+
+  const toggleSort = key => { if (justPanned.current) return; setSort(s => (!s || s.key !== key ? { key, dir: 1 } : s.dir === 1 ? { key, dir: -1 } : null)) }
   const activeFilters = Object.values(filters).filter(v => v && v.trim()).length
   const fmtN = x => Number(x).toLocaleString('en-US', { maximumFractionDigits: 2 })
   const cellStyle = (c, ci, r) => ({
@@ -170,6 +241,17 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
 
   return (
     <div style={{ border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+      <style>{`
+        .dg-scroll{scrollbar-width:thin;scrollbar-color:var(--border-2) transparent}
+        .dg-scroll::-webkit-scrollbar{height:12px;width:12px}
+        .dg-scroll::-webkit-scrollbar-track{background:transparent}
+        .dg-scroll::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:99px;border:3px solid var(--card)}
+        .dg-scroll::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+        .dg-wrap:hover .dg-arrow{opacity:.95 !important}
+        .dg-arrow:hover{transform:scale(1.08)}
+        @media (hover:none){.dg-arrow{opacity:.9 !important}}
+      `}</style>
       {/* شريط أدوات الشبكة */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 10px', borderBottom: '1px solid var(--border-2)', background: 'var(--surface)' }}>
         <button type="button" style={tb(showFilters || activeFilters > 0)} aria-pressed={showFilters} onClick={() => setShowFilters(o => !o)}>{T('فلاتر الأعمدة', 'Column filters')}{activeFilters > 0 && <b style={{ fontFamily: MONO }}>{activeFilters}</b>}</button>
@@ -191,18 +273,23 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
             </div>
           )}
         </div>
+        <button type="button" style={tb(panMode)} aria-pressed={panMode} onClick={() => setPanMode(o => !o)} title={T('وضع اليد: اسحب الجدول بالماوس في أي اتجاه', 'Hand mode: drag the grid in any direction')}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 00-4 0v5M14 10V4a2 2 0 00-4 0v7M10 10.5V6a2 2 0 00-4 0v8" /><path d="M18 8a2 2 0 014 0v6a8 8 0 01-8 8h-2c-2.5 0-4-1-5.3-2.4L3.4 15.6a2 2 0 013-2.6L8 14.5" /></svg>
+          {T('يد', 'Hand')}
+        </button>
         <button type="button" style={tb(pin)} aria-pressed={pin} onClick={() => setPin(o => !o)}>{T('تثبيت أول عمود', 'Freeze first column')}</button>
 
       </div>
 
       {/* الشبكة */}
-      <div ref={box} tabIndex={0} role="grid" aria-rowcount={view.length} aria-colcount={vcols.length} onKeyDown={onKey}
-        onScroll={e => setScroll({ top: e.currentTarget.scrollTop, left: e.currentTarget.scrollLeft })}
-        style={{ height, overflow: 'auto', position: 'relative', outline: 'none', direction: isAr ? 'rtl' : 'ltr', background: 'var(--card)' }}>
+      <div className="dg-wrap" style={{ position: 'relative' }}>
+      <div ref={box} className="dg-scroll" tabIndex={0} role="grid" aria-rowcount={view.length} aria-colcount={vcols.length} onKeyDown={onKey}
+        onScroll={e => { setScroll({ top: e.currentTarget.scrollTop, left: e.currentTarget.scrollLeft }); measureEdge() }}
+        style={{ height, overflow: 'auto', position: 'relative', outline: 'none', direction: isAr ? 'rtl' : 'ltr', background: 'var(--card)', userSelect: panning || panMode ? 'none' : undefined, cursor: panMode ? (panning ? 'grabbing' : 'grab') : undefined }}>
         <div style={{ width: totalW, minWidth: '100%' }}>
           {/* الترويسة */}
           <div style={{ position: 'sticky', top: 0, zIndex: 4, background: 'var(--surface)' }}>
-            <div style={{ display: 'flex', height: 38, borderBottom: '2px solid var(--accent)' }}>
+            <div onMouseDown={e => { if (e.button === 0) startPan(e, false) }} style={{ display: 'flex', height: 38, borderBottom: '2px solid var(--accent)', cursor: panning ? 'grabbing' : 'grab' }}>
               <div style={{ position: 'sticky', insetInlineStart: 0, zIndex: 5, width: NUM_W, minWidth: NUM_W, display: 'grid', placeItems: 'center', background: 'var(--surface)', borderInlineEnd: '1px solid var(--border-2)', color: 'var(--text-3)', fontSize: '0.66rem', fontWeight: 800 }}>#</div>
               {vcols.map((c, ci) => (
                 <div key={c.key} role="columnheader" aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}
@@ -212,7 +299,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.label}</span>
                     <span aria-hidden="true" style={{ color: sort?.key === c.key ? 'var(--accent)' : 'var(--text-3)', fontSize: 10, opacity: sort?.key === c.key ? 1 : 0.4 }}>{sort?.key === c.key ? (sort.dir === 1 ? '▲' : '▼') : '⇅'}</span>
                   </button>
-                  <i onMouseDown={e => { e.preventDefault(); resize.current = { key: c.key, x: e.clientX, w: c.w } }} aria-hidden="true"
+                  <i onMouseDown={e => { e.preventDefault(); e.stopPropagation(); resize.current = { key: c.key, x: e.clientX, w: c.w } }} aria-hidden="true"
                     style={{ position: 'absolute', insetInlineEnd: 0, top: 0, width: 7, height: '100%', cursor: 'col-resize', zIndex: 6 }} />
                 </div>
               ))}
@@ -242,7 +329,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
                     const text = display(c, v)
                     return (
                       <div key={c.key} role="gridcell" aria-selected={!!inSel(r, ci)} title={text}
-                        onMouseDown={e => { box.current?.focus(); drag.current = true; setSel(e.shiftKey && sel ? { ...sel, r2: r, c2: ci } : { r1: r, c1: ci, r2: r, c2: ci }) }}
+                        onMouseDown={e => { box.current?.focus(); if (panMode) { e.preventDefault(); startPan(e, true); return } drag.current = true; startAutoScroll(); setSel(e.shiftKey && sel ? { ...sel, r2: r, c2: ci } : { r1: r, c1: ci, r2: r, c2: ci }) }}
                         onDoubleClick={() => setDetail(r)}
                         onMouseEnter={() => { if (drag.current && !resize.current) setSel(s => (s ? { ...s, r2: r, c2: ci } : s)) }}
                         style={cellStyle(c, ci, r)}>
@@ -268,6 +355,17 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
           )}
           {view.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.86rem', position: 'sticky', insetInlineStart: 0 }}>{T('لا توجد صفوف مطابقة', 'No matching rows')}</div>}
         </div>
+      </div>
+
+      {/* ظلال الأطراف وأسهم التحريك: تظهر فقط عند وجود أعمدة مخفية */}
+      <i aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, left: isAr ? 0 : NUM_W, width: 44, pointerEvents: 'none', zIndex: 8, opacity: canL ? 1 : 0, transition: 'opacity .2s', background: 'linear-gradient(to right, rgba(0,0,0,.22), transparent)' }} />
+      <i aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, right: isAr ? NUM_W : 0, width: 44, pointerEvents: 'none', zIndex: 8, opacity: canR ? 1 : 0, transition: 'opacity .2s', background: 'linear-gradient(to left, rgba(0,0,0,.22), transparent)' }} />
+      {[['L', canL, -1], ['R', canR, 1]].map(([k, can, dir]) => (
+        <button key={k} type="button" className="dg-arrow" onClick={() => panBy(dir)} aria-label={dir < 0 ? T('تحريك لليسار', 'Scroll left') : T('تحريك لليمين', 'Scroll right')} tabIndex={can ? 0 : -1}
+          style={{ position: 'absolute', top: '50%', [dir < 0 ? 'left' : 'right']: 12, marginTop: -20, width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--border-2)', background: 'var(--card)', color: 'var(--text-1)', display: 'grid', placeItems: 'center', cursor: 'pointer', zIndex: 9, boxShadow: '0 4px 14px rgba(0,0,0,.28)', transition: 'opacity .18s, transform .18s', opacity: 0, pointerEvents: can ? 'auto' : 'none', visibility: can ? 'visible' : 'hidden' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{dir < 0 ? <path d="M15 18l-6-6 6-6" /> : <path d="M9 18l6-6-6-6" />}</svg>
+        </button>
+      ))}
       </div>
 
       {/* شريط الحالة (مثل Excel) */}
