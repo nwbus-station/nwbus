@@ -375,6 +375,7 @@ const ICONS = {
   bus:     ['M8 6v6','M15 6v6','M2 12h19.6','M18 18h2l1-3H3l1 3h2','M7 18a2 2 0 100 4 2 2 0 000-4z','M17 18a2 2 0 100 4 2 2 0 000-4z','M2 6h20v12H2z'],
   bag:     ['M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z','M3 6h18','M16 10a4 4 0 01-8 0'],
   sales:   ['M12 2v20','M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6'],
+  grid:    ['M3 3h18v18H3z','M3 9h18','M3 15h18','M9 3v18','M15 3v18'],
   report:  ['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z','M14 2v6h6','M16 13H8','M16 17H8','M10 9H8'],
   users:   ['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2','M23 21v-2a4 4 0 00-3-3.87','M9 3a4 4 0 010 8','M16 3.13a4 4 0 010 7.75'],
   station: ['M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z','M12 7a3 3 0 100 6 3 3 0 000-6z'],
@@ -397,7 +398,7 @@ const ICONS = {
 }
 
 // لون مميز لكل قسم بقائمة الجوال
-const NAV_HUE = { '/': '#6366f1', '/transportation': '#0ea5e9', '/lost-found': '#f59e0b', '/sales': '#10b981', '/reports': '#6366f1', '/leaves': '#8b5cf6', '/survey': '#f59e0b', '/evaluation': '#ec4899', '/my-rating': '#f59e0b', '/users': '#0ea5e9', '/stations': '#14b8a6', '/settings': '#64748b', '/map': '#22c55e', '/customer-ratings': '#ec4899', '/employee-file': '#6366f1', '/calls': '#ef4444', '/magazine': '#ef4444' }
+const NAV_HUE = { '/': '#6366f1', '/transportation': '#0ea5e9', '/lost-found': '#f59e0b', '/sales': '#10b981', '/reports': '#6366f1', '/leaves': '#8b5cf6', '/survey': '#f59e0b', '/evaluation': '#ec4899', '/my-rating': '#f59e0b', '/users': '#0ea5e9', '/stations': '#14b8a6', '/settings': '#64748b', '/data': '#6366f1', '/map': '#22c55e', '/customer-ratings': '#ec4899', '/employee-file': '#6366f1', '/calls': '#ef4444', '/magazine': '#ef4444' }
 
 const NAV_GROUPS = [
   {
@@ -417,6 +418,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/users',    labelAr: 'الموظفون', labelEn: 'Staff',     icon: 'users',   roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'users' },
       { to: '/stations', labelAr: 'المحطات',  labelEn: 'Stations',  icon: 'station', roles: ADMIN_ROLE_VALUES,                 module: 'stations', capKey: 'stations_page' },
+      { to: '/data', labelAr: 'مركز البيانات', labelEn: 'Data Center', icon: 'grid', roles: ADMIN_ROLE_VALUES, module: null, adminOnly: true },
       { to: '/settings', labelAr: 'الإعدادات', labelEn: 'Settings', icon: 'settings', roles: ADMIN_ROLE_VALUES,               module: 'settings', capKey: 'settings_access' },
       { to: '/map',      labelAr: 'الخريطة',  labelEn: 'Map',       icon: 'map',     roles: [...ADMIN_ROLE_VALUES,'station_admin'], module: 'map' },
       { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings', allowKey: 'customer_ratings_view' },

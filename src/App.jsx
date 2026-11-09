@@ -39,6 +39,7 @@ import PublicRatingPage from './pages/PublicRatingPage'
 import SetPasswordPage  from './pages/SetPasswordPage'
 import CustomerRatingsAdminPage from './pages/CustomerRatingsAdminPage'
 const EmployeeFilePage = lazy(() => safeImport(() => import('./pages/EmployeeFilePage')))
+const DataHubPage = lazy(() => safeImport(() => import('./pages/DataHubPage')))
 import MagazinePage     from './pages/MagazinePage'
 import CallPage         from './pages/CallPage'
 import FeedbackPage     from './pages/FeedbackPage'
@@ -171,6 +172,11 @@ export default function App() {
         <Route path="employee-file" element={
           <RequireAuth module="employee_file" adminOnly>
             <Suspense fallback={null}><EmployeeFilePage /></Suspense>
+          </RequireAuth>
+        } />
+        <Route path="data" element={
+          <RequireAuth adminOnly>
+            <Suspense fallback={null}><DataHubPage /></Suspense>
           </RequireAuth>
         } />
         <Route path="settings" element={<SettingsPage />} />

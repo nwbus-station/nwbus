@@ -4,7 +4,7 @@ import { createBook, XL } from './excelExport'
 import { supabase } from '../lib/supabase'
 import { FEED_DATASETS } from './excelFeedCode'
 
-const AR = {
+export const COL_AR = {
   id: 'المعرّف', sale_date: 'التاريخ', record_date: 'التاريخ', shift: 'الوردية', station_name: 'المحطة', station_id: 'معرّف المحطة',
   cash_amount: 'نقداً', mada_amount: 'مدى', visa_amount: 'Visa', mastercard_amount: 'Mastercard', other_amount: 'أخرى', other_type: 'نوع «أخرى»',
   total_actual: 'إجمالي المحصَّل', total_expected: 'إجمالي المبيعات', surplus_deficit: 'الفرق', is_confirmed: 'مؤكَّد', confirmed_by_name: 'أكّده', confirmed_at: 'وقت التأكيد',
@@ -14,7 +14,9 @@ const AR = {
   full_name_ar: 'الاسم', full_name_en: 'الاسم (EN)', job_number: 'الرقم الوظيفي', role: 'الدور', is_active: 'فعّال', created_at: 'تاريخ الإنشاء', updated_at: 'آخر تعديل',
   name_ar: 'الاسم', name_en: 'الاسم (EN)', employee_id_name: 'الموظف', user_id_name: 'الموظف', status: 'الحالة', start_date: 'من', end_date: 'إلى',
 }
-const label = k => AR[k] || k.replace(/_/g, ' ')
+const AR = COL_AR
+export const colLabel = k => AR[k] || k.replace(/_/g, ' ')
+const label = colLabel
 const TS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const pad = n => String(n).padStart(2, '0')
