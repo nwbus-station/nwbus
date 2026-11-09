@@ -1,6 +1,6 @@
 // مركز البيانات المباشر: فهرس الأقسام + أدوات الأعمدة والعرض والتصدير لشبكة بيانات بنمط Excel
 import { createBook, XL } from './excelExport'
-import { colLabel } from './masterWorkbook'
+import { COL_AR } from './masterWorkbook'
 import { supabase } from '../lib/supabase'
 
 export const HUB_GROUPS = [
@@ -111,23 +111,47 @@ export async function loadHubSet(id, days) {
   return enrich(id, rows, L)
 }
 
+// ترجمة أسماء الأعمدة: القاموس الجاهز أولاً، وإلا ترجمة كلمات الاسم وعكس ترتيبها بالإضافة العربية (ticket_number ← رقم التذكرة)
+const TOK = {
+  number: 'رقم', name: 'اسم', type: 'نوع', count: 'عدد', date: 'تاريخ', at: 'وقت', by: 'بواسطة', amount: 'مبلغ', status: 'حالة', total: 'إجمالي', note: 'ملاحظة', notes: 'ملاحظات', reason: 'سبب', description: 'وصف', phone: 'جوال', mobile: 'جوال', time: 'وقت', title: 'عنوان', text: 'نص', message: 'رسالة', value: 'قيمة', rate: 'نسبة', score: 'درجة', rating: 'تقييم', comment: 'تعليق',
+  customer: 'العميل', ticket: 'التذكرة', report: 'البلاغ', contact: 'التواصل', station: 'المحطة', trip: 'الرحلة', employee: 'الموظف', user: 'المستخدم', bus: 'الحافلة', passenger: 'الراكب', passengers: 'الركاب', item: 'الغرض', found: 'الموجود', lost: 'المفقود', cash: 'النقد', shift: 'الوردية', driver: 'السائق', city: 'المدينة', supervisor: 'المشرف', evaluator: 'المقيّم', leave: 'الإجازة', sale: 'المبيعات', sales: 'المبيعات', survey: 'الاستبيان', shipment: 'الشحنة', donation: 'التبرع', post: 'المنشور', schedule: 'الجدول', stop: 'التوقف', departure: 'المغادرة', arrival: 'الوصول', start: 'البداية', end: 'النهاية', created: 'الإنشاء', updated: 'التعديل', confirmed: 'التأكيد', approved: 'الاعتماد', expected: 'المتوقع', actual: 'الفعلي', first: 'الأول', last: 'الأخير', job: 'الوظيفي', city_name: 'المدينة', sender: 'المرسل', receiver: 'المستلم', recipient: 'المستلم', image: 'الصورة', photo: 'الصورة', file: 'الملف', url: 'الرابط', email: 'البريد', address: 'العنوان', location: 'الموقع', day: 'اليوم', month: 'الشهر', year: 'السنة', week: 'الأسبوع', priority: 'الأولوية', source: 'المصدر', category: 'الفئة', code: 'رمز', ref: 'مرجع', reference: 'مرجع', order: 'ترتيب', label: 'تسمية', language: 'اللغة', lang: 'اللغة', ar: '(عربي)', en: '(EN)',
+}
+const VERB = { is: '؟', has: '؟' }
+export function smartLabel(k) {
+  if (COL_AR[k]) return COL_AR[k]
+  const parts = k.split('_').filter(Boolean)
+  if (!parts.length) return k
+  let q = false
+  if (VERB[parts[0]]) { q = true; parts.shift() }
+  if (!parts.length) return k
+  const ar = parts.map(w => TOK[w] || w)
+  if (!parts.some(w => TOK[w])) return k.replace(/_/g, ' ')
+  return ar.reverse().join(' ') + (q ? '؟' : '')
+}
+
+// أعمدة تقنية لا تفيد القارئ: تُخفى افتراضياً (وتبقى في قائمة الأعمدة وفي لوحة تفاصيل الصف)
+const TECH_KEY = /(^id$|_id$|^updated_at$|updated_by|token|password|hash|^auth_|push|fcm|avatar|signature|^is_cancelled$|^deleted|lat$|lng$|^lang$|_url$|^sort|^order_index|^version$)/i
+const isEmpty = v => v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length)
+
 // أعمدة القسم من عيّنة الصفوف: النوع يحدد المحاذاة والتنسيق والفرز والتصفية
 export function inferCols(rows) {
   const keys = [...new Set(rows.slice(0, 300).flatMap(r => Object.keys(r)))]
   const cols = keys.map(key => {
-    const sample = rows.find(r => r[key] !== null && r[key] !== undefined)?.[key]
+    const sample = rows.find(r => !isEmpty(r[key]))?.[key]
     let type = 'text'
     if (typeof sample === 'number') type = 'num'
     else if (typeof sample === 'boolean') type = 'bool'
     else if (typeof sample === 'string') type = TS.test(sample) ? 'stamp' : DATE.test(sample) ? 'date' : UUID.test(sample) ? 'id' : 'text'
-    const label = colLabel(key)
-    const lens = rows.slice(0, 80).map(r => String(r[key] ?? '').length)
-    const textW = Math.min(Math.max(label.length * 9 + 34, Math.max(0, ...lens) * 8 + 24), 320)
-    const width = { num: Math.max(96, label.length * 9 + 34), date: 112, stamp: 150, bool: 86, id: 120 }[type] ?? Math.max(110, textW)
-    return { key, label, type, width, hidden: type === 'id' || key === 'id' }
+    const label = smartLabel(key)
+    const lens = rows.slice(0, 80).map(r => display({ type }, r[key]).length)
+    const textW = Math.min(Math.max(label.length * 9 + 34, Math.max(0, ...lens) * 7.5 + 24), 240)
+    const width = { num: Math.max(96, label.length * 8 + 40), date: 112, stamp: 142, bool: 86, id: 120 }[type] ?? Math.max(110, textW)
+    // فارغ أو صفر في كل الصفوف المحمَّلة ← مخفي افتراضياً
+    const empty = rows.every(r => isEmpty(r[key]) || r[key] === false || r[key] === 0)
+    return { key, label, type, width, hidden: type === 'id' || TECH_KEY.test(key) || empty }
   })
-  // الأعمدة المهمة أولاً: التاريخ ثم المحطة ثم الباقي، والمعرّفات في النهاية
-  const rank = c => (c.hidden ? 9 : /date$|^date$/.test(c.key) ? 0 : /station_name|^name_|full_name/.test(c.key) ? 1 : 2)
+  // الأعمدة المهمة أولاً: التاريخ ثم المحطة/الاسم ثم الباقي، وأوقات التسجيل التقنية في الآخر
+  const rank = c => (c.hidden ? 9 : /(^|_)date$|^date$/.test(c.key) ? 0 : /station_name|^name_|full_name|_name$/.test(c.key) ? 1 : /(^|_)at$/.test(c.key) ? 3 : 2)
   return cols.map((c, i) => ({ ...c, i })).sort((a, b) => rank(a) - rank(b) || a.i - b.i)
 }
 
@@ -136,6 +160,7 @@ export function display(col, v) {
   if (col.type === 'num') return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
   if (col.type === 'bool') return v ? 'نعم' : 'لا'
   if (col.type === 'stamp') return riyadhText(v)
+  if (Array.isArray(v)) return v.map(x => (x !== null && typeof x === 'object' ? JSON.stringify(x) : String(x))).join('، ')
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }
@@ -176,7 +201,7 @@ export async function exportViewXlsx({ isAr = true, title, subtitle = '', cols, 
       if (c.type === 'bool') return v ? 'نعم' : 'لا'
       if (c.type === 'stamp') return riyadhText(v)
       if (c.type === 'date') return new Date(Date.UTC(+v.slice(0, 4), +v.slice(5, 7) - 1, +v.slice(8, 10)))
-      if (typeof v === 'object') return JSON.stringify(v)
+      if (typeof v === 'object') return display(c, v)
       return v
     }))
   }

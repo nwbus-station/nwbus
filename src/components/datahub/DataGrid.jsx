@@ -4,10 +4,12 @@ import { display, sortVal, matches } from '../../utils/dataHub'
 // شبكة بيانات بنمط Excel: تمرير سريع لعشرات الآلاف من الصفوف (عرض الظاهر فقط)، فرز وفلاتر لكل عمود، تغيير عرض الأعمدة،
 // تحديد خلايا بالماوس أو الأسهم (مع Shift)، نسخ (Ctrl+C) للصق مباشرة في Excel، وشريط حالة بمجموع ومتوسط المحدد.
 const NUM_W = 54
+const NO_SUM = /number|_no$|phone|mobile|code|_id$|^id$|order|sort|seq|year|month|day|hour|version|rating|score|rate|percent|accuracy/i
 const MONO = "'IBM Plex Mono', ui-monospace, monospace"
 
 export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = '', height = 560, onView }) {
   const T = (a, e) => (isAr ? a : e)
+  const hiddenByDefault = useMemo(() => new Set(cols.filter(c => c.hidden).map(c => c.key)), [cols])
   const [hidden, setHidden] = useState(() => new Set(cols.filter(c => c.hidden).map(c => c.key)))
   const [widths, setWidths] = useState({})
   const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
@@ -18,9 +20,25 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
   const [sel, setSel] = useState(null)                  // { r1, c1, r2, c2 }
   const [scroll, setScroll] = useState({ top: 0, left: 0 })
   const [copied, setCopied] = useState(false)
+  const [detail, setDetail] = useState(null)             // فهرس الصف المعروض تفاصيله
+  const [cw, setCw] = useState(0)                        // عرض الحاوية لملء المساحة بدون تمرير جانبي
   const box = useRef(null), drag = useRef(false), resize = useRef(null)
 
-  const vcols = useMemo(() => cols.filter(c => !hidden.has(c.key)).map(c => ({ ...c, w: widths[c.key] ?? c.width })), [cols, hidden, widths])
+  useEffect(() => {
+    const el = box.current; if (!el) return
+    const ro = new ResizeObserver(() => setCw(el.clientWidth))
+    ro.observe(el); setCw(el.clientWidth)
+    return () => ro.disconnect()
+  }, [])
+
+  const vcols = useMemo(() => {
+    const vis = cols.filter(c => !hidden.has(c.key))
+    const manual = vis.reduce((a, c) => a + (widths[c.key] ?? 0), 0)
+    const auto = vis.reduce((a, c) => a + (widths[c.key] ? 0 : c.width), 0)
+    // توزيع المساحة الفارغة على الأعمدة بدل ترك فراغ جانبي (حتى ×2.2)
+    const k = auto && cw ? Math.min(2.2, Math.max(1, (cw - NUM_W - 2 - manual) / auto)) : 1
+    return vis.map(c => ({ ...c, w: widths[c.key] ?? Math.round(c.width * k) }))
+  }, [cols, hidden, widths, cw])
 
   const view = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -45,9 +63,20 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
 
   useEffect(() => { onView?.({ rows: view, cols: vcols }) }, [view, vcols]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // إجماليات الأعمدة الرقمية للصفوف الظاهرة بعد الفلاتر (تتحدث مع أي فلتر)
+  const totals = useMemo(() => {
+    const t = vcols.map(c => {
+      if (c.type !== 'num' || NO_SUM.test(c.key)) return null
+      let sum = 0, any = false
+      for (const r of view) { const v = r[c.key]; if (typeof v === 'number') { sum += v; any = true } }
+      return any ? sum : null
+    })
+    return t.some(x => x !== null) ? t : null
+  }, [view, vcols])
+
   const totalW = NUM_W + vcols.reduce((a, c) => a + c.w, 0)
   const bodyH = view.length * rowH
-  const vh = height - 38 - (showFilters ? 40 : 0)
+  const vh = height - 38 - (showFilters ? 40 : 0) - (totals ? rowH + 2 : 0)
   const first = Math.max(0, Math.floor(scroll.top / rowH) - 6)
   const last = Math.min(view.length, Math.ceil((scroll.top + vh) / rowH) + 6)
   const visible = view.slice(first, last)
@@ -92,6 +121,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
     void c
   }
   function onKey(e) {
+    if (e.key === 'Enter' && sel && view[sel.r2]) { setDetail(sel.r2); return }
     if (!sel) { if (view.length && vcols.length && ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key)) setSel({ r1: 0, c1: 0, r2: 0, c2: 0 }); return }
     const k = e.key
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'c') { e.preventDefault(); copy(); return }
@@ -105,6 +135,13 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
     setSel(e.shiftKey ? { ...sel, r2, c2 } : { r1: r2, c1: c2, r2, c2 })
     ensure(r2, c2)
   }
+
+  useEffect(() => {
+    if (detail === null) return
+    const k = e => { if (e.key === 'Escape') setDetail(null) }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [detail])
 
   // ── تغيير عرض العمود بالسحب
   useEffect(() => {
@@ -143,7 +180,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
             <div role="menu" style={{ position: 'absolute', insetInlineStart: 0, top: '100%', marginTop: 6, zIndex: 20, width: 260, maxHeight: 340, overflowY: 'auto', background: 'var(--card)', border: '1px solid var(--border-2)', borderRadius: 12, boxShadow: 'var(--shadow-lg, 0 8px 30px rgba(0,0,0,.2))', padding: 6 }}>
               <div style={{ display: 'flex', gap: 6, padding: 4 }}>
                 <button type="button" style={{ ...tb(false), minHeight: 30 }} onClick={() => setHidden(new Set())}>{T('إظهار الكل', 'Show all')}</button>
-                <button type="button" style={{ ...tb(false), minHeight: 30 }} onClick={() => setHidden(new Set(cols.filter(c => c.hidden).map(c => c.key)))}>{T('الافتراضي', 'Default')}</button>
+                <button type="button" style={{ ...tb(false), minHeight: 30 }} onClick={() => setHidden(new Set(hiddenByDefault))}>{T('الافتراضي', 'Default')}</button>
               </div>
               {cols.map(c => (
                 <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 9, minHeight: 36, padding: '4px 8px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', borderRadius: 8 }}>
@@ -155,7 +192,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
           )}
         </div>
         <button type="button" style={tb(pin)} aria-pressed={pin} onClick={() => setPin(o => !o)}>{T('تثبيت أول عمود', 'Freeze first column')}</button>
-        <span style={{ marginInlineStart: 'auto', fontSize: '0.7rem', color: 'var(--text-3)' }}>{T('اضغط خلية ثم Ctrl+C للنسخ إلى Excel · Shift/سحب لتحديد نطاق · اضغط العنوان للفرز', 'Click a cell, Ctrl+C to copy to Excel · Shift/drag to select a range · click a header to sort')}</span>
+        <span style={{ marginInlineStart: 'auto', fontSize: '0.7rem', color: 'var(--text-3)' }}>{T('اضغط رقم الصف لعرض كل تفاصيله · Ctrl+C للنسخ إلى Excel · اضغط العنوان للفرز', 'Click a row number for full details · Ctrl+C to copy to Excel · click a header to sort')}</span>
       </div>
 
       {/* الشبكة */}
@@ -199,13 +236,14 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
               const r = first + k
               return (
                 <div key={r} role="row" className="dg-row" style={{ position: 'absolute', top: r * rowH, insetInlineStart: 0, display: 'flex', height: rowH, width: totalW, background: r % 2 ? 'var(--surface)' : 'var(--card)' }}>
-                  <div style={{ position: 'sticky', insetInlineStart: 0, zIndex: 3, width: NUM_W, minWidth: NUM_W, height: rowH, display: 'grid', placeItems: 'center', background: 'var(--surface)', borderInlineEnd: '1px solid var(--border-2)', borderBottom: '1px solid var(--border)', color: n && r >= n.r1 && r <= n.r2 ? 'var(--accent)' : 'var(--text-3)', fontFamily: MONO, fontSize: '0.66rem', fontWeight: 800 }}>{r + 1}</div>
+                  <div style={{ position: 'sticky', insetInlineStart: 0, zIndex: 3, width: NUM_W, minWidth: NUM_W, height: rowH, display: 'grid', placeItems: 'center', background: 'var(--surface)', borderInlineEnd: '1px solid var(--border-2)', borderBottom: '1px solid var(--border)', color: n && r >= n.r1 && r <= n.r2 ? 'var(--accent)' : 'var(--text-3)', fontFamily: MONO, fontSize: '0.66rem', fontWeight: 800, cursor: 'pointer' }} role="button" title={T('عرض كل تفاصيل الصف', 'Show full row details')} onClick={() => setDetail(r)}>{r + 1}</div>
                   {vcols.map((c, ci) => {
                     const v = row[c.key]
                     const text = display(c, v)
                     return (
                       <div key={c.key} role="gridcell" aria-selected={!!inSel(r, ci)} title={text}
                         onMouseDown={e => { box.current?.focus(); drag.current = true; setSel(e.shiftKey && sel ? { ...sel, r2: r, c2: ci } : { r1: r, c1: ci, r2: r, c2: ci }) }}
+                        onDoubleClick={() => setDetail(r)}
                         onMouseEnter={() => { if (drag.current && !resize.current) setSel(s => (s ? { ...s, r2: r, c2: ci } : s)) }}
                         style={cellStyle(c, ci, r)}>
                         {c.type === 'bool'
@@ -218,6 +256,16 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
               )
             })}
           </div>
+          {totals && view.length > 0 && (
+            <div role="row" style={{ position: 'sticky', bottom: 0, zIndex: 4, display: 'flex', height: rowH + 2, width: totalW, background: 'var(--surface)', borderTop: '2px solid var(--accent)' }}>
+              <div style={{ position: 'sticky', insetInlineStart: 0, zIndex: 5, width: NUM_W, minWidth: NUM_W, display: 'grid', placeItems: 'center', background: 'var(--surface)', borderInlineEnd: '1px solid var(--border-2)', fontWeight: 900, fontSize: '0.8rem', color: 'var(--accent)' }}>Σ</div>
+              {vcols.map((c, ci) => (
+                <div key={c.key} style={{ width: c.w, minWidth: c.w, display: 'flex', alignItems: 'center', justifyContent: c.type === 'num' ? 'flex-end' : 'flex-start', padding: '0 10px', boxSizing: 'border-box', borderInlineEnd: '1px solid var(--border)', fontFamily: MONO, fontWeight: 900, fontSize: '0.8rem', color: 'var(--text-1)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                  {totals[ci] !== null ? fmtN(totals[ci]) : (ci === 0 ? <span style={{ fontFamily: 'inherit', color: 'var(--text-2)', fontSize: '0.74rem' }}>{T(`الإجمالي (${view.length.toLocaleString('en-US')} صف)`, `Total (${view.length.toLocaleString('en-US')} rows)`)}</span> : null)}
+                </div>
+              ))}
+            </div>
+          )}
           {view.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.86rem', position: 'sticky', insetInlineStart: 0 }}>{T('لا توجد صفوف مطابقة', 'No matching rows')}</div>}
         </div>
       </div>
@@ -238,6 +286,38 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
         {copied && <span style={{ marginInlineStart: 'auto', color: 'var(--success)', fontWeight: 800 }}>{T('تم النسخ إلى الحافظة', 'Copied to clipboard')}</span>}
         {sel && !copied && <button type="button" onClick={copy} style={{ ...tb(false), marginInlineStart: 'auto', minHeight: 30 }}>{T('نسخ المحدد', 'Copy selection')}</button>}
       </div>
+
+      {detail !== null && view[detail] && (
+        <>
+          <div onClick={() => setDetail(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 59 }} />
+          <aside role="dialog" aria-label={T('تفاصيل الصف', 'Row details')} dir={isAr ? 'rtl' : 'ltr'}
+            style={{ position: 'fixed', top: 0, bottom: 0, insetInlineEnd: 0, width: 'min(460px, 100vw)', zIndex: 60, background: 'var(--card)', borderInlineStart: '1px solid var(--border-2)', boxShadow: 'var(--shadow-xl, 0 0 40px rgba(0,0,0,.35))', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', borderBottom: '1px solid var(--border-2)', background: 'var(--surface)' }}>
+              <b style={{ flex: 1, fontSize: '0.9rem', color: 'var(--text-1)' }}>{T('تفاصيل الصف', 'Row details')} <span style={{ fontFamily: MONO, color: 'var(--text-3)' }}>{detail + 1} / {view.length.toLocaleString('en-US')}</span></b>
+              <button type="button" style={tb(false)} disabled={detail <= 0} onClick={() => setDetail(d => Math.max(0, d - 1))} aria-label={T('السابق', 'Previous')}>▲</button>
+              <button type="button" style={tb(false)} disabled={detail >= view.length - 1} onClick={() => setDetail(d => Math.min(view.length - 1, d + 1))} aria-label={T('التالي', 'Next')}>▼</button>
+              <button type="button" style={tb(true)} onClick={() => setDetail(null)}>{T('إغلاق', 'Close')}</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+              {[false, true].map(tech => {
+                const list = cols.filter(c => (tech ? hiddenByDefault.has(c.key) : !hiddenByDefault.has(c.key)) && !(view[detail][c.key] === null || view[detail][c.key] === undefined || view[detail][c.key] === ''))
+                if (!list.length) return null
+                return (
+                  <div key={String(tech)} style={{ marginBottom: 14 }}>
+                    {tech && <div style={{ fontSize: '0.66rem', fontWeight: 900, color: 'var(--text-3)', margin: '6px 4px', letterSpacing: '.05em' }}>{T('بيانات تقنية', 'Technical')}</div>}
+                    {list.map(c => (
+                      <div key={c.key} style={{ display: 'grid', gridTemplateColumns: '130px minmax(0,1fr)', gap: 10, padding: '9px 6px', borderBottom: '1px solid var(--border)', fontSize: '0.82rem' }}>
+                        <span style={{ color: 'var(--text-3)', fontWeight: 700 }}>{c.label}</span>
+                        <span dir="auto" style={{ color: 'var(--text-1)', fontWeight: 600, wordBreak: 'break-word', fontFamily: c.type === 'num' || c.type === 'stamp' || c.type === 'date' || c.type === 'id' ? MONO : 'inherit', textAlign: 'start' }}>{display(c, view[detail][c.key])}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   )
 }
