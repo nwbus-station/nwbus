@@ -26,7 +26,7 @@ export default function SalesDaySettings({ isAr = true }) {
   }
 
   return (
-    <div style={{ background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
+    <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
       <h3 style={{ margin: '0 0 6px', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? 'اليوم التشغيلي (الإيرادات)' : 'Business day (Sales)'}</h3>
       <p style={{ margin: '0 0 14px', fontSize: '0.74rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
         {isAr

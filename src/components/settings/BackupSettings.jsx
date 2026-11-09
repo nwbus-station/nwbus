@@ -63,7 +63,7 @@ export default function BackupSettings({ isAr }) {
     load(true)
   }
 
-  const card = { background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }
+  const card = { background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }
   const lbl = { fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 6, display: 'block' }
 
   if (missing) {
@@ -121,11 +121,11 @@ export default function BackupSettings({ isAr }) {
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" onClick={save} disabled={!dirty && !draft.trim() || busy === 'save'}
-          style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: (!dirty && !draft.trim()) ? 0.4 : 1 }}>
+          style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: 'var(--solid-btn)', color: 'var(--card)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: (!dirty && !draft.trim()) ? 0.4 : 1 }}>
           {busy === 'save' ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'حفظ' : 'Save')}
         </button>
         <button type="button" onClick={sendNow} disabled={busy === 'now' || pending}
-          style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid #1C2B4A', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: (busy === 'now' || pending) ? 0.5 : 1 }}>
+          style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid var(--solid-btn)', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: (busy === 'now' || pending) ? 0.5 : 1 }}>
           {pending ? (isAr ? 'بانتظار التنفيذ…' : 'Waiting…') : (isAr ? 'إرسال الآن' : 'Send now')}
         </button>
         {msg && <span style={{ fontSize: '0.76rem', fontWeight: 600, color: msg.ok ? '#15803D' : '#B91C1C' }}>{msg.text}</span>}

@@ -74,7 +74,7 @@ export default function ExcelLiveLink({ isAr = true }) {
   const active = keys.filter(k => !k.revoked_at && new Date(k.expires_at) > new Date())
 
   return (
-    <div style={{ background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
+    <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
       <h3 style={{ margin: '0 0 6px', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{T('اتصال Excel المباشر', 'Live Excel connection')}</h3>
       <p style={{ margin: '0 0 14px', fontSize: '0.78rem', lineHeight: 1.8, color: 'var(--text-3)' }}>
         {T('ملف Excel واحد يسحب أحدث بيانات النظام (مبيعات، رحلات، إجازات، تقييمات…) بزر «تحديث»، بدل تنزيل نسخة كل يوم. المفتاح للقراءة فقط وللأدمن العام فقط، وينتهي تلقائياً، وتلغيه متى شئت.', 'One Excel file that pulls the latest system data with a Refresh button instead of daily copies. The key is read-only, general-admin only, expires automatically, and can be revoked any time.')}

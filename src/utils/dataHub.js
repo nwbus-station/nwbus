@@ -48,12 +48,67 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/i
 const pad = n => String(n).padStart(2, '0')
 export const riyadhText = s => { const d = new Date(new Date(s).getTime() + 3 * 3600 * 1000); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}` }
 
-export async function loadHubSet(id, days) {
-  const iso = x => x.toISOString().slice(0, 10)
-  const now = Date.now()
-  const { data, error } = await supabase.rpc('excel_feed_admin', { p_dataset: id, p_from: iso(new Date(now - days * 86400000)), p_to: iso(new Date(now + 31 * 86400000)) })
+const isoDay = x => x.toISOString().slice(0, 10)
+
+async function rpcRaw(id, from, to) {
+  const { data, error } = await supabase.rpc('excel_feed_admin', { p_dataset: id, p_from: from ?? null, p_to: to ?? null })
   if (error) throw new Error(/not allowed/i.test(error.message) ? 'ليس لديك صلاحية' : /does not exist|not find|schema cache/i.test(error.message) ? 'SETUP' : error.message)
   return Array.isArray(data) ? data : []
+}
+
+// جداول صغيرة (المحطات/الموظفون/الجدول) تُجلب مرة وتُحفظ 5 دقائق؛ الربط بالأسماء يتم هنا بدل الخادم (أسرع بكثير)
+let LOOK = null, LOOK_AT = 0, LOOK_P = null
+async function lookups() {
+  if (LOOK && Date.now() - LOOK_AT < 300000) return LOOK
+  if (!LOOK_P) {
+    LOOK_P = (async () => {
+      const safe = id => rpcRaw(id).catch(() => [])
+      const [st, us, sc] = await Promise.all([safe('stations'), safe('employees'), safe('schedule')])
+      const stations = new Map(st.map(r => [r.id, r.name_ar || r.name_en || null]))
+      const users = new Map(us.map(r => [r.id, r]))
+      const sched = new Map(sc.map(r => [r.id, r]))
+      LOOK = { stations, users, sched }; LOOK_AT = Date.now()
+      return LOOK
+    })().finally(() => { LOOK_P = null })
+  }
+  return LOOK_P
+}
+const USER_COLS = ['user_id', 'employee_id', 'created_by', 'evaluator_id', 'supervisor_id', 'evaluated_by', 'approved_by']
+
+function enrich(id, rows, L) {
+  if (!rows.length) return rows
+  const sample = rows[0]
+  const hasStation = 'station_id' in sample
+  const hasTrip = 'trip_schedule_id' in sample
+  const uCols = id === 'employees' ? [] : USER_COLS.filter(c => c in sample)
+  if (!hasStation && !hasTrip && !uCols.length) return rows
+  return rows.map(r => {
+    const o = { ...r }
+    if (hasStation && !('station_name' in o)) o.station_name = L.stations.get(r.station_id) ?? null
+    if (hasTrip && !('trip_number' in o)) {
+      const t = L.sched.get(r.trip_schedule_id)
+      o.trip_number = t?.trip_number ?? null
+      o.scheduled_departure = t?.scheduled_departure ?? null
+      o.from_station = t ? (L.stations.get(t.from_station_id) ?? null) : null
+      o.to_station = t ? (L.stations.get(t.to_station_id) ?? null) : null
+    }
+    for (const c of uCols) {
+      if (`${c}_name` in o) continue
+      const u = L.users.get(r[c])
+      o[`${c}_name`] = u?.full_name_ar ?? null
+      o[`${c}_job`] = u?.job_number ?? null
+    }
+    return o
+  })
+}
+
+export async function loadHubSet(id, days) {
+  const now = Date.now()
+  const [rows, L] = await Promise.all([
+    rpcRaw(id, isoDay(new Date(now - days * 86400000)), isoDay(new Date(now + 31 * 86400000))),
+    lookups(),
+  ])
+  return enrich(id, rows, L)
 }
 
 // أعمدة القسم من عيّنة الصفوف: النوع يحدد المحاذاة والتنسيق والفرز والتصفية

@@ -52,7 +52,7 @@ export default function TransportOverviewAccess({ isAr = true }) {
   const meIn = !!profile?.id && ids.includes(profile.id)
 
   return (
-    <div style={{ background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
+    <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
       <h3 style={{ margin: '0 0 6px', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{T('الجدول الشامل (الترحيل): من يراه؟', 'Comprehensive schedule: who sees it?')}</h3>
       <p style={{ margin: '0 0 14px', fontSize: '0.78rem', lineHeight: 1.8, color: 'var(--text-3)' }}>
         {T('أضف الحسابات التي تبيها ترى الجدول الشامل. المضافون فقط يرونه ويفتح لهم أول ما يدخلون صفحة الترحيل، وباقي الحسابات (حتى الأدمن) لا يظهر لهم. وإذا ما أضفت أحداً يبقى كما كان: يظهر لمن عنده صلاحية «عرض تبويب الجدول الشامل».', 'Add the accounts that should see the comprehensive schedule. Only they see it, and it opens first when they enter Transportation; other accounts (even admins) do not. If nobody is added, it works as before: shown to anyone with the “comprehensive schedule tab” permission.')}

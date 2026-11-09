@@ -21,7 +21,7 @@ export default function MasterWorkbookExport({ isAr = true }) {
   }
 
   return (
-    <div style={{ background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
+    <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
       <h3 style={{ margin: '0 0 6px', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{T('ملف Excel الشامل (كل الأقسام في ملف واحد)', 'Master Excel (all sections in one file)')}</h3>
       <p style={{ margin: '0 0 14px', fontSize: '0.78rem', lineHeight: 1.8, color: 'var(--text-3)' }}>
         {T('اضغط الزر فيُنزَّل ملف واحد فيه: المبيعات، الترحيل، الإجازات، التقييمات، المفقودات، الموظفون وغيرها، كل قسم تبويب مستقل بفلاتر، وأول تبويب فهرس بروابط. يجلب أحدث بيانات لحظة الضغط، بدون أي إعداد.', 'Press the button to download one file with sales, trips, leaves, evaluations, lost & found, employees and more — each section its own filtered tab, plus an index tab with links. It pulls the latest data at the moment you press, with no setup.')}

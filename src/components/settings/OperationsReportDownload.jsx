@@ -44,7 +44,7 @@ export default function OperationsReportDownload({ isAr }) {
 
   const inp = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white'
   return (
-    <div style={{ background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
+    <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
       <h3 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{T('تنزيل التقرير التشغيلي التحليلي', 'Download the operations analytics report')}</h3>
       <p style={{ margin: '4px 0 14px', fontSize: '0.74rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
         {T('حدّد الفترة وانزّل ملف Excel مباشرة: ملخص بالمغادرة والوصول وعدد الزوار (أرقام وتحليل ورسوم)، جدول المحطات، الاتجاه اليومي، الوكلاء في ورقة مستقلة، رضا العملاء والاستبيانات، الحركات غير المُدخلة، كل السجلات، وورقة لكل محطة. بدون إرسال إيميل.',
@@ -55,7 +55,7 @@ export default function OperationsReportDownload({ isAr }) {
           const on = from === a && to === b
           return (
             <button key={l} type="button" onClick={() => { setFrom(a); setTo(b) }}
-              style={{ padding: '6px 12px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${on ? '#1C2B4A' : 'var(--border)'}`, background: on ? '#1C2B4A' : '#fff', color: on ? '#fff' : 'var(--text-2)' }}>{l}</button>
+              style={{ padding: '6px 12px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${on ? 'var(--solid-btn)' : 'var(--border)'}`, background: on ? 'var(--solid-btn)' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' }}>{l}</button>
           )
         })}
       </div>
@@ -63,7 +63,7 @@ export default function OperationsReportDownload({ isAr }) {
         <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', marginInlineEnd: 4 }}>{T('المحطات:', 'Stations:')}</span>
         {[['all', T('الكل (نورث وست + الوكلاء)', 'All (North West + agents)')], ['nwb', T('نورث وست فقط', 'North West only')], ['agent', T('الوكلاء فقط', 'Agents only')]].map(([k, l]) => (
           <button key={k} type="button" onClick={() => setKind(k)}
-            style={{ padding: '6px 12px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${kind === k ? '#7C3AED' : 'var(--border)'}`, background: kind === k ? '#7C3AED' : '#fff', color: kind === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
+            style={{ padding: '6px 12px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${kind === k ? 'var(--accent)' : 'var(--border)'}`, background: kind === k ? 'var(--accent)' : 'var(--card)', color: kind === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
         ))}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
@@ -71,7 +71,7 @@ export default function OperationsReportDownload({ isAr }) {
         <span style={{ color: 'var(--text-3)' }}>—</span>
         <DatePicker value={to} onChange={v => { setTo(v); if (v && from && v < from) setFrom(v) }} isAr={isAr} className={inp} />
         <button type="button" onClick={run} disabled={busy}
-          style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+          style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: 'var(--solid-btn)', color: 'var(--card)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
           {busy ? T('جاري الإنشاء…', 'Building…') : T('تنزيل التقرير', 'Download report')}
         </button>
       </div>
