@@ -6,6 +6,7 @@ import BackupSettings from '../components/settings/BackupSettings'
 import OperationsReportDownload from '../components/settings/OperationsReportDownload'
 import SalesDaySettings from '../components/settings/SalesDaySettings'
 import ExcelLiveLink from '../components/settings/ExcelLiveLink'
+import MasterWorkbookExport from '../components/settings/MasterWorkbookExport'
 import TransportOverviewAccess from '../components/settings/TransportOverviewAccess'
 
 const THEMES = [
@@ -101,7 +102,10 @@ const Section = ({ titleAr, titleEn, children }) => (
       {/* ── من يرى الجدول الشامل في الترحيل ── */}
       <TransportOverviewAccess isAr={isAr} />
 
-      {/* ── اتصال Excel المباشر (الأدمن العام فقط) ── */}
+      {/* ── ملف Excel الشامل بزر واحد (الأدمن العام فقط) ── */}
+      {isGeneralAdmin && <MasterWorkbookExport isAr={isAr} />}
+
+      {/* ── اتصال Excel المباشر المتقدم (الأدمن العام فقط) ── */}
       {isGeneralAdmin && <ExcelLiveLink isAr={isAr} />}
 
       {/* ── النسخ الاحتياطي والتقرير اليومي ── */}
