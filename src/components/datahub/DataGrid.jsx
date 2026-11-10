@@ -109,14 +109,18 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
   const stats = useMemo(() => {
     if (!n) return null
     const nums = []
+    const sp = { true: 0, false: 0 }
+    let spN = 0, spLab = null
     let cnt = 0
     for (let r = n.r1; r <= n.r2 && r < view.length; r++) for (let c = n.c1; c <= n.c2 && c < vcols.length; c++) {
       const v = view[r][vcols[c].key]
       if (v !== null && v !== undefined && v !== '') cnt++
-      if (vcols[c].type === 'num' && v !== null && v !== undefined) nums.push(Number(v))
+      if (vcols[c].split && typeof v === 'number') { const g = view[r][vcols[c].split.by]; if (g === true || g === false) { sp[g] += v; spN++ } }  // ركاب الوصول والمغادرة لا يُجمعون
+      else if (vcols[c].type === 'num' && v !== null && v !== undefined) nums.push(Number(v))
     }
+    for (let c = n.c1; c <= n.c2 && c < vcols.length; c++) if (vcols[c].split) spLab = vcols[c].split.labels
     const sum = nums.reduce((a, b) => a + b, 0)
-    return { cells: (n.r2 - n.r1 + 1) * (n.c2 - n.c1 + 1), cnt, nums: nums.length, sum, avg: nums.length ? sum / nums.length : 0, min: nums.length ? Math.min(...nums) : 0, max: nums.length ? Math.max(...nums) : 0 }
+    return { sp: spN && spLab ? [[spLab.true, sp.true], [spLab.false, sp.false]] : null, cells: (n.r2 - n.r1 + 1) * (n.c2 - n.c1 + 1), cnt, nums: nums.length, sum, avg: nums.length ? sum / nums.length : 0, min: nums.length ? Math.min(...nums) : 0, max: nums.length ? Math.max(...nums) : 0 }
   }, [n?.r1, n?.r2, n?.c1, n?.c2, view, vcols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const copy = useCallback(async () => {
@@ -377,6 +381,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', minHeight: 38, padding: '6px 12px', borderTop: '1px solid var(--border-2)', background: 'var(--surface)', fontSize: '0.74rem', color: 'var(--text-2)' }}>
         <span><b style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{view.length.toLocaleString('en-US')}</b> {T('من', 'of')} <span style={{ fontFamily: MONO }}>{rows.length.toLocaleString('en-US')}</span> {T('صف', 'rows')}</span>
         {stats && <span style={{ color: 'var(--text-3)' }}>{T('المحدد', 'Selected')}: <b style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{stats.cells}</b> {T('خلية', 'cells')}</span>}
+        {stats && stats.sp && stats.sp.map(([l, x]) => <span key={l}>{l}: <b style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{fmtN(x)}</b></span>)}
         {stats && stats.nums > 0 && (
           <>
             <span>{T('المجموع', 'Sum')}: <b style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{fmtN(stats.sum)}</b></span>

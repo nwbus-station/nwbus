@@ -191,7 +191,8 @@ export function inferCols(rows, setId) {
     // فارغ أو صفر في كل الصفوف المحمَّلة ← مخفي افتراضياً
     const empty = rows.every(r => isEmpty(r[key]) || r[key] === false || r[key] === 0)
     const hidden = P?.force?.includes(key) ? false : (type === 'id' || TECH_KEY.test(key) || empty)
-    const split = P?.split?.[key]
+    // أي عمود ركاب مع وجود نوع الرحلة (وصول/مغادرة) يُفصل تلقائياً: لا يُجمعان أبداً
+    const split = P?.split?.[key] || (type === 'num' && /passenger|pax/i.test(key) && rows.some(r => typeof r.is_arrival === 'boolean') ? { by: 'is_arrival', labels: { true: 'وصول', false: 'مغادرة' } } : undefined)
     return { key, label, type, width: split ? Math.max(width, 200) : width, hidden, fmt, tones: P?.tones?.[key], split }
   })
   // الأعمدة المهمة أولاً: التاريخ ثم المحطة/الاسم ثم الباقي، وأوقات التسجيل التقنية في الآخر
