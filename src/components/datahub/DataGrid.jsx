@@ -7,7 +7,7 @@ const NUM_W = 54
 const NO_SUM = /number|_no$|phone|mobile|code|_id$|^id$|order|sort|seq|year|month|day|hour|version|rating|score|rate|percent|accuracy/i
 const MONO = "'IBM Plex Mono', ui-monospace, monospace"
 
-export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = '', height = 560, onView }) {
+export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = '', height = 560, onView, rowTone, legend }) {
   const T = (a, e) => (isAr ? a : e)
   const hiddenByDefault = useMemo(() => new Set(cols.filter(c => c.hidden).map(c => c.key)), [cols])
   const [hidden, setHidden] = useState(() => new Set(cols.filter(c => c.hidden).map(c => c.key)))
@@ -257,6 +257,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
         .dg-scroll::-webkit-scrollbar-track{background:transparent}
         .dg-scroll::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:99px;border:3px solid var(--card)}
         .dg-scroll::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+        .dg-row:hover{background:var(--gold-dim) !important}
         .dg-wrap:hover .dg-arrow{opacity:.95 !important}
         .dg-arrow:hover{transform:scale(1.08)}
         @media (hover:none){.dg-arrow{opacity:.9 !important}}
@@ -282,6 +283,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
             </div>
           )}
         </div>
+        {legend && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12, marginInlineStart: 6, fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-2)' }}>{legend.map(([l, c]) => <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><i style={{ width: 4, height: 16, borderRadius: 2, background: c }} />{l}</span>)}</span>}
         <button type="button" style={tb(panMode)} aria-pressed={panMode} onClick={() => setPanMode(o => !o)} title={T('وضع اليد: اسحب الجدول بالماوس في أي اتجاه', 'Hand mode: drag the grid in any direction')}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 00-4 0v5M14 10V4a2 2 0 00-4 0v7M10 10.5V6a2 2 0 00-4 0v8" /><path d="M18 8a2 2 0 014 0v6a8 8 0 01-8 8h-2c-2.5 0-4-1-5.3-2.4L3.4 15.6a2 2 0 013-2.6L8 14.5" /></svg>
           {T('يد', 'Hand')}
@@ -332,7 +334,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
               const r = first + k
               return (
                 <div key={r} role="row" className="dg-row" style={{ position: 'absolute', top: r * rowH, insetInlineStart: 0, display: 'flex', height: rowH, width: totalW, background: r % 2 ? 'var(--surface)' : 'var(--card)' }}>
-                  <div style={{ position: 'sticky', insetInlineStart: 0, zIndex: 3, width: NUM_W, minWidth: NUM_W, height: rowH, display: 'grid', placeItems: 'center', background: 'var(--surface)', borderInlineEnd: '1px solid var(--border-2)', borderBottom: '1px solid var(--border)', color: n && r >= n.r1 && r <= n.r2 ? 'var(--accent)' : 'var(--text-3)', fontFamily: MONO, fontSize: '0.66rem', fontWeight: 800, cursor: 'pointer' }} role="button" title={T('عرض كل تفاصيل الصف', 'Show full row details')} onClick={() => setDetail(r)}>{r + 1}</div>
+                  <div style={{ position: 'sticky', insetInlineStart: 0, zIndex: 3, width: NUM_W, minWidth: NUM_W, height: rowH, display: 'grid', placeItems: 'center', background: 'var(--surface)', borderInlineEnd: '1px solid var(--border-2)', borderBottom: '1px solid var(--border)', color: n && r >= n.r1 && r <= n.r2 ? 'var(--accent)' : 'var(--text-3)', fontFamily: MONO, fontSize: '0.66rem', fontWeight: 800, cursor: 'pointer', borderInlineStart: rowTone ? `4px solid ${rowTone(row)}` : undefined, boxSizing: 'border-box' }} role="button" title={T('عرض كل تفاصيل الصف', 'Show full row details')} onClick={() => setDetail(r)}>{r + 1}</div>
                   {vcols.map((c, ci) => {
                     const v = row[c.key]
                     const text = display(c, v)
@@ -342,7 +344,11 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
                         onDoubleClick={() => setDetail(r)}
                         onMouseEnter={() => { if (drag.current && !resize.current) setSel(s => (s ? { ...s, r2: r, c2: ci } : s)) }}
                         style={cellStyle(c, ci, r)}>
-                        {c.type === 'bool'
+                        {text === '' && c.type !== 'num'
+                          ? <span aria-label={T('فارغ', 'Empty')} style={{ color: 'var(--text-3)', opacity: 0.45, fontSize: '0.8rem' }}>—</span>
+                          : c.pill
+                          ? <span style={{ borderRadius: 99, padding: '2px 11px', fontSize: '0.78rem', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', background: c.pill(v)[0], color: c.pill(v)[1] }}>{text}</span>
+                          : c.type === 'bool'
                           ? (v === null || v === undefined ? null : <span style={{ borderRadius: 99, padding: '1px 9px', fontSize: '0.68rem', fontWeight: 800, background: c.tones ? c.tones[!!v][0] : v ? 'var(--success-bg)' : 'var(--surface-2)', color: c.tones ? c.tones[!!v][1] : v ? 'var(--success)' : 'var(--text-3)' }}>{text}</span>)
                           : <span dir={c.type === 'text' ? 'auto' : 'ltr'} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.88rem', color: 'var(--text-1)', fontFamily: c.type === 'num' || c.type === 'stamp' || c.type === 'date' ? MONO : 'inherit', fontWeight: c.type === 'num' ? 700 : 500 }}>{text}</span>}
                       </div>

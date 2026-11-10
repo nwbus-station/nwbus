@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } fr
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import DataGrid from '../components/datahub/DataGrid'
-import { HUB_GROUPS, HUB_SETS, PERIODS, resolvePeriod, riyadhToday, loadHubSet, inferCols, exportViewXlsx } from '../utils/dataHub'
+import { HUB_GROUPS, HUB_SETS, PRESETS, PERIODS, resolvePeriod, riyadhToday, loadHubSet, inferCols, exportViewXlsx } from '../utils/dataHub'
 
 // مركز البيانات المباشر: كل أقسام النظام في شبكة بنمط Excel، تتحدث لحظياً عند أي تغيير (أدمن عام فقط).
 const MONO = "'IBM Plex Mono', ui-monospace, monospace"
@@ -213,7 +213,7 @@ export default function DataHubPage() {
             ? <div style={{ display: 'grid', placeItems: 'center', height: gridH, border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', color: 'var(--text-3)', fontWeight: 800 }}>{T('جارٍ تحميل البيانات…', 'Loading data…')}</div>
             : !err && (rows.length === 0
               ? <div style={{ display: 'grid', placeItems: 'center', height: 240, border: '1px solid var(--border-2)', borderRadius: 14, background: 'var(--card)', color: 'var(--text-3)', fontWeight: 800 }}>{period.mode === 'today' ? T('لا توجد بيانات اليوم حتى الآن — تظهر هنا لحظياً فور تسجيلها', 'Nothing today yet — new records appear here live') : T('لا توجد بيانات في هذا القسم للفترة المختارة', 'No data in this section for the selected period')}</div>
-              : <DataGrid key={setId} cols={cols} rows={rows} isAr={isAr} rowH={density} search={q} height={gridH} onView={v => { viewRef.current = v }} />)}
+              : <DataGrid key={setId} cols={cols} rows={rows} isAr={isAr} rowH={density} search={q} height={gridH} rowTone={PRESETS[setId]?.rowTone} legend={PRESETS[setId]?.legend} onView={v => { viewRef.current = v }} />)}
           </div>
         </div>
       </div>
