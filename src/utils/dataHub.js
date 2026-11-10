@@ -160,13 +160,16 @@ const STATUS_AR = {
   'Malfunction inside the station': 'عطل داخل المحطة', 'Out-of-station malfunction': 'عطل خارج المحطة',
 }
 const ACC_AR = { Early: 'مبكرة', 'On Time': 'في الموعد', 'Not On Time': 'خارج الموعد', Delayed: 'متأخرة' }
+// الوقت فقط بتوقيت الرياض وبنظام 24 ساعة (بدون تاريخ)
+const hhmm = v => riyadhText(v).slice(11)
 const ARR_TONES = { true: ['var(--gold-dim)', 'var(--accent)'], false: ['var(--surface-2)', 'var(--text-2)'] }
 export const PRESETS = {
   trips: {
-    order: ['record_date', 'station_name', 'trip_number', 'bus_number', 'is_arrival', 'from_station', 'to_station', 'passenger_count', 'operational_status', 'created_by_name', 'scheduled_departure', 'actual_departure', 'actual_arrival', 'departure_accuracy', 'delay_minutes', 'missed_count', 'is_extra_trip', 'notes'],
-    force: ['record_date', 'station_name', 'trip_number', 'bus_number', 'is_arrival', 'from_station', 'to_station', 'passenger_count', 'operational_status', 'created_by_name'],
+    order: ['record_date', 'station_name', 'actual_departure', 'actual_arrival', 'trip_number', 'bus_number', 'is_arrival', 'from_station', 'to_station', 'passenger_count', 'operational_status', 'created_by_name', 'scheduled_departure', 'departure_accuracy', 'delay_minutes', 'missed_count', 'is_extra_trip', 'notes'],
+    force: ['record_date', 'station_name', 'actual_departure', 'actual_arrival', 'trip_number', 'bus_number', 'is_arrival', 'from_station', 'to_station', 'passenger_count', 'operational_status', 'created_by_name'],
     labels: { is_arrival: 'النوع', bus_number: 'الحافلة', trip_number: 'رقم الرحلة', from_station: 'من', to_station: 'إلى', passenger_count: 'عدد الركاب', operational_status: 'حالة الحافلة', created_by_name: 'أدخلها', scheduled_departure: 'موعد الجدول', actual_departure: 'المغادرة الفعلية', actual_arrival: 'الوصول الفعلي', departure_accuracy: 'الالتزام بالموعد', delay_minutes: 'التأخير (د)', missed_count: 'المتخلفون', is_extra_trip: 'إضافية' },
-    fmt: { is_arrival: v => (v ? 'وصول' : 'مغادرة'), operational_status: v => STATUS_AR[v] || v, departure_accuracy: v => ACC_AR[v] || v },
+    fmt: { is_arrival: v => (v ? 'وصول' : 'مغادرة'), operational_status: v => STATUS_AR[v] || v, departure_accuracy: v => ACC_AR[v] || v, actual_departure: hhmm, actual_arrival: hhmm, scheduled_departure: v => String(v).slice(0, 5) },
+    widths: { actual_departure: 104, actual_arrival: 104, scheduled_departure: 100 },
     tones: { is_arrival: ARR_TONES },
     // ركاب الوصول والمغادرة لا يُجمعان أبداً: الإجمالي يظهر منفصلاً
     split: { passenger_count: { by: 'is_arrival', labels: { true: 'وصول', false: 'مغادرة' } } },
@@ -193,7 +196,7 @@ export function inferCols(rows, setId) {
     const hidden = P?.force?.includes(key) ? false : (type === 'id' || TECH_KEY.test(key) || empty)
     // أي عمود ركاب مع وجود نوع الرحلة (وصول/مغادرة) يُفصل تلقائياً: لا يُجمعان أبداً
     const split = P?.split?.[key] || (type === 'num' && /passenger|pax/i.test(key) && rows.some(r => typeof r.is_arrival === 'boolean') ? { by: 'is_arrival', labels: { true: 'وصول', false: 'مغادرة' } } : undefined)
-    return { key, label, type, width: split ? Math.max(width, 200) : width, hidden, fmt, tones: P?.tones?.[key], split }
+    return { key, label, type, width: split ? Math.max(width, 200) : (P?.widths?.[key] ?? width), hidden, fmt, tones: P?.tones?.[key], split }
   })
   // الأعمدة المهمة أولاً: التاريخ ثم المحطة/الاسم ثم الباقي، وأوقات التسجيل التقنية في الآخر
   const rank = c => (c.hidden ? 9 : /(^|_)date$|^date$/.test(c.key) ? 0 : /station_name|^name_|full_name|_name$/.test(c.key) ? 1 : /(^|_)at$/.test(c.key) ? 3 : 2)
