@@ -168,6 +168,8 @@ export const PRESETS = {
     labels: { is_arrival: 'النوع', bus_number: 'الحافلة', trip_number: 'رقم الرحلة', from_station: 'من', to_station: 'إلى', passenger_count: 'عدد الركاب', operational_status: 'حالة الحافلة', created_by_name: 'أدخلها', scheduled_departure: 'موعد الجدول', actual_departure: 'المغادرة الفعلية', actual_arrival: 'الوصول الفعلي', departure_accuracy: 'الالتزام بالموعد', delay_minutes: 'التأخير (د)', missed_count: 'المتخلفون', is_extra_trip: 'إضافية' },
     fmt: { is_arrival: v => (v ? 'وصول' : 'مغادرة'), operational_status: v => STATUS_AR[v] || v, departure_accuracy: v => ACC_AR[v] || v },
     tones: { is_arrival: ARR_TONES },
+    // ركاب الوصول والمغادرة لا يُجمعان أبداً: الإجمالي يظهر منفصلاً
+    split: { passenger_count: { by: 'is_arrival', labels: { true: 'وصول', false: 'مغادرة' } } },
   },
 }
 
@@ -189,7 +191,8 @@ export function inferCols(rows, setId) {
     // فارغ أو صفر في كل الصفوف المحمَّلة ← مخفي افتراضياً
     const empty = rows.every(r => isEmpty(r[key]) || r[key] === false || r[key] === 0)
     const hidden = P?.force?.includes(key) ? false : (type === 'id' || TECH_KEY.test(key) || empty)
-    return { key, label, type, width, hidden, fmt, tones: P?.tones?.[key] }
+    const split = P?.split?.[key]
+    return { key, label, type, width: split ? Math.max(width, 200) : width, hidden, fmt, tones: P?.tones?.[key], split }
   })
   // الأعمدة المهمة أولاً: التاريخ ثم المحطة/الاسم ثم الباقي، وأوقات التسجيل التقنية في الآخر
   const rank = c => (c.hidden ? 9 : /(^|_)date$|^date$/.test(c.key) ? 0 : /station_name|^name_|full_name|_name$/.test(c.key) ? 1 : /(^|_)at$/.test(c.key) ? 3 : 2)

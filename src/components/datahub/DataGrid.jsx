@@ -82,6 +82,11 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
   const totals = useMemo(() => {
     const t = vcols.map(c => {
       if (c.type !== 'num' || NO_SUM.test(c.key)) return null
+      if (c.split) {
+        const g = { true: 0, false: 0 }
+        for (const r of view) { const v = r[c.split.by]; if (typeof r[c.key] === 'number' && (v === true || v === false)) g[v] += r[c.key] }
+        return { parts: [[c.split.labels.true, g.true], [c.split.labels.false, g.false]] }
+      }
       let sum = 0, any = false
       for (const r of view) { const v = r[c.key]; if (typeof v === 'number') { sum += v; any = true } }
       return any ? sum : null
@@ -348,7 +353,7 @@ export default function DataGrid({ cols, rows, isAr = true, rowH = 34, search = 
               <div style={{ position: 'sticky', insetInlineStart: 0, zIndex: 5, width: NUM_W, minWidth: NUM_W, display: 'grid', placeItems: 'center', background: 'var(--surface)', borderInlineEnd: '1px solid var(--border-2)', fontWeight: 900, fontSize: '0.8rem', color: 'var(--accent)' }}>Σ</div>
               {vcols.map((c, ci) => (
                 <div key={c.key} style={{ width: c.w, minWidth: c.w, display: 'flex', alignItems: 'center', justifyContent: c.type === 'num' ? 'flex-end' : 'flex-start', padding: '0 10px', boxSizing: 'border-box', borderInlineEnd: '1px solid var(--border)', fontFamily: MONO, fontWeight: 900, fontSize: '0.8rem', color: 'var(--text-1)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                  {totals[ci] !== null ? fmtN(totals[ci]) : (ci === 0 ? <span style={{ fontFamily: 'inherit', color: 'var(--text-2)', fontSize: '0.74rem' }}>{T(`الإجمالي (${view.length.toLocaleString('en-US')} صف)`, `Total (${view.length.toLocaleString('en-US')} rows)`)}</span> : null)}
+                  {totals[ci] !== null && typeof totals[ci] === 'object' ? <span style={{ display: 'flex', gap: 12, fontSize: '0.74rem' }}>{totals[ci].parts.map(([l, n]) => <span key={l}><span style={{ fontFamily: 'inherit', fontWeight: 700, color: 'var(--text-3)' }}>{l} </span>{fmtN(n)}</span>)}</span> : totals[ci] !== null ? fmtN(totals[ci]) : (ci === 0 ? <span style={{ fontFamily: 'inherit', color: 'var(--text-2)', fontSize: '0.74rem' }}>{T(`الإجمالي (${view.length.toLocaleString('en-US')} صف)`, `Total (${view.length.toLocaleString('en-US')} rows)`)}</span> : null)}
                 </div>
               ))}
             </div>
