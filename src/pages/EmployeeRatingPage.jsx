@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import QRCode from 'qrcode'
-import { SHEET_LAYOUTS, buildRatingSheetHtml } from '../utils/qrSheet'
+import { SHEET_LAYOUTS, buildRatingSheetHtml, ratingSheetPdfBlob } from '../utils/qrSheet'
 import { ratingShiftsFor, currentShift, allowedShiftsNow, computeActiveUntil, formatTime } from '../utils/ratingShifts'
 
 export default function EmployeeRatingPage() {
@@ -24,6 +24,7 @@ export default function EmployeeRatingPage() {
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [sheet, setSheet] = useState(() => { try { return localStorage.getItem('rate_sheet') || '2x4' } catch { return '2x4' } })
   const [printing, setPrinting] = useState(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
   const [now, setNow] = useState(new Date())
 
   // نحدّث الوقت كل دقيقة حتى تنعكس نهاية الوردية/فترة السماح بدون الحاجة لتحديث الصفحة
@@ -108,6 +109,21 @@ export default function EmployeeRatingPage() {
       w.document.close()
     } catch { w.close(); setErrMsg('تعذّر تجهيز الورقة، حاول مرة أخرى') }
     setPrinting(false)
+  }
+  // تنزيل نفس الورقة كملف PDF بمقاس A4 جاهز للإرسال أو الطباعة لاحقاً
+  async function downloadSheetPdf() {
+    const L = SHEET_LAYOUTS.find(x => x.id === sheet) || SHEET_LAYOUTS[2]
+    setPdfBusy(true); setErrMsg('')
+    try {
+      const qr = await QRCode.toDataURL(ratingUrl, { width: 900, margin: 1, errorCorrectionLevel: 'M' })
+      const blob = await ratingSheetPdfBlob({ name: profile.full_name_ar, station: stationName, windowNumber: windowNumber.trim(), qr, cols: L.cols, rows: L.rows })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `rating-cards-${L.cols * L.rows}-per-A4.pdf`
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+    } catch { setErrMsg('تعذّر إنشاء ملف PDF، حاول مرة أخرى') }
+    setPdfBusy(false)
   }
   const pickSheet = id => { setSheet(id); try { localStorage.setItem('rate_sheet', id) } catch { /* بدون تخزين */ } }
 
@@ -197,10 +213,17 @@ export default function EmployeeRatingPage() {
               </div>
             )
           })()}
-          <button onClick={printSheet} disabled={printing}
-            className="w-full bg-nwbus-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
-            {printing ? 'جارٍ التجهيز…' : 'طباعة الورقة'}
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={printSheet} disabled={printing || pdfBusy}
+              className="bg-nwbus-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
+              {printing ? 'جارٍ التجهيز…' : 'طباعة الورقة'}
+            </button>
+            <button onClick={downloadSheetPdf} disabled={printing || pdfBusy}
+              className="border border-gray-300 text-gray-700 rounded-lg py-2.5 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
+              {pdfBusy ? 'جارٍ إنشاء PDF…' : 'تنزيل PDF'}
+            </button>
+          </div>
+          {errMsg && <p className="text-xs text-red-600 font-semibold mt-2">{errMsg}</p>}
         </div>
       )}
     </div>
