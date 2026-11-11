@@ -706,10 +706,11 @@ export default function AppLayout() {
   // تنبيه لطيف بعد فترة قصيرة من فتح الجلسة — لأي حساب لسا يستخدم كلمة المرور اللي حطها الأدمن ولا غيّرها بنفسه
   const [showPwdNudge, setShowPwdNudge] = useState(false)
   useEffect(() => {
-    if (profile?.password_changed !== false) { setShowPwdNudge(false); return }
+    // مؤقتاً: حساب المدير التنفيذي للمحطات لا يظهر له التنبيه (بطلبه). لإعادته احذف الشرط التالي.
+    if (profile?.password_changed !== false || profile?.role === 'stations_executive_director') { setShowPwdNudge(false); return }
     const t = setTimeout(() => setShowPwdNudge(true), 4000)
     return () => clearTimeout(t)
-  }, [profile?.id, profile?.password_changed])
+  }, [profile?.id, profile?.password_changed, profile?.role])
 
   // تنبيه "فيه تحديث جديد" — يظهر لأي موظف مفتوح عنده التطبيق لما ينزل نشر جديد، بدل ما
   // يحتاج يسوي تحديث كامل يدوي أو ننتظره يسأل الأدمن
