@@ -10,9 +10,11 @@ export default function EmployeeRatingPage() {
   const [windowNumber, setWindowNumber] = useState(profile?.rating_window_number || '')
   // ورديات محطة الموظف (3 أو 4)
   const [stEnds, setStEnds] = useState(null)
+  const [stName, setStName] = useState('')
+  const stationName = profile?.station?.name_ar || profile?.station?.name_en || stName
   useEffect(() => {
     if (!profile?.station_id) return
-    supabase.from('stations').select('shift_ends').eq('id', profile.station_id).maybeSingle().then(({ data }) => setStEnds(data?.shift_ends ?? null))
+    supabase.from('stations').select('shift_ends, name_ar, name_en').eq('id', profile.station_id).maybeSingle().then(({ data }) => { setStEnds(data?.shift_ends ?? null); setStName(data?.name_ar || data?.name_en || '') })
   }, [profile?.station_id])
   const SHIFTS = ratingShiftsFor(stEnds)
   const [shift, setShift] = useState(profile?.rating_shift || currentShift())
@@ -85,7 +87,7 @@ export default function EmployeeRatingPage() {
       </style></head><body>
       <div class="card">
         <h2>${profile.full_name_ar}</h2>
-        <p>${profile.station?.name_ar || ''}</p>
+        <p>${stationName}</p>
         <img src="${qrDataUrl}" />
         <p style="margin-top:16px">امسح الرمز لتقييم الخدمة</p>
       </div>
@@ -102,7 +104,7 @@ export default function EmployeeRatingPage() {
     setPrinting(true)
     try {
       const qr = await QRCode.toDataURL(ratingUrl, { width: 900, margin: 1, errorCorrectionLevel: 'M' })
-      w.document.write(buildRatingSheetHtml({ name: profile.full_name_ar, station: profile.station?.name_ar || '', windowNumber: windowNumber.trim(), qr, cols: L.cols, rows: L.rows }))
+      w.document.write(buildRatingSheetHtml({ name: profile.full_name_ar, station: stationName, windowNumber: windowNumber.trim(), qr, cols: L.cols, rows: L.rows }))
       w.document.close()
     } catch { w.close(); setErrMsg('تعذّر تجهيز الورقة، حاول مرة أخرى') }
     setPrinting(false)

@@ -17,7 +17,8 @@ export function buildRatingSheetHtml({ name, station, windowNumber, qr, cols, ro
   const cell = `
     <div class="cell">
       <div class="name">${esc(name)}</div>
-      ${station || windowNumber ? `<div class="sub">${esc(station)}${station && windowNumber ? ' · ' : ''}${windowNumber ? 'شباك ' + esc(windowNumber) : ''}</div>` : ''}
+      ${station ? `<div class="station">${esc(station)}</div>` : ''}
+      ${windowNumber ? `<div class="win">شباك ${esc(windowNumber)}</div>` : ''}
       <img src="${qr}" alt="QR" />
       <div class="cta">امسح الرمز لتقييم الخدمة</div>
       <div class="en">Scan to rate our service</div>
@@ -31,7 +32,8 @@ export function buildRatingSheetHtml({ name, station, windowNumber, qr, cols, ro
   .sheet { width: ${PAGE_W}mm; height: ${PAGE_H}mm; padding: ${M}mm; display: grid; grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, 1fr); page-break-after: avoid }
   .cell { border: 0.3mm dashed #8a94a3; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: ${f(0.04)}mm; overflow: hidden; color: #1C2B4A }
   .name { font-weight: 800; font-size: ${f(0.15)}pt; line-height: 1.25; max-width: 100% }
-  .sub { color: #475569; font-size: ${f(0.085)}pt; margin-top: 0.8mm }
+  .station { color: #1C2B4A; font-weight: 700; font-size: ${f(0.105)}pt; margin-top: 0.8mm; line-height: 1.25 }
+  .win { display: inline-block; margin-top: 1mm; padding: 0.4mm 2.4mm; border: 0.3mm solid #1C2B4A; border-radius: 99px; font-weight: 700; font-size: ${f(0.07)}pt }
   img { width: ${qrSize.toFixed(2)}mm; height: ${qrSize.toFixed(2)}mm; margin: ${f(0.04)}mm 0; image-rendering: pixelated }
   .cta { font-weight: 800; font-size: ${f(0.105)}pt }
   .en { color: #64748b; font-size: ${f(0.07)}pt; margin-top: 0.6mm; direction: ltr }
