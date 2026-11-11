@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import QRCode from 'qrcode'
+import { SHEET_LAYOUTS, buildRatingSheetHtml } from '../utils/qrSheet'
 import { ratingShiftsFor, currentShift, allowedShiftsNow, computeActiveUntil, formatTime } from '../utils/ratingShifts'
 
 export default function EmployeeRatingPage() {
@@ -19,6 +20,8 @@ export default function EmployeeRatingPage() {
   const [saved, setSaved] = useState(false)
   const [errMsg, setErrMsg] = useState('')
   const [qrDataUrl, setQrDataUrl] = useState('')
+  const [sheet, setSheet] = useState(() => { try { return localStorage.getItem('rate_sheet') || '2x4' } catch { return '2x4' } })
+  const [printing, setPrinting] = useState(false)
   const [now, setNow] = useState(new Date())
 
   // نحدّث الوقت كل دقيقة حتى تنعكس نهاية الوردية/فترة السماح بدون الحاجة لتحديث الصفحة
@@ -91,6 +94,21 @@ export default function EmployeeRatingPage() {
     w.document.close()
   }
 
+  // ورقة A4 مكررة: بطاقات متعددة بخطوط قص (QR بدقة عالية ليبقى مقروءاً بالحجم الصغير)
+  async function printSheet() {
+    const L = SHEET_LAYOUTS.find(x => x.id === sheet) || SHEET_LAYOUTS[2]
+    const w = window.open('', '_blank')
+    if (!w) { setErrMsg('المتصفح منع نافذة الطباعة — اسمح بالنوافذ المنبثقة لهذا الموقع'); return }
+    setPrinting(true)
+    try {
+      const qr = await QRCode.toDataURL(ratingUrl, { width: 900, margin: 1, errorCorrectionLevel: 'M' })
+      w.document.write(buildRatingSheetHtml({ name: profile.full_name_ar, station: profile.station?.name_ar || '', windowNumber: windowNumber.trim(), qr, cols: L.cols, rows: L.rows }))
+      w.document.close()
+    } catch { w.close(); setErrMsg('تعذّر تجهيز الورقة، حاول مرة أخرى') }
+    setPrinting(false)
+  }
+  const pickSheet = id => { setSheet(id); try { localStorage.setItem('rate_sheet', id) } catch { /* بدون تخزين */ } }
+
   if (!profile?.can_rate_customers) {
     return <div className="p-8 text-center text-gray-400">هذي الصفحة غير متاحة لحسابك</div>
   }
@@ -147,6 +165,39 @@ export default function EmployeeRatingPage() {
           <button onClick={printCard}
             className="mt-4 border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50">
             طباعة البطاقة
+          </button>
+        </div>
+      )}
+
+      {qrDataUrl && (
+        <div className="bg-white rounded-2xl shadow border border-gray-200 p-5 mt-6">
+          <p className="text-sm font-semibold text-gray-700 mb-1">طباعة ورقة A4 مكررة</p>
+          <p className="text-xs text-gray-400 mb-4">تُقسَّم الورقة لبطاقات متساوية بخطوط قص، كل بطاقة فيها اسمك ورمز التقييم</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {SHEET_LAYOUTS.map(L => (
+              <button key={L.id} type="button" onClick={() => pickSheet(L.id)} aria-pressed={sheet === L.id}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold ${sheet === L.id ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                {L.label}
+              </button>
+            ))}
+          </div>
+          {(() => {
+            const L = SHEET_LAYOUTS.find(x => x.id === sheet) || SHEET_LAYOUTS[2]
+            return (
+              <div className="mx-auto mb-4 border border-gray-300 bg-gray-50 p-2 rounded" style={{ width: 150, aspectRatio: '210 / 297' }} aria-hidden="true">
+                <div className="w-full h-full grid" style={{ gridTemplateColumns: `repeat(${L.cols}, 1fr)`, gridTemplateRows: `repeat(${L.rows}, 1fr)` }}>
+                  {Array.from({ length: L.cols * L.rows }, (_, i) => (
+                    <div key={i} className="border border-dashed border-gray-400 bg-white flex items-center justify-center">
+                      <div className="bg-gray-800" style={{ width: '46%', aspectRatio: '1 / 1' }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+          <button onClick={printSheet} disabled={printing}
+            className="w-full bg-nwbus-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
+            {printing ? 'جارٍ التجهيز…' : 'طباعة الورقة'}
           </button>
         </div>
       )}
