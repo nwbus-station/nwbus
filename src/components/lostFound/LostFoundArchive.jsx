@@ -8,6 +8,8 @@ import RouteText from '../shared/RouteText'
 import SelectField from '../shared/SelectField'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import { fmtDT } from './ui'
+import RequestSendModal from './RequestSendModal'
+import { DISPATCH_STATUS } from '../../utils/dispatch'
 
 const CACHE_KEY = 'lostfound_logs_all'
 const PAGE = 60
@@ -74,8 +76,24 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
   const [busy, setBusy] = useState(null)
   const [msg, setMsg] = useState('')
   const [hideExpired, setHideExpired] = useState(false)
+  const [dispMap, setDispMap] = useState({})   // ref_id → إرساليات مرتبطة بالغرض
+  const [reqMap, setReqMap] = useState({})     // ref_id → طلبات إرسال مفتوحة
+  const [reqTarget, setReqTarget] = useState(null)
+  const [stationNames, setStationNames] = useState({})
+  useEffect(() => { supabase.from('stations').select('id, name_ar, name_en').then(({ data }) => setStationNames(Object.fromEntries((data ?? []).map(x => [x.id, x.name_ar || x.name_en])))) }, [])
 
   const flash = m => { setMsg(m); setTimeout(() => setMsg(''), 4000) }
+  // شارات الارتباط بالإرساليات: رقم التذكرة + حالتها، وطلب إرسال مفتوح
+  const linkChips = id => {
+    const ds = dispMap[id] || [], rn = reqMap[id] || 0
+    if (!ds.length && !rn) return null
+    return (
+      <div style={{ padding: '0 14px 10px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {ds.map(d => { const m = DISPATCH_STATUS[d.status] || DISPATCH_STATUS.in_transit; return <span key={d.id} title={isAr ? m.ar : m.en} style={{ fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: m.bg, color: m.color, fontFamily: MONO }} dir="ltr">{d.ticket_no} · {isAr ? m.ar : m.en}</span> })}
+        {rn > 0 && <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: 'rgba(217,119,6,0.15)', color: '#d97706' }}>{t('طلب إرسال مفتوح', 'Open send request')}</span>}
+      </div>
+    )
+  }
 
   const load = useCallback(async () => {
     const [{ data: i }, rRes] = await Promise.all([
@@ -96,6 +114,14 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
     // محاضر التسليم للجمعية (قد يكون الجدول غير منشأ بعد: نتجاهل الخطأ)
     const { data: dons } = await supabase.from('charity_donations').select('*')
     setDonMap(Object.fromEntries((dons ?? []).map(d => [d.id, d])))
+    // الإرساليات وطلبات الإرسال المرتبطة بالأغراض والبلاغات (قد لا يكون القسم مُجهَّزاً بعد: نتجاهل الخطأ)
+    const [{ data: di }, { data: rq }] = await Promise.all([
+      supabase.from('dispatch_items').select('ref_id, dispatch:dispatch_id(id, ticket_no, status)').neq('ref_type', 'free').limit(3000),
+      supabase.from('dispatch_requests').select('ref_id, to_station_id').eq('status', 'open').limit(1000),
+    ])
+    const dm = {}; (di ?? []).forEach(x => { if (x.ref_id && x.dispatch) (dm[x.ref_id] ||= []).push(x.dispatch) })
+    const rm = {}; (rq ?? []).forEach(x => { rm[x.ref_id] = (rm[x.ref_id] || 0) + 1 })
+    setDispMap(dm); setReqMap(rm)
     if (rpts.length || itms.length) setCached(CACHE_KEY, { reports: rpts, items: itms })
     setReports(rpts); setItems(itms); setLoading(false)
   }, [])
@@ -106,6 +132,8 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
     const ch = supabase.channel('lostfound_archive_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lost_found_items' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lost_reports' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dispatch_requests' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dispatches' }, refresh)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [load])
@@ -408,9 +436,15 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
                     </div>
                   )}
 
+                  {linkChips(item.id)}
                   <div style={{ marginTop: 'auto', padding: '10px 14px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                     <button type="button" onClick={() => setOpenId(open ? null : item.id)} style={actBtn()}>{open ? t('إخفاء التفاصيل', 'Hide details') : t('التفاصيل والصور', 'Details & photos')}</button>
                     <span style={{ flex: 1 }} />
+                    {!delivered && item.station_id && (
+                      <button type="button" onClick={() => setReqTarget({ refType: 'found', id: item.id, desc: item.item_description || t('غرض', 'Item'), stationId: item.station_id, stationName: item.found_location })} style={{ ...actBtn(), background: 'rgba(37,99,235,0.12)', color: '#2563eb', borderColor: 'rgba(37,99,235,0.4)' }}>
+                        {t('طلب إرسال', 'Request send')}
+                      </button>
+                    )}
                     {canDonate && onDonate && st === 'due' && (!donateScope || donateScope.includes(item.station_id)) && (
                       <button type="button" onClick={() => onDonate(item.id)} style={{ ...actBtn(), background: 'rgba(139,92,246,0.14)', color: '#8b5cf6', borderColor: 'rgba(139,92,246,0.4)' }}>
                         {t('تسليم للجمعية', 'Donate')}
@@ -447,9 +481,15 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
                     <Meta label={t('المسجّل', 'Registered by')}>{r.created_by_name || '—'}</Meta>
                   </div>
                   {r.notes && <div style={{ padding: '0 14px 12px', fontSize: '0.76rem', color: 'var(--text-2)', lineHeight: 1.7 }}><b style={{ color: 'var(--text-3)', fontSize: '0.64rem' }}>{t('ملاحظات', 'Notes')}: </b>{r.notes}</div>}
-                  {isAdmin && (
-                    <div style={{ marginTop: 'auto', padding: '10px 14px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
-                      <button type="button" disabled={busy === r.id} onClick={() => setConfirm({ kind: 'report', id: r.id })} style={actBtn(true)}>{t('حذف', 'Delete')}</button>
+                  {linkChips(r.id)}
+                  {(r.station_id || isAdmin) && (
+                    <div style={{ marginTop: 'auto', padding: '10px 14px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {r.station_id && (
+                        <button type="button" onClick={() => setReqTarget({ refType: 'report', id: r.id, desc: [r.customer_name, r.item_description].filter(Boolean).join(' — ') || t('بلاغ مفقود', 'Lost report'), stationId: r.station_id, stationName: stationNames[r.station_id] })} style={{ ...actBtn(), background: 'rgba(37,99,235,0.12)', color: '#2563eb', borderColor: 'rgba(37,99,235,0.4)' }}>
+                          {t('طلب إرسال', 'Request send')}
+                        </button>
+                      )}
+                      {isAdmin && <button type="button" disabled={busy === r.id} onClick={() => setConfirm({ kind: 'report', id: r.id })} style={actBtn(true)}>{t('حذف', 'Delete')}</button>}
                     </div>
                   )}
                 </article>
@@ -463,6 +503,8 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
           )}
         </>
       )}
+
+      {reqTarget && <RequestSendModal target={reqTarget} isAr={isAr} onClose={() => setReqTarget(null)} onDone={() => { clearCached(CACHE_KEY); load() }} />}
 
       {lightbox && (
         <div onClick={() => setLightbox(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, cursor: 'zoom-out' }}>

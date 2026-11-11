@@ -41,6 +41,7 @@ function NotificationBell({ profile }) {
   const [notifs, setNotifs]   = useState([])
   const [loading, setLoading] = useState(false)
   const ref = useRef(null)
+  const navigate = useNavigate()
 
   const unread = notifs.filter(n => !n.is_read).length
 
@@ -144,7 +145,7 @@ function NotificationBell({ profile }) {
             ) : notifs.map(n => {
               const s = TYPE_STYLE[n.type] ?? TYPE_STYLE.info
               return (
-                <div key={n.id} onClick={() => markRead(n.id)}
+                <div key={n.id} onClick={() => { markRead(n.id); if (n.ref_type === 'dispatch' && n.ref_id) { setOpen(false); navigate(`/lost-found?tab=dispatch&d=${n.ref_id}`) } }}
                   style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-start', background: n.is_read ? 'var(--card)' : 'var(--gold-dim)', cursor: 'pointer', transition: 'background 0.1s' }}>
                   <div style={{ width: 7, height: 7, borderRadius: 1, background: n.is_read ? 'var(--border-2)' : s.dot, marginTop: 6, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>

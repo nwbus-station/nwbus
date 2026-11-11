@@ -80,6 +80,7 @@ export const TITLE_CAPABILITIES = [
   { group: 'الموجودات', key: 'lostfound_handover_tab', kind: 'allow', ar: 'تبويب تسليم موجودات', en: 'Handover tab' },
   { group: 'الموجودات', key: 'lostfound_register_tab', kind: 'allow', ar: 'تبويب تسجيل موجود', en: 'Register item tab' },
   { group: 'الموجودات', key: 'lostfound_archive_tab',  kind: 'allow', ar: 'تبويب سجل الأرشيف', en: 'Archive log tab' },
+  { group: 'الموجودات', key: 'lostfound_dispatch_tab', kind: 'allow', ar: 'تبويب الإرساليات', en: 'Dispatches tab' },
   // بيانات الموظفين
   { group: 'بيانات الموظفين', key: 'users_view_phones', db: true, kind: 'allow', ar: 'يشوف أرقام جوالات الموظفين المتاحين له', en: 'See employee phone numbers' },
   { group: 'بيانات الموظفين', key: 'users_export', kind: 'allow', ar: 'تصدير وطباعة قائمة الموظفين', en: 'Export / print staff roster' },
