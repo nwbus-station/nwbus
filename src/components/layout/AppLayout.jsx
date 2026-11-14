@@ -798,7 +798,6 @@ function AccountMenu({ side, isAr, profile, roleLabel, stationName, themeMode, o
       </div>
       <button type="button" role="menuitem" className="dk-item" onClick={act(onLang)}><span>{isAr ? 'اللغة' : 'Language'}</span><em>{isAr ? 'English' : 'العربية'}</em></button>
       <p className="dk-menu-lbl">{isAr ? 'الحساب' : 'Account'}</p>
-      <button type="button" role="menuitem" className="dk-item" onClick={act(onRefresh)}><span>{isAr ? 'تحديث الصفحة' : 'Refresh page'}</span></button>
       <button type="button" role="menuitem" className="dk-item" onClick={act(onPwd)}><span>{isAr ? 'تغيير كلمة المرور' : 'Change password'}</span></button>
       <div className="dk-sep-h" />
       {!confirmOut
@@ -920,6 +919,7 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
 
         <div className="dk-tools">
           {liveBoard && <button type="button" className="dk-tbtn" onClick={() => navigate('/board')}>{isAr ? 'شاشة العرض' : 'Live Board'}</button>}
+          <button type="button" className="dk-tbtn" onClick={() => onRefresh()} title={isAr ? 'يفحص النسخة الجديدة ويعيد التحميل' : 'Check for a new version and reload'}>{isAr ? 'تحديث' : 'Refresh'}</button>
           <NotificationBell profile={profile} />
           {!docked && (
             <div data-dk-pop style={{ position: 'relative' }}>
