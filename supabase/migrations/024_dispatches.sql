@@ -183,7 +183,7 @@ begin
   if p_kind not in ('found', 'lost') then raise exception 'bad kind'; end if;
   if p_from is null or p_to is null or p_from = p_to then raise exception 'bad route'; end if;
   if p_to2 is not null and (p_to2 = p_to or p_to2 = p_from) then raise exception 'bad second leg'; end if;
-  if not public.dsp_can_act(me.id, me.role, p_from) then raise exception 'not allowed for this station' using errcode = '42501'; end if;
+  if not public.dsp_can_act(me.id, me.role::text, p_from) then raise exception 'not allowed for this station' using errcode = '42501'; end if;
   if coalesce(trim(p_bus), '') = '' then raise exception 'bus number required'; end if;
   if jsonb_typeof(coalesce(p_items, '[]'::jsonb)) <> 'array' or jsonb_array_length(coalesce(p_items, '[]'::jsonb)) = 0 then raise exception 'items required'; end if;
 
@@ -247,7 +247,7 @@ begin
   if me.id is null then raise exception 'not allowed' using errcode = '28000'; end if;
   select * into lg from public.dispatch_legs where id = p_leg for update;
   if not found then raise exception 'leg not found'; end if;
-  if not public.dsp_can_act(me.id, me.role, lg.to_station_id) then raise exception 'not allowed for this station' using errcode = '42501'; end if;
+  if not public.dsp_can_act(me.id, me.role::text, lg.to_station_id) then raise exception 'not allowed for this station' using errcode = '42501'; end if;
   if lg.status <> 'sent' then raise exception 'leg is not in transit'; end if;
   select * into d from public.dispatches where id = lg.dispatch_id for update;
 
@@ -287,7 +287,7 @@ begin
   if coalesce(trim(p_bus), '') = '' then raise exception 'bus number required'; end if;
   select * into lg from public.dispatch_legs where id = p_leg for update;
   if not found then raise exception 'leg not found'; end if;
-  if not public.dsp_can_act(me.id, me.role, lg.from_station_id) then raise exception 'not allowed for this station' using errcode = '42501'; end if;
+  if not public.dsp_can_act(me.id, me.role::text, lg.from_station_id) then raise exception 'not allowed for this station' using errcode = '42501'; end if;
   if lg.status <> 'pending' then raise exception 'leg already sent'; end if;
   select * into prev from public.dispatch_legs where dispatch_id = lg.dispatch_id and leg_no = lg.leg_no - 1;
   if lg.leg_no > 1 and (prev.id is null or prev.status <> 'received') then raise exception 'previous leg not received yet'; end if;
@@ -314,7 +314,7 @@ declare
   nt public.dispatch_notes;
 begin
   me := public.dsp_user();
-  if me.id is null or not public.dsp_is_admin(me.role) then raise exception 'not allowed' using errcode = '42501'; end if;
+  if me.id is null or not public.dsp_is_admin(me.role::text) then raise exception 'not allowed' using errcode = '42501'; end if;
   if coalesce(trim(p_body), '') = '' then raise exception 'empty note'; end if;
   select * into d from public.dispatches where id = p_dispatch;
   if not found then raise exception 'dispatch not found'; end if;
@@ -376,7 +376,7 @@ begin
   if me.id is null then raise exception 'not allowed' using errcode = '28000'; end if;
   select * into r from public.dispatch_requests where id = p_id for update;
   if not found then raise exception 'request not found'; end if;
-  if not (public.dsp_can_act(me.id, me.role, r.holder_station_id) or r.requester_id = me.id) then raise exception 'not allowed' using errcode = '42501'; end if;
+  if not (public.dsp_can_act(me.id, me.role::text, r.holder_station_id) or r.requester_id = me.id) then raise exception 'not allowed' using errcode = '42501'; end if;
   if r.status <> 'open' then raise exception 'request already handled'; end if;
   update public.dispatch_requests set status = 'dismissed', handled_by_name = coalesce(me.full_name_ar, ''), handled_at = now() where id = r.id;
   if r.requester_id is not null and r.requester_id <> me.id then
