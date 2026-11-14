@@ -534,6 +534,8 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
   const [error,  setError]  = useState('')
   const docBoxRef = useRef(null)
   const [docMissing, setDocMissing] = useState(false)
+  const [refMissing, setRefMissing] = useState(false)
+  const refBoxRef = useRef(null)
   const [deficitAsk, setDeficitAsk] = useState(false)   // نافذة إقرار العجز قبل الحفظ
   const deficitOkRef = useRef(false)
   const [totalMissing, setTotalMissing] = useState(false)
@@ -547,6 +549,8 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
   // ورقة الموازنة: إلزامية على الموظف/المشرف إن وُجد مبلغ بغير النقد؛ الأدمن والمحاسب (مراجعة وتأكيد) مستثنيان
   const cardAmt = ['mada_amount', 'visa_amount', 'mastercard_amount', 'other_amount'].some(k => Number(form[k]) > 0)
   const docRequired = cardAmt && !isGeneralAdmin && !isAccountant && !confirmerOnly
+  // رقم الموازنة إلزامي على من يُدخل اليومية (الأدمن والمحاسب ومن يؤكد فقط مستثنون)
+  const refRequired = !isGeneralAdmin && !isAccountant && !confirmerOnly
   const totalActual = Math.round(Number(form.cash_amount)) + Math.round(Number(form.mada_amount)) +
     Math.round(Number(form.visa_amount)) + Math.round(Number(form.mastercard_amount)) + Math.round(Number(form.other_amount))
   const diff = totalActual - Math.round(Number(form.total_sales))
@@ -611,6 +615,12 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
     }
     if (!sale && (form.shift !== suggested.shift || form.sale_date !== suggested.date) && !shiftConfirmed) {
       setError(isAr ? 'الوردية أو التاريخ يختلف عن المتوقع حسب الوقت الحالي — أكّد صحتهما بالتأشير على خانة التأكيد' : 'The shift or date differs from the one expected for the current time — tick the confirmation box')
+      return
+    }
+    if (refRequired && !form.balance_refs.some(r => String(r || '').trim())) {
+      setRefMissing(true)
+      setError(isAr ? 'أدخل رقم الموازنة قبل الحفظ (إلزامي)' : 'Enter the budget reference before saving (required)')
+      try { refBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) } catch { /* بدون تمرير */ }
       return
     }
     // ورقة الموازنة إلزامية متى أُدخل مبلغ (أكبر من صفر) في مدى أو فيزا أو ماستركارد أو أخرى (الفاضي أو الصفر يمر بدونها)
@@ -1046,19 +1056,21 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
                     </button>
                   )}
                 </div>
-                <div>
+                <div ref={refBoxRef} className={refMissing && refRequired ? 'rounded-lg ring-2 ring-red-400 p-2' : ''}>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-[11px] font-bold text-gray-500">
                       {isAr ? 'رقم الموازنة' : 'Budget reference'}
-                      <span className="ms-1.5 text-gray-400 font-normal">({isAr ? 'اختياري' : 'optional'})</span>
+                      {refRequired
+                        ? <span className="ms-1.5 text-red-600 font-bold">({isAr ? 'إلزامي' : 'required'})</span>
+                        : <span className="ms-1.5 text-gray-400 font-normal">({isAr ? 'اختياري' : 'optional'})</span>}
                     </label>
                     <button type="button" onClick={addBalanceRef} className="text-xs text-emerald-700 font-bold hover:underline">+ {isAr ? 'إضافة رقم' : 'Add another'}</button>
                   </div>
                   {form.balance_refs.map((ref, i) => (
                     <div key={i} className="flex gap-2 mb-2 last:mb-0">
                       <input className={inputCls + ' font-mono'} dir="ltr" value={ref}
-                        onChange={e => setBalanceRef(i, toLatinDigits(e.target.value))}
-                        placeholder={isAr ? 'أدخل رقم الموازنة أو اتركه فارغاً' : 'Enter budget ref or leave blank'} />
+                        onChange={e => { setBalanceRef(i, toLatinDigits(e.target.value)); setRefMissing(false) }}
+                        placeholder={refRequired ? (isAr ? 'أدخل رقم الموازنة' : 'Enter the budget reference') : (isAr ? 'أدخل رقم الموازنة أو اتركه فارغاً' : 'Enter budget ref or leave blank')} />
                       {form.balance_refs.length > 1 && (
                         <button type="button" onClick={() => removeBalanceRef(i)} className="shrink-0 text-red-400 hover:text-red-600 px-2 text-lg">✕</button>
                       )}

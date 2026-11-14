@@ -53,6 +53,12 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled, require
     if (p && sessionPaths.current.has(p)) { sessionPaths.current.delete(p); await supabase.storage.from(BUCKET).remove([p]) }
   }
 
+  // أي صورة (رفع/لصق/سحب) تمرّ بمحرّر القص والتنظيف؛ الـPDF يُرفع مباشرة
+  function intake(file) {
+    if (!file) return
+    if (file.type.startsWith('image/')) setScanFile(file); else onPick(file)
+  }
+
   async function onPick(file, processed = false) {
     if (!file) return
     setBusy(true); setError('')
@@ -79,7 +85,7 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled, require
     if (disabled) return
     const onPaste = e => {
       const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith('image/') || x.type === 'application/pdf')
-      if (f) { e.preventDefault(); onPick(f) }
+      if (f) { e.preventDefault(); intake(f) }
     }
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
@@ -93,7 +99,7 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled, require
 
   return (
     <div onDragOver={e => { if (!disabled) { e.preventDefault(); setDragOver(true) } }} onDragLeave={() => setDragOver(false)}
-      onDrop={e => { e.preventDefault(); setDragOver(false); if (!disabled) { const f = e.dataTransfer?.files?.[0]; if (f) onPick(f) } }}
+      onDrop={e => { e.preventDefault(); setDragOver(false); if (!disabled) { const f = e.dataTransfer?.files?.[0]; if (f) intake(f) } }}
       className={dragOver ? 'rounded-lg ring-2 ring-emerald-400 bg-emerald-50/40' : ''}>
       <div className="flex items-center justify-between mb-1">
         <label className="text-[11px] font-bold text-gray-500">
@@ -128,7 +134,7 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled, require
         )}
       </div>
       <input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; onPick(f) }} />
+        onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; intake(f) }} />
       <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setScanFile(f) }} />
       <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">{isAr ? 'اضغط «تصوير الموازنة» ليفتح تطبيق كاميرا جوالك (أوضح تصوير)، ثم تُقصّ الورقة وتُحسَّن تلقائياً وتراجعها بضغطة. للموازنة متعددة الصفحات استخدم «إضافة صفحة». من الكمبيوتر: ارفع ملفاً أو اسحب الصورة هنا أو الصقها (Ctrl+V).' : 'Tap "Photograph" to open your phone camera; the sheet is auto-cropped and enhanced. Use "Add page" for multi-page sheets. On desktop: upload, drag here, or paste (Ctrl+V).'}</p>
