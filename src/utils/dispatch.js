@@ -40,7 +40,9 @@ export const stName = (map, id) => (id ? (map[id] || '—') : '—')
 // ترجمة أخطاء الخادم لرسائل مفهومة
 export function dispatchError(e) {
   const m = String(e?.message || e || '')
-  if (/could not find the function|does not exist|schema cache|relation .*dispatch/i.test(m)) return 'SETUP'
+  // «لم يُجهَّز» فقط عندما تكون دالة/جدول الإرساليات نفسه غير موجود؛ باقي الأخطاء تُعرض كما هي (لا نخفي السبب الحقيقي)
+  if (/could not find the function public\.dispatch|could not find the table 'public\.dispatch|relation "?(public\.)?dispatch\w*"? does not exist/i.test(m)) return 'SETUP'
+  if (typeof console !== 'undefined') console.error('[dispatch]', e)
   const map = [
     [/not allowed for this station/i, 'لا تملك صلاحية على هذه المحطة'],
     [/not allowed/i, 'غير مصرّح لك بهذا الإجراء'],
@@ -58,7 +60,7 @@ export function dispatchError(e) {
     [/empty note/i, 'اكتب الملاحظة أولاً'],
   ]
   for (const [re, t] of map) if (re.test(m)) return t
-  return m || 'حدث خطأ غير متوقع'
+  return (e?.details || e?.hint) ? `${m} (${[e.details, e.hint].filter(Boolean).join(' — ')})` : (m || 'حدث خطأ غير متوقع')
 }
 
 // حالة خط واحد للعرض: هل أنا أستطيع الاستلام/الإرسال
