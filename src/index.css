@@ -1268,3 +1268,31 @@ input.amt-input, input.amt-hero { background: transparent !important; border: 0 
 @keyframes dkPop { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes dkFade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .dk-menu, .dk-mega, .dk-pal, .dk-pal-bd { animation: none; } }
+
+/* قائمة الحساب المطوّرة + بطاقة المستخدم بأسفل القائمة الجانبية */
+.dk-menu { width: 300px; padding: 10px; }
+.dk-menu.side { top: auto; bottom: calc(100% + 8px); inset-inline-end: auto; inset-inline-start: 0; z-index: 60; animation-name: dkPopUp; }
+@keyframes dkPopUp { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: none; } }
+.dk-acc-head { display: flex; align-items: center; gap: 12px; padding: 10px 8px 14px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.dk-acc-head b { display: block; font-size: .92rem; color: var(--text-1); }
+.dk-acc-head small { display: block; font-size: .72rem; color: var(--accent); font-weight: 700; margin-top: 2px; }
+.dk-acc-head small.dim { color: var(--text-3); font-weight: 600; }
+.dk-menu-lbl { margin: 10px 8px 4px; font-size: .66rem; font-weight: 800; letter-spacing: .05em; color: var(--text-3); }
+.dk-row-t { margin: 4px 8px 6px; font-size: .82rem; font-weight: 700; color: var(--text-1); }
+.dk-seg { margin: 0 4px 6px; }
+.dk-seg button { height: 30px; }
+.dk-item { justify-content: space-between; height: 40px; padding: 0 10px; border-radius: 9px; }
+.dk-item em { font-style: normal; font-size: .76rem; font-weight: 700; color: var(--text-3); }
+.dk-item:hover, .dk-item:focus-visible { background: var(--surface-2, var(--surface)); outline: none; }
+.dk-item.danger { color: #dc2626; }
+.dk-item.danger:hover { background: rgba(220,38,38,.1); }
+.dk-sep-h { height: 1px; background: var(--border); margin: 8px 4px; }
+.dk-out-c { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; background: rgba(220,38,38,.08); font-size: .8rem; font-weight: 700; color: #dc2626; }
+.dk-out-c span { flex: 1; }
+.dk-out-c button { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border-2); background: var(--card); color: var(--text-2); font-family: inherit; font-size: .76rem; font-weight: 700; cursor: pointer; }
+.dk-out-c button.go { background: #dc2626; border-color: #dc2626; color: #fff; }
+.dk-acc-ver { margin: 10px 8px 2px; font-family: 'IBM Plex Mono', monospace; font-size: .62rem; color: var(--text-3); text-align: center; }
+.dk-side-me { position: relative; margin: 0 12px 8px; flex-shrink: 0; }
+.dk-me { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-1); font-family: inherit; cursor: pointer; text-align: start; transition: border-color .14s; }
+.dk-me:hover, .dk-me.on { border-color: var(--border-2); }
+.dk-me .dk-user-t b, .dk-me .dk-user-t small { max-width: 130px; }

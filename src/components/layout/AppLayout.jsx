@@ -10,6 +10,8 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { supabase } from '../../lib/supabase'
 import { ADMIN_ROLE_VALUES } from '../../utils/constants'
 import { buildStamp } from '../../utils/buildInfo'
+import { shiftsFromEnds } from '../../utils/stationShifts'
+import { shiftIdx } from '../../utils/shifts'
 import DailySurveyGate from '../survey/DailySurveyGate'
 import { startPresence, updatePresencePath, stopPresence } from '../../lib/presence'
 import { onPwaUpdateAvailable, applyPwaUpdate, hardRefresh, consumeUpdatedFlag } from '../../lib/pwaUpdate'
@@ -760,6 +762,59 @@ const SearchIco = ({ size = 15 }) => <svg width={size} height={size} viewBox="0 
 const CaretIco = ({ size = 12 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
 const isOnPath = (to, path) => (to === '/' ? path === '/' : path === to || path.startsWith(to + '/'))
 
+// قائمة الحساب (تُفتح من أسفل القائمة الجانبية، أو من الشريط العلوي عند الطيّ): بطاقة المستخدم + تفضيلات + حساب + خروج بتأكيد
+function AccountMenu({ side, isAr, profile, roleLabel, stationName, themeMode, onTheme, onLang, onRefresh, onPwd, onLogout, close }) {
+  const [shift, setShift] = useState('')
+  const [confirmOut, setConfirmOut] = useState(false)
+  const initials = String(profile?.full_name_ar || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  const themes = [['auto', isAr ? 'تلقائي' : 'Auto'], ['light', isAr ? 'نهاري' : 'Light'], ['dark', isAr ? 'ليلي' : 'Dark'], ['system', isAr ? 'الجهاز' : 'Device']]
+  useEffect(() => {
+    if (!profile?.station_id) return
+    let off = false
+    supabase.from('stations').select('shift_ends').eq('id', profile.station_id).maybeSingle().then(({ data }) => {
+      if (off) return
+      const list = shiftsFromEnds(data?.shift_ends ?? null)
+      const now = new Date(), c = list[shiftIdx(now.getHours() * 60 + now.getMinutes(), list)]
+      if (c) setShift(`${isAr ? c.ar : (c.en || c.ar)} · ${c.range}`)
+    }).catch(() => {})
+    return () => { off = true }
+  }, [profile?.station_id, isAr])
+  const act = fn => () => { close(); fn() }
+  return (
+    <div className={`dk-menu${side ? ' side' : ''}`} role="menu">
+      <div className="dk-acc-head">
+        <span className="dk-av big">{initials}</span>
+        <div style={{ minWidth: 0 }}>
+          <b>{profile?.full_name_ar}</b>
+          <small>{roleLabel}</small>
+          {stationName && <small className="dim">{stationName}</small>}
+          {shift && <small className="dim">{isAr ? 'وردية اليوم: ' : 'Shift: '}{shift}</small>}
+        </div>
+      </div>
+      <p className="dk-menu-lbl">{isAr ? 'تفضيلاتي' : 'Preferences'}</p>
+      <div className="dk-row-t">{isAr ? 'المظهر' : 'Appearance'}</div>
+      <div className="dk-seg" role="radiogroup">
+        {themes.map(([m, t]) => <button key={m} type="button" role="radio" aria-checked={themeMode === m} className={themeMode === m ? 'on' : ''} onClick={() => onTheme(m)}>{t}</button>)}
+      </div>
+      <button type="button" role="menuitem" className="dk-item" onClick={act(onLang)}><span>{isAr ? 'اللغة' : 'Language'}</span><em>{isAr ? 'English' : 'العربية'}</em></button>
+      <p className="dk-menu-lbl">{isAr ? 'الحساب' : 'Account'}</p>
+      <button type="button" role="menuitem" className="dk-item" onClick={act(onRefresh)}><span>{isAr ? 'تحديث الصفحة' : 'Refresh page'}</span></button>
+      <button type="button" role="menuitem" className="dk-item" onClick={act(onPwd)}><span>{isAr ? 'تغيير كلمة المرور' : 'Change password'}</span></button>
+      <div className="dk-sep-h" />
+      {!confirmOut
+        ? <button type="button" role="menuitem" className="dk-item danger" onClick={() => setConfirmOut(true)}><span>{isAr ? 'تسجيل الخروج' : 'Sign out'}</span></button>
+        : (
+          <div className="dk-out-c" role="alertdialog" aria-label={isAr ? 'تأكيد الخروج' : 'Confirm sign out'}>
+            <span>{isAr ? 'تأكيد تسجيل الخروج؟' : 'Sign out now?'}</span>
+            <button type="button" onClick={() => setConfirmOut(false)}>{isAr ? 'إلغاء' : 'Cancel'}</button>
+            <button type="button" className="go" onClick={act(onLogout)}>{isAr ? 'خروج' : 'Sign out'}</button>
+          </div>
+        )}
+      <p className="dk-acc-ver" dir="ltr">NW Station · v{__APP_VERSION__} · {buildStamp()}</p>
+    </div>
+  )
+}
+
 function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, themeMode, onTheme, onLang, onRefresh, onPwd, onLogout, liveBoard }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -809,6 +864,7 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
   const themes = [['auto', isAr ? 'تلقائي' : 'Auto'], ['light', isAr ? 'نهاري' : 'Light'], ['dark', isAr ? 'ليلي' : 'Dark'], ['system', isAr ? 'الجهاز' : 'Device']]
   const groupTitle = i => (i === 0 ? (isAr ? 'العمليات' : 'Operations') : (isAr ? 'الإدارة' : 'Administration'))
   const go = to => { setPop(false); setPal(false); navigate(to) }
+  const acctProps = { isAr, profile, roleLabel, stationName, themeMode, onTheme, onLang, onRefresh, onPwd, onLogout, close: () => setPop(false) }
 
   const side = overlay => (
     <aside className={`no-print dk-side${overlay ? ' overlay' : ''}`} dir={isAr ? 'rtl' : 'ltr'} aria-label={isAr ? 'الأقسام' : 'Sections'}>
@@ -828,6 +884,15 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
           </div>
         ))}
       </nav>
+      {!overlay && (
+        <div data-dk-pop className="dk-side-me">
+          <button type="button" className={`dk-me${pop ? ' on' : ''}`} onClick={() => setPop(p => !p)} aria-expanded={pop} aria-haspopup="menu">
+            <span className="dk-av">{initials}</span>
+            <span className="dk-user-t"><b>{profile?.full_name_ar}{hasStar && <span style={{ color: '#F59E0B', marginInlineStart: 4 }}>★</span>}</b><small>{roleLabel}</small></span>
+          </button>
+          {pop && <AccountMenu side {...acctProps} />}
+        </div>
+      )}
       {!overlay && <button type="button" className="dk-side-fold" onClick={toggleCollapse}>{isAr ? 'طيّ القائمة' : 'Collapse'}</button>}
     </aside>
   )
@@ -856,29 +921,16 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
         <div className="dk-tools">
           {liveBoard && <button type="button" className="dk-tbtn" onClick={() => navigate('/board')}>{isAr ? 'شاشة العرض' : 'Live Board'}</button>}
           <NotificationBell profile={profile} />
-          <div data-dk-pop style={{ position: 'relative' }}>
-            <button type="button" className={`dk-user${pop ? ' on' : ''}`} onClick={() => setPop(p => !p)} aria-expanded={pop} aria-haspopup="menu">
-              <span className="dk-av">{initials}</span>
-              <span className="dk-user-t"><b>{profile?.full_name_ar}{hasStar && <span style={{ color: '#F59E0B', marginInlineStart: 4 }}>★</span>}</b><small>{roleLabel}</small></span>
-              <CaretIco />
-            </button>
-            {pop && (
-              <div className="dk-menu" role="menu">
-                <div className="dk-menu-head">
-                  <span className="dk-av big">{initials}</span>
-                  <div style={{ minWidth: 0 }}><b>{profile?.full_name_ar}</b><small>{roleLabel}{stationName ? ` · ${stationName}` : ''}</small></div>
-                </div>
-                <div className="dk-menu-lbl">{isAr ? 'المظهر' : 'Appearance'}</div>
-                <div className="dk-seg" role="radiogroup">
-                  {themes.map(([m, t]) => <button key={m} type="button" role="radio" aria-checked={themeMode === m} className={themeMode === m ? 'on' : ''} onClick={() => onTheme(m)}>{t}</button>)}
-                </div>
-                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(false); onLang() }}><span className="dk-item-i">{isAr ? 'EN' : 'ع'}</span>{isAr ? 'English' : 'العربية'}</button>
-                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(false); onRefresh() }}><span className="dk-item-i"><Icon d={ICONS.refresh} size={14} /></span>{isAr ? 'تحديث الصفحة' : 'Refresh'}</button>
-                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(false); onPwd() }}><span className="dk-item-i"><Icon d={ICONS.key} size={14} /></span>{isAr ? 'تغيير كلمة المرور' : 'Change password'}</button>
-                <button type="button" role="menuitem" className="dk-item danger" onClick={() => { setPop(false); onLogout() }}><span className="dk-item-i"><Icon d={ICONS.logout} size={14} /></span>{isAr ? 'تسجيل الخروج' : 'Sign out'}</button>
-              </div>
-            )}
-          </div>
+          {!docked && (
+            <div data-dk-pop style={{ position: 'relative' }}>
+              <button type="button" className={`dk-user${pop ? ' on' : ''}`} onClick={() => setPop(p => !p)} aria-expanded={pop} aria-haspopup="menu">
+                <span className="dk-av">{initials}</span>
+                <span className="dk-user-t"><b>{profile?.full_name_ar}{hasStar && <span style={{ color: '#F59E0B', marginInlineStart: 4 }}>★</span>}</b><small>{roleLabel}</small></span>
+                <CaretIco />
+              </button>
+              {pop && <AccountMenu {...acctProps} />}
+            </div>
+          )}
         </div>
       </header>
 
