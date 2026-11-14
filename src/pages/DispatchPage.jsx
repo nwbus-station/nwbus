@@ -51,7 +51,7 @@ export default function DispatchPage() {
   const [params, setParams] = useSearchParams()
 
   const isThree = useMedia('(min-width: 1100px)')
-  const hasSide = useMedia('(min-width: 760px)')
+  const hasSide = useMedia('(min-width: 768px)')
   const layout = isThree ? 'three' : hasSide ? 'two' : 'one'
 
   const [stations, setStations] = useState([])
@@ -81,10 +81,22 @@ export default function DispatchPage() {
   const rootRef = useRef(null)
   const swipe = useRef(null)
   const [top, setTop] = useState(0)
+  const [navH, setNavH] = useState(0)
+  const [padB, setPadB] = useState(0)                 // الحشوة السفلية الفعلية للصفحة (تترك مكاناً لشريط التطبيق السفلي على الجوال)
 
   // ملء الشاشة: ارتفاع الواجهة = الشاشة − ما فوقها (شريط التطبيق)
   useLayoutEffect(() => {
-    const m = () => { const el = rootRef.current; if (el) setTop(Math.round(el.getBoundingClientRect().top + window.scrollY)) }
+    const m = () => {
+      const el = rootRef.current
+      if (!el) return
+      setTop(Math.round(el.getBoundingClientRect().top + window.scrollY))
+      const host = el.closest('main')
+      const pad = host ? Math.round(parseFloat(getComputedStyle(host).paddingBottom) || 0) : 0
+      const nv = document.querySelector('nav.bottom-nav')
+      const navH = nv && getComputedStyle(nv).display !== 'none' ? Math.round(nv.getBoundingClientRect().height) : 0
+      setPadB(pad)
+      setNavH(Math.min(pad, navH))
+    }
     m(); window.addEventListener('resize', m)
     return () => window.removeEventListener('resize', m)
   })
@@ -301,14 +313,12 @@ export default function DispatchPage() {
     )
   }
 
-  const H = `calc(100dvh - ${top}px)`
+  const H = `calc(100dvh - ${top}px - ${navH}px - env(safe-area-inset-bottom))`
+  const cancelPad = padB > navH ? -(padB - navH) : 0
   const css = `
-    html body nav.bottom-nav{display:none !important}
-    html body main{padding-bottom:0 !important}
     .dsp-scroll{scrollbar-width:thin;scrollbar-color:var(--border-2) transparent}
     .dsp-scroll::-webkit-scrollbar{width:9px}.dsp-scroll::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:99px;border:2px solid transparent;background-clip:padding-box}
     .dsp-nav:hover{background:var(--surface-2)}
-    .dsp-dock button:active{transform:scale(.96)}
   `
 
   /* ── الأجزاء ── */
@@ -419,36 +429,8 @@ export default function DispatchPage() {
     </section>
   )
 
-  // الدوك السفلي للجوال
-  const dockItems = [
-    { id: 'in', ico: 'in', label: t('الواردة', 'Incoming'), badge: counts.recv, badgeColor: '#d97706' },
-    { id: 'out', ico: 'out', label: t('الصادرة', 'Outgoing') },
-    { id: 'new', ico: 'plus', label: t('جديدة', 'New'), fab: true },
-    { id: 'requests', ico: 'requests', label: t('الطلبات', 'Requests'), badge: counts.requests, badgeColor: '#7c3aed' },
-    { id: 'menu', ico: 'menu', label: t('القائمة', 'Menu'), badge: counts.late, badgeColor: '#dc2626' },
-  ]
-  const dock = layout === 'one' && !(hasSel) ? (
-    <nav className="dsp-dock" aria-label={t('التنقل السريع', 'Quick navigation')} style={{ flexShrink: 0, display: 'flex', alignItems: 'stretch', justifyContent: 'space-around', background: 'var(--card)', borderTop: '1px solid var(--border)', boxShadow: '0 -4px 16px rgba(0,0,0,0.08)', padding: '6px 4px calc(6px + env(safe-area-inset-bottom))' }}>
-      {dockItems.map(it => it.fab ? (
-        <button key={it.id} type="button" onClick={newDispatch} aria-label={it.label} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <span style={{ width: 50, height: 50, marginTop: -22, borderRadius: '50%', background: '#2563eb', color: '#fff', display: 'grid', placeItems: 'center', boxShadow: '0 6px 18px rgba(37,99,235,0.45)', border: '4px solid var(--card)' }}><Ico n="plus" s={24} /></span>
-          <span style={{ fontSize: '0.64rem', fontWeight: 800, color: '#2563eb' }}>{it.label}</span>
-        </button>
-      ) : (
-        <button key={it.id} type="button" onClick={() => (it.id === 'menu' ? setDrawer(true) : goSection(it.id))} aria-label={it.label} aria-current={section === it.id ? 'page' : undefined}
-          style={{ position: 'relative', flex: 1, minHeight: 52, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, color: section === it.id ? 'var(--accent)' : 'var(--text-3)' }}>
-          <span style={{ position: 'relative', display: 'inline-flex' }}>
-            <Ico n={it.ico} s={22} />
-            {it.badge > 0 && <span style={{ position: 'absolute', top: -6, insetInlineEnd: -10, minWidth: 17, height: 17, padding: '0 4px', borderRadius: 99, background: it.badgeColor, color: '#fff', fontSize: '0.62rem', fontWeight: 900, display: 'grid', placeItems: 'center', fontFamily: MONO }}>{it.badge}</span>}
-          </span>
-          <span style={{ fontSize: '0.64rem', fontWeight: section === it.id ? 900 : 700 }}>{it.label}</span>
-        </button>
-      ))}
-    </nav>
-  ) : null
-
   return (
-    <div ref={rootRef} style={{ height: H, display: 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden' }} dir={isAr ? 'rtl' : 'ltr'}
+    <div ref={rootRef} style={{ height: H, marginBottom: cancelPad, display: 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden' }} dir={isAr ? 'rtl' : 'ltr'}
       onTouchStart={e => { const x = e.touches[0].clientX; const edge = isAr ? window.innerWidth - x : x; swipe.current = edge < 26 ? { x, y: e.touches[0].clientY } : null }}
       onTouchEnd={e => {
         const st0 = swipe.current; swipe.current = null
@@ -462,7 +444,6 @@ export default function DispatchPage() {
         {layout !== 'one' && sidebarEl(false)}
         {layout === 'three' ? <>{listPane}{detailPane}</> : (hasSel ? detailPane : listPane)}
       </div>
-      {dock}
 
       {layout === 'one' && drawer && (
         <div onClick={e => { if (e.target === e.currentTarget) setDrawer(false) }} style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(8,12,20,0.52)', backdropFilter: 'blur(3px)', animation: 'dspFade .16s ease-out' }}>
