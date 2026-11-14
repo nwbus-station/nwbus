@@ -21,8 +21,8 @@ export const Meta = ({ label, children }) => (
 )
 const mono = { fontFamily: MONO }
 
-/* ═════════════ بطاقة إرسالية ═════════════ */
-export function DispatchCard({ d, names, isAr, open, flashing, setRef, onToggle, stationSet, myIds, isAdmin, canDelete, canReject, busy, onReceive, onReject, onSend, onNote, onPrint, onDelete, onEscalate }) {
+/* ═════════════ لوحة تفاصيل إرسالية (تُعرض بجانب القائمة) ═════════════ */
+export function DispatchDetail({ d, names, isAr, flashing, setRef, stationSet, myIds, isAdmin, canDelete, canReject, busy, onReceive, onReject, onSend, onNote, onPrint, onDelete, onEscalate }) {
   const t = (a, e) => (isAr ? a : e)
   const legs = sortLegs(d)
   const k = DISPATCH_KINDS[d.kind] || DISPATCH_KINDS.found
@@ -45,8 +45,8 @@ export function DispatchCard({ d, names, isAr, open, flashing, setRef, onToggle,
   const lastWho = last ? (last.status === 'received' ? last.received_by_name : last.sent_by_name) : d.created_by_name
 
   return (
-    <article ref={setRef} style={{ ...card, overflow: 'hidden', borderInlineStart: `4px solid ${esc?.color || st.color}`, boxShadow: flashing ? '0 0 0 3px rgba(37,99,235,0.45)' : undefined, transition: 'box-shadow .4s' }}>
-      <button type="button" onClick={onToggle} aria-expanded={open} style={{ width: '100%', textAlign: 'start', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: '14px 16px', display: 'block', color: 'inherit' }}>
+    <article ref={setRef} style={{ background: 'var(--card)', borderInlineStart: `4px solid ${esc?.color || st.color}`, boxShadow: flashing ? 'inset 0 0 0 3px rgba(37,99,235,0.45)' : undefined, transition: 'box-shadow .4s', minHeight: '100%' }}>
+      <div style={{ padding: '18px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span dir="ltr" style={{ ...mono, fontWeight: 900, fontSize: '1.02rem', color: 'var(--text-1)', letterSpacing: '.03em' }}>{d.ticket_no}</span>
           {dirTxt && <Badge m={{ color: dirColor }} solid>{dirTxt}</Badge>}
@@ -75,10 +75,10 @@ export function DispatchCard({ d, names, isAr, open, flashing, setRef, onToggle,
           {!sentLeg && last && <span>{t('آخر حركة', 'Last')}: <b style={{ color: 'var(--text-2)' }}>{lastWho || '—'}</b> <span dir="ltr" style={mono}>{fmtTime(lastWhen)}</span></span>}
           {(d.notes || []).length > 0 && <span style={{ color: '#d97706', fontWeight: 800 }}>{t(`${d.notes.length} ملاحظة`, `${d.notes.length} note(s)`)}</span>}
         </div>
-      </button>
+      </div>
 
-      {open && (
-        <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {(
+        <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface)', padding: '16px 20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {d.escalation_reason && d.escalation_level > 0 && (
             <div style={{ padding: '10px 12px', borderRadius: 10, background: ESCALATION[d.escalation_level].bg, color: ESCALATION[d.escalation_level].color, fontSize: '0.8rem', fontWeight: 800 }}>
               {t('سبب التصعيد', 'Escalation reason')}: {d.escalation_reason} <span dir="ltr" style={{ ...mono, fontWeight: 600, opacity: 0.8 }}> · {fmtStamp(d.escalated_at)}</span>
