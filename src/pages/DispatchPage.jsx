@@ -1,4 +1,4 @@
-// الإرساليات والشحن: قسم مستقل — الواردة للمحطة، الصادرة منها، استلام (يدوي أو بمسح QR)، تصعيد، وطلبات الإرسال من الموجودات.
+// الإرساليات والشحن: قسم مستقل — الواردة للمحطة، الصادرة منها، استلام (من البطاقة أو برقم التذكرة)، تصعيد، وطلبات الإرسال من الموجودات.
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -8,13 +8,13 @@ import SelectField from '../components/shared/SelectField'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import DispatchForm from '../components/dispatch/DispatchForm'
 import { DispatchCard, RequestCard, btn } from '../components/dispatch/DispatchCards'
-import { ReceiveDialog, EscalateDialog, QrScanDialog } from '../components/dispatch/DispatchDialogs'
+import { ReceiveDialog, EscalateDialog, TicketLookupDialog } from '../components/dispatch/DispatchDialogs'
 import { Banner, card, fieldStyle, MONO } from '../components/lostFound/ui'
 import { DISPATCH_KINDS, dispatchError } from '../utils/dispatch'
 import { printDispatchSlip } from '../utils/dispatchSlip'
 
 const SELECT_D = '*, legs:dispatch_legs(*), items:dispatch_items(*), notes:dispatch_notes(*)'
-const QrIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M21 14v.01M14 21h3M21 17v4" /></svg>
+const TicketIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9a2 2 0 002-2V5h12v2a2 2 0 002 2v6a2 2 0 00-2 2v2H6v-2a2 2 0 00-2-2z" /><path d="M9 10h6M9 14h4" /></svg>
 
 export default function DispatchPage() {
   const { i18n } = useTranslation()
@@ -45,7 +45,7 @@ export default function DispatchPage() {
   const [confirm, setConfirm] = useState(null)
   const [recvDlg, setRecvDlg] = useState(null)      // { d, leg }
   const [escDlg, setEscDlg] = useState(null)        // d
-  const [scanOpen, setScanOpen] = useState(false)
+  const [lookupOpen, setLookupOpen] = useState(false)
   const refs = useRef({})
   const pending = useRef(null)                      // رابط/رمز بانتظار تحميل البيانات
 
@@ -251,7 +251,7 @@ export default function DispatchPage() {
             </SelectField>
           </div>
         )}
-        <button type="button" onClick={() => setScanOpen(true)} style={{ ...btn('ghost'), display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontSize: '0.84rem' }}><QrIcon />{t('استلام بمسح QR', 'Scan to receive')}</button>
+        <button type="button" onClick={() => setLookupOpen(true)} style={{ ...btn('ghost'), display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontSize: '0.84rem' }}><TicketIcon />{t('استلام برقم التذكرة', 'Receive by ticket')}</button>
         <button type="button" onClick={() => { setFormInit(null); setView('form') }} style={{ ...btn('primary'), padding: '10px 20px', fontSize: '0.86rem' }}>+ {t('إرسالية / شحنة جديدة', 'New dispatch / shipment')}</button>
       </div>
 
@@ -326,7 +326,7 @@ export default function DispatchPage() {
 
       {recvDlg && <ReceiveDialog d={recvDlg.d} leg={recvDlg.leg} names={names} isAr={isAr} busy={busy === 'r' + recvDlg.leg.id} onConfirm={doReceive} onClose={() => setRecvDlg(null)} />}
       {escDlg && <EscalateDialog d={escDlg} isAr={isAr} busy={busy === 'e' + escDlg.id} onConfirm={doEscalate} onClose={() => setEscDlg(null)} />}
-      {scanOpen && <QrScanDialog isAr={isAr} onClose={() => setScanOpen(false)} onCode={code => { setScanOpen(false); focusDispatch(code, true) }} />}
+      {lookupOpen && <TicketLookupDialog isAr={isAr} onClose={() => setLookupOpen(false)} onCode={code => { setLookupOpen(false); focusDispatch(code, true) }} />}
       {confirm && (
         <ConfirmDialog
           message={t(`حذف الإرسالية ${confirm.d.ticket_no} نهائياً مع خطوطها وأغراضها وملاحظاتها؟ لا يمكن التراجع عن هذا الإجراء.`, `Permanently delete dispatch ${confirm.d.ticket_no}? This cannot be undone.`)}

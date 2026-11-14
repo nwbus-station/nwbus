@@ -1,6 +1,5 @@
-// نوافذ الإرساليات: استلام (سليمة/بملاحظة)، تصعيد يدوي، ومسح QR بالكاميرا
-import { useState, useEffect, useRef } from 'react'
-import jsQR from 'jsqr'
+// نوافذ الإرساليات: استلام (سليمة/بملاحظة)، تصعيد يدوي، وفتح إرسالية برقم التذكرة
+import { useState, useEffect } from 'react'
 import { fieldStyle, MONO } from '../lostFound/ui'
 import { btn } from './DispatchCards'
 import { parseDispatchCode } from '../../utils/dispatch'
@@ -79,71 +78,29 @@ export function EscalateDialog({ d, isAr = true, busy, onConfirm, onClose }) {
   )
 }
 
-/* ── ماسح QR: كاميرا + إدخال رقم التذكرة يدوياً ── */
-export function QrScanDialog({ isAr = true, onCode, onClose }) {
+/* ── فتح إرسالية برقم التذكرة (بدون كاميرا): للكتابة اليدوية أو جهاز قارئ باركود/QR متصل بالكمبيوتر (يكتب الرقم كلوحة مفاتيح) ── */
+export function TicketLookupDialog({ isAr = true, onCode, onClose }) {
   const t = (a, e) => (isAr ? a : e)
-  const videoRef = useRef(null)
-  const canvasRef = useRef(null)
-  const doneRef = useRef(false)
-  const [err, setErr] = useState('')
-  const [manual, setManual] = useState('')
+  const [val, setVal] = useState('')
   const [bad, setBad] = useState('')
-
-  useEffect(() => {
-    let stream, timer, off = false
-    ;(async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false })
-        if (off) { stream.getTracks().forEach(x => x.stop()); return }
-        const v = videoRef.current
-        v.srcObject = stream
-        await v.play()
-        const c = canvasRef.current, ctx = c.getContext('2d', { willReadFrequently: true })
-        timer = setInterval(() => {
-          if (doneRef.current || v.videoWidth === 0) return
-          const w = 480, h = Math.round((v.videoHeight / v.videoWidth) * w)
-          c.width = w; c.height = h
-          ctx.drawImage(v, 0, 0, w, h)
-          const img = ctx.getImageData(0, 0, w, h)
-          const q = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' })
-          if (q?.data) {
-            const p = parseDispatchCode(q.data)
-            if (p) { doneRef.current = true; try { navigator.vibrate?.(60) } catch { /* بدون اهتزاز */ } onCode(p) }
-            else setBad(t('هذا الرمز ليس تذكرة إرسالية', 'This is not a dispatch ticket'))
-          }
-        }, 160)
-      } catch (e) {
-        setErr(e?.name === 'NotAllowedError' ? t('لم يُسمح باستخدام الكاميرا. اسمح بها من إعدادات المتصفح أو أدخل رقم التذكرة يدوياً.', 'Camera permission denied. Allow it in the browser or enter the ticket manually.') : t('تعذّر تشغيل الكاميرا على هذا الجهاز. أدخل رقم التذكرة يدوياً.', 'Could not start the camera. Enter the ticket manually.'))
-      }
-    })()
-    return () => { off = true; clearInterval(timer); stream?.getTracks().forEach(x => x.stop()) }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function submitManual(e) {
+  function submit(e) {
     e.preventDefault()
-    const p = parseDispatchCode(manual)
-    if (!p) { setBad(t('اكتب رقم التذكرة مثل NWD-000123', 'Enter a ticket number like NWD-000123')); return }
-    doneRef.current = true
+    const p = parseDispatchCode(val)
+    if (!p || !p.ticket) { setBad(t('اكتب رقم التذكرة مثل NWD-000123', 'Enter a ticket number like NWD-000123')); return }
     onCode(p)
   }
-
   return (
-    <Shell title={t('استلام بمسح QR', 'Receive by scanning QR')} sub={t('وجّه الكاميرا نحو رمز التذكرة المطبوعة على الإرسالية', 'Point the camera at the QR on the dispatch ticket')} onClose={onClose} wide>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {!err ? (
-          <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', background: '#000', aspectRatio: '4 / 3' }}>
-            <video ref={videoRef} playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-            <canvas ref={canvasRef} style={{ display: 'none' }} />
-            <div aria-hidden="true" style={{ position: 'absolute', inset: '14%', border: '3px solid rgba(255,255,255,0.9)', borderRadius: 18, boxShadow: '0 0 0 999px rgba(0,0,0,0.35)' }} />
-          </div>
-        ) : <div role="alert" style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(220,38,38,0.1)', color: '#dc2626', fontSize: '0.82rem', fontWeight: 700, lineHeight: 1.7 }}>{err}</div>}
+    <Shell title={t('استلام برقم التذكرة', 'Receive by ticket number')} onClose={onClose}
+      sub={t('اكتب رقم التذكرة المطبوع على الإرسالية، أو امسحه بجهاز قارئ باركود/QR متصل بالجهاز. لا تُستخدم الكاميرا ولا يُعرض أي شيء قبل التحقق من صلاحيتك.', 'Type the ticket number printed on the dispatch, or scan it with a connected barcode reader. No camera is used.')}>
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <input autoFocus value={val} onChange={e => { setVal(e.target.value); setBad('') }} dir="ltr" placeholder="NWD-000123" aria-label={t('رقم التذكرة', 'Ticket number')}
+          style={{ ...fieldStyle, fontFamily: MONO, fontWeight: 900, fontSize: '1.15rem', letterSpacing: '.05em', textAlign: 'center', padding: '14px 12px' }} />
         {bad && <div role="alert" style={{ fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>{bad}</div>}
-        <form onSubmit={submitManual} style={{ display: 'flex', gap: 8 }}>
-          <input value={manual} onChange={e => { setManual(e.target.value); setBad('') }} dir="ltr" placeholder="NWD-000123" aria-label={t('رقم التذكرة', 'Ticket number')} style={{ ...fieldStyle, fontFamily: MONO, fontWeight: 800, flex: 1 }} />
-          <button type="submit" style={btn('primary')}>{t('فتح', 'Open')}</button>
-        </form>
-        <button type="button" onClick={onClose} style={{ ...btn('ghost'), alignSelf: 'flex-end' }}>{t('إغلاق', 'Close')}</button>
-      </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
+          <button type="submit" style={{ ...btn('primary'), padding: '10px 26px' }}>{t('فتح الإرسالية', 'Open')}</button>
+        </div>
+      </form>
     </Shell>
   )
 }

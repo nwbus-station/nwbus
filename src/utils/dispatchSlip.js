@@ -7,8 +7,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 export async function printDispatchSlip(d, names) {
   const w = window.open('', '_blank')
   if (!w) return false
-  // الرابط يفتح الإرسالية مباشرة (مع تفعيل الاستلام) لمن يمسحه بالكاميرا وهو مسجّل الدخول؛ والتطبيق يقرأه من الماسح الداخلي أيضاً
-  const qr = await QRCode.toDataURL(`${window.location.origin}/dispatches?d=${d.id}&r=1`, { width: 420, margin: 1, errorCorrectionLevel: 'M' })
+  // الخصوصية: الـQR يحمل رقم التذكرة فقط (بدون رابط ولا بيانات)؛ لا يعرض شيئاً لمن يمسحه خارج النظام
+  const qr = await QRCode.toDataURL(d.ticket_no, { width: 420, margin: 1, errorCorrectionLevel: 'M' })
   const legs = sortLegs(d)
   const legHtml = legs.map(l => `
     <div class="leg">
