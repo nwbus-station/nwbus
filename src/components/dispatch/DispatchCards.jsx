@@ -1,7 +1,7 @@
 // بطاقات الإرساليات وطلبات الإرسال (مشتركة بين الواردة والصادرة والكل)
 import { useState } from 'react'
 import { card, fieldStyle, MONO } from '../lostFound/ui'
-import { DISPATCH_KINDS, DISPATCH_STATUS, LEG_STATUS, REQUEST_STATUS, ESCALATION, fmtDate, fmtTime, fmtStamp, sortLegs, ageLabel, toLatinDigits } from '../../utils/dispatch'
+import { DISPATCH_KINDS, DISPATCH_STATUS, LEG_STATUS, REQUEST_STATUS, ESCALATION, fmtDate, fmtTime, fmtStamp, sortLegs, ageLabel, toLatinDigits, isActiveDispatch } from '../../utils/dispatch'
 
 export const btn = (kind = 'ghost', extra = {}) => ({
   padding: '8px 16px', borderRadius: 9, fontFamily: 'inherit', fontWeight: 800, fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap',
@@ -22,12 +22,12 @@ export const Meta = ({ label, children }) => (
 const mono = { fontFamily: MONO }
 
 /* ═════════════ بطاقة إرسالية ═════════════ */
-export function DispatchCard({ d, names, isAr, open, flashing, setRef, onToggle, stationSet, myIds, isAdmin, canDelete, busy, onReceive, onSend, onNote, onPrint, onDelete, onEscalate }) {
+export function DispatchCard({ d, names, isAr, open, flashing, setRef, onToggle, stationSet, myIds, isAdmin, canDelete, canReject, busy, onReceive, onReject, onSend, onNote, onPrint, onDelete, onEscalate }) {
   const t = (a, e) => (isAr ? a : e)
   const legs = sortLegs(d)
   const k = DISPATCH_KINDS[d.kind] || DISPATCH_KINDS.found
   const st = DISPATCH_STATUS[d.status] || DISPATCH_STATUS.in_transit
-  const esc = d.status !== 'received' || d.escalation_reason ? ESCALATION[d.escalation_level] : null
+  const esc = isActiveDispatch(d) ? ESCALATION[d.escalation_level] : (d.status === 'received' && d.escalation_reason ? ESCALATION[d.escalation_level] : null)
   const [bus2, setBus2] = useState('')
   const [note, setNote] = useState('')
   const canAct = id => isAdmin || myIds.has(id)
@@ -106,7 +106,7 @@ export function DispatchCard({ d, names, isAr, open, flashing, setRef, onToggle,
                     <span style={{ fontWeight: 900, fontSize: '0.92rem', color: 'var(--text-1)' }}>{names[l.from_station_id] || '—'} <span style={{ color: 'var(--text-3)' }}>{isAr ? '←' : '→'}</span> {names[l.to_station_id] || '—'}</span>
                     <span style={{ marginInlineStart: 'auto', fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: `${lm.color}22`, color: lm.color }}>{isAr ? lm.ar : lm.en}</span>
                   </div>
-                  {l.status !== 'pending' && (
+                  {l.status !== 'pending' && l.sent_at && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginTop: 10 }}>
                       <Meta label={t('من أرسل', 'Sent by')}>{l.sent_by_name || '—'}</Meta>
                       <Meta label={t('رقم الحافلة', 'Bus')}><span dir="ltr" style={mono}>{l.bus_number || '—'}</span></Meta>
@@ -122,7 +122,16 @@ export function DispatchCard({ d, names, isAr, open, flashing, setRef, onToggle,
                   )}
                   {l.status === 'pending' && !canSendThis && <div style={{ marginTop: 8, fontSize: '0.74rem', color: 'var(--text-3)' }}>{prev?.status === 'received' ? t('بانتظار إرسالها من محطة التحويل', 'Waiting to be forwarded by the transfer station') : t('تبدأ بعد استلام الخط الأول', 'Starts after the first leg is received')}</div>}
                   {canRecvThis && (
-                    <button type="button" disabled={busy === 'r' + l.id} onClick={() => onReceive(l)} style={{ ...btn('ok'), marginTop: 12, padding: '10px 22px', fontSize: '0.84rem' }}>{t('استلام الإرسالية', 'Receive')}</button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                      <button type="button" disabled={busy === 'r' + l.id} onClick={() => onReceive(l)} style={{ ...btn('ok'), padding: '10px 22px', fontSize: '0.84rem' }}>{t('استلام الإرسالية', 'Receive')}</button>
+                      {canReject && <button type="button" onClick={() => onReject(l)} style={{ ...btn('danger'), padding: '10px 22px', fontSize: '0.84rem' }}>{t('رفض', 'Reject')}</button>}
+                    </div>
+                  )}
+                  {l.status === 'rejected' && (
+                    <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(220,38,38,0.1)', color: '#dc2626', fontSize: '0.8rem', fontWeight: 700, lineHeight: 1.7 }}>
+                      {l.rejected_by_name ? <>{t('رفضها', 'Rejected by')}: <b>{l.rejected_by_name}</b> · <span dir="ltr" style={mono}>{fmtStamp(l.rejected_at)}</span><br /></> : null}
+                      {t('السبب', 'Reason')}: {l.reject_reason || '—'}
+                    </div>
                   )}
                   {canSendThis && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 12 }}>
@@ -175,7 +184,7 @@ export function DispatchCard({ d, names, isAr, open, flashing, setRef, onToggle,
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
             <button type="button" onClick={onPrint} style={btn('ghost')}>{t('طباعة التذكرة', 'Print ticket')}</button>
-            {d.status !== 'received' && legs.some(l => canAct(l.from_station_id) || canAct(l.to_station_id)) && (
+            {isActiveDispatch(d) && legs.some(l => canAct(l.from_station_id) || canAct(l.to_station_id)) && (
               <button type="button" onClick={() => onEscalate(d)} style={btn('warn')}>{t('تصعيد', 'Escalate')}</button>
             )}
             {canDelete && <button type="button" onClick={onDelete} disabled={busy === 'd' + d.id} style={{ ...btn('danger'), marginInlineStart: 'auto' }}>{t('حذف', 'Delete')}</button>}

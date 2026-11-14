@@ -8,9 +8,9 @@ import SelectField from '../components/shared/SelectField'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import DispatchForm from '../components/dispatch/DispatchForm'
 import { DispatchCard, RequestCard, btn } from '../components/dispatch/DispatchCards'
-import { ReceiveDialog, EscalateDialog, TicketLookupDialog } from '../components/dispatch/DispatchDialogs'
+import { ReceiveDialog, RejectDialog, EscalateDialog, TicketLookupDialog } from '../components/dispatch/DispatchDialogs'
 import { Banner, card, fieldStyle, MONO } from '../components/lostFound/ui'
-import { DISPATCH_KINDS, dispatchError } from '../utils/dispatch'
+import { DISPATCH_KINDS, dispatchError, isActiveDispatch } from '../utils/dispatch'
 import { printDispatchSlip } from '../utils/dispatchSlip'
 
 const SELECT_D = '*, legs:dispatch_legs(*), items:dispatch_items(*), notes:dispatch_notes(*)'
@@ -23,6 +23,8 @@ export default function DispatchPage() {
   const { profile, isGeneralAdmin, workStations } = useAuth()
   const isAdmin = !!isGeneralAdmin
   const isGeneral = profile?.role === 'general_admin'
+  // الرفض للمشرفين (محطة/وردية/منطقة) والأدمن فقط — الموظف العادي يستلم ولا يرفض (والخادم يتحقق أيضاً)
+  const canReject = isAdmin || ['station_admin', 'shift_supervisor', 'area_supervisor'].includes(profile?.role) || profile?.display_role === 'area_supervisor'
   const [params, setParams] = useSearchParams()
 
   const [stations, setStations] = useState([])
@@ -45,6 +47,7 @@ export default function DispatchPage() {
   const [confirm, setConfirm] = useState(null)
   const [recvDlg, setRecvDlg] = useState(null)      // { d, leg }
   const [escDlg, setEscDlg] = useState(null)        // d
+  const [rejDlg, setRejDlg] = useState(null)        // { d, leg }
   const [lookupOpen, setLookupOpen] = useState(false)
   const refs = useRef({})
   const pending = useRef(null)                      // رابط/رمز بانتظار تحميل البيانات
@@ -96,7 +99,7 @@ export default function DispatchPage() {
   const inScope = d => legsOf(d).some(l => scopeSet.has(l.to_station_id))
   const outScope = d => legsOf(d).some(l => scopeSet.has(l.from_station_id))
   const touchScope = d => inScope(d) || outScope(d)
-  const isLate = d => d.status !== 'received' && d.escalation_level > 0
+  const isLate = d => isActiveDispatch(d) && d.escalation_level > 0
 
   /* ── فتح إرسالية من رابط/QR/تذكرة ── */
   const focusDispatch = useCallback(async (code, auto) => {
@@ -148,6 +151,11 @@ export default function DispatchPage() {
   const sendLeg = (leg, bus) => run('s' + leg.id, () => supabase.rpc('dispatch_leg_send', { p_leg: leg.id, p_bus: bus }), t('تم إرسال الخط الثاني وإشعار المحطة المستقبِلة', 'Second leg sent'))
   const addNote = (d, body) => run('n' + d.id, () => supabase.rpc('dispatch_add_note', { p_dispatch: d.id, p_body: body }), t('تمت إضافة الملاحظة', 'Note added'))
   const dismissReq = (r, reason) => run('q' + r.id, () => supabase.rpc('dispatch_request_dismiss', { p_id: r.id, p_reason: reason || null }), t('تم إغلاق الطلب', 'Request closed'))
+  async function doReject(reason) {
+    const { leg } = rejDlg
+    const ok = await run('j' + leg.id, () => supabase.rpc('dispatch_leg_reject', { p_leg: leg.id, p_reason: reason }), t('تم رفض الإرسالية وإشعار المحطة المرسِلة والإدارة', 'Rejected; the sending station and management were notified'))
+    if (ok) setRejDlg(null)
+  }
   async function doEscalate(reason) {
     const ok = await run('e' + escDlg.id, () => supabase.rpc('dispatch_escalate_manual', { p_dispatch: escDlg.id, p_reason: reason }), t('تم التصعيد وإشعار الإدارة والمشرفين', 'Escalated; management was notified'))
     if (ok) setEscDlg(null)
@@ -183,7 +191,8 @@ export default function DispatchPage() {
       if (chip === 'recv' && !needsRecv(d)) return false
       if (chip === 'send' && !needsSend(d)) return false
       if (chip === 'late' && !isLate(d)) return false
-      if (chip === 'urgent' && !(d.priority === 'urgent' && d.status !== 'received')) return false
+      if (chip === 'urgent' && !(d.priority === 'urgent' && isActiveDispatch(d))) return false
+      if (chip === 'rejected' && d.status !== 'rejected') return false
       if (chip === 'done' && d.status !== 'received') return false
       if (fKind && d.kind !== fKind) return false
       if (s) {
@@ -193,7 +202,7 @@ export default function DispatchPage() {
       return true
     })
     // الأهم أولاً: بانتظار الاستلام/الإرسال، ثم المتأخرة، ثم الأحدث
-    const w = d => (needsRecv(d) ? 0 : needsSend(d) ? 1 : isLate(d) ? 2 : d.status !== 'received' ? 3 : 4)
+    const w = d => (needsRecv(d) ? 0 : needsSend(d) ? 1 : isLate(d) ? 2 : isActiveDispatch(d) ? 3 : 4)
     return out.sort((a, b) => w(a) - w(b) || new Date(b.created_at) - new Date(a.created_at))
   }, [baseList, chip, fKind, q, names, scopeSet]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -201,7 +210,7 @@ export default function DispatchPage() {
     const sc = rows.filter(touchScope)
     return {
       recv: sc.filter(needsRecv).length,
-      out: sc.filter(d => outScope(d) && d.status !== 'received').length,
+      out: sc.filter(d => outScope(d) && isActiveDispatch(d)).length,
       send: sc.filter(needsSend).length,
       late: sc.filter(isLate).length,
       req: reqs.filter(r => r.status === 'open' && (isAdmin ? (!stationSel || r.holder_station_id === stationSel) : myIds.has(r.holder_station_id))).length,
@@ -232,7 +241,7 @@ export default function DispatchPage() {
     { key: 'late', label: t('متأخرة / مُصعّدة', 'Overdue / escalated'), val: kpi.late, tone: '#dc2626', go: () => { setTab(isAdmin ? 'all' : 'in'); setChip('late') } },
     { key: 'req', label: t('طلبات إرسال مفتوحة', 'Open requests'), val: kpi.req, tone: '#7c3aed', go: () => setTab('requests') },
   ]
-  const chips = [['', t('الكل', 'All')], ['recv', t('بانتظار الاستلام', 'To receive')], ['send', t('بانتظار الإرسال', 'To forward')], ['late', t('متأخرة', 'Overdue')], ['urgent', t('عاجلة', 'Urgent')], ['done', t('مستلمة', 'Received')]]
+  const chips = [['', t('الكل', 'All')], ['recv', t('بانتظار الاستلام', 'To receive')], ['send', t('بانتظار الإرسال', 'To forward')], ['late', t('متأخرة', 'Overdue')], ['urgent', t('عاجلة', 'Urgent')], ['done', t('مستلمة', 'Received')], ['rejected', t('مرفوضة', 'Rejected')]]
   const stationOptions = isAdmin ? stations : myStations
 
   return (
@@ -305,7 +314,7 @@ export default function DispatchPage() {
           ) : visible.map(d => (
             <DispatchCard key={d.id} d={d} names={names} isAr={isAr} open={openId === d.id} flashing={flashId === d.id} setRef={el => { refs.current[d.id] = el }}
               onToggle={() => setOpenId(o => (o === d.id ? null : d.id))} stationSet={scopeSet} myIds={myIds} isAdmin={isAdmin} canDelete={isGeneral} busy={busy}
-              onReceive={leg => setRecvDlg({ d, leg })} onSend={sendLeg} onNote={addNote} onPrint={() => printOne(d)} onDelete={() => setConfirm({ d })} onEscalate={setEscDlg} />
+              onReceive={leg => setRecvDlg({ d, leg })} canReject={canReject} onReject={leg => setRejDlg({ d, leg })} onSend={sendLeg} onNote={addNote} onPrint={() => printOne(d)} onDelete={() => setConfirm({ d })} onEscalate={setEscDlg} />
           ))}
           {shown.length > visible.length && <button type="button" onClick={() => setLimit(l => l + 40)} style={{ ...btn('ghost'), alignSelf: 'center', padding: '10px 28px' }}>{t(`عرض المزيد (${shown.length - visible.length})`, `Show more (${shown.length - visible.length})`)}</button>}
         </>
@@ -325,6 +334,7 @@ export default function DispatchPage() {
       )}
 
       {recvDlg && <ReceiveDialog d={recvDlg.d} leg={recvDlg.leg} names={names} isAr={isAr} busy={busy === 'r' + recvDlg.leg.id} onConfirm={doReceive} onClose={() => setRecvDlg(null)} />}
+      {rejDlg && <RejectDialog d={rejDlg.d} leg={rejDlg.leg} names={names} isAr={isAr} busy={busy === 'j' + rejDlg.leg.id} onConfirm={doReject} onClose={() => setRejDlg(null)} />}
       {escDlg && <EscalateDialog d={escDlg} isAr={isAr} busy={busy === 'e' + escDlg.id} onConfirm={doEscalate} onClose={() => setEscDlg(null)} />}
       {lookupOpen && <TicketLookupDialog isAr={isAr} onClose={() => setLookupOpen(false)} onCode={code => { setLookupOpen(false); focusDispatch(code, true) }} />}
       {confirm && (

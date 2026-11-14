@@ -15,12 +15,14 @@ export const DISPATCH_STATUS = {
   in_transit: { ar: 'في الطريق', en: 'In transit', color: '#2563eb', bg: 'rgba(37,99,235,0.13)' },
   awaiting_leg2: { ar: 'بانتظار إرسال الخط الثاني', en: 'Awaiting 2nd leg', color: '#d97706', bg: 'rgba(217,119,6,0.15)' },
   received: { ar: 'تم الاستلام', en: 'Received', color: '#16a34a', bg: 'rgba(22,163,74,0.14)' },
+  rejected: { ar: 'مرفوضة', en: 'Rejected', color: '#dc2626', bg: 'rgba(220,38,38,0.15)' },
 }
 
 export const LEG_STATUS = {
   pending: { ar: 'لم تُرسل بعد', en: 'Not sent yet', color: '#94a3b8' },
   sent: { ar: 'في الطريق', en: 'In transit', color: '#2563eb' },
   received: { ar: 'تم الاستلام', en: 'Received', color: '#16a34a' },
+  rejected: { ar: 'مرفوض', en: 'Rejected', color: '#dc2626' },
 }
 
 export const REQUEST_STATUS = {
@@ -51,6 +53,7 @@ export function dispatchError(e) {
   if (/could not find the function public\.dispatch|could not find the table 'public\.dispatch|relation "?(public\.)?dispatch\w*"? does not exist/i.test(m)) return 'SETUP'
   if (typeof console !== 'undefined') console.error('[dispatch]', e)
   const map = [
+    [/only supervisors can reject/i, 'الرفض للمشرفين والأدمن فقط'],
     [/not allowed for this station/i, 'لا تملك صلاحية على هذه المحطة'],
     [/not allowed/i, 'غير مصرّح لك بهذا الإجراء'],
     [/bus number required/i, 'أدخل رقم الحافلة'],
@@ -101,3 +104,6 @@ export function parseDispatchCode(raw) {
 
 // أرقام عربية/هندية ← إنجليزية (رقم الحافلة والجوال)
 export const toLatinDigits = v => String(v ?? '').replace(/[٠-٩]/g, d => d.charCodeAt(0) - 1632).replace(/[۰-۹]/g, d => d.charCodeAt(0) - 1776)
+
+// الإرسالية فعّالة (لم تُستلم ولم تُرفض)
+export const isActiveDispatch = d => d.status !== 'received' && d.status !== 'rejected'

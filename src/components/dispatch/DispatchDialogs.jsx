@@ -57,6 +57,28 @@ export function ReceiveDialog({ d, leg, names, isAr = true, busy, onConfirm, onC
   )
 }
 
+/* ── رفض الإرسالية (للمشرفين والأدمن) ── */
+export function RejectDialog({ d, leg, names, isAr = true, busy, onConfirm, onClose }) {
+  const t = (a, e) => (isAr ? a : e)
+  const [reason, setReason] = useState('')
+  return (
+    <Shell title={t('رفض الإرسالية', 'Reject dispatch')} onClose={onClose}
+      sub={<><b dir="ltr" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{d.ticket_no}</b> · {names[leg.from_station_id]} {isAr ? '←' : '→'} {names[leg.to_station_id]}</>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ fontSize: '0.78rem', color: 'var(--text-2)', lineHeight: 1.8 }}>{t('تُغلق الإرسالية كمرفوضة ولا يمكن استلامها بعد ذلك. يُشعَر موظفو المحطة المرسِلة ومنشئ الإرسالية والإدارة بالسبب.', 'The dispatch is closed as rejected and can no longer be received. The sending station, its creator and management are notified.')}</div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 5 }}>{t('سبب الرفض *', 'Reason *')}</label>
+          <textarea autoFocus value={reason} onChange={e => setReason(e.target.value)} rows={3} maxLength={500} placeholder={t('مثال: الإرسالية موجّهة لمحطة أخرى', 'e.g. addressed to another station')} style={{ ...fieldStyle, resize: 'vertical' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
+          <button type="button" disabled={busy || !reason.trim()} onClick={() => onConfirm(reason.trim())} style={{ ...btn('danger'), background: '#dc2626', color: '#fff', border: 'none', padding: '10px 26px', opacity: busy || !reason.trim() ? 0.55 : 1 }}>{busy ? '…' : t('تأكيد الرفض', 'Confirm rejection')}</button>
+        </div>
+      </div>
+    </Shell>
+  )
+}
+
 /* ── تصعيد يدوي ── */
 export function EscalateDialog({ d, isAr = true, busy, onConfirm, onClose }) {
   const t = (a, e) => (isAr ? a : e)
