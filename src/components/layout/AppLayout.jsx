@@ -764,99 +764,105 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const items = groups.flatMap(g => g.items)
-  const navRef = useRef(null)
-  const measRef = useRef(null)
-  const [avail, setAvail] = useState(0)
-  const [widths, setWidths] = useState([])
-  const [pop, setPop] = useState(null)       // 'user' | null
-  const [pal, setPal] = useState(false)
+  const [pop, setPop] = useState(false)          // قائمة المستخدم
+  const [pal, setPal] = useState(false)          // الانتقال السريع
+  const [drawer, setDrawer] = useState(false)    // القائمة الجانبية المنزلقة (عند الضيق أو الطيّ)
   const [scrolled, setScrolled] = useState(false)
+  const [wide, setWide] = useState(() => window.matchMedia('(min-width: 1280px)').matches)
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('nw_side_collapsed') === '1' } catch { return false } })
+  const docked = wide && !collapsed
 
-  // قياس عرض كل تبويب (نسخة مخفية) + عرض المساحة المتاحة: نعرض ما يتسع فقط والباقي بقائمة «الأقسام»
   useEffect(() => {
-    const measure = () => {
-      if (measRef.current) setWidths([...measRef.current.children].map(c => c.getBoundingClientRect().width))
-      if (navRef.current) setAvail(navRef.current.clientWidth)
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    if (navRef.current) ro.observe(navRef.current)
-    document.fonts?.ready?.then(measure)
-    return () => ro.disconnect()
-  }, [items.length, isAr])
-
+    const mq = window.matchMedia('(min-width: 1280px)'), h = () => setWide(mq.matches)
+    mq.addEventListener('change', h); h()
+    return () => mq.removeEventListener('change', h)
+  }, [])
+  // يزيح المحتوى بعرض القائمة الثابتة
+  useEffect(() => {
+    document.documentElement.style.setProperty('--dk-side', docked ? '232px' : '0px')
+    return () => document.documentElement.style.removeProperty('--dk-side')
+  }, [docked])
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 4)
     on(); window.addEventListener('scroll', on, { passive: true })
     return () => window.removeEventListener('scroll', on)
   }, [])
-  useEffect(() => { setPop(null); setPal(false) }, [pathname])
+  useEffect(() => { setPop(false); setPal(false); setDrawer(false) }, [pathname])
   useEffect(() => {
-    const down = e => { if (pop && !e.target.closest?.('[data-dk-pop]')) setPop(null) }
+    const down = e => { if (pop && !e.target.closest?.('[data-dk-pop]')) setPop(false) }
     const key = e => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPal(p => !p); setPop(null) }
-      else if (e.key === 'Escape') { setPop(null); setPal(false) }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPal(p => !p); setPop(false) }
+      else if (e.key === 'Escape') { setPop(false); setPal(false); setDrawer(false) }
     }
     document.addEventListener('mousedown', down); window.addEventListener('keydown', key)
     return () => { document.removeEventListener('mousedown', down); window.removeEventListener('keydown', key) }
   }, [pop])
+  function toggleCollapse() {
+    const next = !collapsed
+    setCollapsed(next)
+    try { localStorage.setItem('nw_side_collapsed', next ? '1' : '0') } catch { /* بدون تخزين */ }
+  }
 
-  // الأقسام كلها ظاهرة دائماً: إن اتسع الاسم مع الأيقونة نعرضه، وإلا أيقونات فقط مع اسم القسم النشط وتلميح للبقية
-  const total = widths.reduce((acc, w) => acc + w, 0) + 4 * Math.max(0, widths.length - 1)
-  const compact = !!avail && widths.length === items.length && total > avail
-  // عجلة الماوس فوق الأقسام تحرّكها أفقياً عند الضيق
-  useEffect(() => {
-    const el = navRef.current
-    if (!el || !compact) return
-    const w = e => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); el.scrollLeft += e.deltaY } }
-    el.addEventListener('wheel', w, { passive: false })
-    return () => el.removeEventListener('wheel', w)
-  }, [compact])
-  // إن ضاق العرض وصار التمرير ضرورياً: نُظهر القسم النشط
-  useEffect(() => { navRef.current?.querySelector('.dk-pill.on')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [pathname, compact])
   const label = it => (isAr ? it.labelAr : it.labelEn)
   const hueStyle = it => ({ '--hue': NAV_HUE[it.to] || '#5B5BD6' })
   const initials = String(profile?.full_name_ar || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
   const themes = [['auto', isAr ? 'تلقائي' : 'Auto'], ['light', isAr ? 'نهاري' : 'Light'], ['dark', isAr ? 'ليلي' : 'Dark'], ['system', isAr ? 'الجهاز' : 'Device']]
-  const go = to => { setPop(null); setPal(false); navigate(to) }
+  const groupTitle = i => (i === 0 ? (isAr ? 'العمليات' : 'Operations') : (isAr ? 'الإدارة' : 'Administration'))
+  const go = to => { setPop(false); setPal(false); navigate(to) }
+
+  const side = overlay => (
+    <aside className={`no-print dk-side${overlay ? ' overlay' : ''}`} dir={isAr ? 'rtl' : 'ltr'} aria-label={isAr ? 'الأقسام' : 'Sections'}>
+      <div className="dk-side-top">
+        <NavLink to="/" className="brand-mark" aria-label="North West Bus"><NWLogo height={40} /></NavLink>
+        {overlay && <button type="button" className="dk-side-x" onClick={() => setDrawer(false)} aria-label={isAr ? 'إغلاق' : 'Close'}>✕</button>}
+      </div>
+      <nav className="dk-side-nav">
+        {groups.map((g, gi) => (
+          <div key={gi} className="dk-side-grp">
+            <p className="dk-side-t">{groupTitle(gi)}</p>
+            {g.items.map(it => (
+              <NavLink key={it.to} to={it.to} end={it.to === '/'} className={({ isActive }) => `dk-side-it${isActive ? ' on' : ''}`} style={hueStyle(it)}>
+                {label(it)}
+              </NavLink>
+            ))}
+          </div>
+        ))}
+      </nav>
+      {!overlay && <button type="button" className="dk-side-fold" onClick={toggleCollapse}>{isAr ? 'طيّ القائمة' : 'Collapse'}</button>}
+    </aside>
+  )
 
   return (
     <>
+      {docked && side(false)}
+      {!docked && drawer && (
+        <div className="dk-drawer-bd" onMouseDown={e => { if (e.target === e.currentTarget) setDrawer(false) }}>{side(true)}</div>
+      )}
+
       <header className={`no-print dk-bar${scrolled ? ' scrolled' : ''}`} dir={isAr ? 'rtl' : 'ltr'}>
-        <NavLink to="/" className="brand-mark dk-logo" aria-label="North West Bus"><NWLogo height={34} /></NavLink>
-        <span className="dk-sep" aria-hidden="true" />
+        {!docked && (
+          <>
+            <button type="button" className="dk-menu-btn" onClick={() => (wide ? toggleCollapse() : setDrawer(true))} aria-label={isAr ? 'فتح الأقسام' : 'Open sections'}>
+              {isAr ? 'الأقسام' : 'Menu'}
+            </button>
+            <NavLink to="/" className="brand-mark dk-logo" aria-label="North West Bus"><NWLogo height={34} /></NavLink>
+          </>
+        )}
 
-        <nav ref={navRef} className={`dk-nav${compact ? ' compact' : ''}`} aria-label={isAr ? 'الأقسام' : 'Sections'}>
-          {items.map(it => {
-            const on = isOnPath(it.to, pathname)
-            return (
-              <NavLink key={it.to} to={it.to} end={it.to === '/'} className={`dk-pill${on ? ' on' : ''}`} style={hueStyle(it)} title={label(it)} aria-label={label(it)} aria-current={on ? 'page' : undefined}>
-                <span>{label(it)}</span>
-              </NavLink>
-            )
-          })}
-          {/* نسخة مخفية للقياس */}
-          <div ref={measRef} className="dk-meas" aria-hidden="true">
-            {items.map(it => <span key={it.to} className="dk-pill"><span>{label(it)}</span></span>)}
-          </div>
-        </nav>
-
-        <button type="button" className="dk-search" onClick={() => { setPal(true); setPop(null) }} title={isAr ? 'انتقال سريع (Ctrl K)' : 'Quick jump (Ctrl K)'} aria-label={isAr ? 'بحث وانتقال سريع' : 'Quick search'}>
-          <SearchIco />
+        <button type="button" className="dk-find" onClick={() => { setPal(true); setPop(false) }} aria-label={isAr ? 'بحث وانتقال سريع' : 'Quick jump'}>
+          <SearchIco /><span>{isAr ? 'ابحث عن قسم أو انتقل إليه…' : 'Search or jump to…'}</span><kbd>Ctrl K</kbd>
         </button>
 
         <div className="dk-tools">
-          {liveBoard && (
-            <button type="button" className="dk-ico" onClick={() => navigate('/board')} title={isAr ? 'شاشة العرض' : 'Live Board'} aria-label={isAr ? 'شاشة العرض' : 'Live Board'}><Icon d={ICONS.monitor} size={16} /></button>
-          )}
+          {liveBoard && <button type="button" className="dk-tbtn" onClick={() => navigate('/board')}>{isAr ? 'شاشة العرض' : 'Live Board'}</button>}
           <NotificationBell profile={profile} />
           <div data-dk-pop style={{ position: 'relative' }}>
-            <button type="button" className={`dk-user${pop === 'user' ? ' on' : ''}`} onClick={() => setPop(p => (p === 'user' ? null : 'user'))} aria-expanded={pop === 'user'} aria-haspopup="menu">
+            <button type="button" className={`dk-user${pop ? ' on' : ''}`} onClick={() => setPop(p => !p)} aria-expanded={pop} aria-haspopup="menu">
               <span className="dk-av">{initials}</span>
               <span className="dk-user-t"><b>{profile?.full_name_ar}{hasStar && <span style={{ color: '#F59E0B', marginInlineStart: 4 }}>★</span>}</b><small>{roleLabel}</small></span>
               <CaretIco />
             </button>
-            {pop === 'user' && (
+            {pop && (
               <div className="dk-menu" role="menu">
                 <div className="dk-menu-head">
                   <span className="dk-av big">{initials}</span>
@@ -866,15 +872,14 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
                 <div className="dk-seg" role="radiogroup">
                   {themes.map(([m, t]) => <button key={m} type="button" role="radio" aria-checked={themeMode === m} className={themeMode === m ? 'on' : ''} onClick={() => onTheme(m)}>{t}</button>)}
                 </div>
-                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(null); onLang() }}><span className="dk-item-i">{isAr ? 'EN' : 'ع'}</span>{isAr ? 'English' : 'العربية'}</button>
-                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(null); onRefresh() }}><span className="dk-item-i"><Icon d={ICONS.refresh} size={14} /></span>{isAr ? 'تحديث الصفحة' : 'Refresh'}</button>
-                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(null); onPwd() }}><span className="dk-item-i"><Icon d={ICONS.key} size={14} /></span>{isAr ? 'تغيير كلمة المرور' : 'Change password'}</button>
-                <button type="button" role="menuitem" className="dk-item danger" onClick={() => { setPop(null); onLogout() }}><span className="dk-item-i"><Icon d={ICONS.logout} size={14} /></span>{isAr ? 'تسجيل الخروج' : 'Sign out'}</button>
+                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(false); onLang() }}><span className="dk-item-i">{isAr ? 'EN' : 'ع'}</span>{isAr ? 'English' : 'العربية'}</button>
+                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(false); onRefresh() }}><span className="dk-item-i"><Icon d={ICONS.refresh} size={14} /></span>{isAr ? 'تحديث الصفحة' : 'Refresh'}</button>
+                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(false); onPwd() }}><span className="dk-item-i"><Icon d={ICONS.key} size={14} /></span>{isAr ? 'تغيير كلمة المرور' : 'Change password'}</button>
+                <button type="button" role="menuitem" className="dk-item danger" onClick={() => { setPop(false); onLogout() }}><span className="dk-item-i"><Icon d={ICONS.logout} size={14} /></span>{isAr ? 'تسجيل الخروج' : 'Sign out'}</button>
               </div>
             )}
           </div>
         </div>
-
       </header>
 
       {pal && <DeskPalette items={items} isAr={isAr} pathname={pathname} onGo={go} onClose={() => setPal(false)} label={label} hueStyle={hueStyle} />}
@@ -905,7 +910,6 @@ function DeskPalette({ items, isAr, pathname, onGo, onClose, label, hueStyle }) 
           {list.length === 0 && <p className="dk-pal-empty">{isAr ? 'لا أقسام مطابقة' : 'No matches'}</p>}
           {list.map((it, i) => (
             <button key={it.to} type="button" role="option" aria-selected={i === idx} className={`dk-pal-row${i === idx ? ' sel' : ''}`} style={hueStyle(it)} onMouseEnter={() => setIdx(i)} onClick={() => onGo(it.to)}>
-              <span className="dk-card-i">{ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={16} />}</span>
               <span style={{ flex: 1, textAlign: 'start' }}>{label(it)}</span>
               {isOnPath(it.to, pathname) && <em>{isAr ? 'أنت هنا' : 'Here'}</em>}
               {i === idx && <kbd>↵</kbd>}
@@ -1089,7 +1093,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
+    <div dir={isAr ? 'rtl' : 'ltr'} className={deskMode ? 'dk-root' : undefined} style={{ minHeight: '100vh', background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
 
       {/* ══ شريط العلامة العلوي ══════════════════════════ */}
       {deskMode && (
