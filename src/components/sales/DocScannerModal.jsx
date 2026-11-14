@@ -289,33 +289,74 @@ export default function DocScannerModal({ isAr, onDone, onClose, file: initialFi
   const onUp = () => setDrag(null)
 
   // احتياط: التقاط بتطبيق كاميرا الجهاز (أو اختيار صورة) ثم الكشف وضبط الحواف تلقائياً
+  const fallbackRef = useRef(null)   // لوحة الصورة عند تعذّر محرّك المسح (OpenCV): قص يدوي بسيط بدون تصحيح المنظور
+  const withTimeout = (pr, ms) => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))])
+  const shrink = (bmp, max) => {
+    const k = Math.min(1, max / Math.max(bmp.width, bmp.height))
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k)
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height)
+    return c
+  }
   async function onFile(file) {
     if (!file) return
-    capturedRef.current = true; stopStream(); setStage('processing')
+    capturedRef.current = true; stopStream(); setStage('processing'); fallbackRef.current = null
+    let bmp
+    try { bmp = await createImageBitmap(file) } catch { setError(isAr ? 'تعذّرت قراءة الصورة.' : 'Could not read the image.'); setStage('error'); return }
+    // المحرّك الكامل (كشف الورقة + تنظيف): نجرّب دقة عالية ثم أخفّ (ذاكرة الجوال محدودة)، بمهلة حتى لا ينتظر المستخدم بلا نهاية
+    for (const max of [2600, 1600]) {
+      try {
+        const c = shrink(bmp, max)
+        const r = await withTimeout(getEngine().capture([await createImageBitmap(c)], null, mode), 25000)
+        const W = r.width, H = r.height
+        detectedRef.current = r.quad
+        setCap({ url: URL.createObjectURL(r.preview), w: W, h: H })
+        // قص وتنظيف تلقائي بأرجح ورقة مكتشفة؛ إن لم نجد: الصورة كاملة. المستخدم يبدّل الورقة أو يحدد بيده أو يلغي القص
+        const full = [{ x: W * 0.03, y: H * 0.03 }, { x: W * 0.97, y: H * 0.03 }, { x: W * 0.97, y: H * 0.97 }, { x: W * 0.03, y: H * 0.97 }]
+        const qs = r.quads?.length ? r.quads : (r.quad ? [r.quad] : [])
+        setQuads(qs); setQi(0); setRot(0)
+        setPts(qs[0] ?? full)
+        setCropOn(!!qs[0])
+        setMode('color')
+        const ok = await renderResult({ mode: 'color', crop: !!qs[0], quad: qs[0] ?? undefined, rot: 0 })
+        setStage(ok ? 'review' : 'crop')
+        return
+      } catch { /* نجرّب الأخف ثم الاحتياط */ }
+    }
+    // احتياط: المحرّك لم يعمل على هذا الجهاز؛ نبقي «التحديد اليدوي» متاحاً (قص مستطيل + تدوير + تحسين خفيف)
     try {
-      const bmp = await createImageBitmap(file)
-      const k = Math.min(1, 3000 / Math.max(bmp.width, bmp.height))
-      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k)
-      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height)
-      const r = await getEngine().capture([await createImageBitmap(c)], null, mode)
-      const W = r.width, H = r.height
-      detectedRef.current = r.quad
-      setCap({ url: URL.createObjectURL(r.preview), w: W, h: H })
-      // قص وتنظيف تلقائي بأرجح ورقة مكتشفة؛ إن لم نجد: الصورة كاملة. المستخدم يبدّل الورقة أو يحدد بيده أو يلغي القص
-      const full = [{ x: W * 0.03, y: H * 0.03 }, { x: W * 0.97, y: H * 0.03 }, { x: W * 0.97, y: H * 0.97 }, { x: W * 0.03, y: H * 0.97 }]
-      const qs = r.quads?.length ? r.quads : (r.quad ? [r.quad] : [])
-      setQuads(qs); setQi(0); setRot(0)
-      setPts(qs[0] ?? full)
-      setCropOn(!!qs[0])
-      setMode('color')
-      const ok = await renderResult({ mode: 'color', crop: !!qs[0], quad: qs[0] ?? undefined, rot: 0 })
-      setStage(ok ? 'review' : 'crop')
+      const c = shrink(bmp, 2400)
+      fallbackRef.current = c
+      const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.85))
+      setCap({ url: URL.createObjectURL(blob), w: c.width, h: c.height })
+      detectedRef.current = null; setQuads([]); setQi(0); setRot(0); setCropOn(false); setMode('orig')
+      setPts([{ x: c.width * 0.03, y: c.height * 0.03 }, { x: c.width * 0.97, y: c.height * 0.03 }, { x: c.width * 0.97, y: c.height * 0.97 }, { x: c.width * 0.03, y: c.height * 0.97 }])
+      setBlobUrl(blob)
+      setStage('crop')
     } catch { setError(isAr ? 'تعذّرت قراءة الصورة.' : 'Could not read the image.'); setStage('error') }
+  }
+
+  // عرض النتيجة بالاحتياط (بدون OpenCV): قص مستطيل حول الزوايا + تدوير + مرشّح خفيف
+  async function fallbackRender({ mode: m, crop, quad, rot: rr }) {
+    const src = fallbackRef.current
+    const xs = quad?.map(p => p.x) ?? [0, src.width], ys = quad?.map(p => p.y) ?? [0, src.height]
+    const x0 = crop && quad ? Math.max(0, Math.min(...xs)) : 0, y0 = crop && quad ? Math.max(0, Math.min(...ys)) : 0
+    const w = crop && quad ? Math.max(20, Math.min(src.width, Math.max(...xs)) - x0) : src.width
+    const h = crop && quad ? Math.max(20, Math.min(src.height, Math.max(...ys)) - y0) : src.height
+    const turn = ((rr % 4) + 4) % 4, swap = turn % 2 === 1
+    const out = document.createElement('canvas'); out.width = swap ? h : w; out.height = swap ? w : h
+    const ctx = out.getContext('2d')
+    if ('filter' in ctx) ctx.filter = m === 'bw' ? 'grayscale(1) contrast(1.8) brightness(1.1)' : m === 'color' ? 'contrast(1.18) brightness(1.06) saturate(1.05)' : 'none'
+    ctx.translate(out.width / 2, out.height / 2); ctx.rotate(turn * Math.PI / 2)
+    ctx.drawImage(src, x0, y0, w, h, -w / 2, -h / 2, w, h)
+    return new Promise(res => out.toBlob(res, 'image/jpeg', 0.88))
   }
 
   async function renderResult(opts) {
     setBusy(true)
-    try { const r = await getEngine().render(opts); if (r) { setBlobUrl(r.blob); return true } } catch { /* تبقى الحالية */ }
+    try {
+      if (fallbackRef.current) { const blob = await fallbackRender(opts); if (blob) { setBlobUrl(blob); return true } }
+      else { const r = await getEngine().render(opts); if (r) { setBlobUrl(r.blob); return true } }
+    } catch { /* تبقى الحالية */ }
     finally { setBusy(false) }
     return false
   }
