@@ -742,12 +742,212 @@ function ScrollToTopButton() {
   )
 }
 
+// ══ شريط سطح المكتب الموحّد (يُعرض فقط على الشاشات الواسعة؛ الجوال والتابلت باللمس بلا أي تغيير) ══
+// سطح المكتب = عرض ≥768 وليس جهازاً باللمس بعرض ≤1100 (هذي تبقى على واجهة الجوال القديمة)
+const deskNow = () => window.matchMedia('(min-width: 768px)').matches && !(window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 1100px)').matches)
+function useDeskMode() {
+  const [m, setM] = useState(() => typeof window !== 'undefined' && deskNow())
+  useEffect(() => {
+    const qs = ['(min-width: 768px)', '(pointer: coarse)', '(max-width: 1100px)'].map(q => window.matchMedia(q))
+    const h = () => setM(deskNow())
+    qs.forEach(q => q.addEventListener('change', h)); h()
+    return () => qs.forEach(q => q.removeEventListener('change', h))
+  }, [])
+  return m
+}
+
+const SearchIco = ({ size = 15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+const CaretIco = ({ size = 12 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+const isOnPath = (to, path) => (to === '/' ? path === '/' : path === to || path.startsWith(to + '/'))
+
+function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, themeMode, onTheme, onLang, onRefresh, onPwd, onLogout, liveBoard }) {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const items = groups.flatMap(g => g.items)
+  const navRef = useRef(null)
+  const measRef = useRef(null)
+  const [avail, setAvail] = useState(0)
+  const [widths, setWidths] = useState([])
+  const [pop, setPop] = useState(null)       // 'more' | 'user' | null
+  const [pal, setPal] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+
+  // قياس عرض كل تبويب (نسخة مخفية) + عرض المساحة المتاحة: نعرض ما يتسع فقط والباقي بقائمة «الأقسام»
+  useEffect(() => {
+    const measure = () => {
+      if (measRef.current) setWidths([...measRef.current.children].map(c => c.getBoundingClientRect().width))
+      if (navRef.current) setAvail(navRef.current.clientWidth)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    if (navRef.current) ro.observe(navRef.current)
+    document.fonts?.ready?.then(measure)
+    return () => ro.disconnect()
+  }, [items.length, isAr])
+
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 4)
+    on(); window.addEventListener('scroll', on, { passive: true })
+    return () => window.removeEventListener('scroll', on)
+  }, [])
+  useEffect(() => { setPop(null); setPal(false) }, [pathname])
+  useEffect(() => {
+    const down = e => { if (pop && !e.target.closest?.('[data-dk-pop]')) setPop(null) }
+    const key = e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPal(p => !p); setPop(null) }
+      else if (e.key === 'Escape') { setPop(null); setPal(false) }
+    }
+    document.addEventListener('mousedown', down); window.addEventListener('keydown', key)
+    return () => { document.removeEventListener('mousedown', down); window.removeEventListener('keydown', key) }
+  }, [pop])
+
+  const GAP = 4, MORE_W = 134
+  let k = items.length
+  if (widths.length === items.length && avail) {
+    const total = widths.reduce((a, b) => a + b, 0) + GAP * Math.max(0, items.length - 1)
+    if (total > avail) {
+      let acc = 0; k = 0
+      for (const w of widths) { if (acc + w + GAP > avail - MORE_W) break; acc += w + GAP; k++ }
+    }
+  }
+  let visible = items.slice(0, k)
+  const activeIdx = items.findIndex(it => isOnPath(it.to, pathname))
+  if (k > 0 && activeIdx >= k) visible = [...items.slice(0, k - 1), items[activeIdx]]
+  const hasMore = k < items.length
+  const label = it => (isAr ? it.labelAr : it.labelEn)
+  const hueStyle = it => ({ '--hue': NAV_HUE[it.to] || '#5B5BD6' })
+  const initials = String(profile?.full_name_ar || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  const themes = [['auto', isAr ? 'تلقائي' : 'Auto'], ['light', isAr ? 'نهاري' : 'Light'], ['dark', isAr ? 'ليلي' : 'Dark'], ['system', isAr ? 'الجهاز' : 'Device']]
+  const groupTitle = i => (i === 0 ? (isAr ? 'العمليات' : 'Operations') : (isAr ? 'الإدارة' : 'Administration'))
+  const go = to => { setPop(null); setPal(false); navigate(to) }
+
+  return (
+    <>
+      <header className={`no-print dk-bar${scrolled ? ' scrolled' : ''}`} dir={isAr ? 'rtl' : 'ltr'}>
+        <NavLink to="/" className="brand-mark dk-logo" aria-label="North West Bus"><NWLogo height={34} /></NavLink>
+        <span className="dk-sep" aria-hidden="true" />
+
+        <nav ref={navRef} className="dk-nav" aria-label={isAr ? 'الأقسام' : 'Sections'}>
+          {visible.map(it => {
+            const on = isOnPath(it.to, pathname)
+            return (
+              <NavLink key={it.to} to={it.to} end={it.to === '/'} className={`dk-pill${on ? ' on' : ''}`} style={hueStyle(it)} aria-current={on ? 'page' : undefined}>
+                {ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={16} />}<span>{label(it)}</span>
+              </NavLink>
+            )
+          })}
+          {hasMore && (
+            <button type="button" data-dk-pop className={`dk-pill dk-more${pop === 'more' ? ' on' : ''}`} onClick={() => setPop(p => (p === 'more' ? null : 'more'))} aria-expanded={pop === 'more'} aria-haspopup="true">
+              <Icon d={ICONS.grid} size={15} /><span>{isAr ? 'الأقسام' : 'All'}</span>
+              <b className="dk-count">{items.length - visible.length}</b><CaretIco />
+            </button>
+          )}
+          {/* نسخة مخفية للقياس */}
+          <div ref={measRef} className="dk-meas" aria-hidden="true">
+            {items.map(it => <span key={it.to} className="dk-pill">{ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={16} />}<span>{label(it)}</span></span>)}
+          </div>
+        </nav>
+
+        <button type="button" className="dk-search" onClick={() => { setPal(true); setPop(null) }} title={isAr ? 'انتقال سريع (Ctrl K)' : 'Quick jump (Ctrl K)'} aria-label={isAr ? 'بحث وانتقال سريع' : 'Quick search'}>
+          <SearchIco />
+        </button>
+
+        <div className="dk-tools">
+          {liveBoard && (
+            <button type="button" className="dk-ico" onClick={() => navigate('/board')} title={isAr ? 'شاشة العرض' : 'Live Board'} aria-label={isAr ? 'شاشة العرض' : 'Live Board'}><Icon d={ICONS.monitor} size={16} /></button>
+          )}
+          <NotificationBell profile={profile} />
+          <div data-dk-pop style={{ position: 'relative' }}>
+            <button type="button" className={`dk-user${pop === 'user' ? ' on' : ''}`} onClick={() => setPop(p => (p === 'user' ? null : 'user'))} aria-expanded={pop === 'user'} aria-haspopup="menu">
+              <span className="dk-av">{initials}</span>
+              <span className="dk-user-t"><b>{profile?.full_name_ar}{hasStar && <span style={{ color: '#F59E0B', marginInlineStart: 4 }}>★</span>}</b><small>{roleLabel}</small></span>
+              <CaretIco />
+            </button>
+            {pop === 'user' && (
+              <div className="dk-menu" role="menu">
+                <div className="dk-menu-head">
+                  <span className="dk-av big">{initials}</span>
+                  <div style={{ minWidth: 0 }}><b>{profile?.full_name_ar}</b><small>{roleLabel}{stationName ? ` · ${stationName}` : ''}</small></div>
+                </div>
+                <div className="dk-menu-lbl">{isAr ? 'المظهر' : 'Appearance'}</div>
+                <div className="dk-seg" role="radiogroup">
+                  {themes.map(([m, t]) => <button key={m} type="button" role="radio" aria-checked={themeMode === m} className={themeMode === m ? 'on' : ''} onClick={() => onTheme(m)}>{t}</button>)}
+                </div>
+                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(null); onLang() }}><span className="dk-item-i">{isAr ? 'EN' : 'ع'}</span>{isAr ? 'English' : 'العربية'}</button>
+                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(null); onRefresh() }}><span className="dk-item-i"><Icon d={ICONS.refresh} size={14} /></span>{isAr ? 'تحديث الصفحة' : 'Refresh'}</button>
+                <button type="button" role="menuitem" className="dk-item" onClick={() => { setPop(null); onPwd() }}><span className="dk-item-i"><Icon d={ICONS.key} size={14} /></span>{isAr ? 'تغيير كلمة المرور' : 'Change password'}</button>
+                <button type="button" role="menuitem" className="dk-item danger" onClick={() => { setPop(null); onLogout() }}><span className="dk-item-i"><Icon d={ICONS.logout} size={14} /></span>{isAr ? 'تسجيل الخروج' : 'Sign out'}</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {pop === 'more' && (
+          <div className="dk-mega" data-dk-pop role="menu">
+            {groups.map((g, gi) => (
+              <section key={gi}>
+                <p className="dk-mega-t">{groupTitle(gi)}</p>
+                <div className="dk-mega-grid">
+                  {g.items.map(it => (
+                    <NavLink key={it.to} to={it.to} end={it.to === '/'} className={`dk-card${isOnPath(it.to, pathname) ? ' on' : ''}`} style={hueStyle(it)} onClick={() => setPop(null)}>
+                      <span className="dk-card-i">{ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={17} />}</span>
+                      <span>{label(it)}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </header>
+
+      {pal && <DeskPalette items={items} isAr={isAr} pathname={pathname} onGo={go} onClose={() => setPal(false)} label={label} hueStyle={hueStyle} />}
+    </>
+  )
+}
+
+// لوحة الانتقال السريع (Ctrl/⌘ + K): اكتب اسم القسم ثم Enter
+function DeskPalette({ items, isAr, pathname, onGo, onClose, label, hueStyle }) {
+  const [q, setQ] = useState('')
+  const [idx, setIdx] = useState(0)
+  const needle = normAr(q)
+  const list = needle ? items.filter(it => normAr(`${it.labelAr} ${it.labelEn}`).includes(needle)) : items
+  useEffect(() => { setIdx(0) }, [q])
+  function onKey(e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, list.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)) }
+    else if (e.key === 'Enter' && list[idx]) { e.preventDefault(); onGo(list[idx].to) }
+  }
+  return (
+    <div className="dk-pal-bd" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="dk-pal" role="dialog" aria-modal="true" aria-label={isAr ? 'انتقال سريع' : 'Quick jump'} dir={isAr ? 'rtl' : 'ltr'}>
+        <div className="dk-pal-in"><SearchIco size={18} />
+          <input autoFocus value={q} onChange={e => setQ(e.target.value)} onKeyDown={onKey} placeholder={isAr ? 'اكتب اسم القسم…' : 'Type a section name…'} aria-label={isAr ? 'بحث' : 'Search'} />
+          <kbd>Esc</kbd>
+        </div>
+        <div className="dk-pal-list" role="listbox">
+          {list.length === 0 && <p className="dk-pal-empty">{isAr ? 'لا أقسام مطابقة' : 'No matches'}</p>}
+          {list.map((it, i) => (
+            <button key={it.to} type="button" role="option" aria-selected={i === idx} className={`dk-pal-row${i === idx ? ' sel' : ''}`} style={hueStyle(it)} onMouseEnter={() => setIdx(i)} onClick={() => onGo(it.to)}>
+              <span className="dk-card-i">{ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={16} />}</span>
+              <span style={{ flex: 1, textAlign: 'start' }}>{label(it)}</span>
+              {isOnPath(it.to, pathname) && <em>{isAr ? 'أنت هنا' : 'Here'}</em>}
+              {i === idx && <kbd>↵</kbd>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AppLayout() {
   const { i18n } = useTranslation()
   const { profile, signOut, customTitle, allowCap, grantCap, isRestricted, canSeeModule, isGeneralAdmin } = useAuth()
   const navigate = useNavigate()
   const isAr = i18n.language === 'ar'
   const { settings } = useAppSettings()
+  const deskMode = useDeskMode()
 
   // ── المظهر: تلقائي / نهاري / ليلي ─────────────────────
   const [themeMode, setThemeModeState] = useState(() => {
@@ -916,7 +1116,12 @@ export default function AppLayout() {
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: '100vh', background: 'var(--surface)', display: 'flex', flexDirection: 'column' }}>
 
       {/* ══ شريط العلامة العلوي ══════════════════════════ */}
-      <header className="no-print app-header" style={{
+      {deskMode && (
+        <DeskBar groups={visibleGroups} isAr={isAr} profile={profile} roleLabel={roleLabel} stationName={stationName} hasStar={hasStar}
+          themeMode={themeMode} onTheme={setThemeModeState} onLang={toggleLang} onRefresh={() => hardRefresh()} onPwd={() => setShowChangePwd(true)} onLogout={handleLogout}
+          liveBoard={canSeeModule('live_board')} />
+      )}
+      {!deskMode && <header className="no-print app-header" style={{
         background: 'var(--card)',
         borderBottom: '1px solid var(--border)',
         height: 60, flexShrink: 0,
@@ -1015,7 +1220,7 @@ export default function AppLayout() {
             <Icon d={ICONS.logout} size={13} />
           </button>
         </div>
-      </header>
+      </header>}
 
       <MobileMenu open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)}
         visibleGroups={visibleGroups} isAr={isAr} profile={profile} roleLabel={roleLabel} stationName={stationName}
@@ -1101,7 +1306,7 @@ export default function AppLayout() {
       )}
 
       {/* ══ شريط التبويبات ══════════════════════════════ */}
-      <nav className="no-print top-nav" style={{
+      {!deskMode && <nav className="no-print top-nav" style={{
         background: 'var(--card)', flexShrink: 0,
         borderBottom: '1px solid var(--border)',
         boxShadow: '0 4px 14px -10px rgba(0,0,0,0.25)',
@@ -1116,7 +1321,7 @@ export default function AppLayout() {
             {group.items.map(item => <NavTab key={item.to} item={item} isAr={isAr} />)}
           </div>
         ))}
-      </nav>
+      </nav>}
 
       {/* ══ المحتوى ══════════════════════════════════════ */}
       <main style={{ flex: 1, minWidth: 0 }}>
