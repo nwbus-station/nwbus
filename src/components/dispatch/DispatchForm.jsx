@@ -1,13 +1,13 @@
-// نموذج إنشاء إرسالية: النوع (موجودات/مفقودات) ← الخط الأول (من/إلى + الحافلة) ← خط ثانٍ اختياري ← الأغراض ← إصدار التذكرة
+// نموذج إنشاء إرسالية/شحنة: النوع (موجودات/مفقودات/شحنة) ← الخط الأول (من/إلى + الحافلة) ← خط ثانٍ اختياري ← الأغراض ← إصدار التذكرة
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import SelectField from '../shared/SelectField'
-import { FormCard, Section, Banner, PrimaryButton, GhostButton, fieldStyle, MONO } from './ui'
-import { DISPATCH_KINDS, dispatchError, fmtDate } from '../../utils/dispatch'
+import { FormCard, Section, Banner, PrimaryButton, GhostButton, fieldStyle, MONO } from '../lostFound/ui'
+import { DISPATCH_KINDS, dispatchError, fmtDate, toLatinDigits } from '../../utils/dispatch'
 
 const lbl = { display: 'block', fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 5 }
 
-export default function DispatchForm({ profile, isAr = true, isAdmin, stations, myStations, initial, onCancel, onCreated, onPrint }) {
+export default function DispatchForm({ profile, isAr = true, isAdmin, stations, myStations, history = [], initial, onCancel, onCreated, onPrint }) {
   const t = (a, e) => (isAr ? a : e)
   const allowedFrom = isAdmin ? stations : (myStations.length ? myStations : stations.filter(s => s.id === profile?.station_id))
   const [kind, setKind] = useState(initial?.kind || 'found')
@@ -17,6 +17,9 @@ export default function DispatchForm({ profile, isAr = true, isAdmin, stations, 
   const [to2Id, setTo2Id] = useState('')
   const [bus, setBus] = useState('')
   const [note, setNote] = useState('')
+  const [priority, setPriority] = useState('normal')
+  const [party, setParty] = useState({ sender_name: '', sender_phone: '', recipient_name: '', recipient_phone: '' })
+  const setP = (k, v) => setParty(p => ({ ...p, [k]: v }))
   const [cands, setCands] = useState([])          // أغراض/بلاغات المحطة المرسِلة
   const [loadingC, setLoadingC] = useState(false)
   const [picked, setPicked] = useState(() => new Map(initial?.items?.map(i => [i.ref_id, i]) || []))   // ref_id → item
@@ -26,11 +29,17 @@ export default function DispatchForm({ profile, isAr = true, isAdmin, stations, 
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState(null)
+  // أكثر المحطات التي أُرسل إليها من المحطة المختارة (اختصار سريع)
+  const topTo = useMemo(() => {
+    const c = {}
+    history.forEach(d => { const l = (d.legs || []).find(x => x.leg_no === 1); if (l && l.from_station_id === fromId) c[l.to_station_id] = (c[l.to_station_id] || 0) + 1 })
+    return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 5).map(x => x[0])
+  }, [history, fromId])
   const nm = useMemo(() => Object.fromEntries(stations.map(s => [s.id, s.name_ar || s.name_en])), [stations])
 
   // قائمة ما يمكن إرساله من المحطة المختارة
   useEffect(() => {
-    if (!fromId) { setCands([]); return }
+    if (!fromId || kind === 'shipment') { setCands([]); return }
     let off = false
     setLoadingC(true)
     const q = kind === 'found'
@@ -61,14 +70,16 @@ export default function DispatchForm({ profile, isAr = true, isAdmin, stations, 
     if (!fromId || !toId) { setErr(t('اختر محطة الإرسال ومحطة الاستقبال', 'Select the sending and receiving stations')); return }
     if (twoLegs && !to2Id) { setErr(t('اختر محطة الخط الثاني أو ألغِ الخط الثاني', 'Select the second leg station or remove it')); return }
     if (!bus.trim()) { setErr(t('أدخل رقم الحافلة', 'Enter the bus number')); return }
-    if (!allItems.length) { setErr(t('أضف غرضاً واحداً على الأقل', 'Add at least one item')); return }
+    if (!allItems.length) { setErr(kind === 'shipment' ? t('أضف محتويات الشحنة', 'Add the shipment contents') : t('أضف غرضاً واحداً على الأقل', 'Add at least one item')); return }
+    if (kind === 'shipment' && !party.recipient_name.trim()) { setErr(t('أدخل اسم المستلِم النهائي للشحنة', 'Enter the recipient name')); return }
     setSaving(true)
     const { data, error } = await supabase.rpc('dispatch_create', {
       p_kind: kind, p_from: fromId, p_to: toId, p_bus: bus.trim(), p_to2: twoLegs ? to2Id : null,
       p_note: note.trim() || null, p_items: allItems, p_request: initial?.requestId || null,
+      p_party: kind === 'shipment' ? Object.fromEntries(Object.entries(party).map(([k, v]) => [k, v.trim()])) : null, p_priority: priority,
     })
     setSaving(false)
-    if (error) { const m = dispatchError(error); setErr(m === 'SETUP' ? t('لم يُجهَّز النظام بعد: شغّل ملف SQL «024_dispatches» في Supabase', 'Run the 024_dispatches SQL in Supabase first') : m); return }
+    if (error) { const m = dispatchError(error); setErr(m === 'SETUP' ? t('لم يُجهَّز النظام بعد: شغّل ملفي SQL «024» ثم «025_dispatches_v2» في Supabase', 'Run the 024 and 025 SQL files in Supabase first') : m); return }
     setDone(data)
     onCreated?.(data)
   }
@@ -127,11 +138,35 @@ export default function DispatchForm({ profile, isAr = true, isAdmin, stations, 
                   <option value="">{t('— اختر المحطة —', '— Select —')}</option>
                   {stations.filter(s => s.id !== fromId).map(s => <option key={s.id} value={s.id}>{s.name_ar || s.name_en}</option>)}
                 </SelectField>
+                {topTo.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                    <span style={{ fontSize: '0.64rem', fontWeight: 800, color: 'var(--text-3)', alignSelf: 'center' }}>{t('الأكثر إرسالاً:', 'Frequent:')}</span>
+                    {topTo.map(id => <button key={id} type="button" onClick={() => setToId(id)} style={{ padding: '4px 11px', borderRadius: 99, border: `1px solid ${toId === id ? '#2563eb' : 'var(--border)'}`, background: toId === id ? 'rgba(37,99,235,0.12)' : 'var(--card)', color: toId === id ? '#2563eb' : 'var(--text-2)', fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>{nm[id]}</button>)}
+                  </div>
+                )}
               </div>
               <div>
                 <label style={lbl}>{t('رقم الحافلة *', 'Bus number *')}</label>
-                <input value={bus} onChange={e => setBus(e.target.value)} dir="ltr" inputMode="text" placeholder="4521" style={{ ...fieldStyle, fontFamily: MONO, fontWeight: 800 }} />
+                <input value={bus} onChange={e => setBus(toLatinDigits(e.target.value))} dir="ltr" inputMode="text" placeholder="4521" style={{ ...fieldStyle, fontFamily: MONO, fontWeight: 800 }} />
               </div>
+            </div>
+          </Section>
+
+          {kind === 'shipment' && (
+            <Section title={t('بيانات الشحنة', 'Shipment details')} hint={t('المرسِل والمستلِم النهائي', 'Sender and final recipient')}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+                <div><label style={lbl}>{t('اسم المرسِل (العميل)', 'Sender name')}</label><input value={party.sender_name} onChange={e => setP('sender_name', e.target.value)} style={fieldStyle} /></div>
+                <div><label style={lbl}>{t('جوال المرسِل', 'Sender phone')}</label><input value={party.sender_phone} onChange={e => setP('sender_phone', toLatinDigits(e.target.value))} dir="ltr" inputMode="tel" style={{ ...fieldStyle, fontFamily: MONO }} /></div>
+                <div><label style={lbl}>{t('اسم المستلِم النهائي *', 'Recipient name *')}</label><input value={party.recipient_name} onChange={e => setP('recipient_name', e.target.value)} style={fieldStyle} /></div>
+                <div><label style={lbl}>{t('جوال المستلِم', 'Recipient phone')}</label><input value={party.recipient_phone} onChange={e => setP('recipient_phone', toLatinDigits(e.target.value))} dir="ltr" inputMode="tel" style={{ ...fieldStyle, fontFamily: MONO }} /></div>
+              </div>
+            </Section>
+          )}
+
+          <Section title={t('الأولوية', 'Priority')}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button type="button" aria-pressed={priority === 'normal'} onClick={() => setPriority('normal')} style={pill(priority === 'normal', '#2563eb')}>{t('عادية', 'Normal')}</button>
+              <button type="button" aria-pressed={priority === 'urgent'} onClick={() => setPriority('urgent')} style={pill(priority === 'urgent', '#dc2626')}>{t('عاجلة', 'Urgent')}</button>
             </div>
           </Section>
 
@@ -157,8 +192,8 @@ export default function DispatchForm({ profile, isAr = true, isAdmin, stations, 
             )}
           </Section>
 
-          <Section title={t('الأغراض', 'Items')} hint={fromId ? t(`من سجلات ${nm[fromId] || 'المحطة'}`, '') : t('اختر محطة الإرسال أولاً', 'Select the sending station first')}>
-            {fromId && (
+          <Section title={kind === 'shipment' ? t('محتويات الشحنة', 'Shipment contents') : t('الأغراض', 'Items')} hint={kind === 'shipment' ? t('أضف أصناف الشحنة يدوياً', 'Add the shipment items manually') : fromId ? t(`من سجلات ${nm[fromId] || 'المحطة'}`, '') : t('اختر محطة الإرسال أولاً', 'Select the sending station first')}>
+            {fromId && kind !== 'shipment' && (
               <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--card)', maxHeight: 230, overflowY: 'auto' }}>
                 {loadingC ? <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>{t('جارٍ التحميل…', 'Loading…')}</div>
                   : cands.length === 0 ? <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>{kind === 'found' ? t('لا موجودات غير مستلمة في هذه المحطة — أضف أغراضك يدوياً بالأسفل', 'No unclaimed items here — add items manually below') : t('لا بلاغات في هذه المحطة — أضف أغراضك يدوياً بالأسفل', 'No reports here — add items manually below')}</div>

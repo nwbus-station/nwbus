@@ -2,6 +2,13 @@
 export const DISPATCH_KINDS = {
   found: { ar: 'موجودات', en: 'Found items', color: '#16a34a', bg: 'rgba(22,163,74,0.14)' },
   lost: { ar: 'مفقودات', en: 'Lost items', color: '#d97706', bg: 'rgba(217,119,6,0.15)' },
+  shipment: { ar: 'شحنة', en: 'Shipment', color: '#7c3aed', bg: 'rgba(124,58,237,0.14)' },
+}
+
+// تصعيد: 1 = تنبيه لموظفي المحطة (تأخر) · 2 = وصل للإدارة والمشرفين
+export const ESCALATION = {
+  1: { ar: 'متأخرة', en: 'Overdue', color: '#d97706', bg: 'rgba(217,119,6,0.16)' },
+  2: { ar: 'مُصعّدة للإدارة', en: 'Escalated', color: '#dc2626', bg: 'rgba(220,38,38,0.15)' },
 }
 
 export const DISPATCH_STATUS = {
@@ -58,6 +65,10 @@ export function dispatchError(e) {
     [/item has no station/i, 'هذا الغرض غير مرتبط بمحطة'],
     [/request already handled/i, 'هذا الطلب عولج مسبقاً'],
     [/empty note/i, 'اكتب الملاحظة أولاً'],
+    [/note required/i, 'اكتب سبب الملاحظة عند الاستلام بملاحظات'],
+    [/reason required/i, 'اكتب سبب التصعيد'],
+    [/bad condition/i, 'حالة الاستلام غير صحيحة'],
+    [/bad priority/i, 'أولوية غير صحيحة'],
   ]
   for (const [re, t] of map) if (re.test(m)) return t
   return (e?.details || e?.hint) ? `${m} (${[e.details, e.hint].filter(Boolean).join(' — ')})` : (m || 'حدث خطأ غير متوقع')
@@ -65,3 +76,28 @@ export function dispatchError(e) {
 
 // حالة خط واحد للعرض: هل أنا أستطيع الاستلام/الإرسال
 export const sortLegs = d => [...(d.legs || [])].sort((a, b) => a.leg_no - b.leg_no)
+
+// منذ كم؟ «3 س 20 د» / «45 د» / «2 يوم»
+export function ageLabel(iso, isAr = true) {
+  if (!iso) return '—'
+  const m = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000))
+  if (m < 60) return isAr ? `${m} د` : `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return isAr ? `${h} س ${m % 60} د` : `${h}h ${m % 60}m`
+  const d = Math.floor(h / 24)
+  return isAr ? `${d} يوم ${h % 24} س` : `${d}d ${h % 24}h`
+}
+
+// يستخرج مُعرّف الإرسالية من محتوى QR: رابط فيه ?d=<uuid> أو رقم تذكرة NWD-000123 أو uuid مباشر
+export function parseDispatchCode(raw) {
+  const s = toLatinDigits(String(raw || '')).trim()
+  if (!s) return null
+  const u = s.match(/[?&]d=([0-9a-f-]{36})/i); if (u) return { id: u[1] }
+  const t = s.match(/NWD-?\s*(\d{1,8})/i); if (t) return { ticket: 'NWD-' + String(t[1]).padStart(6, '0') }
+  const g = s.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i); if (g) return { id: s }
+  const n = s.match(/^\d{1,8}$/); if (n) return { ticket: 'NWD-' + s.padStart(6, '0') }
+  return null
+}
+
+// أرقام عربية/هندية ← إنجليزية (رقم الحافلة والجوال)
+export const toLatinDigits = v => String(v ?? '').replace(/[٠-٩]/g, d => d.charCodeAt(0) - 1632).replace(/[۰-۹]/g, d => d.charCodeAt(0) - 1776)

@@ -7,7 +7,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 export async function printDispatchSlip(d, names) {
   const w = window.open('', '_blank')
   if (!w) return false
-  const qr = await QRCode.toDataURL(d.ticket_no, { width: 360, margin: 1, errorCorrectionLevel: 'M' })
+  // الرابط يفتح الإرسالية مباشرة (مع تفعيل الاستلام) لمن يمسحه بالكاميرا وهو مسجّل الدخول؛ والتطبيق يقرأه من الماسح الداخلي أيضاً
+  const qr = await QRCode.toDataURL(`${window.location.origin}/dispatches?d=${d.id}&r=1`, { width: 420, margin: 1, errorCorrectionLevel: 'M' })
   const legs = sortLegs(d)
   const legHtml = legs.map(l => `
     <div class="leg">
@@ -41,10 +42,11 @@ export async function printDispatchSlip(d, names) {
   .foot { margin-top: 12px; text-align: center; font-size: 8pt; color: #94a3b8 }
 </style></head><body>
   <div class="head">
-    <div><h1>تذكرة إرسالية</h1><small>NORTH WEST BUS · إرساليات الموجودات والمفقودات</small><div class="tk">${esc(d.ticket_no)}</div><span class="kind">${esc(k.ar)}</span></div>
+    <div><h1>تذكرة إرسالية</h1><small>NORTH WEST BUS · إرساليات الموجودات والمفقودات</small><div class="tk">${esc(d.ticket_no)}</div><span class="kind">${esc(k.ar)}</span>${d.priority === 'urgent' ? '<span class="kind" style="background:#fee2e2;color:#dc2626;margin-inline-start:6px">عاجل</span>' : ''}</div>
     <img src="${qr}" alt="QR" />
   </div>
   <div class="meta" style="margin-top:8px"><span>أنشأها: <b>${esc(d.created_by_name || '—')}</b></span><span>التاريخ: <b dir="ltr">${fmtDate(d.created_at)}</b></span><span>الوقت: <b dir="ltr">${fmtTime(d.created_at)}</b></span></div>
+  ${(d.recipient_name || d.sender_name) ? `<div class="leg"><div class="lt">بيانات الشحنة</div><div class="meta">${d.sender_name ? `<span>المرسِل: <b>${esc(d.sender_name)}</b>${d.sender_phone ? ` <b dir="ltr">${esc(d.sender_phone)}</b>` : ''}</span>` : ''}${d.recipient_name ? `<span>المستلِم: <b>${esc(d.recipient_name)}</b>${d.recipient_phone ? ` <b dir="ltr">${esc(d.recipient_phone)}</b>` : ''}</span>` : ''}</div></div>` : ''}
   ${legHtml}
   <table><thead><tr><th>الغرض</th><th>العدد</th></tr></thead><tbody>${items}</tbody></table>
   ${d.note ? `<div class="note">ملاحظة المُرسِل: ${esc(d.note)}</div>` : ''}

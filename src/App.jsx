@@ -24,6 +24,7 @@ import LoginPage        from './pages/LoginPage'
 import DashboardPage    from './pages/DashboardPage'
 import TransportationPage from './pages/TransportationPage'
 import LostFoundPage    from './pages/LostFoundPage'
+import DispatchPage     from './pages/DispatchPage'
 import SalesPage        from './pages/SalesPage'
 import ReportsPage      from './pages/ReportsPage'
 import UsersPage        from './pages/UsersPage'
@@ -136,6 +137,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="transportation" element={<RequireAuth module="transportation"><TransportationPage /></RequireAuth>} />
         <Route path="lost-found"     element={<RequireAuth module="lost_found"><LostFoundPage /></RequireAuth>} />
+        <Route path="dispatches"     element={<RequireAuth module="dispatches"><DispatchPage /></RequireAuth>} />
         <Route path="sales"          element={<RequireAuth module="sales"><SalesPage /></RequireAuth>} />
         <Route path="reports"        element={
           <RequireAuth module="reports">

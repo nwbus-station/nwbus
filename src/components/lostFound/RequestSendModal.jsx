@@ -1,5 +1,6 @@
 // نافذة «طلب إرسال» لموجود أو بلاغ مفقود: اختيار المحطة المطلوب الإرسال إليها، ثم يُشعَر موظفو المحطة التي فيها الغرض.
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import SelectField from '../shared/SelectField'
@@ -9,6 +10,7 @@ import { dispatchError } from '../../utils/dispatch'
 export default function RequestSendModal({ target, isAr = true, onClose, onDone }) {
   const t = (a, e) => (isAr ? a : e)
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const [stations, setStations] = useState([])
   const [toId, setToId] = useState('')
   const [note, setNote] = useState('')
@@ -36,7 +38,7 @@ export default function RequestSendModal({ target, isAr = true, onClose, onDone 
     setSaving(true); setErr('')
     const { error } = await supabase.rpc('dispatch_request_create', { p_ref_type: target.refType, p_ref_id: target.id, p_to: toId, p_note: note.trim() || null })
     setSaving(false)
-    if (error) { const m = dispatchError(error); setErr(m === 'SETUP' ? t('لم يُجهَّز قسم الإرساليات بعد: شغّل ملف SQL «024_dispatches» في Supabase', 'Run the 024_dispatches SQL in Supabase first') : m); return }
+    if (error) { const m = dispatchError(error); setErr(m === 'SETUP' ? t('لم يُجهَّز قسم الإرساليات بعد: شغّل ملفي SQL «024» و«025» في Supabase', 'Run the 024_dispatches SQL in Supabase first') : m); return }
     setOk(true)
     onDone?.()
   }
@@ -57,7 +59,10 @@ export default function RequestSendModal({ target, isAr = true, onClose, onDone 
             </div>
             <div style={{ fontWeight: 900, color: 'var(--text-1)' }}>{t('تم إرسال الطلب', 'Request sent')}</div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', margin: '6px 0 16px', lineHeight: 1.7 }}>{t(`أُشعر موظفو محطة ${target.stationName || ''} باسمك ووقت الطلب والمحطة المطلوب الإرسال إليها`, 'The station staff were notified with your name, the time and the destination')}</div>
-            <button type="button" onClick={onClose} style={{ padding: '10px 28px', borderRadius: 10, border: 'none', background: 'var(--text-1)', color: 'var(--card)', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>{t('تم', 'Done')}</button>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button type="button" onClick={onClose} style={{ padding: '10px 28px', borderRadius: 10, border: 'none', background: 'var(--text-1)', color: 'var(--card)', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>{t('تم', 'Done')}</button>
+              <button type="button" onClick={() => { onClose(); navigate('/dispatches?tab=requests') }} style={{ padding: '10px 22px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>{t('عرض طلبات الإرسال', 'View requests')}</button>
+            </div>
           </div>
         ) : (
           <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>

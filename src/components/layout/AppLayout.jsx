@@ -58,6 +58,17 @@ function NotificationBell({ profile }) {
     setLoading(false)
   }
 
+  // تصعيد الإرساليات المتأخرة تلقائياً: يكفي أن يفتح أي موظف النظام (مرة كل 30 دقيقة للمتصفح). فشلها صامت.
+  useEffect(() => {
+    if (!profile?.id) return
+    try {
+      const last = Number(localStorage.getItem('dsp_esc_at') || 0)
+      if (Date.now() - last < 30 * 60 * 1000) return
+      localStorage.setItem('dsp_esc_at', String(Date.now()))
+    } catch { /* بدون تخزين */ }
+    supabase.rpc('dispatch_escalate_overdue', { p_l1: 8, p_l2: 24 }).then(() => {}, () => {})
+  }, [profile?.id])
+
   useEffect(() => {
     if (!profile?.id) return
     load()
@@ -145,7 +156,7 @@ function NotificationBell({ profile }) {
             ) : notifs.map(n => {
               const s = TYPE_STYLE[n.type] ?? TYPE_STYLE.info
               return (
-                <div key={n.id} onClick={() => { markRead(n.id); if (n.ref_type === 'dispatch' && n.ref_id) { setOpen(false); navigate(`/lost-found?tab=dispatch&d=${n.ref_id}`) } }}
+                <div key={n.id} onClick={() => { markRead(n.id); if (n.ref_type === 'dispatch' && n.ref_id) { setOpen(false); navigate(`/dispatches?d=${n.ref_id}`) } }}
                   style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-start', background: n.is_read ? 'var(--card)' : 'var(--gold-dim)', cursor: 'pointer', transition: 'background 0.1s' }}>
                   <div style={{ width: 7, height: 7, borderRadius: 1, background: n.is_read ? 'var(--border-2)' : s.dot, marginTop: 6, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -374,6 +385,7 @@ function ChangePasswordModal({ isAr, onClose }) {
 const ICONS = {
   home:    ['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10'],
   bus:     ['M8 6v6','M15 6v6','M2 12h19.6','M18 18h2l1-3H3l1 3h2','M7 18a2 2 0 100 4 2 2 0 000-4z','M17 18a2 2 0 100 4 2 2 0 000-4z','M2 6h20v12H2z'],
+  box:     ['M21 8l-9-5-9 5v8l9 5 9-5V8z','M3 8l9 5 9-5','M12 13v8'],
   bag:     ['M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z','M3 6h18','M16 10a4 4 0 01-8 0'],
   sales:   ['M12 2v20','M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6'],
   grid:    ['M3 3h18v18H3z','M3 9h18','M3 15h18','M9 3v18','M15 3v18'],
@@ -399,7 +411,7 @@ const ICONS = {
 }
 
 // لون مميز لكل قسم بقائمة الجوال
-const NAV_HUE = { '/': '#6366f1', '/transportation': '#0ea5e9', '/lost-found': '#f59e0b', '/sales': '#10b981', '/reports': '#6366f1', '/leaves': '#8b5cf6', '/survey': '#f59e0b', '/evaluation': '#ec4899', '/my-rating': '#f59e0b', '/users': '#0ea5e9', '/stations': '#14b8a6', '/settings': '#64748b', '/data': '#6366f1', '/map': '#22c55e', '/customer-ratings': '#ec4899', '/employee-file': '#6366f1', '/calls': '#ef4444', '/magazine': '#ef4444' }
+const NAV_HUE = { '/dispatches': '#2563eb', '/': '#6366f1', '/transportation': '#0ea5e9', '/lost-found': '#f59e0b', '/sales': '#10b981', '/reports': '#6366f1', '/leaves': '#8b5cf6', '/survey': '#f59e0b', '/evaluation': '#ec4899', '/my-rating': '#f59e0b', '/users': '#0ea5e9', '/stations': '#14b8a6', '/settings': '#64748b', '/data': '#6366f1', '/map': '#22c55e', '/customer-ratings': '#ec4899', '/employee-file': '#6366f1', '/calls': '#ef4444', '/magazine': '#ef4444' }
 
 const NAV_GROUPS = [
   {
@@ -407,6 +419,7 @@ const NAV_GROUPS = [
       { to: '/',               labelAr: 'الرئيسية',      labelEn: 'Dashboard',      icon: 'home',    roles: null,                                          module: 'home' },
       { to: '/transportation', labelAr: 'الترحيل',        labelEn: 'Transportation', icon: 'bus',     roles: null,                                          module: 'transportation' },
       { to: '/lost-found',     labelAr: 'الموجودات',      labelEn: 'Lost & Found',   icon: 'bag',     roles: null,                                          module: 'lost_found' },
+      { to: '/dispatches',     labelAr: 'الإرساليات',     labelEn: 'Dispatches',     icon: 'box',     roles: null,                                          module: 'dispatches' },
       { to: '/sales',          labelAr: 'الإيرادات',      labelEn: 'Sales',          icon: 'sales',   roles: null,                                          module: 'sales' },
       { to: '/reports',        labelAr: 'التقارير',        labelEn: 'Reports',        icon: 'report',  roles: [...ADMIN_ROLE_VALUES,'station_admin','accountant'], module: 'reports' },
       { to: '/leaves',         labelAr: 'الإجازات',        labelEn: 'Leaves',         icon: 'leave',   roles: null, module: 'leaves' },

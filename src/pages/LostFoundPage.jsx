@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
@@ -13,7 +13,6 @@ import ConfirmDialog from '../components/shared/ConfirmDialog'
 import LostFoundArchive from '../components/lostFound/LostFoundArchive'
 import HandoverTab from '../components/lostFound/HandoverTab'
 import CharityTab, { donationScope } from '../components/lostFound/CharityTab'
-import DispatchTab from '../components/lostFound/DispatchTab'
 import { FormCard, Section, Banner, PrimaryButton } from '../components/lostFound/ui'
 import { ADMIN_ROLE_VALUES } from '../utils/constants'
 
@@ -685,7 +684,6 @@ const TABS = [
   { id: 'handover', ar: 'تسليم لصاحبه',      en: 'Hand Over',       hint: { ar: 'سلّم الغرض لمن جاء يطلبه', en: 'Give an item to its owner' } },
   { id: 'report',   ar: 'بلاغ مفقود',        en: 'Lost Report',     hideForEmployee: true, hint: { ar: 'عميل فقد غرضاً؟ سجّل بلاغه', en: 'A customer lost something' } },
   { id: 'charity',  ar: 'التسليم للجمعية',   en: 'Charity',         donorsOnly: true, hint: { ar: 'دفعة أغراض بمحضر رسمي', en: 'Batch hand-over with record' } },
-  { id: 'dispatch', ar: 'الإرساليات',        en: 'Dispatches',      hint: { ar: 'إرسال موجودات ومفقودات بين المحطات', en: 'Send items between stations' } },
   { id: 'logs',     ar: 'السجل والأرشيف',    en: 'Archive & Log',   hint: { ar: 'كل الموجودات والبلاغات السابقة', en: 'All past items and reports' } },
 ]
 
@@ -700,9 +698,8 @@ export default function LostFoundPage() {
   // تسليم الموجودات للجمعية: للمشرفين فقط (مشرف المحطة/المنطقة/الوردية) والإدارة
   const canDonate = ['station_admin', 'area_supervisor', 'shift_supervisor', ...ADMIN_ROLE_VALUES].includes(profile?.role)
   const isAr = i18n.language === 'ar'
-  const [params, setParams] = useSearchParams()
-  const [tab, setTab] = useState(() => (params.get('tab') === 'dispatch' ? 'dispatch' : 'register'))
-  const [focusId, setFocusId] = useState(() => params.get('d'))   // إرسالية/طلب مفتوح من إشعار
+  const navigate = useNavigate()
+  const [tab, setTab] = useState('register')
   const [preselect, setPreselect] = useState(null)   // غرض يُفتح مختاراً في تبويب التسليم للجمعية
   const [stations, setStations] = useState([])
   const [counts, setCounts] = useState({ unclaimed: null, reports: null, aging: null })
@@ -715,9 +712,7 @@ export default function LostFoundPage() {
       .then(({ data }) => setStations(data ?? []))
   }, [])
 
-  useEffect(() => { const d = params.get('d'); if (params.get('tab') === 'dispatch' && d) { setTab('dispatch'); setFocusId(d) } }, [params])
-
-  const TAB_CAP = { report: 'lostfound_report_tab', handover: 'lostfound_handover_tab', register: 'lostfound_register_tab', logs: 'lostfound_archive_tab', dispatch: 'lostfound_dispatch_tab' }
+  const TAB_CAP = { report: 'lostfound_report_tab', handover: 'lostfound_handover_tab', register: 'lostfound_register_tab', logs: 'lostfound_archive_tab' }
   const visibleTabs = TABS.filter(t => !(t.hideForEmployee && isEmployee) && !(t.donorsOnly && !canDonate) && allowCap(TAB_CAP[t.id]))
   const activeTab = visibleTabs.some(t => t.id === tab) ? tab : visibleTabs[0]?.id
 
@@ -753,6 +748,19 @@ export default function LostFoundPage() {
           ))}
         </div>
 
+        {/* ربط الموجودات بقسم الإرساليات والشحن (قسم مستقل) */}
+        <button type="button" onClick={() => navigate('/dispatches')}
+          style={{ width: '100%', marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, border: '1.5px solid rgba(37,99,235,0.4)', background: 'rgba(37,99,235,0.07)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
+          <span style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'rgba(37,99,235,0.15)', color: '#2563eb', flexShrink: 0 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" /><path d="M3 8l9 5 9-5M12 13v8" /></svg>
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontWeight: 900, fontSize: '0.9rem', color: 'var(--text-1)' }}>{isAr ? 'الإرساليات والشحن' : 'Dispatches & Shipping'}</span>
+            <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{isAr ? 'إرسال الموجودات والمفقودات بين المحطات واستلامها — قسم مستقل' : 'Send and receive items between stations'}</span>
+          </span>
+          <span aria-hidden="true" style={{ color: '#2563eb', fontWeight: 900 }}>{isAr ? '‹' : '›'}</span>
+        </button>
+
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${narrow ? 2 : Math.max(1, visibleTabs.length)}, minmax(0, 1fr))`, gap: 8, marginTop: 12 }}>
           {visibleTabs.map(t => {
             const on = activeTab === t.id
@@ -776,7 +784,6 @@ export default function LostFoundPage() {
       {activeTab === 'handover' && <HandoverTab    profile={profile} isAr={isAr} />}
       {activeTab === 'register' && <RegisterItemTab profile={profile} isAr={isAr} stations={stations} />}
       {activeTab === 'charity'  && canDonate && <CharityTab preselectId={preselect} onPreselectUsed={() => setPreselect(null)} isAr={isAr} />}
-      {activeTab === 'dispatch' && <DispatchTab isAr={isAr} focusId={focusId} onFocusDone={() => { setFocusId(null); setParams({}, { replace: true }) }} />}
       {activeTab === 'logs'     && <LostFoundArchive isAdmin={isAdmin} canDonate={canDonate} donateScope={donationScope({ isGeneralAdmin, isRestricted, allowedStationIds, profile })} onDonate={id => { setPreselect(id); setTab('charity') }} isAr={isAr} />}
     </div>
   )

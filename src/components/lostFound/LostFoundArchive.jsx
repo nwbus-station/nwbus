@@ -1,6 +1,7 @@
 // السجل والأرشيف: الموجودات وبلاغات المفقودات كبطاقات مع فلاتر ومؤشرات.
 // تسليم الموجودات للجمعية للمشرفين فقط (canDonate)، والحذف للأدمن فقط (isAdmin).
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { getCached, setCached, clearCached } from '../../lib/pageCache'
 import { ITEM_TYPES } from '../../utils/constants'
@@ -79,6 +80,7 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
   const [dispMap, setDispMap] = useState({})   // ref_id → إرساليات مرتبطة بالغرض
   const [reqMap, setReqMap] = useState({})     // ref_id → طلبات إرسال مفتوحة
   const [reqTarget, setReqTarget] = useState(null)
+  const navigate = useNavigate()
   const [stationNames, setStationNames] = useState({})
   useEffect(() => { supabase.from('stations').select('id, name_ar, name_en').then(({ data }) => setStationNames(Object.fromEntries((data ?? []).map(x => [x.id, x.name_ar || x.name_en])))) }, [])
 
@@ -89,8 +91,8 @@ export default function LostFoundArchive({ isAdmin = false, canDonate = false, o
     if (!ds.length && !rn) return null
     return (
       <div style={{ padding: '0 14px 10px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {ds.map(d => { const m = DISPATCH_STATUS[d.status] || DISPATCH_STATUS.in_transit; return <span key={d.id} title={isAr ? m.ar : m.en} style={{ fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: m.bg, color: m.color, fontFamily: MONO }} dir="ltr">{d.ticket_no} · {isAr ? m.ar : m.en}</span> })}
-        {rn > 0 && <span style={{ fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: 'rgba(217,119,6,0.15)', color: '#d97706' }}>{t('طلب إرسال مفتوح', 'Open send request')}</span>}
+        {ds.map(d => { const m = DISPATCH_STATUS[d.status] || DISPATCH_STATUS.in_transit; return <button type="button" key={d.id} onClick={() => navigate(`/dispatches?d=${d.id}`)} title={isAr ? 'فتح الإرسالية' : 'Open dispatch'} style={{ border: 'none', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: m.bg, color: m.color, fontFamily: MONO }} dir="ltr">{d.ticket_no} · {isAr ? m.ar : m.en}</button> })}
+        {rn > 0 && <button type="button" onClick={() => navigate('/dispatches?tab=requests')} style={{ border: 'none', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 99, background: 'rgba(217,119,6,0.15)', color: '#d97706', fontFamily: 'inherit' }}>{t('طلب إرسال مفتوح', 'Open send request')}</button>}
       </div>
     )
   }
