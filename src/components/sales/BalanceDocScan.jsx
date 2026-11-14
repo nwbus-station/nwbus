@@ -29,7 +29,9 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled, require
   const [error, setError] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
   const [localUrl, setLocalUrl] = useState('')
-  const [scanning, setScanning] = useState(false)
+  const [scanFile, setScanFile] = useState(null)   // لقطة كاميرا الجهاز بانتظار القص/المراجعة
+  const camRef = useRef(null)
+  const [dragOver, setDragOver] = useState(false)
 
   // تسخين الماسح بالخلفية (تحميل OpenCV مرة واحدة) ليفتح فورياً عند الضغط
   useEffect(() => {
@@ -72,6 +74,17 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled, require
     setBusy(false)
   }
 
+  // لصق صورة (Ctrl+V) من الحافظة، أو سحبها وإفلاتها — لمن يعمل من الكمبيوتر
+  useEffect(() => {
+    if (disabled) return
+    const onPaste = e => {
+      const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith('image/') || x.type === 'application/pdf')
+      if (f) { e.preventDefault(); onPick(f) }
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function remove() {
     setConfirmDel(false)
     await drop(path)
@@ -79,7 +92,9 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled, require
   }
 
   return (
-    <div>
+    <div onDragOver={e => { if (!disabled) { e.preventDefault(); setDragOver(true) } }} onDragLeave={() => setDragOver(false)}
+      onDrop={e => { e.preventDefault(); setDragOver(false); if (!disabled) { const f = e.dataTransfer?.files?.[0]; if (f) onPick(f) } }}
+      className={dragOver ? 'rounded-lg ring-2 ring-emerald-400 bg-emerald-50/40' : ''}>
       <div className="flex items-center justify-between mb-1">
         <label className="text-[11px] font-bold text-gray-500">
           {isAr ? 'ورقة الموازنة' : 'Balance document'}
@@ -101,24 +116,26 @@ export default function BalanceDocScan({ path, onChange, isAr, disabled, require
             <img src={preview} alt={isAr ? 'ورقة الموازنة' : 'Balance document'} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
           </a>
         )}
-        <button type="button" onClick={() => setScanning(true)} disabled={busy || disabled}
-          className="flex items-center gap-2 border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-          {busy ? (isAr ? 'جارٍ الرفع...' : 'Uploading...') : path ? (isAr ? 'استبدال الصورة' : 'Replace scan') : 'Scan document'}
+        <button type="button" onClick={() => camRef.current?.click()} disabled={busy || disabled}
+          className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+          {busy ? (isAr ? 'جارٍ الرفع...' : 'Uploading...') : path ? (isAr ? 'تصوير من جديد' : 'Retake photo') : (isAr ? 'تصوير الموازنة' : 'Photograph balance sheet')}
         </button>
         <button type="button" onClick={() => inputRef.current?.click()} disabled={busy || disabled}
-          className="border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">{isAr ? 'ماسح الجوال / رفع ملف' : 'Phone scanner / upload'}</button>
+          className="border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">{isAr ? 'رفع صورة / PDF' : 'Upload image / PDF'}</button>
         {path && !busy && (
           <button type="button" onClick={() => setConfirmDel(true)} className="text-xs text-red-500 hover:text-red-700 font-semibold">{isAr ? 'إزالة' : 'Remove'}</button>
         )}
       </div>
       <input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; onPick(f) }} />
-      <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">{isAr ? 'ماسح الجوال: على الآيفون اختر «اختيار ملف» ثم ⋯ ← «مسح المستندات» (Scan Documents)، وعلى الأندرويد اختر ماسح المستندات من الكاميرا. يُقبل صورة أو PDF.' : 'Phone scanner: on iPhone choose "Choose File" then ⋯ > Scan Documents. Images or PDF accepted.'}</p>
+      <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setScanFile(f) }} />
+      <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">{isAr ? 'اضغط «تصوير الموازنة» ليفتح تطبيق كاميرا جوالك (أوضح تصوير)، ثم تُقصّ الورقة وتُحسَّن تلقائياً وتراجعها بضغطة. للموازنة متعددة الصفحات استخدم «إضافة صفحة». من الكمبيوتر: ارفع ملفاً أو اسحب الصورة هنا أو الصقها (Ctrl+V).' : 'Tap "Photograph" to open your phone camera; the sheet is auto-cropped and enhanced. Use "Add page" for multi-page sheets. On desktop: upload, drag here, or paste (Ctrl+V).'}</p>
       {error && <p className="text-xs text-red-600 mt-1.5">{error}</p>}
-      {scanning && (
+      {scanFile && (
         <Suspense fallback={null}>
-          <DocScannerModal isAr={isAr} onClose={() => setScanning(false)} onDone={blob => { setScanning(false); onPick(blob, true) }} />
+          <DocScannerModal isAr={isAr} file={scanFile} onClose={() => setScanFile(null)} onDone={blob => { setScanFile(null); onPick(blob, true) }} />
         </Suspense>
       )}
       {confirmDel && (

@@ -179,6 +179,8 @@ export function warp(cv, img, quad, mode = 'color', rot = 0) {
       cv.adaptiveThreshold(norm, norm, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 12)
       cv.cvtColor(norm, dst, cv.COLOR_GRAY2RGBA)
       g.delete(); bg.delete(); norm.delete()
+    } else if (mode === 'orig') {
+      // الأصلية: بلا أي تحسين (الأنسب للإيصالات الحرارية والخط الدقيق)
     } else {
       // ألوان محسّنة: تسوية الإضاءة بالقسمة على الخلفية ثم تباين خفيف
       const rgb = new cv.Mat(), out = new cv.Mat()

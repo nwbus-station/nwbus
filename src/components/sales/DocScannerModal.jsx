@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { getEngine } from '../../utils/docScan'
 
 const STABLE_MS = 900       // مدة بقاء كل الشروط متحققة قبل الالتقاط التلقائي
@@ -8,7 +9,27 @@ const lerp = (a, b, t) => a + (b - a) * t
 const avgDist = (a, b) => a.reduce((s, p, i) => s + Math.hypot(p.x - b[i].x, p.y - b[i].y), 0) / a.length
 
 // ماسح مستندات على طراز تطبيقات المسح: كشف حيّ مستقر → التقاط → ضبط الحواف بالسحب → فلاتر وتدوير → اعتماد
-export default function DocScannerModal({ isAr, onDone, onClose }) {
+// تجميع صفحات الموازنة في PDF واحد (كل صفحة بحجم صورتها)
+async function pagesToPdf(blobs) {
+  const { jsPDF } = await import('jspdf')
+  let doc = null
+  for (const b of blobs) {
+    const bmp = await createImageBitmap(b)
+    const w = bmp.width, h = bmp.height
+    const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b) })
+    if (!doc) doc = new jsPDF({ unit: 'px', format: [w, h], orientation: w > h ? 'l' : 'p', compress: true })
+    else doc.addPage([w, h], w > h ? 'l' : 'p')
+    doc.addImage(data, 'JPEG', 0, 0, w, h)
+  }
+  return doc.output('blob')
+}
+
+// file: لقطة جاهزة من كاميرا الجهاز الأصلية (الوضع الموصى به) — بدونها يعمل البث المباشر القديم
+export default function DocScannerModal({ isAr, onDone, onClose, file: initialFile = null }) {
+  const nativeMode = !!initialFile
+  const pagesRef = useRef([])
+  const [pageCount, setPageCount] = useState(0)
+  const [cropOn, setCropOn] = useState(false)   // القص مفعّل فقط إذا ضبطه المستخدم (الورقة الطويلة/عدة أوراق بالصورة لا يصلح لها القص التلقائي)
   const videoRef = useRef(null)
   const overlayRef = useRef(null)
   const progressRef = useRef(null)
@@ -31,10 +52,10 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   const detectedRef = useRef(null)   // الزوايا المكتشفة تلقائياً على الإطار الكامل
   const boxRef = useRef(null)
   const fileRef = useRef(null)
-  const [stage, setStage] = useState('loading') // loading | camera | processing | crop | rendering | review | error
+  const [stage, setStage] = useState(initialFile ? 'processing' : 'loading') // loading | camera | processing | crop | rendering | review | error
   const [hint, setHint] = useState('')
   const [error, setError] = useState('')
-  const [mode, setMode] = useState('color')
+  const [mode, setMode] = useState(initialFile ? 'orig' : 'color')
   const [rot, setRot] = useState(0)
   const [auto, setAuto] = useState(true)
   const [torch, setTorch] = useState({ supported: false, on: false })
@@ -96,7 +117,7 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   useEffect(() => {
     aliveRef.current = true
     getEngine().warmup()
-    startCamera()
+    if (initialFile) onFile(initialFile); else startCamera()
     const onVis = () => { if (document.visibilityState === 'visible' && aliveRef.current && !capturedRef.current && streamRef.current && streamRef.current.getVideoTracks()[0]?.readyState === 'ended') startCamera() }
     document.addEventListener('visibilitychange', onVis)
     return () => { aliveRef.current = false; document.removeEventListener('visibilitychange', onVis); stopStream() }
@@ -250,15 +271,18 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
     capturedRef.current = true; stopStream(); setStage('processing')
     try {
       const bmp = await createImageBitmap(file)
-      const k = Math.min(1, 2200 / Math.max(bmp.width, bmp.height))
+      const k = Math.min(1, 3000 / Math.max(bmp.width, bmp.height))
       const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k)
       c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height)
       const r = await getEngine().capture([await createImageBitmap(c)], null, mode)
       const W = r.width, H = r.height
       detectedRef.current = r.quad
       setCap({ url: URL.createObjectURL(r.preview), w: W, h: H })
-      setPts(r.quad ?? [{ x: W * 0.1, y: H * 0.1 }, { x: W * 0.9, y: H * 0.1 }, { x: W * 0.9, y: H * 0.9 }, { x: W * 0.1, y: H * 0.9 }])
-      setStage('crop')
+      // نبدأ بالصورة كاملة محسّنة (بدون قص): هذا يناسب الإيصال الطويل ووجود أوراق متعددة بالصورة. القص اختياري من «تعديل الحواف»
+      setPts([{ x: W * 0.03, y: H * 0.03 }, { x: W * 0.97, y: H * 0.03 }, { x: W * 0.97, y: H * 0.97 }, { x: W * 0.03, y: H * 0.97 }])
+      setCropOn(false); setRot(0)
+      const ok = await renderResult({ mode, crop: false, rot: 0 })
+      setStage(ok ? 'review' : 'crop')
     } catch { setError(isAr ? 'تعذّرت قراءة الصورة.' : 'Could not read the image.'); setStage('error') }
   }
 
@@ -271,24 +295,33 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
   async function confirmCrop() {
     setStage('rendering')
     const ok = await renderResult({ mode, crop: true, quad: pts, rot })
+    if (ok) setCropOn(true)
     setStage(ok ? 'review' : 'crop')
   }
-  const changeMode = m => { setMode(m); renderResult({ mode: m, crop: true, quad: pts, rot }) }
-  const rotate = () => { const r = (rot + 1) % 4; setRot(r); renderResult({ mode, crop: true, quad: pts, rot: r }) }
+  const changeMode = m => { setMode(m); renderResult({ mode: m, crop: cropOn, quad: pts, rot }) }
+  const rotate = () => { const r = (rot + 1) % 4; setRot(r); renderResult({ mode, crop: cropOn, quad: pts, rot: r }) }
   async function toggleTorch() {
     const track = streamRef.current?.getVideoTracks()[0]
     try { await track.applyConstraints({ advanced: [{ torch: !torch.on }] }); setTorch(t => ({ ...t, on: !t.on })) } catch { /* غير مدعوم */ }
   }
   const close = () => { aliveRef.current = false; stopStream(); onClose() }
-  const accept = () => { if (blobRef.current) { setBusy(true); onDone(blobRef.current) } }
+  // إعادة التصوير / صفحة جديدة: كاميرا الجهاز الأصلية في الوضع الجديد، والبث المباشر في القديم
+  const retake = () => { if (nativeMode) fileRef.current?.click(); else startCamera() }
+  const addPage = () => { if (!blobRef.current) return; pagesRef.current = [...pagesRef.current, blobRef.current]; setPageCount(pagesRef.current.length); blobRef.current = null; fileRef.current?.click() }
+  const accept = async () => {
+    if (!blobRef.current) return
+    setBusy(true)
+    try { onDone(pagesRef.current.length ? await pagesToPdf([...pagesRef.current, blobRef.current]) : blobRef.current) }
+    catch { setBusy(false); setError(isAr ? 'تعذّر تجميع الصفحات.' : 'Could not combine pages.') }
+  }
   const toggleAuto = () => { autoRef.current = !autoRef.current; setAuto(autoRef.current); stableSinceRef.current = 0 }
 
   const titles = { crop: isAr ? 'اضبط حواف الورقة' : 'Adjust the edges', review: isAr ? 'مراجعة المسح' : 'Review scan' }
 
-  return (
-    <div className="fixed inset-0 z-[70] bg-black flex flex-col select-none touch-none" dir={isAr ? 'rtl' : 'ltr'}>
+  return createPortal(
+    <div className="fixed inset-0 z-[10050] bg-black flex flex-col select-none touch-none" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between px-4 py-3 text-white">
-        <span className="font-bold text-sm">{titles[stage] || 'Scan document'}</span>
+        <span className="font-bold text-sm">{titles[stage] || 'Scan document'}{pageCount > 0 && <span className="ms-2 text-[11px] font-semibold bg-sky-500/90 rounded-full px-2 py-0.5">{isAr ? `الصفحات: ${pageCount + (stage === 'review' ? 1 : 0)}` : `Pages: ${pageCount + (stage === 'review' ? 1 : 0)}`}</span>}</span>
         <div className="flex items-center gap-2">
           {stage === 'camera' && torch.supported && <button type="button" onClick={toggleTorch} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${torch.on ? 'bg-amber-400 text-black' : 'bg-white/15'}`}>{isAr ? 'الإضاءة' : 'Light'}</button>}
           {stage === 'camera' && <button type="button" onClick={toggleAuto} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${auto ? 'bg-emerald-500' : 'bg-white/15'}`}>{auto ? (isAr ? 'تلقائي' : 'Auto') : (isAr ? 'يدوي' : 'Manual')}</button>}
@@ -353,7 +386,7 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
           <div className="space-y-3">
             <p className="text-xs text-white/80 text-center">{isAr ? 'اسحب الدوائر الخضراء إلى زوايا الورقة بدقة' : 'Drag the green handles to the page corners'}</p>
             <div className="flex gap-2">
-              <button type="button" onClick={startCamera} className="flex-1 py-3 rounded-lg bg-white/15 font-bold text-sm">{isAr ? 'إعادة التصوير' : 'Retake'}</button>
+              <button type="button" onClick={retake} className="flex-1 py-3 rounded-lg bg-white/15 font-bold text-sm">{isAr ? 'إعادة التصوير' : 'Retake'}</button>
               {detectedRef.current && <button type="button" onClick={() => setPts(detectedRef.current)} className="px-4 py-3 rounded-lg bg-white/15 font-semibold text-sm">{isAr ? 'قص تلقائي' : 'Auto'}</button>}
               <button type="button" onClick={confirmCrop} className="flex-1 py-3 rounded-lg bg-emerald-500 text-white font-bold text-sm">{isAr ? 'متابعة' : 'Continue'}</button>
             </div>
@@ -362,14 +395,15 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
         {stage === 'review' && (
           <div className="space-y-3">
             <div className="flex items-center justify-center gap-2 text-xs flex-wrap">
-              {[{ v: 'color', l: isAr ? 'ألوان محسّنة' : 'Enhanced color' }, { v: 'bw', l: isAr ? 'أبيض وأسود' : 'Black & white' }].map(o => (
+              {[{ v: 'orig', l: isAr ? 'الأصلية' : 'Original' }, { v: 'color', l: isAr ? 'محسّنة' : 'Enhanced' }, { v: 'bw', l: isAr ? 'أبيض وأسود' : 'Black & white' }].map(o => (
                 <button key={o.v} type="button" disabled={busy} onClick={() => changeMode(o.v)} className={`px-3 py-1.5 rounded-lg font-semibold ${mode === o.v ? 'bg-white text-black' : 'bg-white/15 text-white'}`}>{o.l}</button>
               ))}
               <button type="button" disabled={busy} onClick={rotate} className="px-3 py-1.5 rounded-lg bg-white/15 font-semibold">{isAr ? 'تدوير' : 'Rotate'}</button>
               <button type="button" disabled={busy} onClick={() => setStage('crop')} className="px-3 py-1.5 rounded-lg bg-white/15 font-semibold">{isAr ? 'تعديل الحواف' : 'Edit edges'}</button>
+              {nativeMode && <button type="button" disabled={busy} onClick={addPage} className="px-3 py-1.5 rounded-lg bg-sky-500/90 font-semibold">{isAr ? '+ إضافة صفحة' : '+ Add page'}</button>}
             </div>
             <div className="flex gap-3">
-              <button type="button" onClick={startCamera} disabled={busy} className="flex-1 py-3 rounded-lg bg-white/15 font-bold text-sm">{isAr ? 'إعادة التصوير' : 'Retake'}</button>
+              <button type="button" onClick={retake} disabled={busy} className="flex-1 py-3 rounded-lg bg-white/15 font-bold text-sm">{isAr ? 'إعادة التصوير' : 'Retake'}</button>
               <button type="button" onClick={accept} disabled={busy} className="flex-1 py-3 rounded-lg bg-emerald-500 text-white font-bold text-sm disabled:opacity-50">{isAr ? 'اعتماد' : 'Use scan'}</button>
             </div>
           </div>
@@ -377,13 +411,14 @@ export default function DocScannerModal({ isAr, onDone, onClose }) {
         {stage === 'error' && (
           <div className="flex flex-col items-center gap-3">
             <div className="flex gap-3 justify-center flex-wrap">
-              <button type="button" onClick={startCamera} className="px-5 py-2.5 rounded-lg bg-white/15 font-bold text-sm">{isAr ? 'إعادة المحاولة' : 'Try again'}</button>
+              <button type="button" onClick={retake} className="px-5 py-2.5 rounded-lg bg-white/15 font-bold text-sm">{isAr ? 'إعادة المحاولة' : 'Try again'}</button>
               <button type="button" onClick={() => fileRef.current?.click()} className="px-5 py-2.5 rounded-lg bg-emerald-500 font-bold text-sm">{isAr ? 'التقاط بكاميرا الجهاز' : 'Use device camera'}</button>
             </div>
           </div>
         )}
         <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; onFile(f) }} />
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
