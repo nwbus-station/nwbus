@@ -1196,7 +1196,12 @@ input.amt-input, input.amt-hero { background: transparent !important; border: 0 
 .dk-bar::after { content: ''; position: absolute; inset-inline: 0; bottom: -1px; height: 2px; pointer-events: none; background: linear-gradient(90deg, transparent, #264673 18%, #EE712D 50%, #264673 82%, transparent); opacity: .75; }
 .dk-logo { padding: 4px 2px; }
 .dk-sep { width: 1px; height: 26px; background: var(--border-2); flex-shrink: 0; }
-.dk-nav { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; overflow: hidden; }
+.dk-nav { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.dk-nav::-webkit-scrollbar { display: none; }
+.dk-nav.compact { gap: 2px; }
+.dk-pill.ico { width: 38px; padding: 0; justify-content: center; }
+.dk-pill.ico span { display: none; }
+.dk-pill.ico svg { display: block !important; opacity: .85; }
 .dk-meas { position: absolute; visibility: hidden; pointer-events: none; height: 0; overflow: hidden; display: flex; gap: 4px; white-space: nowrap; }
 .dk-pill { --hue: #5B5BD6; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 11px; border: 1px solid transparent; background: transparent; color: var(--text-2); font-family: inherit; font-size: .87rem; font-weight: 600; white-space: nowrap; text-decoration: none; cursor: pointer; flex-shrink: 0; transition: background .14s, color .14s, border-color .14s, transform .1s; }
 .dk-pill svg { opacity: .8; flex-shrink: 0; }
@@ -1218,7 +1223,7 @@ input.amt-input, input.amt-hero { background: transparent !important; border: 0 
 .dk-user-t { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; min-width: 0; text-align: start; }
 .dk-user-t b { font-size: .8rem; color: var(--text-1); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dk-user-t small { font-size: .66rem; color: var(--accent); font-weight: 600; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 1280px) { .dk-user-t { display: none; } .dk-user { padding: 0 8px 0 6px; } .dk-pill { padding: 0 11px; font-size: .84rem; } .dk-pill:not(.dk-more) svg { display: none; } .dk-logo svg { height: 30px; width: auto; } }
+@media (max-width: 1280px) { .dk-user-t { display: none; } .dk-user { padding: 0 8px 0 6px; } .dk-pill { padding: 0 11px; font-size: .84rem; } .dk-logo svg { height: 30px; width: auto; } }
 .dk-av { width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; background: linear-gradient(135deg, #5B5BD6, #8b5cf6); color: #fff; font-size: .76rem; font-weight: 800; flex-shrink: 0; }
 .dk-av.big { width: 42px; height: 42px; font-size: .9rem; }
 .dk-menu { position: absolute; top: calc(100% + 10px); inset-inline-end: 0; width: 290px; background: var(--card); border: 1px solid var(--border-2); border-radius: 16px; box-shadow: 0 24px 60px -12px rgba(0,0,0,.5); padding: 8px; z-index: 60; animation: dkPop .16s ease-out; }

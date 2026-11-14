@@ -768,7 +768,7 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
   const measRef = useRef(null)
   const [avail, setAvail] = useState(0)
   const [widths, setWidths] = useState([])
-  const [pop, setPop] = useState(null)       // 'more' | 'user' | null
+  const [pop, setPop] = useState(null)       // 'user' | null
   const [pal, setPal] = useState(false)
   const [scrolled, setScrolled] = useState(false)
 
@@ -801,24 +801,13 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
     return () => { document.removeEventListener('mousedown', down); window.removeEventListener('keydown', key) }
   }, [pop])
 
-  const GAP = 4, MORE_W = 134
-  let k = items.length
-  if (widths.length === items.length && avail) {
-    const total = widths.reduce((a, b) => a + b, 0) + GAP * Math.max(0, items.length - 1)
-    if (total > avail) {
-      let acc = 0; k = 0
-      for (const w of widths) { if (acc + w + GAP > avail - MORE_W) break; acc += w + GAP; k++ }
-    }
-  }
-  let visible = items.slice(0, k)
-  const activeIdx = items.findIndex(it => isOnPath(it.to, pathname))
-  if (k > 0 && activeIdx >= k) visible = [...items.slice(0, k - 1), items[activeIdx]]
-  const hasMore = k < items.length
+  // الأقسام كلها ظاهرة دائماً: إن اتسع الاسم مع الأيقونة نعرضه، وإلا أيقونات فقط مع اسم القسم النشط وتلميح للبقية
+  const total = widths.reduce((acc, w) => acc + w, 0) + 4 * Math.max(0, widths.length - 1)
+  const compact = !!avail && widths.length === items.length && total > avail
   const label = it => (isAr ? it.labelAr : it.labelEn)
   const hueStyle = it => ({ '--hue': NAV_HUE[it.to] || '#5B5BD6' })
   const initials = String(profile?.full_name_ar || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
   const themes = [['auto', isAr ? 'تلقائي' : 'Auto'], ['light', isAr ? 'نهاري' : 'Light'], ['dark', isAr ? 'ليلي' : 'Dark'], ['system', isAr ? 'الجهاز' : 'Device']]
-  const groupTitle = i => (i === 0 ? (isAr ? 'العمليات' : 'Operations') : (isAr ? 'الإدارة' : 'Administration'))
   const go = to => { setPop(null); setPal(false); navigate(to) }
 
   return (
@@ -827,21 +816,15 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
         <NavLink to="/" className="brand-mark dk-logo" aria-label="North West Bus"><NWLogo height={34} /></NavLink>
         <span className="dk-sep" aria-hidden="true" />
 
-        <nav ref={navRef} className="dk-nav" aria-label={isAr ? 'الأقسام' : 'Sections'}>
-          {visible.map(it => {
+        <nav ref={navRef} className={`dk-nav${compact ? ' compact' : ''}`} aria-label={isAr ? 'الأقسام' : 'Sections'}>
+          {items.map(it => {
             const on = isOnPath(it.to, pathname)
             return (
-              <NavLink key={it.to} to={it.to} end={it.to === '/'} className={`dk-pill${on ? ' on' : ''}`} style={hueStyle(it)} aria-current={on ? 'page' : undefined}>
+              <NavLink key={it.to} to={it.to} end={it.to === '/'} className={`dk-pill${on ? ' on' : ''}${compact && !on ? ' ico' : ''}`} style={hueStyle(it)} title={label(it)} aria-label={label(it)} aria-current={on ? 'page' : undefined}>
                 {ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={16} />}<span>{label(it)}</span>
               </NavLink>
             )
           })}
-          {hasMore && (
-            <button type="button" data-dk-pop className={`dk-pill dk-more${pop === 'more' ? ' on' : ''}`} onClick={() => setPop(p => (p === 'more' ? null : 'more'))} aria-expanded={pop === 'more'} aria-haspopup="true">
-              <Icon d={ICONS.grid} size={15} /><span>{isAr ? 'الأقسام' : 'All'}</span>
-              <b className="dk-count">{items.length - visible.length}</b><CaretIco />
-            </button>
-          )}
           {/* نسخة مخفية للقياس */}
           <div ref={measRef} className="dk-meas" aria-hidden="true">
             {items.map(it => <span key={it.to} className="dk-pill">{ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={16} />}<span>{label(it)}</span></span>)}
@@ -882,23 +865,6 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
           </div>
         </div>
 
-        {pop === 'more' && (
-          <div className="dk-mega" data-dk-pop role="menu">
-            {groups.map((g, gi) => (
-              <section key={gi}>
-                <p className="dk-mega-t">{groupTitle(gi)}</p>
-                <div className="dk-mega-grid">
-                  {g.items.map(it => (
-                    <NavLink key={it.to} to={it.to} end={it.to === '/'} className={`dk-card${isOnPath(it.to, pathname) ? ' on' : ''}`} style={hueStyle(it)} onClick={() => setPop(null)}>
-                      <span className="dk-card-i">{ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={17} />}</span>
-                      <span>{label(it)}</span>
-                    </NavLink>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        )}
       </header>
 
       {pal && <DeskPalette items={items} isAr={isAr} pathname={pathname} onGo={go} onClose={() => setPal(false)} label={label} hueStyle={hueStyle} />}
