@@ -43,7 +43,8 @@ function quadsFromMask(cv, mask, w, h, out, gray, grad) {
     for (let i = 0; i < contours.size(); i++) {
       const cnt = contours.get(i)
       const area = cv.contourArea(cnt)
-      if (area > w * h * 0.1 && area < w * h * 0.985) {
+      // الورقة العادية ≥10% من الإطار؛ والإيصال الحراري الطويل الضيق قد يكون أقل (≥3%) فنقبله إن كان مستطيلاً فعلاً
+      if (area > w * h * 0.03 && area < w * h * 0.985) {
         const hull = new cv.Mat()
         cv.convexHull(cnt, hull, false, true)
         const hullArea = cv.contourArea(hull)
@@ -66,6 +67,13 @@ function quadsFromMask(cv, mask, w, h, out, gray, grad) {
           if (rectArea > 0 && area / rectArea >= 0.8) {
             q = orderQuad(cv.RotatedRect.points(r).map(p => ({ x: p.x, y: p.y })))
           } else q = null
+        }
+        if (q && area < w * h * 0.1) {
+          // صغير الحجم: نقبله فقط إن كان مستطيلاً مستقيماً طويلاً (إيصال) وليس بقعة
+          const r = cv.minAreaRect(cnt), ra = r.size.width * r.size.height
+          const asp = Math.max(r.size.width, r.size.height) / Math.max(1, Math.min(r.size.width, r.size.height))
+          if (!(ra > 0 && area / ra >= 0.82 && asp >= 3)) q = null
+          else q = orderQuad(cv.RotatedRect.points(r).map(p => ({ x: p.x, y: p.y })))
         }
         if (q && angleOk(q)) {
           // قوة الحواف على محيط المرشّح: حدود الورقة الحقيقية فيها تدرّج لوني قوي على أضلاعها الأربعة، أما المنطقة الخاطئة فأضلاعها على فراغ/حافة الإطار
@@ -141,7 +149,17 @@ export function detectQuad(cv, img, maxW = 320) {
   if (!found.length) return null
   found.sort((a, b) => b.area - a.area)
   detectQuad.last = found.map(f => f.dbg)
-  return found[0].q.map(p => ({ x: p.x / scale, y: p.y / scale }))
+  // مرشّحون متعددون (دون تكرار): الأول الأرجح، والباقي لخيار «ورقة أخرى»
+  const cand = []
+  const cen = q => ({ x: q.reduce((a, p) => a + p.x, 0) / 4, y: q.reduce((a, p) => a + p.y, 0) / 4 })
+  for (const f of found) {
+    const c = cen(f.q), diag = Math.hypot(img.width, img.height) * scale
+    const dup = cand.some(o => { const oc = cen(o.q); return Math.hypot(c.x - oc.x, c.y - oc.y) < diag * 0.06 })
+    if (!dup) cand.push(f)
+    if (cand.length >= 4) break
+  }
+  detectQuad.cands = cand.map(f => f.q.map(p => ({ x: p.x / scale, y: p.y / scale })))
+  return detectQuad.cands[0]
 }
 
 // خلفية الإضاءة بسرعة: نصغّر الصورة (÷8)، نطمس، ثم نكبّرها (أسرع بكثير من طمس كبير على الدقة الكاملة)

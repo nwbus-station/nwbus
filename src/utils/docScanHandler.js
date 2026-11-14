@@ -60,13 +60,14 @@ export async function handle(data) {
     }
     state.img = best
     state.quad = detectQuad(cv, best, 900) ?? data.hint ?? null  // إعادة كشف بدقة أعلى على الإطار الكامل
+    const quads = state.quad && detectQuad.cands?.length ? detectQuad.cands : (state.quad ? [state.quad] : [])
     // معاينة الإطار الكامل لشاشة ضبط الحواف
     const k = Math.min(1, 1280 / best.width)
     const pc = mkCanvas(Math.round(best.width * k), Math.round(best.height * k))
     const full = mkCanvas(best.width, best.height)
     full.getContext('2d').putImageData(best, 0, 0)
     pc.getContext('2d').drawImage(full, 0, 0, pc.width, pc.height)
-    return { preview: await toBlob(pc, 0.82), width: best.width, height: best.height, quad: state.quad }
+    return { preview: await toBlob(pc, 0.82), width: best.width, height: best.height, quad: state.quad, quads }
   }
   if (data.type === 'render') {
     if (!state.img) return null

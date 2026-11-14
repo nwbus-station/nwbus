@@ -29,6 +29,8 @@ export default function DocScannerModal({ isAr, onDone, onClose, file: initialFi
   const nativeMode = !!initialFile
   const pagesRef = useRef([])
   const [pageCount, setPageCount] = useState(0)
+  const [quads, setQuads] = useState([])       // مرشّحو الورقة المكتشفون
+  const [qi, setQi] = useState(0)
   const [cropOn, setCropOn] = useState(false)   // القص مفعّل فقط إذا ضبطه المستخدم (الورقة الطويلة/عدة أوراق بالصورة لا يصلح لها القص التلقائي)
   const videoRef = useRef(null)
   const overlayRef = useRef(null)
@@ -261,6 +263,27 @@ export default function DocScannerModal({ isAr, onDone, onClose, file: initialFi
     const r = boxRef.current.getBoundingClientRect()
     return { x: Math.max(0, Math.min(cap.w, ((e.clientX - r.left) / r.width) * cap.w)), y: Math.max(0, Math.min(cap.h, ((e.clientY - r.top) / r.height) * cap.h)) }
   }
+  // تحديد يدوي: اسحب على الورقة لرسم المنطقة المطلوبة (مستطيل جديد)، أو حرّك الزوايا الخضراء للتعديل الدقيق
+  const rectStart = useRef(null)
+  const onBoxDown = e => {
+    if (e.target !== e.currentTarget && !e.target.dataset.sel) return
+    e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId)
+    const p = toImgCoords(e); rectStart.current = p
+    setPts([p, p, p, p])
+  }
+  const onBoxMove = e => {
+    if (!rectStart.current) return onMove(e)
+    const a = rectStart.current, b = toImgCoords(e)
+    const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x), y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y)
+    setPts([{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }, { x: x1, y: y2 }])
+  }
+  const onBoxUp = () => {
+    if (rectStart.current) {
+      rectStart.current = null
+      setPts(prev => { const w = Math.abs(prev[1].x - prev[0].x), h = Math.abs(prev[3].y - prev[0].y); return w < cap.w * 0.04 || h < cap.h * 0.04 ? (detectedRef.current ?? quads[0] ?? [{ x: cap.w * 0.03, y: cap.h * 0.03 }, { x: cap.w * 0.97, y: cap.h * 0.03 }, { x: cap.w * 0.97, y: cap.h * 0.97 }, { x: cap.w * 0.03, y: cap.h * 0.97 }]) : prev })   // لمسة عابرة: نرجع للتحديد السابق
+    }
+    onUp()
+  }
   const onDown = (i, e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); setDrag({ i }) }
   const onMove = e => { if (!drag) return; const p = toImgCoords(e); setPts(prev => prev.map((q, j) => (j === drag.i ? p : q))) }
   const onUp = () => setDrag(null)
@@ -278,10 +301,14 @@ export default function DocScannerModal({ isAr, onDone, onClose, file: initialFi
       const W = r.width, H = r.height
       detectedRef.current = r.quad
       setCap({ url: URL.createObjectURL(r.preview), w: W, h: H })
-      // نبدأ بالصورة كاملة محسّنة (بدون قص): هذا يناسب الإيصال الطويل ووجود أوراق متعددة بالصورة. القص اختياري من «تعديل الحواف»
-      setPts([{ x: W * 0.03, y: H * 0.03 }, { x: W * 0.97, y: H * 0.03 }, { x: W * 0.97, y: H * 0.97 }, { x: W * 0.03, y: H * 0.97 }])
-      setCropOn(false); setRot(0)
-      const ok = await renderResult({ mode, crop: false, rot: 0 })
+      // قص وتنظيف تلقائي بأرجح ورقة مكتشفة؛ إن لم نجد: الصورة كاملة. المستخدم يبدّل الورقة أو يحدد بيده أو يلغي القص
+      const full = [{ x: W * 0.03, y: H * 0.03 }, { x: W * 0.97, y: H * 0.03 }, { x: W * 0.97, y: H * 0.97 }, { x: W * 0.03, y: H * 0.97 }]
+      const qs = r.quads?.length ? r.quads : (r.quad ? [r.quad] : [])
+      setQuads(qs); setQi(0); setRot(0)
+      setPts(qs[0] ?? full)
+      setCropOn(!!qs[0])
+      setMode('color')
+      const ok = await renderResult({ mode: 'color', crop: !!qs[0], quad: qs[0] ?? undefined, rot: 0 })
       setStage(ok ? 'review' : 'crop')
     } catch { setError(isAr ? 'تعذّرت قراءة الصورة.' : 'Could not read the image.'); setStage('error') }
   }
@@ -297,6 +324,15 @@ export default function DocScannerModal({ isAr, onDone, onClose, file: initialFi
     const ok = await renderResult({ mode, crop: true, quad: pts, rot })
     if (ok) setCropOn(true)
     setStage(ok ? 'review' : 'crop')
+  }
+  const nextQuad = async () => {
+    const n = (qi + 1) % quads.length, q = quads[n]
+    setQi(n); setPts(q)
+    const ok = await renderResult({ mode, crop: true, quad: q, rot }); if (ok) setCropOn(true)
+  }
+  const toggleCrop = async () => {
+    const on = !cropOn
+    const ok = await renderResult({ mode, crop: on, quad: on ? pts : undefined, rot }); if (ok) setCropOn(on)
   }
   const changeMode = m => { setMode(m); renderResult({ mode: m, crop: cropOn, quad: pts, rot }) }
   const rotate = () => { const r = (rot + 1) % 4; setRot(r); renderResult({ mode, crop: cropOn, quad: pts, rot: r }) }
@@ -316,7 +352,7 @@ export default function DocScannerModal({ isAr, onDone, onClose, file: initialFi
   }
   const toggleAuto = () => { autoRef.current = !autoRef.current; setAuto(autoRef.current); stableSinceRef.current = 0 }
 
-  const titles = { crop: isAr ? 'اضبط حواف الورقة' : 'Adjust the edges', review: isAr ? 'مراجعة المسح' : 'Review scan' }
+  const titles = { crop: isAr ? 'حدّد المنطقة' : 'Select the area', review: isAr ? 'مراجعة المسح' : 'Review scan' }
 
   return createPortal(
     <div className="fixed inset-0 z-[10050] bg-black flex flex-col select-none touch-none" dir={isAr ? 'rtl' : 'ltr'}>
@@ -341,8 +377,9 @@ export default function DocScannerModal({ isAr, onDone, onClose, file: initialFi
         {stage === 'crop' && cap && pts && (
           <div className="absolute inset-0 flex items-center justify-center p-3">
             <div ref={boxRef} className="relative max-w-full max-h-full" style={{ aspectRatio: `${cap.w} / ${cap.h}`, width: `min(100%, calc((100vh - 190px) * ${cap.w / cap.h}))` }}
-              onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+              onPointerDown={onBoxDown} onPointerMove={onBoxMove} onPointerUp={onBoxUp} onPointerCancel={onBoxUp}>
               <img src={cap.url} alt="" className="absolute inset-0 w-full h-full pointer-events-none" draggable={false} />
+              <div className="absolute inset-0 cursor-crosshair" data-sel="1" />
               <svg viewBox={`0 0 ${cap.w} ${cap.h}`} className="absolute inset-0 w-full h-full pointer-events-none">
                 <path fillRule="evenodd" fill="rgba(0,0,0,0.42)" d={`M0 0H${cap.w}V${cap.h}H0Z M${pts.map(p => `${p.x} ${p.y}`).join(' L')}Z`} />
                 <polygon points={pts.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#34d399" strokeWidth={cap.w / 220} strokeLinejoin="round" />
@@ -384,7 +421,7 @@ export default function DocScannerModal({ isAr, onDone, onClose, file: initialFi
         )}
         {stage === 'crop' && (
           <div className="space-y-3">
-            <p className="text-xs text-white/80 text-center">{isAr ? 'اسحب الدوائر الخضراء إلى زوايا الورقة بدقة' : 'Drag the green handles to the page corners'}</p>
+            <p className="text-xs text-white/80 text-center">{isAr ? 'حدّد المنطقة: اسحب بإصبعك على الورقة لرسم المربع، أو حرّك الدوائر الخضراء للتعديل' : 'Draw the area by dragging on the sheet, or move the green handles'}</p>
             <div className="flex gap-2">
               <button type="button" onClick={retake} className="flex-1 py-3 rounded-lg bg-white/15 font-bold text-sm">{isAr ? 'إعادة التصوير' : 'Retake'}</button>
               {detectedRef.current && <button type="button" onClick={() => setPts(detectedRef.current)} className="px-4 py-3 rounded-lg bg-white/15 font-semibold text-sm">{isAr ? 'قص تلقائي' : 'Auto'}</button>}
@@ -399,7 +436,9 @@ export default function DocScannerModal({ isAr, onDone, onClose, file: initialFi
                 <button key={o.v} type="button" disabled={busy} onClick={() => changeMode(o.v)} className={`px-3 py-1.5 rounded-lg font-semibold ${mode === o.v ? 'bg-white text-black' : 'bg-white/15 text-white'}`}>{o.l}</button>
               ))}
               <button type="button" disabled={busy} onClick={rotate} className="px-3 py-1.5 rounded-lg bg-white/15 font-semibold">{isAr ? 'تدوير' : 'Rotate'}</button>
-              <button type="button" disabled={busy} onClick={() => setStage('crop')} className="px-3 py-1.5 rounded-lg bg-white/15 font-semibold">{isAr ? 'تعديل الحواف' : 'Edit edges'}</button>
+              <button type="button" disabled={busy} onClick={() => setStage('crop')} className="px-3 py-1.5 rounded-lg bg-white/15 font-semibold">{isAr ? 'تحديد يدوي' : 'Select manually'}</button>
+              {quads.length > 1 && <button type="button" disabled={busy} onClick={nextQuad} className="px-3 py-1.5 rounded-lg bg-white/15 font-semibold">{isAr ? `ورقة أخرى (${qi + 1}/${quads.length})` : `Other sheet (${qi + 1}/${quads.length})`}</button>}
+              {quads.length > 0 && <button type="button" disabled={busy} onClick={toggleCrop} className={`px-3 py-1.5 rounded-lg font-semibold ${cropOn ? 'bg-white/15' : 'bg-amber-400 text-black'}`}>{cropOn ? (isAr ? 'إلغاء القص' : 'No crop') : (isAr ? 'قص تلقائي' : 'Auto crop')}</button>}
               {nativeMode && <button type="button" disabled={busy} onClick={addPage} className="px-3 py-1.5 rounded-lg bg-sky-500/90 font-semibold">{isAr ? '+ إضافة صفحة' : '+ Add page'}</button>}
             </div>
             <div className="flex gap-3">
