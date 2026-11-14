@@ -804,6 +804,16 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
   // الأقسام كلها ظاهرة دائماً: إن اتسع الاسم مع الأيقونة نعرضه، وإلا أيقونات فقط مع اسم القسم النشط وتلميح للبقية
   const total = widths.reduce((acc, w) => acc + w, 0) + 4 * Math.max(0, widths.length - 1)
   const compact = !!avail && widths.length === items.length && total > avail
+  // عجلة الماوس فوق الأقسام تحرّكها أفقياً عند الضيق
+  useEffect(() => {
+    const el = navRef.current
+    if (!el || !compact) return
+    const w = e => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); el.scrollLeft += e.deltaY } }
+    el.addEventListener('wheel', w, { passive: false })
+    return () => el.removeEventListener('wheel', w)
+  }, [compact])
+  // إن ضاق العرض وصار التمرير ضرورياً: نُظهر القسم النشط
+  useEffect(() => { navRef.current?.querySelector('.dk-pill.on')?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [pathname, compact])
   const label = it => (isAr ? it.labelAr : it.labelEn)
   const hueStyle = it => ({ '--hue': NAV_HUE[it.to] || '#5B5BD6' })
   const initials = String(profile?.full_name_ar || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
@@ -820,14 +830,14 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
           {items.map(it => {
             const on = isOnPath(it.to, pathname)
             return (
-              <NavLink key={it.to} to={it.to} end={it.to === '/'} className={`dk-pill${on ? ' on' : ''}${compact && !on ? ' ico' : ''}`} style={hueStyle(it)} title={label(it)} aria-label={label(it)} aria-current={on ? 'page' : undefined}>
-                {ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={16} />}<span>{label(it)}</span>
+              <NavLink key={it.to} to={it.to} end={it.to === '/'} className={`dk-pill${on ? ' on' : ''}`} style={hueStyle(it)} title={label(it)} aria-label={label(it)} aria-current={on ? 'page' : undefined}>
+                <span>{label(it)}</span>
               </NavLink>
             )
           })}
           {/* نسخة مخفية للقياس */}
           <div ref={measRef} className="dk-meas" aria-hidden="true">
-            {items.map(it => <span key={it.to} className="dk-pill">{ICONS[it.icon] && <Icon d={ICONS[it.icon]} size={16} />}<span>{label(it)}</span></span>)}
+            {items.map(it => <span key={it.to} className="dk-pill"><span>{label(it)}</span></span>)}
           </div>
         </nav>
 

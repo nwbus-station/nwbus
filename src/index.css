@@ -1198,10 +1198,8 @@ input.amt-input, input.amt-hero { background: transparent !important; border: 0 
 .dk-sep { width: 1px; height: 26px; background: var(--border-2); flex-shrink: 0; }
 .dk-nav { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .dk-nav::-webkit-scrollbar { display: none; }
-.dk-nav.compact { gap: 2px; }
-.dk-pill.ico { width: 38px; padding: 0; justify-content: center; }
-.dk-pill.ico span { display: none; }
-.dk-pill.ico svg { display: block !important; opacity: .85; }
+.dk-nav.compact { gap: 1px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 26px, #000 calc(100% - 26px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 26px, #000 calc(100% - 26px), transparent 100%); }
+.dk-nav.compact .dk-pill { padding: 0 9px; font-size: .79rem; }
 .dk-meas { position: absolute; visibility: hidden; pointer-events: none; height: 0; overflow: hidden; display: flex; gap: 4px; white-space: nowrap; }
 .dk-pill { --hue: #5B5BD6; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 11px; border: 1px solid transparent; background: transparent; color: var(--text-2); font-family: inherit; font-size: .87rem; font-weight: 600; white-space: nowrap; text-decoration: none; cursor: pointer; flex-shrink: 0; transition: background .14s, color .14s, border-color .14s, transform .1s; }
 .dk-pill svg { opacity: .8; flex-shrink: 0; }
