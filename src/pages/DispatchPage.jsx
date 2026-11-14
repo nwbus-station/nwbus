@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import SelectField from '../components/shared/SelectField'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
 import DispatchForm from '../components/dispatch/DispatchForm'
+import { useMedia } from '../components/dispatch/Sheet'
 import { DispatchDetail, RequestCard, btn } from '../components/dispatch/DispatchCards'
 import { DispatchRow, RequestRow } from '../components/dispatch/DispatchRows'
 import { ReceiveDialog, RejectDialog, EscalateDialog, TicketLookupDialog } from '../components/dispatch/DispatchDialogs'
@@ -28,6 +29,8 @@ const ICON = {
   plus: ['M12 5v14M5 12h14'],
   ticket: ['M4 9a2 2 0 002-2V5h12v2a2 2 0 002 2v6a2 2 0 00-2 2v2H6v-2a2 2 0 00-2-2z', 'M9 10h6M9 14h4'],
   more: ['M5 12h.01M12 12h.01M19 12h.01'],
+  menu: ['M4 7h16', 'M4 12h16', 'M4 17h16'],
+  x: ['M18 6L6 18M6 6l12 12'],
   back: ['M9 18l6-6-6-6'],
   box: ['M21 8l-9-5-9 5v8l9 5 9-5V8z', 'M3 8l9 5 9-5M12 13v8'],
 }
@@ -36,16 +39,6 @@ const Ico = ({ n, s = 18 }) => (
     {ICON[n].map((d, i) => <path key={i} d={d} />)}
   </svg>
 )
-function useMedia(q) {
-  const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches)
-  useEffect(() => {
-    const mq = window.matchMedia(q), h = e => setM(e.matches)
-    mq.addEventListener('change', h); setM(mq.matches)
-    return () => mq.removeEventListener('change', h)
-  }, [q])
-  return m
-}
-
 export default function DispatchPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -68,7 +61,7 @@ export default function DispatchPage() {
   const [setup, setSetup] = useState(false)
   const [section, setSection] = useState(() => (params.get('tab') === 'requests' ? 'requests' : (isAdmin ? 'all' : 'in')))
   const [selectedId, setSelectedId] = useState(null)
-  const [view, setView] = useState('list')            // list | form
+  const [formOpen, setFormOpen] = useState(false)
   const [formInit, setFormInit] = useState(null)
   const [stationSel, setStationSel] = useState('')
   const [fKind, setFKind] = useState('')
@@ -82,10 +75,11 @@ export default function DispatchPage() {
   const [rejDlg, setRejDlg] = useState(null)
   const [escDlg, setEscDlg] = useState(null)
   const [lookupOpen, setLookupOpen] = useState(false)
-  const [sheet, setSheet] = useState(false)
+  const [drawer, setDrawer] = useState(false)           // القائمة الجانبية المنزلقة على الجوال
   const refs = useRef({})
   const pending = useRef(null)
   const rootRef = useRef(null)
+  const swipe = useRef(null)
   const [top, setTop] = useState(0)
 
   // ملء الشاشة: ارتفاع الواجهة = الشاشة − ما فوقها (شريط التطبيق)
@@ -152,7 +146,7 @@ export default function DispatchPage() {
     }
     if (!d) { flash('err', t('لم أجد إرسالية بهذا الرمز', 'No dispatch found for this code')); return }
     const toMe = legsOf(d).some(l => myIds.has(l.to_station_id))
-    setView('list'); setStationSel(''); setFKind(''); setQ('')
+    setFormOpen(false); setStationSel(''); setFKind(''); setQ('')
     setSection(isAdmin ? 'all' : toMe ? 'in' : 'out')
     setSelectedId(d.id); setFlashId(d.id)
     setTimeout(() => { refs.current[d.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => setFlashId(null), 2500) }, 300)
@@ -217,9 +211,10 @@ export default function DispatchPage() {
       kind: r.ref_type === 'report' ? 'lost' : 'found', fromId: r.holder_station_id, toId: r.to_station_id, requestId: r.id,
       items: [{ ref_type: r.ref_type === 'report' ? 'report' : 'found', ref_id: r.ref_id, description: r.item_desc || (r.ref_type === 'report' ? 'بلاغ مفقود' : 'غرض'), qty: 1 }],
     })
-    setView('form')
+    setFormOpen(true)
   }
-  const newDispatch = () => { setFormInit(null); setView('form'); setSheet(false) }
+  const newDispatch = () => { setFormInit(null); setFormOpen(true); setDrawer(false) }
+  const showCreated = id => { setSection(isAdmin ? 'all' : 'out'); setSelectedId(id); setStationSel(''); setFKind(''); setQ('') }
 
   /* ── الأقسام والقوائم ── */
   const baseFor = useCallback(sec => {
@@ -286,7 +281,7 @@ export default function DispatchPage() {
     { sep: t('الطلبات', 'Requests') },
     { id: 'requests', ico: 'requests', label: t('طلبات الإرسال', 'Send requests'), n: counts.requests, hot: counts.requests, hotColor: '#7c3aed' },
   ]
-  const goSection = id => { setSection(id); setSelectedId(null); setLimit(60); setSheet(false) }
+  const goSection = id => { setSection(id); setSelectedId(null); setLimit(60); setDrawer(false) }
   const sectionTitle = NAV.find(n => n.id === section)?.label || ''
   const stationOptions = isAdmin ? stations : myStations
 
@@ -316,26 +311,17 @@ export default function DispatchPage() {
     .dsp-dock button:active{transform:scale(.96)}
   `
 
-  if (view === 'form') {
-    return (
-      <div ref={rootRef} className="dsp-scroll" style={{ height: H, overflowY: 'auto', background: 'var(--surface)' }}>
-        <style>{css}</style>
-        <DispatchForm profile={profile} isAr={isAr} isAdmin={isAdmin} stations={stations} myStations={myStations} history={rows} initial={formInit}
-          onCancel={() => { setView('list'); setFormInit(null) }} onCreated={() => load()} onPrint={printOne} />
-      </div>
-    )
-  }
-
   /* ── الأجزاء ── */
-  const sidebar = (
-    <aside aria-label={t('أقسام الإرساليات', 'Dispatch sections')} style={{ width: 236, flexShrink: 0, background: 'var(--card)', borderInlineEnd: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+  const sidebarEl = asDrawer => (
+    <aside aria-label={t('أقسام الإرساليات', 'Dispatch sections')} style={{ width: asDrawer ? '100%' : 236, flexShrink: 0, background: 'var(--card)', borderInlineEnd: asDrawer ? 'none' : '1px solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0, height: asDrawer ? '100%' : undefined }}>
       <div style={{ padding: '16px 14px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'rgba(37,99,235,0.14)', color: '#2563eb' }}><Ico n="box" /></span>
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontWeight: 900, fontSize: '0.98rem', color: 'var(--text-1)' }}>{t('الإرساليات والشحن', 'Dispatches')}</div>
             <div style={{ fontSize: '0.64rem', color: 'var(--text-3)' }}>{t('تتبّع · استلام · تصعيد', 'Track · Receive · Escalate')}</div>
           </div>
+          {asDrawer && <button type="button" onClick={() => setDrawer(false)} aria-label={t('إغلاق القائمة', 'Close menu')} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Ico n="x" s={18} /></button>}
         </div>
         {stationPick()}
         <button type="button" onClick={newDispatch} style={{ ...btn('primary'), display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 14px', fontSize: '0.86rem' }}><Ico n="plus" s={17} />{t('إرسالية / شحنة جديدة', 'New dispatch')}</button>
@@ -354,7 +340,7 @@ export default function DispatchPage() {
         ))}
       </nav>
       <div style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
-        <button type="button" onClick={() => setLookupOpen(true)} style={{ ...btn('ghost'), width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 12px' }}><Ico n="ticket" s={16} />{t('استلام برقم التذكرة', 'Receive by ticket no.')}</button>
+        <button type="button" onClick={() => { setDrawer(false); setLookupOpen(true) }} style={{ ...btn('ghost'), width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 12px' }}><Ico n="ticket" s={16} />{t('استلام برقم التذكرة', 'Receive by ticket no.')}</button>
       </div>
     </aside>
   )
@@ -362,9 +348,14 @@ export default function DispatchPage() {
   const listPane = (
     <section aria-label={t('القائمة', 'List')} style={{ width: layout === 'three' ? 392 : '100%', flexShrink: 0, flex: layout === 'three' ? '0 0 392px' : '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', background: 'var(--card)', borderInlineEnd: layout === 'three' ? '1px solid var(--border)' : 'none', minHeight: 0 }}>
       <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {layout === 'one' && <button type="button" onClick={() => setDrawer(true)} aria-label={t('القائمة', 'Menu')} style={{ width: 40, height: 40, borderRadius: 11, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0, position: 'relative' }}>
+            <Ico n="menu" s={20} />
+            {(counts.late + counts.action) > 0 && <i aria-hidden="true" style={{ position: 'absolute', top: 6, insetInlineEnd: 6, width: 9, height: 9, borderRadius: '50%', background: '#dc2626', border: '2px solid var(--surface)' }} />}
+          </button>}
           <h1 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 900, color: 'var(--text-1)' }}>{sectionTitle}</h1>
           <span style={{ fontFamily: MONO, fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 700 }}>{section === 'requests' ? reqRows.length : list.length}</span>
+          {layout === 'one' && <button type="button" onClick={newDispatch} style={{ ...btn('primary'), marginInlineStart: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px' }}><Ico n="plus" s={16} />{t('جديدة', 'New')}</button>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input value={q} onChange={e => { setQ(e.target.value); setLimit(60) }} placeholder={t('بحث…', 'Search…')} aria-label={t('بحث', 'Search')} style={{ ...fieldStyle, flex: 1, minWidth: 0 }} />
@@ -434,7 +425,7 @@ export default function DispatchPage() {
     { id: 'out', ico: 'out', label: t('الصادرة', 'Outgoing') },
     { id: 'new', ico: 'plus', label: t('جديدة', 'New'), fab: true },
     { id: 'requests', ico: 'requests', label: t('الطلبات', 'Requests'), badge: counts.requests, badgeColor: '#7c3aed' },
-    { id: 'more', ico: 'more', label: t('المزيد', 'More'), badge: counts.late, badgeColor: '#dc2626' },
+    { id: 'menu', ico: 'menu', label: t('القائمة', 'Menu'), badge: counts.late, badgeColor: '#dc2626' },
   ]
   const dock = layout === 'one' && !(hasSel) ? (
     <nav className="dsp-dock" aria-label={t('التنقل السريع', 'Quick navigation')} style={{ flexShrink: 0, display: 'flex', alignItems: 'stretch', justifyContent: 'space-around', background: 'var(--card)', borderTop: '1px solid var(--border)', boxShadow: '0 -4px 16px rgba(0,0,0,0.08)', padding: '6px 4px calc(6px + env(safe-area-inset-bottom))' }}>
@@ -444,7 +435,7 @@ export default function DispatchPage() {
           <span style={{ fontSize: '0.64rem', fontWeight: 800, color: '#2563eb' }}>{it.label}</span>
         </button>
       ) : (
-        <button key={it.id} type="button" onClick={() => (it.id === 'more' ? setSheet(true) : goSection(it.id))} aria-label={it.label} aria-current={section === it.id ? 'page' : undefined}
+        <button key={it.id} type="button" onClick={() => (it.id === 'menu' ? setDrawer(true) : goSection(it.id))} aria-label={it.label} aria-current={section === it.id ? 'page' : undefined}
           style={{ position: 'relative', flex: 1, minHeight: 52, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, color: section === it.id ? 'var(--accent)' : 'var(--text-3)' }}>
           <span style={{ position: 'relative', display: 'inline-flex' }}>
             <Ico n={it.ico} s={22} />
@@ -457,29 +448,33 @@ export default function DispatchPage() {
   ) : null
 
   return (
-    <div ref={rootRef} style={{ height: H, display: 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden' }} dir={isAr ? 'rtl' : 'ltr'}>
+    <div ref={rootRef} style={{ height: H, display: 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden' }} dir={isAr ? 'rtl' : 'ltr'}
+      onTouchStart={e => { const x = e.touches[0].clientX; const edge = isAr ? window.innerWidth - x : x; swipe.current = edge < 26 ? { x, y: e.touches[0].clientY } : null }}
+      onTouchEnd={e => {
+        const st0 = swipe.current; swipe.current = null
+        if (!st0 || layout !== 'one') return
+        const dx = e.changedTouches[0].clientX - st0.x, dy = Math.abs(e.changedTouches[0].clientY - st0.y)
+        if (dy < 60 && (isAr ? -dx : dx) > 70) setDrawer(true)
+      }}>
       <style>{css}</style>
       {msg && <div style={{ padding: '8px 12px', flexShrink: 0 }}><Banner kind={msg.kind}>{msg.text}</Banner></div>}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-        {layout !== 'one' && sidebar}
+        {layout !== 'one' && sidebarEl(false)}
         {layout === 'three' ? <>{listPane}{detailPane}</> : (hasSel ? detailPane : listPane)}
       </div>
       {dock}
 
-      {sheet && (
-        <div onClick={e => { if (e.target === e.currentTarget) setSheet(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9990, display: 'flex', alignItems: 'flex-end' }}>
-          <div role="dialog" aria-modal="true" style={{ width: '100%', background: 'var(--card)', borderRadius: '18px 18px 0 0', padding: '14px 14px calc(18px + env(safe-area-inset-bottom))', maxHeight: '82vh', overflowY: 'auto' }}>
-            <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--border-2)', margin: '0 auto 12px' }} />
-            <div style={{ marginBottom: 10 }}>{stationPick()}</div>
-            {NAV.filter(n => !n.sep && !['in', 'out', 'requests'].includes(n.id)).map(it => (
-              <button key={it.id} type="button" onClick={() => goSection(it.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, minHeight: 50, padding: '0 12px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', color: 'var(--text-1)', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.92rem', cursor: 'pointer', textAlign: 'start' }}>
-                <Ico n={it.ico} /><span style={{ flex: 1 }}>{it.label}</span>
-                {it.n > 0 && <span style={{ fontFamily: MONO, fontSize: '0.78rem', color: it.hot > 0 ? '#fff' : 'var(--text-3)', background: it.hot > 0 ? it.hotColor : 'transparent', borderRadius: 99, padding: it.hot > 0 ? '1px 8px' : 0, fontWeight: 800 }}>{it.n}</span>}
-              </button>
-            ))}
-            <button type="button" onClick={() => { setSheet(false); setLookupOpen(true) }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, minHeight: 50, padding: '0 12px', border: 'none', background: 'transparent', color: 'var(--text-1)', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.92rem', cursor: 'pointer', textAlign: 'start' }}><Ico n="ticket" /><span style={{ flex: 1 }}>{t('استلام برقم التذكرة', 'Receive by ticket no.')}</span></button>
+      {layout === 'one' && drawer && (
+        <div onClick={e => { if (e.target === e.currentTarget) setDrawer(false) }} style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(8,12,20,0.52)', backdropFilter: 'blur(3px)', animation: 'dspFade .16s ease-out' }}>
+          <style>{`@keyframes dspFade{from{opacity:0}to{opacity:1}}@keyframes dspMenuIn{from{transform:translateX(calc(var(--mx) * 100%))}to{transform:none}}`}</style>
+          <div style={{ '--mx': isAr ? 1 : -1, position: 'absolute', top: 0, bottom: 0, insetInlineStart: 0, width: 'min(322px, 88vw)', boxShadow: '0 0 40px rgba(0,0,0,0.4)', animation: 'dspMenuIn .24s cubic-bezier(.2,.8,.2,1)' }}>
+            {sidebarEl(true)}
           </div>
         </div>
+      )}
+      {formOpen && (
+        <DispatchForm profile={profile} isAr={isAr} isAdmin={isAdmin} stations={stations} myStations={myStations} history={rows} initial={formInit}
+          onClose={() => { setFormOpen(false); setFormInit(null) }} onCreated={() => load()} onPrint={printOne} onShow={showCreated} />
       )}
 
       {recvDlg && <ReceiveDialog d={recvDlg.d} leg={recvDlg.leg} names={names} isAr={isAr} busy={busy === 'r' + recvDlg.leg.id} onConfirm={doReceive} onClose={() => setRecvDlg(null)} />}

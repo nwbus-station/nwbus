@@ -1,59 +1,56 @@
-// نوافذ الإرساليات: استلام (سليمة/بملاحظة)، تصعيد يدوي، وفتح إرسالية برقم التذكرة
-import { useState, useEffect } from 'react'
+// نوافذ الإرساليات (على نمط Sheet الموحّد): استلام (سليمة/بملاحظة)، رفض، تصعيد يدوي، وفتح إرسالية برقم التذكرة
+import { useState } from 'react'
+import Sheet, { Ic } from './Sheet'
 import { fieldStyle, MONO } from '../lostFound/ui'
 import { btn } from './DispatchCards'
 import { parseDispatchCode } from '../../utils/dispatch'
 
-function Shell({ title, sub, onClose, children, wide = false }) {
-  useEffect(() => {
-    const h = e => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
-  return (
-    <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(2px)' }}>
-      <div role="dialog" aria-modal="true" aria-label={title} style={{ background: 'var(--card)', borderRadius: 14, boxShadow: '0 10px 40px rgba(0,0,0,0.3)', width: '100%', maxWidth: wide ? 520 : 440, maxHeight: '92vh', overflowY: 'auto' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', borderRadius: '14px 14px 0 0' }}>
-          <div style={{ fontWeight: 900, fontSize: '1rem', color: 'var(--text-1)' }}>{title}</div>
-          {sub && <div style={{ fontSize: '0.74rem', color: 'var(--text-3)', marginTop: 4, lineHeight: 1.6 }}>{sub}</div>}
-        </div>
-        <div style={{ padding: 20 }}>{children}</div>
-      </div>
-    </div>
-  )
-}
+const lbl = { display: 'block', fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 6 }
+const hint = { fontSize: '0.76rem', color: 'var(--text-2)', lineHeight: 1.85 }
+const Route = ({ d, leg, names, isAr }) => (
+  <div style={{ padding: '12px 14px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--border)', marginBottom: 16 }}>
+    <div dir="ltr" style={{ fontFamily: MONO, fontWeight: 900, fontSize: '1rem', color: 'var(--text-1)', letterSpacing: '.03em' }}>{d.ticket_no}</div>
+    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-1)', marginTop: 6 }}>{names[leg.from_station_id] || '—'} <span style={{ color: 'var(--text-3)' }}>{isAr ? '←' : '→'}</span> {names[leg.to_station_id] || '—'}</div>
+    {leg.bus_number && <div style={{ fontSize: '0.74rem', color: 'var(--text-3)', marginTop: 4 }}>{isAr ? 'الحافلة' : 'Bus'}: <b dir="ltr" style={{ fontFamily: MONO, color: 'var(--text-2)' }}>{leg.bus_number}</b></div>}
+  </div>
+)
 
 /* ── استلام: سليمة أو بملاحظة (الملاحظة تُصعَّد للإدارة تلقائياً) ── */
 export function ReceiveDialog({ d, leg, names, isAr = true, busy, onConfirm, onClose }) {
   const t = (a, e) => (isAr ? a : e)
   const [cond, setCond] = useState('ok')
   const [note, setNote] = useState('')
-  const pill = (on, c) => ({ flex: 1, padding: '14px 10px', borderRadius: 12, border: `2px solid ${on ? c : 'var(--border)'}`, background: on ? `${c}1a` : 'var(--card)', color: on ? c : 'var(--text-2)', fontWeight: 900, fontSize: '0.9rem', cursor: 'pointer', fontFamily: 'inherit' })
+  const bad = cond === 'issue'
+  const blocked = busy || (bad && !note.trim())
+  const opt = (id, c, title, sub, icon) => (
+    <button type="button" aria-pressed={cond === id} onClick={() => setCond(id)}
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '16px 10px', borderRadius: 14, border: `2px solid ${cond === id ? c : 'var(--border)'}`, background: cond === id ? `${c}14` : 'var(--card)', color: cond === id ? c : 'var(--text-2)', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s' }}>
+      {icon}<span style={{ fontWeight: 900, fontSize: '0.92rem' }}>{title}</span><span style={{ fontSize: '0.66rem', fontWeight: 600, opacity: 0.85 }}>{sub}</span>
+    </button>
+  )
   return (
-    <Shell title={t('استلام الإرسالية', 'Receive dispatch')} onClose={onClose}
-      sub={<><b dir="ltr" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{d.ticket_no}</b> · {names[leg.from_station_id]} {isAr ? '←' : '→'} {names[leg.to_station_id]} · {t('الحافلة', 'Bus')} <b dir="ltr" style={{ fontFamily: MONO }}>{leg.bus_number}</b></>}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-2)' }}>{t('كيف وصلت الإرسالية؟', 'How did it arrive?')}</div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button type="button" aria-pressed={cond === 'ok'} onClick={() => setCond('ok')} style={pill(cond === 'ok', '#16a34a')}>{t('سليمة وكاملة', 'Complete & intact')}</button>
-          <button type="button" aria-pressed={cond === 'issue'} onClick={() => setCond('issue')} style={pill(cond === 'issue', '#dc2626')}>{t('بها ملاحظة', 'With an issue')}</button>
-        </div>
-        {cond === 'issue' && (
-          <div>
-            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 5 }}>{t('اكتب الملاحظة *', 'Describe the issue *')}</label>
-            <textarea autoFocus value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={500} placeholder={t('مثال: ناقص غرضين / الصندوق مكسور', 'e.g. two items missing / box damaged')} style={{ ...fieldStyle, resize: 'vertical' }} />
-            <div style={{ fontSize: '0.7rem', color: '#dc2626', marginTop: 6, fontWeight: 700 }}>{t('سيُصعَّد تلقائياً للإدارة ومشرفي المحطة المرسِلة.', 'This will be escalated automatically to management and the sending station supervisors.')}</div>
-          </div>
-        )}
-        <div style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}>{t('يُسجَّل اسمك ووقت الاستلام تلقائياً.', 'Your name and the receipt time are recorded automatically.')}</div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
-          <button type="button" disabled={busy || (cond === 'issue' && !note.trim())} onClick={() => onConfirm(cond, note.trim())} style={{ ...btn(cond === 'issue' ? 'danger' : 'ok', cond === 'issue' ? { background: '#dc2626', color: '#fff', border: 'none' } : {}), padding: '10px 26px', fontSize: '0.86rem', opacity: busy || (cond === 'issue' && !note.trim()) ? 0.55 : 1 }}>
-            {busy ? t('جارٍ التأكيد…', 'Confirming…') : cond === 'issue' ? t('استلام وتصعيد', 'Receive & escalate') : t('تأكيد الاستلام', 'Confirm receipt')}
-          </button>
-        </div>
+    <Sheet isAr={isAr} title={t('استلام الإرسالية', 'Receive dispatch')} icon={Ic.check} accent="#16a34a" onClose={onClose}
+      footer={<>
+        <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
+        <button type="button" disabled={blocked} onClick={() => onConfirm(cond, note.trim())} style={{ ...btn(bad ? 'danger' : 'ok', bad ? { background: '#dc2626', color: '#fff', border: 'none' } : {}), padding: '11px 28px', fontSize: '0.88rem', opacity: blocked ? 0.55 : 1 }}>
+          {busy ? t('جارٍ التأكيد…', 'Confirming…') : bad ? t('استلام وتصعيد', 'Receive & escalate') : t('تأكيد الاستلام', 'Confirm receipt')}
+        </button>
+      </>}>
+      <Route d={d} leg={leg} names={names} isAr={isAr} />
+      <div style={lbl}>{t('كيف وصلت الإرسالية؟', 'How did it arrive?')}</div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        {opt('ok', '#16a34a', t('سليمة وكاملة', 'Complete & intact'), t('كل شيء كما هو', 'All as expected'), Ic.check)}
+        {opt('issue', '#dc2626', t('بها ملاحظة', 'With an issue'), t('نقص أو تلف أو غير ذلك', 'Missing / damaged'), Ic.alert)}
       </div>
-    </Shell>
+      {bad && (
+        <div style={{ marginTop: 16 }}>
+          <label style={lbl}>{t('اكتب الملاحظة *', 'Describe the issue *')}</label>
+          <textarea autoFocus value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={500} placeholder={t('مثال: ناقص غرضين / الصندوق مكسور', 'e.g. two items missing / box damaged')} style={{ ...fieldStyle, resize: 'vertical' }} />
+          <div style={{ fontSize: '0.72rem', color: '#dc2626', marginTop: 8, fontWeight: 700, lineHeight: 1.7 }}>{t('سيُصعَّد تلقائياً للإدارة ومشرفي المحطة المرسِلة.', 'This will be escalated automatically to management and the sending station supervisors.')}</div>
+        </div>
+      )}
+      <div style={{ ...hint, color: 'var(--text-3)', marginTop: 14 }}>{t('يُسجَّل اسمك ووقت الاستلام تلقائياً.', 'Your name and the receipt time are recorded automatically.')}</div>
+    </Sheet>
   )
 }
 
@@ -61,21 +58,18 @@ export function ReceiveDialog({ d, leg, names, isAr = true, busy, onConfirm, onC
 export function RejectDialog({ d, leg, names, isAr = true, busy, onConfirm, onClose }) {
   const t = (a, e) => (isAr ? a : e)
   const [reason, setReason] = useState('')
+  const blocked = busy || !reason.trim()
   return (
-    <Shell title={t('رفض الإرسالية', 'Reject dispatch')} onClose={onClose}
-      sub={<><b dir="ltr" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{d.ticket_no}</b> · {names[leg.from_station_id]} {isAr ? '←' : '→'} {names[leg.to_station_id]}</>}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ fontSize: '0.78rem', color: 'var(--text-2)', lineHeight: 1.8 }}>{t('تُغلق الإرسالية كمرفوضة ولا يمكن استلامها بعد ذلك. يُشعَر موظفو المحطة المرسِلة ومنشئ الإرسالية والإدارة بالسبب.', 'The dispatch is closed as rejected and can no longer be received. The sending station, its creator and management are notified.')}</div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 5 }}>{t('سبب الرفض *', 'Reason *')}</label>
-          <textarea autoFocus value={reason} onChange={e => setReason(e.target.value)} rows={3} maxLength={500} placeholder={t('مثال: الإرسالية موجّهة لمحطة أخرى', 'e.g. addressed to another station')} style={{ ...fieldStyle, resize: 'vertical' }} />
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
-          <button type="button" disabled={busy || !reason.trim()} onClick={() => onConfirm(reason.trim())} style={{ ...btn('danger'), background: '#dc2626', color: '#fff', border: 'none', padding: '10px 26px', opacity: busy || !reason.trim() ? 0.55 : 1 }}>{busy ? '…' : t('تأكيد الرفض', 'Confirm rejection')}</button>
-        </div>
-      </div>
-    </Shell>
+    <Sheet isAr={isAr} title={t('رفض الإرسالية', 'Reject dispatch')} icon={Ic.x} accent="#dc2626" onClose={onClose}
+      footer={<>
+        <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
+        <button type="button" disabled={blocked} onClick={() => onConfirm(reason.trim())} style={{ ...btn('danger'), background: '#dc2626', color: '#fff', border: 'none', padding: '11px 28px', fontSize: '0.88rem', opacity: blocked ? 0.55 : 1 }}>{busy ? '…' : t('تأكيد الرفض', 'Confirm rejection')}</button>
+      </>}>
+      <Route d={d} leg={leg} names={names} isAr={isAr} />
+      <div style={{ ...hint, marginBottom: 14 }}>{t('تُغلق الإرسالية كمرفوضة ولا يمكن استلامها بعد ذلك. يُشعَر موظفو المحطة المرسِلة ومنشئ الإرسالية والإدارة بالسبب.', 'The dispatch is closed as rejected and can no longer be received. The sending station, its creator and management are notified.')}</div>
+      <label style={lbl}>{t('سبب الرفض *', 'Reason *')}</label>
+      <textarea autoFocus value={reason} onChange={e => setReason(e.target.value)} rows={3} maxLength={500} placeholder={t('مثال: الإرسالية موجّهة لمحطة أخرى', 'e.g. addressed to another station')} style={{ ...fieldStyle, resize: 'vertical' }} />
+    </Sheet>
   )
 }
 
@@ -83,46 +77,44 @@ export function RejectDialog({ d, leg, names, isAr = true, busy, onConfirm, onCl
 export function EscalateDialog({ d, isAr = true, busy, onConfirm, onClose }) {
   const t = (a, e) => (isAr ? a : e)
   const [reason, setReason] = useState('')
+  const blocked = busy || !reason.trim()
   return (
-    <Shell title={t('تصعيد الإرسالية', 'Escalate dispatch')} onClose={onClose} sub={<b dir="ltr" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{d.ticket_no}</b>}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ fontSize: '0.78rem', color: 'var(--text-2)', lineHeight: 1.8 }}>{t('يصل إشعار فوري للإدارة ولمشرفي المحطات المعنية، ويظهر على الإرسالية أنها مُصعّدة.', 'Management and the supervisors of the involved stations are notified immediately.')}</div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 5 }}>{t('سبب التصعيد *', 'Reason *')}</label>
-          <textarea autoFocus value={reason} onChange={e => setReason(e.target.value)} rows={3} maxLength={500} placeholder={t('مثال: الحافلة تأخرت ولم تصل المحطة', 'e.g. the bus is late and has not arrived')} style={{ ...fieldStyle, resize: 'vertical' }} />
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
-          <button type="button" disabled={busy || !reason.trim()} onClick={() => onConfirm(reason.trim())} style={{ ...btn('danger'), background: '#dc2626', color: '#fff', border: 'none', padding: '10px 26px', opacity: busy || !reason.trim() ? 0.55 : 1 }}>{busy ? '…' : t('تصعيد الآن', 'Escalate now')}</button>
-        </div>
-      </div>
-    </Shell>
+    <Sheet isAr={isAr} title={t('تصعيد الإرسالية', 'Escalate dispatch')} icon={Ic.alert} accent="#d97706" onClose={onClose}
+      sub={<b dir="ltr" style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{d.ticket_no}</b>}
+      footer={<>
+        <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
+        <button type="button" disabled={blocked} onClick={() => onConfirm(reason.trim())} style={{ ...btn('danger'), background: '#dc2626', color: '#fff', border: 'none', padding: '11px 28px', fontSize: '0.88rem', opacity: blocked ? 0.55 : 1 }}>{busy ? '…' : t('تصعيد الآن', 'Escalate now')}</button>
+      </>}>
+      <div style={{ ...hint, marginBottom: 14 }}>{t('يصل إشعار فوري للإدارة ولمشرفي المحطات المعنية، ويظهر على الإرسالية أنها مُصعّدة.', 'Management and the supervisors of the involved stations are notified immediately.')}</div>
+      <label style={lbl}>{t('سبب التصعيد *', 'Reason *')}</label>
+      <textarea autoFocus value={reason} onChange={e => setReason(e.target.value)} rows={3} maxLength={500} placeholder={t('مثال: الحافلة تأخرت ولم تصل المحطة', 'e.g. the bus is late and has not arrived')} style={{ ...fieldStyle, resize: 'vertical' }} />
+    </Sheet>
   )
 }
 
-/* ── فتح إرسالية برقم التذكرة (بدون كاميرا): للكتابة اليدوية أو جهاز قارئ باركود/QR متصل بالكمبيوتر (يكتب الرقم كلوحة مفاتيح) ── */
+/* ── فتح إرسالية برقم التذكرة (بدون كاميرا): كتابة يدوية أو قارئ باركود/QR متصل بالكمبيوتر (يكتب الرقم كلوحة مفاتيح) ── */
 export function TicketLookupDialog({ isAr = true, onCode, onClose }) {
   const t = (a, e) => (isAr ? a : e)
   const [val, setVal] = useState('')
   const [bad, setBad] = useState('')
   function submit(e) {
-    e.preventDefault()
+    e?.preventDefault()
     const p = parseDispatchCode(val)
     if (!p || !p.ticket) { setBad(t('اكتب رقم التذكرة مثل NWD-000123', 'Enter a ticket number like NWD-000123')); return }
     onCode(p)
   }
   return (
-    <Shell title={t('استلام برقم التذكرة', 'Receive by ticket number')} onClose={onClose}
-      sub={t('اكتب رقم التذكرة المطبوع على الإرسالية، أو امسحه بجهاز قارئ باركود/QR متصل بالجهاز. لا تُستخدم الكاميرا ولا يُعرض أي شيء قبل التحقق من صلاحيتك.', 'Type the ticket number printed on the dispatch, or scan it with a connected barcode reader. No camera is used.')}>
-      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <Sheet isAr={isAr} title={t('استلام برقم التذكرة', 'Receive by ticket number')} icon={Ic.ticket} onClose={onClose}
+      sub={t('اكتب الرقم المطبوع على الإرسالية، أو امسحه بجهاز قارئ باركود/QR متصل بالجهاز. لا تُستخدم الكاميرا.', 'Type the number printed on the dispatch, or scan it with a connected barcode reader. No camera is used.')}
+      footer={<>
+        <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
+        <button type="submit" form="dsp-lookup" style={{ ...btn('primary'), padding: '11px 28px', fontSize: '0.88rem' }}>{t('فتح الإرسالية', 'Open')}</button>
+      </>}>
+      <form id="dsp-lookup" onSubmit={submit}>
         <input autoFocus value={val} onChange={e => { setVal(e.target.value); setBad('') }} dir="ltr" placeholder="NWD-000123" aria-label={t('رقم التذكرة', 'Ticket number')}
-          style={{ ...fieldStyle, fontFamily: MONO, fontWeight: 900, fontSize: '1.15rem', letterSpacing: '.05em', textAlign: 'center', padding: '14px 12px' }} />
-        {bad && <div role="alert" style={{ fontSize: '0.78rem', fontWeight: 800, color: '#d97706' }}>{bad}</div>}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
-          <button type="submit" style={{ ...btn('primary'), padding: '10px 26px' }}>{t('فتح الإرسالية', 'Open')}</button>
-        </div>
+          style={{ ...fieldStyle, fontFamily: MONO, fontWeight: 900, fontSize: '1.25rem', letterSpacing: '.06em', textAlign: 'center', padding: '16px 12px' }} />
+        {bad && <div role="alert" style={{ fontSize: '0.78rem', fontWeight: 800, color: '#d97706', marginTop: 10 }}>{bad}</div>}
       </form>
-    </Shell>
+    </Sheet>
   )
 }

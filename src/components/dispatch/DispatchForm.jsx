@@ -1,13 +1,26 @@
-// نموذج إنشاء إرسالية/شحنة: النوع (موجودات/مفقودات/شحنة) ← الخط الأول (من/إلى + الحافلة) ← خط ثانٍ اختياري ← الأغراض ← إصدار التذكرة
+// نموذج إنشاء إرسالية/شحنة كلوحة جانبية (ورقة سفلية على الجوال): النوع ← المسار والحافلة ← خط ثانٍ اختياري ← الأغراض ← إصدار التذكرة
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import SelectField from '../shared/SelectField'
-import { FormCard, Section, Banner, PrimaryButton, GhostButton, fieldStyle, MONO } from '../lostFound/ui'
+import Sheet, { Ic } from './Sheet'
+import { fieldStyle, MONO } from '../lostFound/ui'
+import { btn } from './DispatchCards'
 import { DISPATCH_KINDS, dispatchError, fmtDate, toLatinDigits } from '../../utils/dispatch'
 
-const lbl = { display: 'block', fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 5 }
+const lbl = { display: 'block', fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 6 }
 
-export default function DispatchForm({ profile, isAr = true, isAdmin, stations, myStations, history = [], initial, onCancel, onCreated, onPrint }) {
+// قسم داخل النموذج (خارج المكوّن حتى لا تفقد الحقول التركيز عند الكتابة)
+const Block = ({ title, hintTxt, children }) => (
+  <section style={{ paddingBottom: 18, marginBottom: 18, borderBottom: '1px solid var(--border)' }}>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 11, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '0.8rem', fontWeight: 900, color: 'var(--text-1)' }}>{title}</span>
+      {hintTxt && <span style={{ fontSize: '0.66rem', color: 'var(--text-3)' }}>{hintTxt}</span>}
+    </div>
+    {children}
+  </section>
+)
+
+export default function DispatchForm({ profile, isAr = true, isAdmin, stations, myStations, history = [], initial, onClose, onCreated, onPrint, onShow }) {
   const t = (a, e) => (isAr ? a : e)
   const allowedFrom = isAdmin ? stations : (myStations.length ? myStations : stations.filter(s => s.id === profile?.station_id))
   const [kind, setKind] = useState(initial?.kind || 'found')
@@ -79,124 +92,114 @@ export default function DispatchForm({ profile, isAr = true, isAdmin, stations, 
       p_party: kind === 'shipment' ? Object.fromEntries(Object.entries(party).map(([k, v]) => [k, v.trim()])) : null, p_priority: priority,
     })
     setSaving(false)
-    if (error) { const m = dispatchError(error); setErr(m === 'SETUP' ? t('لم يُجهَّز النظام بعد: شغّل ملفي SQL «024» ثم «025_dispatches_v2» في Supabase', 'Run the 024 and 025 SQL files in Supabase first') : m); return }
+    if (error) { const m = dispatchError(error); setErr(m === 'SETUP' ? t('لم يُجهَّز النظام بعد: شغّل ملفات SQL «024» و«025» و«026» في Supabase', 'Run the 024 and 025 SQL files in Supabase first') : m); return }
     setDone(data)
     onCreated?.(data)
   }
 
+  // أي بيانات مُدخلة؟ (لتأكيد الإغلاق قبل ضياعها)
+  const dirty = !done && !!(toId || bus.trim() || note.trim() || allItems.length || Object.values(party).some(v => v.trim()))
+  const requestClose = () => { if (dirty && !window.confirm(t('لديك بيانات غير محفوظة. إغلاق النموذج؟', 'You have unsaved data. Close the form?'))) return; onClose?.() }
+
   if (done) {
     return (
-      <div style={{ maxWidth: 560, margin: '0 auto', padding: '30px 14px' }}>
-        <div style={{ textAlign: 'center', border: '1px solid var(--border)', borderRadius: 16, background: 'var(--card)', padding: '30px 22px' }}>
-          <div style={{ width: 54, height: 54, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(22,163,74,0.14)', color: '#16a34a', margin: '0 auto 12px' }}>
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+      <Sheet isAr={isAr} variant="drawer" width={520} title={t('تم إصدار الإرسالية', 'Dispatch issued')} icon={Ic.check} accent="#16a34a" onClose={onClose}
+        footer={<>
+          <button type="button" onClick={() => onPrint?.(done.id)} style={btn('ghost')}>{t('طباعة التذكرة', 'Print ticket')}</button>
+          <button type="button" onClick={() => { onShow?.(done.id); onClose?.() }} style={{ ...btn('primary'), padding: '11px 26px', fontSize: '0.88rem' }}>{t('عرض الإرسالية', 'View dispatch')}</button>
+        </>}>
+        <div style={{ textAlign: 'center', padding: '24px 6px 8px' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'rgba(22,163,74,0.14)', color: '#16a34a', margin: '0 auto 14px' }}>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
           </div>
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('تم إصدار الإرسالية وإشعار موظفي محطة الاستقبال', 'Dispatch issued and the receiving station was notified')}</div>
-          <div dir="ltr" style={{ fontFamily: MONO, fontWeight: 900, fontSize: '1.9rem', letterSpacing: '.04em', color: 'var(--text-1)', margin: '8px 0 4px' }}>{done.ticket_no}</div>
-          <div style={{ fontSize: '0.74rem', color: 'var(--text-3)' }}>{t('رقم تذكرة الإرسالية — سلّمه لسائق الحافلة وأرفقه مع الأغراض', 'Dispatch ticket number — hand it to the driver and attach to the items')}</div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 20 }}>
-            <PrimaryButton type="button" onClick={() => onPrint?.(done.id)}>{t('طباعة التذكرة', 'Print ticket')}</PrimaryButton>
-            <GhostButton type="button" onClick={onCancel}>{t('عرض الإرساليات', 'View dispatches')}</GhostButton>
-          </div>
+          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-3)' }}>{t('أُشعر موظفو محطة الاستقبال', 'The receiving station was notified')}</div>
+          <div dir="ltr" style={{ fontFamily: MONO, fontWeight: 900, fontSize: '2rem', letterSpacing: '.05em', color: 'var(--text-1)', margin: '10px 0 6px' }}>{done.ticket_no}</div>
+          <div style={{ fontSize: '0.76rem', color: 'var(--text-3)', lineHeight: 1.8 }}>{t('رقم تذكرة الإرسالية — سلّمه لسائق الحافلة وأرفقه مع الأغراض', 'Dispatch ticket — hand it to the driver and attach it to the items')}</div>
         </div>
-      </div>
+      </Sheet>
     )
   }
 
-  const pill = (on, color) => ({ padding: '9px 20px', borderRadius: 10, border: `1.5px solid ${on ? color : 'var(--border)'}`, background: on ? `${color}1f` : 'var(--card)', color: on ? color : 'var(--text-2)', fontWeight: 800, fontSize: '0.86rem', cursor: 'pointer', fontFamily: 'inherit' })
+  const seg = (on, color) => ({ flex: 1, minWidth: 0, padding: '10px 6px', borderRadius: 11, border: `1.5px solid ${on ? color : 'var(--border)'}`, background: on ? `${color}1a` : 'var(--card)', color: on ? color : 'var(--text-2)', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', fontFamily: 'inherit', transition: 'all .12s' })
+  const stationOpt = list => list.map(s => <option key={s.id} value={s.id}>{s.name_ar || s.name_en}</option>)
 
   return (
-    <form onSubmit={submit} style={{ maxWidth: 820, margin: '0 auto', padding: '18px 14px 40px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {err && <Banner kind="err">{err}</Banner>}
-        {initial?.requestId && <Banner kind="ok">{t('تنفيذ طلب إرسال: بيانات الغرض والمحطة المطلوبة مُعبّأة مسبقاً — راجعها وأدخل رقم الحافلة', 'Fulfilling a send request: details are prefilled')}</Banner>}
-        <FormCard icon="box" accent="#2563eb" title={t('إرسالية جديدة', 'New dispatch')} subtitle={profile?.full_name_ar}
-          right={<GhostButton type="button" onClick={onCancel} style={{ padding: '8px 16px' }}>{t('رجوع', 'Back')}</GhostButton>}>
+    <Sheet isAr={isAr} variant="drawer" width={620} title={t('إرسالية / شحنة جديدة', 'New dispatch / shipment')} icon={Ic.send} onClose={requestClose} closeOnBackdrop={false}
+      sub={initial?.requestId ? t('تنفيذ طلب إرسال: بيانات الغرض والمحطة مُعبّأة مسبقاً — أدخل رقم الحافلة', 'Fulfilling a send request: details prefilled') : profile?.full_name_ar}
+      footer={<>
+        <button type="button" onClick={requestClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
+        <button type="submit" form="dsp-form" disabled={saving} style={{ ...btn('primary'), padding: '11px 30px', fontSize: '0.9rem', opacity: saving ? 0.6 : 1 }}>{saving ? t('جارٍ الإصدار…', 'Issuing…') : t('إرسال وإصدار التذكرة', 'Send & issue ticket')}</button>
+      </>}>
+      <form id="dsp-form" onSubmit={submit}>
+        {err && <div role="alert" style={{ padding: '11px 14px', borderRadius: 11, background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.35)', color: '#dc2626', fontSize: '0.82rem', fontWeight: 800, marginBottom: 16, lineHeight: 1.7 }}>{err}</div>}
 
-          <Section title={t('نوع الإرسالية', 'Dispatch type')}>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {Object.entries(DISPATCH_KINDS).map(([k, m]) => (
-                <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); setPicked(new Map()) }} style={pill(kind === k, m.color)}>{isAr ? m.ar : m.en}</button>
-              ))}
+        <Block title={t('نوع الإرسالية', 'Type')}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {Object.entries(DISPATCH_KINDS).map(([k, m]) => (
+              <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); setPicked(new Map()) }} style={seg(kind === k, m.color)}>{isAr ? m.ar : m.en}</button>
+            ))}
+          </div>
+        </Block>
+
+        <Block title={t('المسار', 'Route')} hintTxt={t('الخط الأول', 'First leg')}>
+          <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(0,1fr)', gap: '0 12px', alignItems: 'stretch' }}>
+            <div aria-hidden="true" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 30, paddingBottom: 12 }}>
+              <i style={{ width: 12, height: 12, borderRadius: '50%', border: '3px solid #2563eb', background: 'var(--card)' }} />
+              <i style={{ flex: 1, width: 2, background: 'repeating-linear-gradient(to bottom, #2563eb 0 5px, transparent 5px 9px)', margin: '4px 0' }} />
+              <i style={{ width: 12, height: 12, borderRadius: '50%', background: '#2563eb' }} />
             </div>
-          </Section>
-
-          <Section title={t('الخط الأول', 'First leg')} hint={t('من محطة الإرسال إلى محطة الاستقبال', 'From the sending to the receiving station')}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={lbl}>{t('من محطة *', 'From station *')}</label>
+                <label style={lbl}>{t('من محطة *', 'From *')}</label>
                 {allowedFrom.length === 1
                   ? <div style={{ ...fieldStyle, fontWeight: 800 }}>{allowedFrom[0].name_ar || allowedFrom[0].name_en}</div>
-                  : <SelectField value={fromId} onChange={e => { setFromId(e.target.value); setPicked(new Map()) }} style={fieldStyle}>
-                      <option value="">{t('— اختر المحطة —', '— Select —')}</option>
-                      {allowedFrom.map(s => <option key={s.id} value={s.id}>{s.name_ar || s.name_en}</option>)}
-                    </SelectField>}
+                  : <SelectField value={fromId} onChange={e => { setFromId(e.target.value); setPicked(new Map()) }} style={fieldStyle}><option value="">{t('— اختر المحطة —', '— Select —')}</option>{stationOpt(allowedFrom)}</SelectField>}
               </div>
               <div>
-                <label style={lbl}>{t('إلى محطة *', 'To station *')}</label>
-                <SelectField value={toId} onChange={e => setToId(e.target.value)} style={fieldStyle}>
-                  <option value="">{t('— اختر المحطة —', '— Select —')}</option>
-                  {stations.filter(s => s.id !== fromId).map(s => <option key={s.id} value={s.id}>{s.name_ar || s.name_en}</option>)}
-                </SelectField>
+                <label style={lbl}>{t('إلى محطة *', 'To *')}</label>
+                <SelectField value={toId} onChange={e => setToId(e.target.value)} style={fieldStyle}><option value="">{t('— اختر المحطة —', '— Select —')}</option>{stationOpt(stations.filter(s => s.id !== fromId))}</SelectField>
                 {topTo.length > 0 && (
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                    <span style={{ fontSize: '0.64rem', fontWeight: 800, color: 'var(--text-3)', alignSelf: 'center' }}>{t('الأكثر إرسالاً:', 'Frequent:')}</span>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.64rem', fontWeight: 800, color: 'var(--text-3)' }}>{t('الأكثر إرسالاً:', 'Frequent:')}</span>
                     {topTo.map(id => <button key={id} type="button" onClick={() => setToId(id)} style={{ padding: '4px 11px', borderRadius: 99, border: `1px solid ${toId === id ? '#2563eb' : 'var(--border)'}`, background: toId === id ? 'rgba(37,99,235,0.12)' : 'var(--card)', color: toId === id ? '#2563eb' : 'var(--text-2)', fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>{nm[id]}</button>)}
                   </div>
                 )}
               </div>
-              <div>
-                <label style={lbl}>{t('رقم الحافلة *', 'Bus number *')}</label>
-                <input value={bus} onChange={e => setBus(toLatinDigits(e.target.value))} dir="ltr" inputMode="text" placeholder="4521" style={{ ...fieldStyle, fontFamily: MONO, fontWeight: 800 }} />
-              </div>
             </div>
-          </Section>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label style={lbl}>{t('رقم الحافلة *', 'Bus number *')}</label>
+            <input value={bus} onChange={e => setBus(toLatinDigits(e.target.value))} dir="ltr" inputMode="text" placeholder="4521" style={{ ...fieldStyle, fontFamily: MONO, fontWeight: 900, fontSize: '1rem', letterSpacing: '.04em' }} />
+          </div>
 
-          {kind === 'shipment' && (
-            <Section title={t('بيانات الشحنة', 'Shipment details')} hint={t('المرسِل والمستلِم النهائي', 'Sender and final recipient')}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
-                <div><label style={lbl}>{t('اسم المرسِل (العميل)', 'Sender name')}</label><input value={party.sender_name} onChange={e => setP('sender_name', e.target.value)} style={fieldStyle} /></div>
-                <div><label style={lbl}>{t('جوال المرسِل', 'Sender phone')}</label><input value={party.sender_phone} onChange={e => setP('sender_phone', toLatinDigits(e.target.value))} dir="ltr" inputMode="tel" style={{ ...fieldStyle, fontFamily: MONO }} /></div>
-                <div><label style={lbl}>{t('اسم المستلِم النهائي *', 'Recipient name *')}</label><input value={party.recipient_name} onChange={e => setP('recipient_name', e.target.value)} style={fieldStyle} /></div>
-                <div><label style={lbl}>{t('جوال المستلِم', 'Recipient phone')}</label><input value={party.recipient_phone} onChange={e => setP('recipient_phone', toLatinDigits(e.target.value))} dir="ltr" inputMode="tel" style={{ ...fieldStyle, fontFamily: MONO }} /></div>
-              </div>
-            </Section>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, padding: '11px 13px', borderRadius: 12, border: `1px dashed ${twoLegs ? '#2563eb' : 'var(--border-2)'}`, background: twoLegs ? 'rgba(37,99,235,0.06)' : 'transparent', fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-1)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={twoLegs} onChange={e => { setTwoLegs(e.target.checked); if (!e.target.checked) setTo2Id('') }} style={{ width: 18, height: 18, accentColor: '#2563eb' }} />
+            <span style={{ flex: 1 }}>{t('إضافة خط ثانٍ عبر محطة تحويل', 'Add a second leg via a transfer station')}<span style={{ display: 'block', fontSize: '0.66rem', color: 'var(--text-3)', fontWeight: 600, marginTop: 2 }}>{t('تستلمها المحطة الأولى ثم تُرسلها للمحطة التالية', 'The first station receives then forwards it')}</span></span>
+          </label>
+          {twoLegs && (
+            <div style={{ marginTop: 12 }}>
+              <label style={lbl}>{t(`إلى محطة (من ${toId ? nm[toId] : 'محطة الاستقبال الأولى'}) *`, 'Second leg to *')}</label>
+              <SelectField value={to2Id} onChange={e => setTo2Id(e.target.value)} style={fieldStyle}><option value="">{t('— اختر المحطة —', '— Select —')}</option>{stationOpt(stations.filter(s => s.id !== fromId && s.id !== toId))}</SelectField>
+            </div>
           )}
+        </Block>
 
-          <Section title={t('الأولوية', 'Priority')}>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button type="button" aria-pressed={priority === 'normal'} onClick={() => setPriority('normal')} style={pill(priority === 'normal', '#2563eb')}>{t('عادية', 'Normal')}</button>
-              <button type="button" aria-pressed={priority === 'urgent'} onClick={() => setPriority('urgent')} style={pill(priority === 'urgent', '#dc2626')}>{t('عاجلة', 'Urgent')}</button>
+        {kind === 'shipment' && (
+          <Block title={t('بيانات الشحنة', 'Shipment details')} hintTxt={t('المرسِل والمستلِم النهائي', 'Sender and final recipient')}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+              <div><label style={lbl}>{t('اسم المرسِل (العميل)', 'Sender name')}</label><input value={party.sender_name} onChange={e => setP('sender_name', e.target.value)} style={fieldStyle} /></div>
+              <div><label style={lbl}>{t('جوال المرسِل', 'Sender phone')}</label><input value={party.sender_phone} onChange={e => setP('sender_phone', toLatinDigits(e.target.value))} dir="ltr" inputMode="tel" style={{ ...fieldStyle, fontFamily: MONO }} /></div>
+              <div><label style={lbl}>{t('اسم المستلِم النهائي *', 'Recipient name *')}</label><input value={party.recipient_name} onChange={e => setP('recipient_name', e.target.value)} style={fieldStyle} /></div>
+              <div><label style={lbl}>{t('جوال المستلِم', 'Recipient phone')}</label><input value={party.recipient_phone} onChange={e => setP('recipient_phone', toLatinDigits(e.target.value))} dir="ltr" inputMode="tel" style={{ ...fieldStyle, fontFamily: MONO }} /></div>
             </div>
-          </Section>
+          </Block>
+        )}
 
-          <Section title={t('الخط الثاني', 'Second leg')} hint={t('اختياري: عند التحويل عبر محطة وسيطة', 'Optional: when transferring via an intermediate station')}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={twoLegs} onChange={e => { setTwoLegs(e.target.checked); if (!e.target.checked) setTo2Id('') }} style={{ width: 18, height: 18, accentColor: '#2563eb' }} />
-              {t('إضافة خط ثانٍ (تستلم المحطة الأولى ثم تُرسلها للمحطة التالية)', 'Add a second leg (the first station receives then forwards)')}
-            </label>
-            {twoLegs && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12 }}>
-                <div>
-                  <label style={lbl}>{t('من محطة (محطة الاستقبال الأولى)', 'From (first receiving station)')}</label>
-                  <div style={{ ...fieldStyle, fontWeight: 800, opacity: toId ? 1 : 0.5 }}>{toId ? nm[toId] : t('اختر محطة الاستقبال أولاً', 'Select the first receiving station')}</div>
-                </div>
-                <div>
-                  <label style={lbl}>{t('إلى محطة *', 'To station *')}</label>
-                  <SelectField value={to2Id} onChange={e => setTo2Id(e.target.value)} style={fieldStyle}>
-                    <option value="">{t('— اختر المحطة —', '— Select —')}</option>
-                    {stations.filter(s => s.id !== fromId && s.id !== toId).map(s => <option key={s.id} value={s.id}>{s.name_ar || s.name_en}</option>)}
-                  </SelectField>
-                </div>
-              </div>
-            )}
-          </Section>
-
-          <Section title={kind === 'shipment' ? t('محتويات الشحنة', 'Shipment contents') : t('الأغراض', 'Items')} hint={kind === 'shipment' ? t('أضف أصناف الشحنة يدوياً', 'Add the shipment items manually') : fromId ? t(`من سجلات ${nm[fromId] || 'المحطة'}`, '') : t('اختر محطة الإرسال أولاً', 'Select the sending station first')}>
-            {fromId && kind !== 'shipment' && (
-              <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--card)', maxHeight: 230, overflowY: 'auto' }}>
-                {loadingC ? <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>{t('جارٍ التحميل…', 'Loading…')}</div>
-                  : cands.length === 0 ? <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>{kind === 'found' ? t('لا موجودات غير مستلمة في هذه المحطة — أضف أغراضك يدوياً بالأسفل', 'No unclaimed items here — add items manually below') : t('لا بلاغات في هذه المحطة — أضف أغراضك يدوياً بالأسفل', 'No reports here — add items manually below')}</div>
+        <Block title={kind === 'shipment' ? t('محتويات الشحنة', 'Contents') : t('الأغراض', 'Items')} hintTxt={kind === 'shipment' ? t('أضف الأصناف يدوياً', 'Add manually') : fromId ? t(`من سجلات ${nm[fromId] || 'المحطة'}`, '') : t('اختر محطة الإرسال أولاً', 'Select the sending station first')}>
+          {fromId && kind !== 'shipment' && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card)', maxHeight: 210, overflowY: 'auto', marginBottom: 12 }}>
+              {loadingC ? <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>{t('جارٍ التحميل…', 'Loading…')}</div>
+                : cands.length === 0 ? <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem', lineHeight: 1.7 }}>{kind === 'found' ? t('لا موجودات غير مستلمة في هذه المحطة — أضف أغراضك يدوياً بالأسفل', 'No unclaimed items here — add items manually below') : t('لا بلاغات في هذه المحطة — أضف أغراضك يدوياً بالأسفل', 'No reports here — add items manually below')}</div>
                   : cands.map(c => {
                     const on = picked.has(c.id)
                     return (
@@ -209,42 +212,40 @@ export default function DispatchForm({ profile, isAr = true, isAdmin, stations, 
                       </label>
                     )
                   })}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <div style={{ flex: '1 1 220px' }}>
-                <label style={lbl}>{t('إضافة غرض يدوياً', 'Add an item manually')}</label>
-                <input value={freeText} onChange={e => setFreeText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFree() } }} placeholder={t('مثال: كرتون ملابس', 'e.g. a box of clothes')} style={fieldStyle} />
-              </div>
-              <div style={{ width: 84 }}>
-                <label style={lbl}>{t('العدد', 'Qty')}</label>
-                <input type="number" min={1} value={freeQty} onChange={e => setFreeQty(e.target.value)} dir="ltr" style={{ ...fieldStyle, fontFamily: MONO }} />
-              </div>
-              <GhostButton type="button" onClick={addFree} style={{ padding: '9px 18px' }}>{t('إضافة', 'Add')}</GhostButton>
             </div>
-            {allItems.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {allItems.map((i, idx) => (
-                  <span key={(i.ref_id || 'f') + idx} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 6px 5px 11px', borderRadius: 99, background: 'rgba(37,99,235,0.1)', color: '#2563eb', fontSize: '0.78rem', fontWeight: 700 }}>
-                    {i.description}{i.qty > 1 && <b dir="ltr" style={{ fontFamily: MONO }}>×{i.qty}</b>}
-                    <button type="button" aria-label={t('حذف', 'Remove')} onClick={() => (i.ref_id ? togglePick({ id: i.ref_id }) : setFree(f => f.filter((_, k) => k !== free.indexOf(i))))}
-                      style={{ width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(37,99,235,0.18)', color: '#2563eb', cursor: 'pointer', fontSize: 12, lineHeight: 1 }}>✕</button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </Section>
-
-          <Section title={t('ملاحظة', 'Note')} hint={t('اختياري', 'Optional')}>
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} maxLength={500} placeholder={t('أي تفاصيل تهم موظفي محطة الاستقبال', 'Anything the receiving staff should know')} style={{ ...fieldStyle, resize: 'vertical' }} />
-          </Section>
-
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            <GhostButton type="button" onClick={onCancel}>{t('إلغاء', 'Cancel')}</GhostButton>
-            <PrimaryButton type="submit" disabled={saving}>{saving ? t('جارٍ الإصدار…', 'Issuing…') : t('إرسال وإصدار التذكرة', 'Send & issue ticket')}</PrimaryButton>
+          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <label style={lbl}>{t('إضافة غرض يدوياً', 'Add an item manually')}</label>
+              <input value={freeText} onChange={e => setFreeText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addFree() } }} placeholder={t('مثال: كرتون ملابس', 'e.g. a box of clothes')} style={fieldStyle} />
+            </div>
+            <div style={{ width: 70 }}>
+              <label style={lbl}>{t('العدد', 'Qty')}</label>
+              <input type="number" min={1} value={freeQty} onChange={e => setFreeQty(e.target.value)} dir="ltr" style={{ ...fieldStyle, fontFamily: MONO }} />
+            </div>
+            <button type="button" onClick={addFree} style={{ ...btn('ghost'), height: 42, padding: '0 16px' }}>{t('إضافة', 'Add')}</button>
           </div>
-        </FormCard>
-      </div>
-    </form>
+          {allItems.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+              {allItems.map((i, idx) => (
+                <span key={(i.ref_id || 'f') + idx} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 6px 5px 11px', borderRadius: 99, background: 'rgba(37,99,235,0.1)', color: '#2563eb', fontSize: '0.78rem', fontWeight: 700 }}>
+                  {i.description}{i.qty > 1 && <b dir="ltr" style={{ fontFamily: MONO }}>×{i.qty}</b>}
+                  <button type="button" aria-label={t('حذف', 'Remove')} onClick={() => (i.ref_id ? togglePick({ id: i.ref_id }) : setFree(f => f.filter((_, k) => k !== free.indexOf(i))))}
+                    style={{ width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(37,99,235,0.18)', color: '#2563eb', cursor: 'pointer', fontSize: 12, lineHeight: 1 }}>✕</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </Block>
+
+        <Block title={t('الأولوية والملاحظة', 'Priority & note')}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <button type="button" aria-pressed={priority === 'normal'} onClick={() => setPriority('normal')} style={seg(priority === 'normal', '#2563eb')}>{t('عادية', 'Normal')}</button>
+            <button type="button" aria-pressed={priority === 'urgent'} onClick={() => setPriority('urgent')} style={seg(priority === 'urgent', '#dc2626')}>{t('عاجلة', 'Urgent')}</button>
+          </div>
+          <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} maxLength={500} placeholder={t('ملاحظة لموظفي محطة الاستقبال (اختياري)', 'Note for the receiving staff (optional)')} style={{ ...fieldStyle, resize: 'vertical' }} />
+        </Block>
+      </form>
+    </Sheet>
   )
 }
