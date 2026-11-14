@@ -8,6 +8,8 @@ import { getCached, setCached } from '../lib/pageCache'
 import { onPwaUpdateAvailable, isPwaUpdatePending, applyPwaUpdate } from '../lib/pwaUpdate'
 import { shiftsFromEnds } from '../utils/stationShifts'
 import { shiftIdx } from '../utils/shifts'
+import MobileHome from '../components/home/MobileHome'
+import { useMedia } from '../components/dispatch/Sheet'
 import { SurveyOverlay, detectSurveyCity, SURVEY_STATIONS } from './SurveyPage'
 import { TEMPLATES as MAGAZINE_TEMPLATES, TEMPLATE_ORDER as MAGAZINE_TEMPLATE_ORDER, bgFor as magazineBgFor, isPostLive, templateLabel as magazineTemplateLabel } from './MagazinePage'
 
@@ -62,6 +64,7 @@ const ICONS = {
   arrow:   'M5 12h14M12 5l7 7-7 7',
   sales:   ['M12 1v22','M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6'],
   check:   ['M9 11l3 3L22 4','M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11'],
+  box:     ['M21 8l-9-5-9 5v8l9 5 9-5V8z','M3 8l9 5 9-5M12 13v8'],
   magazine: ['M4 19.5A2.5 2.5 0 016.5 17H20','M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z','M9 7h7','M9 11h7','M9 15h4'],
 }
 
@@ -282,7 +285,8 @@ function MagazineFeed({ posts, isAr, onNavigate }) {
 }
 
 export default function DashboardPage() {
-  const { profile, isAdmin, isGeneralAdmin, allowedStationIds, customTitle, canSeeModule } = useAuth()
+  const { profile, isAdmin, isGeneralAdmin, allowedStationIds, customTitle, canSeeModule, workStations } = useAuth()
+  const isMobile = useMedia('(max-width: 767px)')
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const navigate = useNavigate()
@@ -441,11 +445,29 @@ export default function DashboardPage() {
     return isAr ? `منذ ${Math.floor(diff / 1440)} يوم` : `${Math.floor(diff / 1440)}d ago`
   }
 
+  /* ── إرساليات بانتظار الاستلام (للأيقونة والتنبيه) ── */
+  const [dispatchPending, setDispatchPending] = useState(0)
+  useEffect(() => {
+    if (!profile?.id || !canSeeModule('dispatches')) return
+    let off = false
+    const ids = [profile.station_id, ...(workStations || []).map(s => s.id)].filter(Boolean)
+    async function loadDsp() {
+      let q = supabase.from('dispatch_legs').select('id', { count: 'exact', head: true }).eq('status', 'sent')
+      if (!isAdmin) { if (!ids.length) { setDispatchPending(0); return } q = q.in('to_station_id', ids) }
+      const { count, error } = await q
+      if (!off && !error) setDispatchPending(count ?? 0)
+    }
+    loadDsp()
+    const ch = supabase.channel('dash-dsp').on('postgres_changes', { event: '*', schema: 'public', table: 'dispatch_legs' }, loadDsp).subscribe()
+    return () => { off = true; supabase.removeChannel(ch) }
+  }, [profile?.id, profile?.station_id, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── وصلات سريعة ── */
   const quickLinks = [
     ...(canSeeModule('transportation') ? [{ to: '/transportation', ar: 'الترحيل',    en: 'Transportation', icon: 'bus',     desc_ar: 'تتبع الرحلات والمغادرات', desc_en: 'Trips & departures', hue: '#0ea5e9' }] : []),
     ...(canSeeModule('sales') ? [{ to: '/sales', ar: 'الإيرادات', en: 'Sales', icon: 'sales', desc_ar: 'يوميات المبيعات والتحصيل', desc_en: 'Daily sales & collection', hue: '#10b981' }] : []),
     ...(canSeeModule('lost_found') ? [{ to: '/lost-found', ar: 'الموجودات', en: 'Lost & Found', icon: 'bag', desc_ar: 'بلاغات المفقودات والتسليم', desc_en: 'Lost items & handover', hue: '#f59e0b' }] : []),
+    ...(canSeeModule('dispatches') ? [{ to: '/dispatches', ar: 'الإرساليات', en: 'Dispatches', icon: 'box', desc_ar: 'إرسال واستلام الموجودات والشحنات', desc_en: 'Send & receive items and shipments', hue: '#2563eb', badge: dispatchPending }] : []),
     ...(canSeeModule('leaves') ? [{ to: '/leaves', ar: 'الإجازات', en: 'Leaves', icon: 'leave', desc_ar: 'طلبات الإجازة والاستئذان', desc_en: 'Leave & permission requests', hue: '#8b5cf6', badge: pendingLeaves.length }] : []),
     ...(canSeeModule('reports') ? [{ to: '/reports',       ar: 'التقارير',    en: 'Reports',        icon: 'report',  desc_ar: 'تقارير تشغيلية شاملة',    desc_en: 'Operational reports', hue: '#6366f1' }] : []),
     ...(canSeeModule('evaluation') ? [{ to: '/evaluation', ar: 'التقييم الوظيفي', en: 'Evaluations', icon: 'check', desc_ar: 'تقييم الموظفين والمحطات', desc_en: 'Staff & station evaluation', hue: '#ec4899' }] : []),
@@ -460,6 +482,30 @@ export default function DashboardPage() {
   const [surveyOpen, setSurveyOpen] = useState(false)
 
   const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: 'var(--shadow-sm)' }
+
+  if (isMobile) {
+    const canSeePending = isAdmin || profile?.role === 'station_admin'
+    const attention = [
+      ...(canSeeModule('dispatches') && dispatchPending > 0 ? [{ key: 'dsp', n: dispatchPending, label: isAdmin ? (isAr ? 'إرساليات في الطريق' : 'Dispatches in transit') : (isAr ? 'بانتظار استلامك' : 'Awaiting your receipt'), color: '#d97706', icon: 'box', onClick: () => navigate('/dispatches') }] : []),
+      ...(canSeePending && pendingLeaves.length > 0 ? [{ key: 'leaves', n: pendingLeaves.length, label: isAr ? 'طلبات بانتظار موافقتك' : 'Requests to approve', color: '#8b5cf6', icon: 'leave', onClick: () => navigate('/leaves?tab=pending') }] : []),
+      ...(unread > 0 ? [{ key: 'notifs', n: unread, label: isAr ? 'إشعارات جديدة' : 'New notifications', color: 'var(--accent)', icon: 'bell', onClick: () => document.getElementById('home-notifs')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }] : []),
+    ]
+    return (
+      <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }}>
+        <style>{SURVEY_DASH_CSS}</style>
+        <style>{MAGAZINE_DASH_CSS}</style>
+        {surveyOpen && surveyCity && <SurveyOverlay city={surveyCity} onClose={() => setSurveyOpen(false)} />}
+        <MobileHome isAr={isAr} now={now} greeting={greet()} userName={userName} roleLabel={roleLabel} stationName={stationName} hasStar={hasStar}
+          curShift={curShift} shiftPct={shiftPct} remText={remText} quickLinks={quickLinks} renderIcon={(n, s) => <Svg paths={ICONS[n]} size={s} />}
+          attention={attention} notifs={notifs} notifLoading={notifLoading} unread={unread} markRead={markRead} markAllRead={markAllRead} timeAgo={timeAgo}
+          onNotifOpen={n => { markRead(n.id); if (n.ref_type === 'dispatch' && n.ref_id) navigate(`/dispatches?d=${n.ref_id}`) }}
+          updatePending={updatePending} onUpdate={applyPwaUpdate} version={typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'} stamp={buildStamp()} navigate={navigate}>
+          <MagazineFeed posts={magazinePosts} isAr={isAr} onNavigate={p => navigate('/magazine', { state: { postId: p.id } })} />
+          <SurveyWidget city={surveyCity} isAdmin={isGeneralAdmin} isAr={isAr} onLaunch={() => setSurveyOpen(true)} onNavigate={() => navigate('/survey')} />
+        </MobileHome>
+      </div>
+    )
+  }
 
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }}>
