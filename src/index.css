@@ -770,6 +770,22 @@ html[dir="rtl"] .mobile-menu-drawer.open { transform: translateX(0); }
 .mm-action:active { transform: scale(0.96); }
 .mm-action:hover { border-color: #5B5BD6; color: var(--text-1); }
 .mm-action-ico { height: 20px; display: flex; align-items: center; justify-content: center; color: #5B5BD6; font-size: 0.85rem; }
+.mm-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.mm-stat { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text-2); font-family: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer; }
+.mm-stat:active { transform: scale(0.97); }
+.mm-stat-n { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-weight: 800; font-size: 0.78rem; background: var(--surface-2, var(--surface)); color: var(--text-3); }
+.mm-stat-n.hot { background: #5B5BD6; color: #fff; }
+.mm-stat-n.warn { background: #d97706; color: #fff; }
+.mm-search { display: flex; align-items: center; gap: 8px; margin: 10px 12px 2px; padding: 0 12px; height: 42px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-3); flex-shrink: 0; }
+.mm-search:focus-within { border-color: #5B5BD6; box-shadow: 0 0 0 3px rgba(91,91,214,0.15); }
+.mm-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text-1); font-family: inherit; font-size: 16px; }
+.mm-search button { border: none; background: transparent; color: var(--text-3); cursor: pointer; padding: 4px; font-size: 0.8rem; }
+.mm-recent { padding: 8px 0 4px; }
+.mm-recent-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 2px 8px; }
+.mm-recent-row::-webkit-scrollbar { display: none; }
+.mm-recent-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--card); color: var(--text-1); text-decoration: none; font-size: 0.74rem; font-weight: 700; }
+.mm-recent-chip svg { color: var(--hue, #64748b); }
+.mm-badge { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 99px; background: #d97706; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; font-weight: 800; }
 .mobile-menu-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 6px 10px 10px; }
 .mobile-menu-group { display: flex; flex-direction: column; gap: 2px; padding: 8px 0 6px; }
 .mobile-menu-group + .mobile-menu-group { border-top: 1px solid var(--border); margin-top: 4px; }

@@ -16,15 +16,16 @@ import { onPwaUpdateAvailable, applyPwaUpdate, hardRefresh, consumeUpdatedFlag }
 
 const MONO = "'IBM Plex Mono', monospace"
 
+// شعار نورث وست باص بألوان الشركة الرسمية: الكحلي #264673 والبرتقالي #EE712D؛ الأجزاء السوداء الرسمية (الباص) تظهر بلون النص (أبيض) لتُرى على الشريط الداكن
 function NWLogo({ height = 28 }) {
   const w = height * (398 / 115)
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={w} height={height} viewBox="0 0 398 115" fill="none">
       <path d="M217.45 73.4831L230.225 100.856H204.675L217.45 73.4831Z" fill="currentColor"/>
-      <path d="M123.432 32.9644L108.667 8.56036H135.605L123.432 32.9644Z" fill="currentColor"/>
+      <path d="M123.432 32.9644L108.667 8.56036H135.605L123.432 32.9644Z" fill="#264673"/>
       <path d="M310.21 108.097C304.406 108.021 299.419 103.036 299.37 97.2583C299.318 91.2463 304.441 86.165 310.49 86.233C316.379 86.297 321.182 91.133 321.237 97.0583C321.294 103.156 316.279 108.177 310.21 108.097ZM389.265 46.289C388.59 40.337 387.926 34.385 387.263 28.433C387.01 26.1396 385.57 25.0636 383.443 24.6943C378.678 23.865 375.034 22.0183 372.829 17.069C370.747 12.4023 365.938 10.453 361.077 9.3063C357.753 8.5223 354.357 8.39297 350.941 8.39697C338.082 8.4103 325.218 8.4143 312.315 8.4143L310.175 15.237C323.375 15.2383 336.571 15.233 349.771 15.245C352.515 15.249 355.287 15.325 357.994 15.717C365.442 16.797 368.906 20.341 369.549 27.7863C370.647 40.5183 371.547 53.269 372.583 66.6996C365.827 66.6996 359.538 66.589 353.255 66.7516C350.782 66.8183 349.049 66.0916 347.339 64.2823C340.633 57.1756 333.799 50.1916 326.954 43.2183C324.837 41.0623 322.738 39.2276 319.165 39.257C313.651 39.305 308.137 39.301 302.625 39.3196L300.495 46.1156C305.831 46.1036 311.169 46.101 316.509 46.0716C319.147 46.0556 321.021 46.7716 322.846 48.7023C329.735 55.997 336.873 63.0543 343.727 70.3796C345.907 72.7116 348.154 73.6836 351.342 73.589C358.543 73.3783 365.753 73.525 373.237 73.525V93.597H328.055C325.225 84.8303 319.629 79.4383 310.382 79.397C300.893 79.353 295.351 85.025 292.506 93.8623H268.971L266.766 100.892H292.217C293.411 101.544 293.359 103.012 293.893 104.132C297.199 111.061 302.633 114.96 310.325 114.972C318.018 114.986 323.697 111.186 326.614 104.098C327.762 101.301 329.117 100.608 331.905 100.63C346.155 100.756 360.406 100.58 374.657 100.748C378.87 100.797 380.27 99.2663 380.367 95.069C380.817 75.7476 378.498 56.5983 377.17 37.3876C377.015 35.1436 376.825 32.9023 376.647 30.6023C379.727 29.9063 380.817 31.293 381.058 33.9716C381.45 38.325 381.982 42.665 382.427 47.0143C382.655 49.2383 383.762 50.9116 386.031 50.7676C388.531 50.6076 389.551 48.7863 389.265 46.289Z" fill="currentColor"/>
-      <path d="M252.214 100.857H272.386L322.254 8.39827H291.612L262.204 60.6503L231.402 8.39827H199.972L171.4 59.1623L148.504 20.3209L133.057 48.7383L151.996 77.8729L166.937 100.857H182.856L217.782 40.2049L252.214 100.857Z" fill="currentColor"/>
-      <path d="M118.531 64.0054L87.9068 8.70808H56.8414L8.94678 100.545H42.0241L73.2681 38.3561L103.923 100.545H133.191L180.985 8.70808H147.773L118.531 64.0054Z" fill="currentColor"/>
+      <path d="M252.214 100.857H272.386L322.254 8.39827H291.612L262.204 60.6503L231.402 8.39827H199.972L171.4 59.1623L148.504 20.3209L133.057 48.7383L151.996 77.8729L166.937 100.857H182.856L217.782 40.2049L252.214 100.857Z" fill="#264673"/>
+      <path d="M118.531 64.0054L87.9068 8.70808H56.8414L8.94678 100.545H42.0241L73.2681 38.3561L103.923 100.545H133.191L180.985 8.70808H147.773L118.531 64.0054Z" fill="#EE712D"/>
     </svg>
   )
 }
@@ -489,10 +490,17 @@ function BrandMark() {
   )
 }
 
+// توحيد الحروف العربية للبحث: الهمزات والتاء المربوطة والياء والتشكيل
+const normAr = t => String(t || '').toLowerCase().replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').trim()
+
 // قائمة الجوال (الدرج الجانبي) — تعرض كل الأقسام المتاحة دفعة وحدة، بدل الاكتفاء بأول 5
 // بالشريط السفلي أو الاضطرار لتدوير الشاشة لعرض الشريط العلوي (نفس محتوى top-nav بالضبط)
 function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, stationName, dark, onToggleTheme, onToggleLang, onRefresh, onChangePwd, onLogout }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [q, setQ] = useState('')
+  const [counts, setCounts] = useState({ unread: 0, dsp: 0 })
+  const [recent, setRecent] = useState(() => { try { return JSON.parse(localStorage.getItem('nw_recent_nav') || '[]') } catch { return [] } })
   const drawerRef = useRef(null)
   const pushedRef = useRef(false)   // أضفنا مدخل سجل للقائمة المفتوحة (زر الرجوع بالأندرويد يغلقها)
   const openPathRef = useRef('')
@@ -505,6 +513,37 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
     document.body.style.overflow = 'hidden'
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
   }, [open, onClose])
+
+  // آخر الأقسام المفتوحة (للوصول السريع في أعلى القائمة)
+  useEffect(() => {
+    const path = location.pathname
+    if (!path || path === '/') return
+    setRecent(prev => {
+      const next = [path, ...prev.filter(x => x !== path)].slice(0, 6)
+      try { localStorage.setItem('nw_recent_nav', JSON.stringify(next)) } catch { /* بدون تخزين */ }
+      return next
+    })
+  }, [location.pathname])
+
+  // عدّادات حيّة تُجلب عند فتح القائمة: إشعارات غير مقروءة + إرساليات بانتظار استلام محطتي
+  useEffect(() => {
+    if (!open) { setQ(''); return }
+    if (!profile?.id) return
+    let off = false
+    ;(async () => {
+      const [{ count: unread }, dsp] = await Promise.all([
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', profile.id).eq('is_read', false),
+        (async () => {
+          const ids = [profile.station_id].filter(Boolean)
+          let qy = supabase.from('dispatch_legs').select('id', { count: 'exact', head: true }).eq('status', 'sent')
+          if (!ADMIN_ROLE_VALUES.includes(profile.role)) { if (!ids.length) return { count: 0 }; qy = qy.in('to_station_id', ids) }
+          return qy
+        })(),
+      ])
+      if (!off) setCounts({ unread: unread ?? 0, dsp: dsp?.error ? 0 : (dsp?.count ?? 0) })
+    })().catch(() => {})
+    return () => { off = true }
+  }, [open, profile?.id, profile?.station_id, profile?.role])
 
   // الأندرويد: زر الرجوع يغلق القائمة بدل الخروج من الصفحة/التطبيق
   useEffect(() => {
@@ -538,7 +577,7 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
   // الأندرويد: اسحب القائمة نحو حافتها لإغلاقها (تتبع الإصبع)
   useEffect(() => {
     const el = drawerRef.current
-    if (!android || !open || !el) return
+    if (!open || !el) return
     const sign = isAr ? 1 : -1   // اتجاه الإغلاق: العربية يمين، الإنجليزية يسار
     let sx = 0, sy = 0, dx = 0, mode = null, t0 = 0
     const start = e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; mode = null; t0 = Date.now() }
@@ -565,10 +604,16 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
       el.removeEventListener('touchend', end); el.removeEventListener('touchcancel', end)
       setTimeout(() => { el.style.transform = ''; el.style.transition = '' }, 320)
     }
-  }, [open, android, isAr, onClose])
+  }, [open, isAr, onClose])
 
   const initials = String(profile?.full_name_ar || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
-  const groups = visibleGroups.filter(g => g.items.length)
+  const allItems = visibleGroups.flatMap(g => g.items)
+  const needle = normAr(q)
+  const groups = visibleGroups
+    .map(g => ({ ...g, items: needle ? g.items.filter(it => normAr(`${it.labelAr} ${it.labelEn}`).includes(needle)) : g.items }))
+    .filter(g => g.items.length)
+  const recentItems = needle ? [] : recent.map(pth => allItems.find(it => it.to === pth)).filter(it => it && it.to !== location.pathname).slice(0, 4)
+  const badgeOf = to => (to === '/dispatches' ? counts.dsp : 0)
   const titles = isAr ? ['الأقسام', 'الإدارة'] : ['Sections', 'Administration']
   const actions = [
     { key: 'theme', label: dark ? (isAr ? 'نهاري' : 'Light') : (isAr ? 'ليلي' : 'Dark'), icon: dark ? ICONS.sun : ICONS.moon, onClick: onToggleTheme },
@@ -603,8 +648,34 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
               </button>
             ))}
           </div>
+          <div className="mm-stats">
+            <button type="button" className="mm-stat" onClick={() => { onClose(); navigate('/'); setTimeout(() => document.getElementById('home-notifs')?.scrollIntoView({ behavior: 'smooth' }), 350) }}>
+              <span className={`mm-stat-n${counts.unread ? ' hot' : ''}`}>{counts.unread}</span><span>{isAr ? 'إشعار جديد' : 'new alerts'}</span>
+            </button>
+            <button type="button" className="mm-stat" onClick={() => { onClose(); navigate('/dispatches') }}>
+              <span className={`mm-stat-n${counts.dsp ? ' warn' : ''}`}>{counts.dsp}</span><span>{isAr ? 'إرسالية بالطريق' : 'dispatches'}</span>
+            </button>
+          </div>
+        </div>
+        <div className="mm-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={isAr ? 'ابحث في الأقسام…' : 'Search sections…'} aria-label={isAr ? 'بحث في الأقسام' : 'Search sections'} />
+          {q && <button type="button" onClick={() => setQ('')} aria-label={isAr ? 'مسح' : 'Clear'}>✕</button>}
         </div>
         <nav className="mobile-menu-body">
+          {recentItems.length > 0 && (
+            <div className="mm-recent">
+              <p className="mm-group-title">{isAr ? 'آخر ما فتحته' : 'Recent'}</p>
+              <div className="mm-recent-row">
+                {recentItems.map(it => (
+                  <NavLink key={it.to} to={it.to} onClick={e => { goTo(e, it.to); onClose() }} className="mm-recent-chip" style={{ '--hue': NAV_HUE[it.to] || '#64748b' }}>
+                    <Icon d={ICONS[it.icon]} size={14} /><span>{isAr ? it.labelAr : it.labelEn}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          )}
+          {needle && groups.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem', padding: '26px 10px' }}>{isAr ? 'لا أقسام مطابقة' : 'No matching sections'}</p>}
           {groups.map((group, gi) => (
             <div key={gi} className="mobile-menu-group">
               {groups.length > 1 && <p className="mm-group-title">{titles[gi] ?? titles[1]}</p>}
@@ -615,6 +686,7 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
                     className={({ isActive }) => `mobile-menu-item${isActive ? ' active' : ''}`} style={{ '--hue': hue }}>
                     <span className="mobile-menu-item-ico"><Icon d={ICONS[item.icon]} size={18} /></span>
                     <span className="mm-label">{isAr ? item.labelAr : item.labelEn}</span>
+                    {badgeOf(item.to) > 0 && <span className="mm-badge">{badgeOf(item.to)}</span>}
                     <span className="mm-chev"><Icon d={ICONS.chevron} size={14} /></span>
                   </NavLink>
                 )
