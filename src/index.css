@@ -1327,3 +1327,8 @@ input.amt-input, input.amt-hero { background: transparent !important; border: 0 
 .dk-root .map-outer { height: calc(100vh - 60px) !important; }
 .dk-root [style*="position: sticky"][style*="top: 8px"] { top: 68px !important; }
 .dk-root .scroll-top-btn { inset-inline-start: calc(var(--dk-side, 0px) + 12px) !important; }
+
+/* النماذج داخل اللوحة الجانبية: عمود واحد وبدون ترويسة مكرّرة (العنوان في اللوحة) */
+.lf-embed .lf-head { display: none !important; }
+.lf-embed .lf-body { display: flex !important; flex-direction: column; padding: 4px 0 !important; }
+.lf-embed .lf-body > * { grid-column: auto; }

@@ -55,10 +55,10 @@ function Meta({ label, children }) {
 }
 const actBtn = (danger = false) => ({ padding: '6px 12px', borderRadius: 8, border: `1px solid ${danger ? 'rgba(220,38,38,0.4)' : 'var(--border)'}`, background: 'var(--surface)', color: danger ? '#dc2626' : 'var(--text-2)', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' })
 
-export default function LostFoundArchive({ isAdmin = false, canDonate = false, onDonate = null, donateScope = null, isAr = true }) {
+export default function LostFoundArchive({ isAdmin = false, canDonate = false, onDonate = null, donateScope = null, isAr = true, initialSub = 'items' }) {
   const t = (ar, en) => (isAr ? ar : en)
   const cached = getCached(CACHE_KEY)
-  const [sub, setSub] = useState('items')
+  const [sub, setSub] = useState(initialSub)
   const [reports, setReports] = useState(() => cached?.reports ?? [])
   const [items, setItems] = useState(() => cached?.items ?? [])
   const [donMap, setDonMap] = useState({})   // donation_id → محضر التسليم للجمعية

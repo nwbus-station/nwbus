@@ -21,7 +21,7 @@ export function Icon({ name, size = 18, color = 'currentColor' }) {
 export function FormCard({ icon = 'box', accent = '#d97706', title, subtitle, right, children }) {
   return (
     <div style={{ ...card, overflow: 'hidden' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="lf-head" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ width: 38, height: 38, borderRadius: 11, display: 'grid', placeItems: 'center', background: `${accent}22`, color: accent, flexShrink: 0 }}><Icon name={icon} /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 900, fontSize: '1rem', color: 'var(--text-1)' }}>{title}</div>

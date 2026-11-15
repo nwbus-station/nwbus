@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -14,6 +14,8 @@ import LostFoundArchive from '../components/lostFound/LostFoundArchive'
 import HandoverTab from '../components/lostFound/HandoverTab'
 import CharityTab, { donationScope } from '../components/lostFound/CharityTab'
 import { FormCard, Section, Banner, PrimaryButton } from '../components/lostFound/ui'
+import LfOverview from '../components/lostFound/LfOverview'
+import Sheet, { useMedia } from '../components/dispatch/Sheet'
 import { ADMIN_ROLE_VALUES } from '../utils/constants'
 
 const toLatinNums = v => v.replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => d.charCodeAt(0) - 1632)
@@ -218,7 +220,7 @@ function StationRouteSelector({ stations, fromId, toId, onFromChange, onToChange
 /* ══════════════════════════════════════════════════════════
    TAB 1 — بلاغ مفقودات
 ══════════════════════════════════════════════════════════ */
-function LostReportTab({ stations, profile, isAr }) {
+function LostReportTab({ stations, profile, isAr, embedded = false, onSaved }) {
   const empty = {
     customer_name: '', contact_number: '', item_description: '',
     sticker_number: '', ticket_number: '', bus_number: '', departure_time: '',
@@ -251,12 +253,12 @@ function LostReportTab({ stations, profile, isAr }) {
     })
     setSaving(false)
     if (err) { setError(err.message); return }
-    setDone(true)
+    setDone(true); onSaved?.()
     setTimeout(() => { setForm(empty); setDone(false) }, 2500)
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: 820, margin: '0 auto', padding: '18px 14px 40px' }}>
+    <form onSubmit={handleSubmit} style={embedded ? undefined : { maxWidth: 820, margin: '0 auto', padding: '18px 14px 40px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {done && <Banner kind="ok">{isAr ? '✓ تم تسجيل البلاغ بنجاح' : '✓ Report submitted successfully'}</Banner>}
       {error && <Banner kind="err">{error}</Banner>}
@@ -366,7 +368,7 @@ function LostReportTab({ stations, profile, isAr }) {
 /* ══════════════════════════════════════════════════════════
    TAB 3 — تسجيل موجود
 ══════════════════════════════════════════════════════════ */
-function RegisterItemTab({ profile, isAr, stations }) {
+function RegisterItemTab({ profile, isAr, stations, embedded = false, onSaved }) {
   // موظف يعمل بأكثر من محطة: لازم يحدد محطة التسجيل من محطاته (الأساسية + الإضافية)
   const { workStations } = useAuth()
   const multi = workStations?.length > 1
@@ -439,12 +441,12 @@ function RegisterItemTab({ profile, isAr, stations }) {
     if (err) { setError(err.message); return }
     previews.forEach(u => URL.revokeObjectURL(u))
     setPhotos([]); setPreviews([]); setProgress(0)
-    setDone(true)
+    setDone(true); onSaved?.()
     setTimeout(() => { setForm(empty); setDone(false) }, 2500)
   }
 
   return (
-    <form onSubmit={handleSave} style={{ maxWidth: 820, margin: '0 auto', padding: '18px 14px 40px' }}>
+    <form onSubmit={handleSave} style={embedded ? undefined : { maxWidth: 820, margin: '0 auto', padding: '18px 14px 40px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {done && <Banner kind="ok">{isAr ? '✓ تم تسجيل الموجود بنجاح' : '✓ Item registered successfully'}</Banner>}
       {error && <Banner kind="err">{error}</Banner>}
@@ -678,18 +680,22 @@ function Field({ label, children }) {
   )
 }
 
-// الترتيب حسب سير العمل: تسجيل ما نُجد ← تسليمه لصاحبه ← بلاغات من فقد شيئاً ← السجل
-const TABS = [
-  { id: 'register', ar: 'تسجيل موجود جديد',  en: 'Register Item',   hint: { ar: 'عثرت على غرض؟ سجّله هنا', en: 'Found something? Log it' } },
-  { id: 'handover', ar: 'تسليم لصاحبه',      en: 'Hand Over',       hint: { ar: 'سلّم الغرض لمن جاء يطلبه', en: 'Give an item to its owner' } },
-  { id: 'report',   ar: 'بلاغ مفقود',        en: 'Lost Report',     hideForEmployee: true, hint: { ar: 'عميل فقد غرضاً؟ سجّل بلاغه', en: 'A customer lost something' } },
-  { id: 'charity',  ar: 'التسليم للجمعية',   en: 'Charity',         donorsOnly: true, hint: { ar: 'دفعة أغراض بمحضر رسمي', en: 'Batch hand-over with record' } },
-  { id: 'logs',     ar: 'السجل والأرشيف',    en: 'Archive & Log',   hint: { ar: 'كل الموجودات والبلاغات السابقة', en: 'All past items and reports' } },
-]
-
 /* ══════════════════════════════════════════════════════════
-   MAIN PAGE
+   MAIN PAGE — واجهة تطبيق: قائمة أقسام جانبية (درج على الجوال) + نظرة عامة، والنماذج في لوحات جانبية
 ══════════════════════════════════════════════════════════ */
+const MONO = 'ui-monospace, Menlo, Consolas, monospace'
+const IcoPaths = {
+  home: 'M3 10.5L12 3l9 7.5V21h-6v-6H9v6H3z',
+  hand: 'M5 12l5 5L20 7',
+  box: 'M21 8l-9-5-9 5v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v8',
+  flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
+  heart: 'M12 21s-7-4.5-9.5-9A5.5 5.5 0 0112 6a5.5 5.5 0 019.5 6C19 16.5 12 21 12 21z',
+  plus: 'M12 5v14M5 12h14',
+  menu: 'M4 7h16M4 12h16M4 17h16',
+  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
+}
+const LfIco = ({ n, s = 18 }) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={IcoPaths[n]} /></svg>
+
 export default function LostFoundPage() {
   const { i18n } = useTranslation()
   const { profile, isAdmin: isAdminRole, allowCap, isGeneralAdmin, isRestricted, allowedStationIds } = useAuth()
@@ -698,93 +704,166 @@ export default function LostFoundPage() {
   // تسليم الموجودات للجمعية: للمشرفين فقط (مشرف المحطة/المنطقة/الوردية) والإدارة
   const canDonate = ['station_admin', 'area_supervisor', 'shift_supervisor', ...ADMIN_ROLE_VALUES].includes(profile?.role)
   const isAr = i18n.language === 'ar'
+  const t = (a, e) => (isAr ? a : e)
   const navigate = useNavigate()
-  const [tab, setTab] = useState('register')
-  const [preselect, setPreselect] = useState(null)   // غرض يُفتح مختاراً في تبويب التسليم للجمعية
+  const [section, setSection] = useState('overview')
+  const [formKind, setFormKind] = useState(null)        // 'register' | 'report' | null
+  const [pickOpen, setPickOpen] = useState(false)       // اختيار نوع الإضافة على الجوال
+  const [drawer, setDrawer] = useState(false)
+  const [refresh, setRefresh] = useState(0)
+  const [preselect, setPreselect] = useState(null)      // غرض يُفتح مختاراً في التسليم للجمعية
   const [stations, setStations] = useState([])
   const [counts, setCounts] = useState({ unclaimed: null, reports: null, aging: null })
-  const narrow = useNarrow()
-  const { workStations } = useAuth()
-  const multi = workStations?.length > 1
+  const isThree = useMedia('(min-width: 900px)')
+  const layout = isThree ? 'wide' : 'one'
+  const rootRef = useRef(null)
+  const [top, setTop] = useState(0)
+  const [navH, setNavH] = useState(0)
+  const [padB, setPadB] = useState(0)
+
+  // ملء الشاشة: ارتفاع الواجهة = الشاشة − ما فوقها (شريط التطبيق) − الشريط السفلي على الجوال
+  useLayoutEffect(() => {
+    const m = () => {
+      const el = rootRef.current
+      if (!el) return
+      setTop(Math.round(el.getBoundingClientRect().top + window.scrollY))
+      const host = el.closest('main')
+      const pad = host ? Math.round(parseFloat(getComputedStyle(host).paddingBottom) || 0) : 0
+      const nv = document.querySelector('nav.bottom-nav')
+      const nh = nv && getComputedStyle(nv).display !== 'none' ? Math.round(nv.getBoundingClientRect().height) : 0
+      setPadB(pad); setNavH(Math.min(pad, nh))
+    }
+    m(); window.addEventListener('resize', m)
+    return () => window.removeEventListener('resize', m)
+  })
 
   useEffect(() => {
     supabase.from('stations').select('id, name_ar, name_en').eq('is_active', true).order('name_ar')
       .then(({ data }) => setStations(data ?? []))
   }, [])
 
-  const TAB_CAP = { report: 'lostfound_report_tab', handover: 'lostfound_handover_tab', register: 'lostfound_register_tab', logs: 'lostfound_archive_tab' }
-  const visibleTabs = TABS.filter(t => !(t.hideForEmployee && isEmployee) && !(t.donorsOnly && !canDonate) && allowCap(TAB_CAP[t.id]))
-  const activeTab = visibleTabs.some(t => t.id === tab) ? tab : visibleTabs[0]?.id
-
-  // ملخص سريع أعلى الصفحة — يتحدّث عند تبديل التبويب (بعد تسجيل أو تسليم)
+  // أعداد الملخص (الموجودات والبلاغات مفتوحة لكل الحسابات على كل المحطات)
   useEffect(() => {
     const cutoff30 = new Date(Date.now() - 30 * 86400000).toISOString()
-    // الموجودات والبلاغات مفتوحة لكل الحسابات على كل المحطات (غرض ضائع يُسأل عنه في أي محطة)
-    const sid = null
-    let uq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed')
-    let aq = supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed').lt('created_at', cutoff30)
-    let rq = supabase.from('lost_reports').select('id', { count: 'exact', head: true })
-    if (sid) { uq = uq.eq('station_id', sid); aq = aq.eq('station_id', sid) }
-    if (isEmployee && sid) rq = rq.eq('station_id', sid)
-    Promise.all([uq, aq, rq]).then(([u, a, r]) => setCounts({ unclaimed: u.count ?? 0, aging: a.count ?? 0, reports: r.count ?? 0 }))
-  }, [activeTab, profile?.station_id, isEmployee])
+    Promise.all([
+      supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed'),
+      supabase.from('lost_found_items').select('id', { count: 'exact', head: true }).eq('status', 'unclaimed').lt('created_at', cutoff30),
+      supabase.from('lost_reports').select('id', { count: 'exact', head: true }),
+    ]).then(([u, a, r]) => setCounts({ unclaimed: u.count ?? 0, aging: a.count ?? 0, reports: r.count ?? 0 }))
+  }, [refresh])
+
+  const canRegister = allowCap('lostfound_register_tab')
+  const canReport = !isEmployee && allowCap('lostfound_report_tab')
+  const canHandover = allowCap('lostfound_handover_tab')
+  const canArchive = allowCap('lostfound_archive_tab')
+  const NAV = [
+    { id: 'overview', label: t('نظرة عامة', 'Overview'), ico: 'home', ok: true },
+    { id: 'handover', label: t('تسليم لصاحبه', 'Hand over'), ico: 'hand', ok: canHandover, hot: counts.unclaimed, hotColor: '#d97706', sub: t('سلّم الغرض لمن جاء يطلبه', 'Give an item to its owner') },
+    { id: 'items', label: t('سجل الموجودات', 'Found items'), ico: 'box', ok: canArchive, sub: t('كل الموجودات وحالتها', 'All items and status') },
+    { id: 'reports', label: t('بلاغات المفقودات', 'Lost reports'), ico: 'flag', ok: canArchive, n: counts.reports, sub: t('بلاغات العملاء', 'Customer reports') },
+    { id: 'charity', label: t('التسليم للجمعية', 'Charity'), ico: 'heart', ok: canDonate, sub: t('دفعة أغراض بمحضر رسمي', 'Batch hand-over with record') },
+  ].filter(x => x.ok)
+  const cur = NAV.find(x => x.id === section) ?? NAV[0]
+  const go = id => { setSection(id); setDrawer(false) }
+  const openForm = k => { setDrawer(false); setPickOpen(false); setFormKind(k) }
+  const afterSaved = () => { setRefresh(k => k + 1); setTimeout(() => setFormKind(null), 1300) }
+
+  const H = `calc(100dvh - ${top}px - ${navH}px - env(safe-area-inset-bottom))`
+  const cancelPad = padB > navH ? -(padB - navH) : 0
+  const btnStyle = (bg, fg = '#fff') => ({ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 14px', borderRadius: 12, border: 'none', background: bg, color: fg, fontFamily: 'inherit', fontWeight: 800, fontSize: '0.86rem', cursor: 'pointer', width: '100%' })
+
+  const sidebar = asDrawer => (
+    <aside aria-label={t('أقسام الموجودات', 'Lost & found sections')} style={{ width: asDrawer ? '100%' : 244, flexShrink: 0, background: 'var(--card)', borderInlineEnd: asDrawer ? 'none' : '1px solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0, height: asDrawer ? '100%' : undefined }}>
+      <div style={{ padding: '16px 14px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 36, height: 36, borderRadius: 11, display: 'grid', placeItems: 'center', background: 'rgba(217,119,6,0.15)', color: '#d97706' }}><LfIco n="box" s={19} /></span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 900, fontSize: '0.98rem', color: 'var(--text-1)' }}>{t('الموجودات والمفقودات', 'Lost & Found')}</div>
+            <div style={{ fontSize: '0.64rem', color: 'var(--text-3)' }}>{t('تسجيل · تسليم · متابعة', 'Log · Hand over · Track')}</div>
+          </div>
+          {asDrawer && <button type="button" onClick={() => setDrawer(false)} aria-label={t('إغلاق', 'Close')} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', fontSize: '0.9rem' }}>✕</button>}
+        </div>
+        {canRegister && <button type="button" onClick={() => openForm('register')} style={btnStyle('#d97706')}><LfIco n="plus" s={17} />{t('تسجيل موجود', 'Register item')}</button>}
+        {canReport && <button type="button" onClick={() => openForm('report')} style={btnStyle('var(--surface)', 'var(--text-1)')}><LfIco n="plus" s={17} />{t('بلاغ مفقود', 'Lost report')}</button>}
+      </div>
+      <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 8px 8px' }}>
+        {NAV.map(it => {
+          const on = cur?.id === it.id
+          return (
+            <button key={it.id} type="button" onClick={() => go(it.id)} aria-current={on ? 'page' : undefined}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, padding: '0 10px', margin: '1px 0', border: 'none', borderRadius: 10, background: on ? 'rgba(217,119,6,0.13)' : 'transparent', color: on ? 'var(--text-1)' : 'var(--text-2)', fontFamily: 'inherit', fontSize: '0.88rem', fontWeight: on ? 900 : 600, cursor: 'pointer', textAlign: 'start' }}>
+              <span style={{ color: on ? '#d97706' : 'var(--text-3)', display: 'flex' }}><LfIco n={it.ico} /></span>
+              <span style={{ flex: 1, minWidth: 0 }}>{it.label}</span>
+              {it.hot > 0 && <span style={{ minWidth: 20, height: 20, padding: '0 6px', borderRadius: 99, background: it.hotColor, color: '#fff', fontSize: '0.68rem', fontWeight: 900, display: 'grid', placeItems: 'center', fontFamily: MONO }}>{it.hot}</span>}
+              {!(it.hot > 0) && it.n > 0 && <span style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: MONO, fontWeight: 700 }}>{it.n}</span>}
+            </button>
+          )
+        })}
+      </nav>
+      <div style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
+        <button type="button" onClick={() => navigate('/dispatches')} style={{ ...btnStyle('rgba(37,99,235,0.1)', '#2563eb'), border: '1px solid rgba(37,99,235,0.35)' }}><LfIco n="send" s={16} />{t('الإرساليات والشحن', 'Dispatches')}</button>
+      </div>
+    </aside>
+  )
+
+  const header = (
+    <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: layout === 'one' ? '10px 12px' : '14px 24px', borderBottom: '1px solid var(--border)', background: 'var(--card)', flexShrink: 0 }}>
+      {layout === 'one' && <button type="button" onClick={() => setDrawer(true)} aria-label={t('الأقسام', 'Sections')} style={{ width: 40, height: 40, borderRadius: 11, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}><LfIco n="menu" /></button>}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <h1 style={{ margin: 0, fontSize: layout === 'one' ? '1rem' : '1.15rem', fontWeight: 900, color: 'var(--text-1)' }}>{cur?.label}</h1>
+        {layout !== 'one' && cur?.sub && <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 2 }}>{cur.sub}</div>}
+      </div>
+      {layout === 'one' && (canRegister || canReport) && (
+        <button type="button" onClick={() => (canRegister && canReport ? setPickOpen(true) : openForm(canRegister ? 'register' : 'report'))}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 11, border: 'none', background: '#d97706', color: '#fff', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer' }}><LfIco n="plus" s={16} />{t('جديد', 'New')}</button>
+      )}
+    </header>
+  )
+
+  const content = (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      {header}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        {cur?.id === 'overview' && <LfOverview isAr={isAr} counts={counts} canRegister={canRegister} canReport={canReport} canArchive={canArchive} onNew={openForm} onGo={go} refresh={refresh} />}
+        {cur?.id === 'handover' && <HandoverTab key={'h' + refresh} profile={profile} isAr={isAr} />}
+        {cur?.id === 'items' && <LostFoundArchive key={'i' + refresh} initialSub="items" isAdmin={isAdmin} canDonate={canDonate} donateScope={donationScope({ isGeneralAdmin, isRestricted, allowedStationIds, profile })} onDonate={id => { setPreselect(id); go('charity') }} isAr={isAr} />}
+        {cur?.id === 'reports' && <LostFoundArchive key={'r' + refresh} initialSub="reports" isAdmin={isAdmin} canDonate={canDonate} donateScope={donationScope({ isGeneralAdmin, isRestricted, allowedStationIds, profile })} onDonate={id => { setPreselect(id); go('charity') }} isAr={isAr} />}
+        {cur?.id === 'charity' && canDonate && <CharityTab preselectId={preselect} onPreselectUsed={() => setPreselect(null)} isAr={isAr} />}
+      </div>
+    </div>
+  )
 
   return (
-    <div style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
+    <div ref={rootRef} style={{ height: H, marginBottom: cancelPad, display: 'flex', background: 'var(--surface)', overflow: 'hidden' }} dir={isAr ? 'rtl' : 'ltr'}>
+      {layout !== 'one' && sidebar(false)}
+      {content}
 
-      {/* ملخص سريع + تبويبات — نفس بطاقات بقية الأقسام */}
-      <div style={{ maxWidth: 820, margin: '0 auto', padding: '16px 14px 0' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
-          {[
-            [isAr ? 'بانتظار التسليم' : 'Awaiting hand-over', counts.unclaimed, 'handover', '#d97706'],
-            [isAr ? 'تجاوزت 30 يوماً (للجمعية)' : 'Over 30 days (charity)', counts.aging, 'logs', '#dc2626'],
-            [isAr ? 'بلاغات المفقودات' : 'Lost reports', counts.reports, 'logs', '#8b5cf6'],
-          ].map(([label, n, go, color], i) => (
-            <button key={i} type="button" onClick={() => visibleTabs.some(t => t.id === go) && setTab(go)}
-              style={{ background: 'var(--card)', border: '1px solid var(--border)', borderTop: `3px solid ${color}`, borderRadius: 14, padding: '12px 10px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}>
-              <div style={{ fontSize: '1.45rem', fontWeight: 900, lineHeight: 1.1, color: 'var(--text-1)', fontFamily: 'ui-monospace, Menlo, Consolas, monospace' }}>{n ?? '—'}</div>
-              <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', marginTop: 4, fontWeight: 700 }}>{label}</div>
-            </button>
-          ))}
+      {layout === 'one' && drawer && (
+        <div onClick={e => { if (e.target === e.currentTarget) setDrawer(false) }} style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(8,12,20,0.52)', WebkitBackdropFilter: 'blur(3px)', backdropFilter: 'blur(3px)' }}>
+          <div style={{ position: 'absolute', top: 0, bottom: 0, insetInlineStart: 0, width: 'min(322px, 88vw)', boxShadow: '0 0 40px rgba(0,0,0,0.4)' }}>{sidebar(true)}</div>
         </div>
+      )}
 
-        {/* ربط الموجودات بقسم الإرساليات والشحن (قسم مستقل) */}
-        <button type="button" onClick={() => navigate('/dispatches')}
-          style={{ width: '100%', marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 14, border: '1.5px solid rgba(37,99,235,0.4)', background: 'rgba(37,99,235,0.07)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
-          <span style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'rgba(37,99,235,0.15)', color: '#2563eb', flexShrink: 0 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" /><path d="M3 8l9 5 9-5M12 13v8" /></svg>
-          </span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: 'block', fontWeight: 900, fontSize: '0.9rem', color: 'var(--text-1)' }}>{isAr ? 'الإرساليات والشحن' : 'Dispatches & Shipping'}</span>
-            <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-3)', marginTop: 2 }}>{isAr ? 'إرسال الموجودات والمفقودات بين المحطات واستلامها — قسم مستقل' : 'Send and receive items between stations'}</span>
-          </span>
-          <span aria-hidden="true" style={{ color: '#2563eb', fontWeight: 900 }}>{isAr ? '‹' : '›'}</span>
-        </button>
+      {pickOpen && (
+        <Sheet isAr={isAr} title={t('إضافة جديدة', 'Add new')} onClose={() => setPickOpen(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button type="button" onClick={() => openForm('register')} style={btnStyle('#d97706')}><LfIco n="plus" s={17} />{t('تسجيل موجود', 'Register found item')}</button>
+            <button type="button" onClick={() => openForm('report')} style={btnStyle('#8b5cf6')}><LfIco n="plus" s={17} />{t('بلاغ مفقود', 'Lost report')}</button>
+          </div>
+        </Sheet>
+      )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${narrow ? 2 : Math.max(1, visibleTabs.length)}, minmax(0, 1fr))`, gap: 8, marginTop: 12 }}>
-          {visibleTabs.map(t => {
-            const on = activeTab === t.id
-            const badge = t.id === 'handover' ? counts.unclaimed : null
-            return (
-              <button key={t.id} type="button" onClick={() => setTab(t.id)} title={isAr ? t.hint.ar : t.hint.en}
-                style={{ padding: '10px 12px', borderRadius: 12, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start', border: `1.5px solid ${on ? 'var(--text-1)' : 'var(--border)'}`, background: on ? 'var(--text-1)' : 'var(--card)', transition: 'all 0.15s' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.86rem', fontWeight: 800, color: on ? 'var(--card)' : 'var(--text-1)' }}>
-                  {isAr ? t.ar : t.en}
-                  {badge > 0 && <span style={{ fontSize: '0.62rem', fontWeight: 800, background: on ? 'var(--card)' : 'var(--text-1)', color: on ? 'var(--text-1)' : 'var(--card)', borderRadius: 99, padding: '1px 7px' }}>{badge}</span>}
-                </span>
-                <span style={{ display: 'block', fontSize: '0.63rem', color: on ? 'var(--card)' : 'var(--text-3)', opacity: on ? 0.8 : 1, marginTop: 2, fontWeight: 500 }}>{isAr ? t.hint.ar : t.hint.en}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Content */}
-      {activeTab === 'report'   && !isEmployee && <LostReportTab   stations={stations} profile={profile} isAr={isAr} />}
-      {activeTab === 'handover' && <HandoverTab    profile={profile} isAr={isAr} />}
-      {activeTab === 'register' && <RegisterItemTab profile={profile} isAr={isAr} stations={stations} />}
-      {activeTab === 'charity'  && canDonate && <CharityTab preselectId={preselect} onPreselectUsed={() => setPreselect(null)} isAr={isAr} />}
-      {activeTab === 'logs'     && <LostFoundArchive isAdmin={isAdmin} canDonate={canDonate} donateScope={donationScope({ isGeneralAdmin, isRestricted, allowedStationIds, profile })} onDonate={id => { setPreselect(id); setTab('charity') }} isAr={isAr} />}
+      {formKind && (
+        <Sheet isAr={isAr} variant="drawer" width={760} accent={formKind === 'register' ? '#d97706' : '#8b5cf6'}
+          title={formKind === 'register' ? t('تسجيل موجود', 'Register found item') : t('بلاغ مفقودات', 'Lost report')} sub={profile?.full_name_ar}
+          onClose={() => setFormKind(null)}>
+          <div className="lf-embed">
+            {formKind === 'register'
+              ? <RegisterItemTab embedded profile={profile} isAr={isAr} stations={stations} onSaved={afterSaved} />
+              : <LostReportTab embedded stations={stations} profile={profile} isAr={isAr} onSaved={afterSaved} />}
+          </div>
+        </Sheet>
+      )}
     </div>
   )
 }
