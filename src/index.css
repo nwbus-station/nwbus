@@ -1311,3 +1311,13 @@ input.amt-input, input.amt-hero { background: transparent !important; border: 0 
 @media (prefers-reduced-motion: reduce) { [class*="fixed"][class*="inset-0"] , [class*="fixed"][class*="inset-0"] > div, .nw-confirm { animation: none !important; } }
 .nw-confirm { animation: dkPop .18s ease-out; }
 .nw-confirm-bd { animation: dkFade .14s ease-out; }
+
+/* ══ الموجودات على الشاشات العريضة: نستغل العرض بدل عمود ضيق وسط الصفحة ══ */
+@media (min-width: 1100px) {
+  main [style*="max-width: 820px"] { max-width: min(100%, 1240px) !important; }
+  .lf-body { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px !important; align-items: start; }
+  .lf-body > :last-child { grid-column: 1 / -1; }
+}
+@media (min-width: 1700px) {
+  main [style*="max-width: 820px"] { max-width: min(100%, 1400px) !important; }
+}

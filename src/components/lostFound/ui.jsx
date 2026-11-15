@@ -29,7 +29,7 @@ export function FormCard({ icon = 'box', accent = '#d97706', title, subtitle, ri
         </div>
         {right}
       </div>
-      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>{children}</div>
+      <div className="lf-body" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>{children}</div>
     </div>
   )
 }
