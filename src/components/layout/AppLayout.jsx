@@ -129,7 +129,7 @@ function NotificationBell({ profile }) {
       </button>
 
       {open && (
-        <div style={{ position: 'absolute', top: 40, left: 0, width: 400, maxWidth: '90vw', background: 'var(--card)', borderRadius: 4, boxShadow: '0 0 0 1px var(--border-2), 0 12px 32px rgba(26,33,41,0.16)', zIndex: 100, overflow: 'hidden' }} dir="rtl">
+        <div style={{ position: 'absolute', top: 40, left: 0, width: 400, maxWidth: '90vw', background: 'var(--card)', borderRadius: 16, boxShadow: '0 0 0 1px var(--border-2), 0 24px 60px -12px rgba(0,0,0,0.45)', zIndex: 100, overflow: 'hidden' }} dir="rtl">
           {/* Header */}
           <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

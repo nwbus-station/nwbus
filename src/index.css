@@ -1296,3 +1296,18 @@ input.amt-input, input.amt-hero { background: transparent !important; border: 0 
 .dk-me { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-1); font-family: inherit; cursor: pointer; text-align: start; transition: border-color .14s; }
 .dk-me:hover, .dk-me.on { border-color: var(--border-2); }
 .dk-me .dk-user-t b, .dk-me .dk-user-t small { max-width: 130px; }
+
+/* ══ الشاشات الكبيرة: تكبير القياس العام + استغلال العرض (سطح المكتب فقط؛ الجوال لا يتأثر) ══ */
+@media (min-width: 1600px) { html { font-size: 17px; } }
+@media (min-width: 1900px) { html { font-size: 18px; } }
+@media (min-width: 1700px) {
+  main .max-w-\[1400px\], main .max-w-6xl, main .max-w-7xl { max-width: 1760px; }
+}
+
+/* ══ لمسة موحّدة لكل النوافذ المنبثقة: خلفية مضبّبة + دخول ناعم + زوايا وظل أعمق ══ */
+[class*="fixed"][class*="inset-0"][class*="bg-black/"] { -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); animation: dkFade .16s ease-out; }
+[class*="fixed"][class*="inset-0"][class*="bg-black/"] > div[class*="rounded"] { border-radius: 16px !important; box-shadow: 0 28px 70px -14px rgba(0,0,0,.5) !important; animation: dkPop .2s ease-out; }
+[style*="position: fixed"][style*="inset: 0"]:not(.dsp-backdrop):not(.nw-confirm-bd) { animation: dkFade .16s ease-out; }
+@media (prefers-reduced-motion: reduce) { [class*="fixed"][class*="inset-0"] , [class*="fixed"][class*="inset-0"] > div, .nw-confirm { animation: none !important; } }
+.nw-confirm { animation: dkPop .18s ease-out; }
+.nw-confirm-bd { animation: dkFade .14s ease-out; }

@@ -515,7 +515,7 @@ export default function DashboardPage() {
       {surveyOpen && surveyCity && <SurveyOverlay city={surveyCity} onClose={() => setSurveyOpen(false)} />}
 
       {/* ── المحتوى الرئيسي ── */}
-      <div style={{ maxWidth: 1304, margin: '0 auto', padding: '20px 16px 32px' }}>
+      <div style={{ maxWidth: 'min(100%, 1720px)', margin: '0 auto', padding: '24px clamp(16px, 2vw, 32px) 36px' }}>
 
         {/* ── البطاقة الرئيسية: الترحيب + الوقت ── */}
         <div style={{ ...card, borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
