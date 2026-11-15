@@ -2,9 +2,15 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { matchesSearch } from '../utils/digits'
-import { arabizeStation, hasLatin } from '../utils/arabizeStation'
 import ConfirmDialog from '../components/shared/ConfirmDialog'
-import SelectField from '../components/shared/SelectField'
+import PageHeader from '../components/shared/PageHeader'
+import Sheet, { useMedia } from '../components/dispatch/Sheet'
+import { CALL_CSS } from '../components/calls/callStyles'
+import TripPanel from '../components/calls/TripPanel'
+import StopsPanel from '../components/calls/StopsPanel'
+import AnnounceConsole from '../components/calls/AnnounceConsole'
+import CallHistory from '../components/calls/CallHistory'
+import ClipsLibrary from '../components/calls/ClipsLibrary'
 
 // نغمة نداء المطار (دينغ-دونغ تنازلي) — مُولّدة بالكامل بالمتصفح (Web Audio)، بدون ملف صوتي خارجي
 // controller اختياري: يخزّن AudioContext الحالي عشان زر "إيقاف" يقدر يسكّته فوراً
@@ -161,6 +167,7 @@ function buildAnnouncement(destName, viaNames) {
 export default function CallPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
+  const desk = useMedia('(min-width: 900px)')
   const [mode, setMode] = useState('trip') // 'trip' | 'free'
   const [trips, setTrips] = useState([])
   const [loadingTrips, setLoadingTrips] = useState(true)
@@ -192,6 +199,7 @@ export default function CallPage() {
   const [nameDrafts, setNameDrafts] = useState({})        // { stationId: اسم عربي مقترح/معدّل }
   const [confirmRename, setConfirmRename] = useState(null) // { list: [{id,name}] }
   const [renaming, setRenaming] = useState('')
+  const [history, setHistory] = useState([]) // سجل نداءات الجلسة (عرض فقط)
 
   const selectedTrip = trips.find(t => t.id === selectedTripId)
   const checkedStops = stops.filter(s => !stopOff[s.id])
@@ -404,13 +412,22 @@ export default function CallPage() {
       } else {
         await speak(t, selectedVoice, controller)
       }
+      if (!controller.stopped) {
+        const kind = voiceURI === CLIPS_VOICE_ID ? 'clips' : voiceURI === ELEVENLABS_VOICE_ID ? 'eleven' : 'device'
+        const entry = {
+          id: `${Date.now()}-${Math.random()}`, at: new Date(), kind,
+          dest: mode === 'trip' && destStop ? destStop.name : '', trip: mode === 'trip' ? selectedTrip?.trip_number : '',
+          text: kind === 'clips' ? '' : (t || ''),
+        }
+        setHistory(h => [entry, ...h].slice(0, 30))
+      }
     } catch (err) {
       setCallError(err.message || (isAr ? 'تعذّر تشغيل النداء' : 'Failed to play the announcement'))
       stopRepeat()
     }
     setPlaying(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chimeOn, selectedVoice, voiceURI, mode, destStop, viaChosen, clipsIndex, phraseClips, isAr])
+  }, [chimeOn, selectedVoice, voiceURI, mode, destStop, viaChosen, clipsIndex, phraseClips, isAr, selectedTrip])
 
   async function onCallClick() {
     if (playing) return
@@ -428,285 +445,140 @@ export default function CallPage() {
     matchesSearch(t.from_station?.name_ar, tripQuery) || matchesSearch(t.to_station?.name_ar, tripQuery)
   )
 
-  const needsBrowserTts = voiceURI !== ELEVENLABS_VOICE_ID && voiceURI !== CLIPS_VOICE_ID
+  const clipsMode = voiceURI === CLIPS_VOICE_ID
+  const needsBrowserTts = !clipsMode && voiceURI !== ELEVENLABS_VOICE_ID
+  const announceDisabled = (!clipsMode && !text.trim()) || playing || repeating || (chimeOn && !CHIME_SUPPORTED) || (needsBrowserTts && !BROWSER_TTS_SUPPORTED)
+  const status = repeating ? 'repeat' : playing ? 'playing' : 'idle'
+  const repeatOpt = REPEAT_OPTIONS.find(o => o.value === repeatEvery)
+
+  // جاهزية المقاطع للنداء الحالي (عرض فقط — نفس شروط التحقق داخل doCall)
+  let clipsCheck = null
+  if (clipsMode && mode === 'trip' && destStop) {
+    clipsCheck = []
+    if (!phraseClips.intro) clipsCheck.push(isAr ? 'عبارة المقدمة' : 'the intro phrase')
+    if (!clipsIndex.has(destStop.id)) clipsCheck.push(destStop.name)
+    if (viaChosen.length && !phraseClips.via) clipsCheck.push(isAr ? 'عبارة "مروراً بـ"' : 'the "via" phrase')
+    viaChosen.forEach(s => { if (!clipsIndex.has(s.id)) clipsCheck.push(s.name) })
+  }
+
+  const voiceOptions = [
+    ...(mode === 'trip' ? [{ value: CLIPS_VOICE_ID, label: isAr ? 'مقاطع مسجّلة جاهزة (الأفضل والأثبت)' : 'Ready-made recorded clips (best and most reliable)' }] : []),
+    { value: ELEVENLABS_VOICE_ID, label: isAr ? 'صوت بشري واقعي حي (ElevenLabs)' : 'Live realistic human voice (ElevenLabs)' },
+    ...[...voices].sort((a, b) => rankVoice(b) - rankVoice(a)).map(v => ({ value: v.voiceURI, label: `${v.name} ${isAr ? '(صوت الجهاز)' : '(device voice)'}` })),
+  ]
+
+  async function onTestVoice() {
+    setCallError('')
+    try {
+      if (voiceURI === ELEVENLABS_VOICE_ID) await speakElevenLabs('هذا تجربة لصوت النداء', undefined, isAr)
+      else await speak('هذا تجربة لصوت النداء', selectedVoice)
+    } catch (err) { setCallError(err.message || (isAr ? 'تعذّر تشغيل الصوت' : 'Failed to play the audio')) }
+  }
+
+  function onModeChange(id) {
+    setMode(id); stopRepeat()
+    if (id === 'free' && voiceURI === CLIPS_VOICE_ID) setVoiceURI(ELEVENLABS_VOICE_ID)
+  }
+
+  const clipsLibrary = (
+    <ClipsLibrary isAr={isAr} phraseClips={phraseClips} clipsIndex={clipsIndex} allStations={allStations}
+      stationSearch={stationSearch} onStationSearch={setStationSearch} uploadingId={uploadingId} bulkProgress={bulkProgress} renaming={renaming}
+      nameDrafts={nameDrafts} onNameDraft={(id, v) => setNameDrafts(p => ({ ...p, [id]: v }))}
+      onUploadPhrase={uploadPhraseClip} onGeneratePhrase={generatePhraseClip} onUploadStation={uploadStationClip} onGenerateStation={generateStationClip}
+      onGenerateAll={generateAllMissing} onAskRename={list => setConfirmRename({ list })} onPlay={path => new Audio(clipUrl(path)).play()} />
+  )
+
+  const historyCard = <CallHistory isAr={isAr} items={history} onReuse={setText} onClear={() => setHistory([])} />
+
+  const stats = desk
+    ? [
+        { label: isAr ? 'رحلات فعّالة' : 'Active trips', value: trips.length },
+        { label: isAr ? 'محطات مفعّلة' : 'Enabled stations', value: selectedTrip ? `${checkedStops.length}/${stops.length}` : '—', hint: selectedTrip ? `${isAr ? 'رحلة' : 'Trip'} ${selectedTrip.trip_number}` : (isAr ? 'لم تُختر رحلة' : 'No trip selected') },
+        { label: isAr ? 'مقاطع محطات جاهزة' : 'Station clips ready', value: clipsIndex.size, hint: `${isAr ? 'المقدمة' : 'Intro'}: ${phraseClips.intro ? (isAr ? 'جاهزة' : 'ready') : (isAr ? 'ناقصة' : 'missing')} · ${isAr ? 'مروراً بـ' : 'Via'}: ${phraseClips.via ? (isAr ? 'جاهزة' : 'ready') : (isAr ? 'ناقصة' : 'missing')}` },
+        { label: isAr ? 'نداءات الجلسة' : 'Session announcements', value: history.length, color: history.length ? 'var(--accent)' : undefined },
+      ]
+    : [
+        { label: isAr ? 'رحلات' : 'Trips', value: trips.length },
+        { label: isAr ? 'محطات مفعّلة' : 'Stations', value: selectedTrip ? `${checkedStops.length}/${stops.length}` : '—' },
+        { label: isAr ? 'نداءات' : 'Announced', value: history.length },
+      ]
 
   return (
-    <div className="max-w-3xl mx-auto p-6" dir={isAr ? 'rtl' : 'ltr'}>
-      <h1 className="text-xl font-bold text-gray-800 mb-1">{isAr ? 'نداء الركاب' : 'Passenger Announcements'}</h1>
-      <p className="text-sm text-gray-500 mb-5">{isAr ? 'نداء صوتي لركاب رحلة معينة أو نص حر — يظهر حالياً للأدمن فقط' : 'Voice announcement for the passengers of a specific trip, or free text — currently visible to admins only'}</p>
+    <div className="cl-page" dir={isAr ? 'rtl' : 'ltr'}>
+      <style>{CALL_CSS}</style>
+      <PageHeader
+        title={isAr ? 'نداء الركاب' : 'Passenger Announcements'}
+        subtitle={isAr ? 'نداء صوتي لركاب رحلة معينة أو نص حر — يظهر حالياً للأدمن فقط' : 'Voice announcement for the passengers of a specific trip, or free text — currently visible to admins only'}
+        stats={stats}
+        actions={desk && (
+          <button type="button" className="cl-btn" onClick={() => setShowClipsLibrary(true)}>{isAr ? 'مكتبة المقاطع الصوتية' : 'Audio clips library'}</button>
+        )} />
 
       {needsBrowserTts && !BROWSER_TTS_SUPPORTED && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl p-4 mb-5">
+        <div className="cl-note warn">
           {isAr
             ? 'المتصفح الحالي ما يدعم تحويل النص لصوت. جرّب على كروم أو سفاري بأحدث إصدار، أو استخدم مقاطع جاهزة/ElevenLabs من القائمة.'
             : 'The current browser does not support text-to-speech. Try the latest Chrome or Safari, or use ready-made clips / ElevenLabs from the menu.'}
         </div>
       )}
-      {callError && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl p-4 mb-5">
-          {callError}
-        </div>
-      )}
+      {callError && <div className="cl-note err" role="alert">{callError}</div>}
 
-      <div className="flex gap-2 mb-5">
-        {[{ id: 'trip', label: isAr ? 'نداء حسب الرحلة' : 'Announce by trip' }, { id: 'free', label: isAr ? 'نص حر' : 'Free text' }].map(m => (
-          <button key={m.id} onClick={() => {
-            setMode(m.id); stopRepeat()
-            if (m.id === 'free' && voiceURI === CLIPS_VOICE_ID) setVoiceURI(ELEVENLABS_VOICE_ID)
-          }}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${mode === m.id ? 'bg-nwbus-primary text-white border-nwbus-primary' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-            {m.label}
-          </button>
-        ))}
-      </div>
+      <div className="cl-grid">
+        <div className="cl-main">
+          <div className="cl-seg" role="tablist">
+            {[{ id: 'trip', label: isAr ? 'نداء حسب الرحلة' : 'Announce by trip' }, { id: 'free', label: isAr ? 'نص حر' : 'Free text' }].map(m => (
+              <button key={m.id} type="button" role="tab" aria-selected={mode === m.id} className={mode === m.id ? 'on' : ''} onClick={() => onModeChange(m.id)}>{m.label}</button>
+            ))}
+          </div>
 
-      {mode === 'trip' && (
-        <div className="bg-white border rounded-xl p-4 mb-4">
-          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">{isAr ? 'الرحلة' : 'Trip'}</label>
-          <input value={tripQuery} onChange={e => setTripQuery(e.target.value)}
-            placeholder={isAr ? 'ابحث برقم الرحلة أو الخط أو المحطة...' : 'Search by trip number, route or station...'}
-            className="w-full border rounded-lg px-3 py-2 text-sm mb-2" />
-          {loadingTrips ? (
-            <p className="text-sm text-gray-400 py-4 text-center">{isAr ? 'جاري التحميل...' : 'Loading...'}</p>
-          ) : (
-            <div className="max-h-48 overflow-y-auto border rounded-lg divide-y divide-gray-100">
-              {filteredTrips.map(t => (
-                <button key={t.id} type="button" onClick={() => setSelectedTripId(t.id)}
-                  className={`block w-full text-start px-3 py-2 text-sm hover:bg-gray-50 ${selectedTripId === t.id ? 'bg-nwbus-primary/5 font-semibold text-nwbus-primary' : 'text-gray-700'}`}>
-                  {isAr ? 'رحلة' : 'Trip'} {t.trip_number}{t.route ? (isAr ? ` – خط ${t.route}` : ` – Route ${t.route}`) : ''}
-                  <span className="text-gray-400 font-normal"> · {t.from_station?.name_ar || '—'} {isAr ? '←' : '→'} {t.to_station?.name_ar || '—'}</span>
-                </button>
-              ))}
-              {filteredTrips.length === 0 && <p className="text-sm text-gray-400 py-4 text-center">{isAr ? 'لا يوجد نتائج' : 'No results'}</p>}
-            </div>
-          )}
-
-          {selectedTrip && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-gray-500">{isAr ? 'المحطات والتوقفات (آخر محطة مفعّلة هي الوجهة المُعلن عنها)' : 'Stations and stops (the last enabled station is the announced destination)'}</label>
-                <div className="flex gap-2 text-[11px]">
-                  <button type="button" onClick={() => setStopOff({})} className="text-nwbus-primary hover:underline">{isAr ? 'الكل' : 'All'}</button>
-                  <button type="button" onClick={() => setStopOff(Object.fromEntries(stops.map(s => [s.id, true])))} className="text-gray-400 hover:underline">{isAr ? 'لا شيء' : 'None'}</button>
-                </div>
-              </div>
-              {loadingStops ? (
-                <p className="text-sm text-gray-400 py-3 text-center">{isAr ? 'جاري التحميل...' : 'Loading...'}</p>
-              ) : (
-                <div className="border rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                  {stops.map((s, i) => (
-                    <label key={s.id}
-                      className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${!stopOff[s.id] ? 'bg-nwbus-primary/5' : ''}`}>
-                      <input type="checkbox" className="accent-nwbus-primary" checked={!stopOff[s.id]}
-                        onChange={() => setStopOff(p => ({ ...p, [s.id]: !p[s.id] }))} />
-                      <span className="flex-1 text-sm text-gray-700">
-                        {s.name}{s.rest ? (isAr ? ' (استراحة)' : ' (Rest stop)') : ''}
-                        {i === 0 && <span className="text-[10px] text-green-600 ms-2">{isAr ? 'المنشأ' : 'Origin'}</span>}
-                        {s.id === destStop?.id && <span className="text-[10px] text-blue-600 ms-2">{isAr ? 'الوجهة' : 'Destination'}</span>}
-                        {voiceURI === CLIPS_VOICE_ID && (
-                          <span className={`text-[10px] ms-2 ${clipsIndex.has(s.id) ? 'text-green-600' : 'text-amber-600'}`}>
-                            {clipsIndex.has(s.id) ? (isAr ? '✓ صوت جاهز' : '✓ Audio ready') : (isAr ? '— بدون صوت' : '— No audio')}
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-xs text-gray-400 font-mono">{s.time ? s.time.slice(0, 5) : ''}</span>
-                    </label>
-                  ))}
-                  {stops.length === 0 && <p className="text-sm text-gray-400 py-3 text-center">{isAr ? 'لا توجد نقاط توقف مسجّلة لهذه الرحلة' : 'No stops are recorded for this trip'}</p>}
-                </div>
+          {mode === 'trip' && (
+            <div className="cl-pickers">
+              <TripPanel isAr={isAr} query={tripQuery} onQuery={setTripQuery} loading={loadingTrips} trips={filteredTrips} total={trips.length}
+                selectedId={selectedTripId} onSelect={setSelectedTripId} />
+              {(desk || selectedTrip) && (
+                <StopsPanel isAr={isAr} hasTrip={!!selectedTrip} loading={loadingStops} stops={stops} stopOff={stopOff}
+                  onToggle={id => setStopOff(p => ({ ...p, [id]: !p[id] }))} onAll={() => setStopOff({})}
+                  onNone={() => setStopOff(Object.fromEntries(stops.map(s => [s.id, true])))}
+                  destId={destStop?.id} showAudio={clipsMode} clipsIndex={clipsIndex} />
               )}
             </div>
           )}
+
+          {desk && mode === 'free' && historyCard}
+
+          {!desk && (
+            <section className="cl-card">
+              <button type="button" onClick={() => setShowClipsLibrary(o => !o)} className="cl-lib-toggle">
+                <span className="cl-card-t">{isAr ? 'مكتبة المقاطع الصوتية الجاهزة' : 'Ready-made audio clips library'}</span>
+                <span className="cl-link">{showClipsLibrary ? (isAr ? 'إخفاء' : 'Hide') : (isAr ? 'إظهار' : 'Show')}</span>
+              </button>
+              {showClipsLibrary && <div style={{ marginTop: 14 }}>{clipsLibrary}</div>}
+            </section>
+          )}
         </div>
+
+        <div className="cl-side">
+          <AnnounceConsole isAr={isAr} mode={mode} text={text} onText={setText} clipsMode={clipsMode}
+            destName={destStop?.name} viaNames={viaChosen.map(s => s.name)} status={status}
+            repeatLabel={isAr ? `يتكرر ${repeatOpt?.ar || ''}` : `Repeats: ${repeatOpt?.en || ''}`}
+            chimeOn={chimeOn} onChime={setChimeOn} chimeSupported={CHIME_SUPPORTED} onTestChime={() => playChime()}
+            repeatEvery={repeatEvery} onRepeat={e => setRepeatEvery(Number(e.target.value))} repeatOptions={REPEAT_OPTIONS} repeating={repeating} playing={playing}
+            voiceURI={voiceURI} voiceOptions={voiceOptions} onVoice={e => { setVoiceURI(e.target.value); setCallError('') }}
+            showTestVoice={!clipsMode} onTestVoice={onTestVoice} needsBrowserTts={needsBrowserTts} ttsSupported={BROWSER_TTS_SUPPORTED} hasDeviceVoices={voices.length > 0}
+            clipsCheck={clipsCheck} onOpenLibrary={() => setShowClipsLibrary(true)}
+            announceDisabled={announceDisabled} onAnnounce={onCallClick} onStop={stopRepeat} />
+          {!(desk && mode === 'free') && (desk || history.length > 0) && historyCard}
+        </div>
+      </div>
+
+      {desk && showClipsLibrary && (
+        <Sheet variant="drawer" width={860} isAr={isAr} accent="#5B5BD6" onClose={() => setShowClipsLibrary(false)}
+          title={isAr ? 'مكتبة المقاطع الصوتية الجاهزة' : 'Ready-made audio clips library'}
+          sub={isAr ? 'عبارتان ثابتتان + مقطع لكل محطة' : 'Two fixed phrases + one clip per station'}>
+          {clipsLibrary}
+        </Sheet>
       )}
 
-      <div className="bg-white border rounded-xl p-4 mb-4">
-        <label className="text-xs font-semibold text-gray-500 mb-1.5 block">{isAr ? 'نص النداء' : 'Announcement text'}</label>
-        <textarea value={text} onChange={e => setText(e.target.value)} rows={3}
-          placeholder={mode === 'free'
-            ? (isAr ? 'اكتب نص النداء هنا...' : 'Type the announcement text here...')
-            : (isAr ? 'اختر رحلة ووجهة ليتم تعبئة النص تلقائياً، وتقدر تعدّله' : 'Select a trip and destination to auto-fill the text; you can edit it')}
-          disabled={voiceURI === CLIPS_VOICE_ID}
-          className="w-full border rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400" />
-        {voiceURI === CLIPS_VOICE_ID && (
-          <p className="text-[11px] text-gray-400 mt-1">{isAr ? 'وضع المقاطع الجاهزة ما يستخدم هذا النص — يشغّل مقاطع المحطات المختارة فوق مباشرة.' : 'Ready-made clips mode does not use this text — it plays the clips of the stations selected above.'}</p>
-        )}
-
-        <div className="flex flex-wrap items-center gap-4 mt-3">
-          <label className="flex items-center gap-1.5 text-xs text-gray-600">
-            <input type="checkbox" className="accent-nwbus-primary" checked={chimeOn} onChange={e => setChimeOn(e.target.checked)} />
-            {isAr ? 'نغمة قبل النداء' : 'Chime before announcement'}
-          </label>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-500">{isAr ? 'تكرار النداء:' : 'Repeat announcement:'}</label>
-            <SelectField value={repeatEvery} onChange={e => setRepeatEvery(Number(e.target.value))}
-              disabled={repeating} className="border rounded-lg px-2 py-1.5 text-sm">
-              {REPEAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{isAr ? o.ar : o.en}</option>)}
-            </SelectField>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 mt-3">
-          <label className="text-xs text-gray-500 shrink-0">{isAr ? 'صوت النداء:' : 'Announcement voice:'}</label>
-          <SelectField value={voiceURI} onChange={e => { setVoiceURI(e.target.value); setCallError('') }}
-            className="border rounded-lg px-2 py-1.5 text-sm flex-1 min-w-0">
-            {mode === 'trip' && <option value={CLIPS_VOICE_ID}>{isAr ? 'مقاطع مسجّلة جاهزة (الأفضل والأثبت)' : 'Ready-made recorded clips (best and most reliable)'}</option>}
-            <option value={ELEVENLABS_VOICE_ID}>{isAr ? 'صوت بشري واقعي حي (ElevenLabs)' : 'Live realistic human voice (ElevenLabs)'}</option>
-            {[...voices].sort((a, b) => rankVoice(b) - rankVoice(a)).map(v => (
-              <option key={v.voiceURI} value={v.voiceURI}>{v.name} {isAr ? '(صوت الجهاز)' : '(device voice)'}</option>
-            ))}
-          </SelectField>
-          {voiceURI !== CLIPS_VOICE_ID && (
-            <button type="button"
-              onClick={async () => {
-                setCallError('')
-                try {
-                  if (voiceURI === ELEVENLABS_VOICE_ID) await speakElevenLabs('هذا تجربة لصوت النداء', undefined, isAr)
-                  else await speak('هذا تجربة لصوت النداء', selectedVoice)
-                } catch (err) { setCallError(err.message || (isAr ? 'تعذّر تشغيل الصوت' : 'Failed to play the audio')) }
-              }}
-              disabled={needsBrowserTts && !BROWSER_TTS_SUPPORTED}
-              className="px-3 py-1.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-xs hover:bg-gray-100 shrink-0 disabled:opacity-40">
-              {isAr ? 'تجربة' : 'Test'}
-            </button>
-          )}
-        </div>
-        {voices.length === 0 && BROWSER_TTS_SUPPORTED && (
-          <p className="text-[11px] text-gray-400 mt-2">
-            {isAr
-              ? 'ما وجدنا صوت عربي إضافي مثبّت بهذا الجهاز — استخدم مقاطع جاهزة أو ElevenLabs، أو ثبّت صوت عربي من إعدادات الجهاز.'
-              : 'No additional Arabic voice is installed on this device — use ready-made clips or ElevenLabs, or install an Arabic voice from the device settings.'}
-          </p>
-        )}
-
-        <div className="flex gap-2 mt-4">
-          <button type="button" onClick={onCallClick}
-            disabled={(voiceURI !== CLIPS_VOICE_ID && !text.trim()) || playing || repeating || (chimeOn && !CHIME_SUPPORTED) || (needsBrowserTts && !BROWSER_TTS_SUPPORTED)}
-            className="flex-1 bg-nwbus-primary text-white rounded-lg py-2.5 text-sm font-bold disabled:opacity-40 hover:opacity-90 transition-opacity">
-            {repeating ? (isAr ? 'جارٍ النداء المتكرر...' : 'Repeating announcement...') : playing ? (isAr ? 'جارٍ النداء...' : 'Announcing...') : (isAr ? 'نداء' : 'Announce')}
-          </button>
-          {(playing || repeating) && (
-            <button type="button" onClick={stopRepeat}
-              className="px-5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-100">
-              {isAr ? 'إيقاف' : 'Stop'}
-            </button>
-          )}
-          {chimeOn && (
-            <button type="button" onClick={() => playChime()} disabled={!CHIME_SUPPORTED}
-              className="px-4 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm hover:bg-gray-100 disabled:opacity-40">
-              {isAr ? 'تجربة النغمة' : 'Test chime'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white border rounded-xl p-4 mb-4">
-        <button type="button" onClick={() => setShowClipsLibrary(o => !o)} className="flex items-center justify-between w-full text-start">
-          <span className="text-sm font-semibold text-gray-700">{isAr ? 'مكتبة المقاطع الصوتية الجاهزة' : 'Ready-made audio clips library'}</span>
-          <span className="text-xs text-gray-400">{showClipsLibrary ? (isAr ? 'إخفاء' : 'Hide') : (isAr ? 'إظهار' : 'Show')}</span>
-        </button>
-        {showClipsLibrary && (
-          <div className="mt-4 space-y-4">
-            <p className="text-xs text-gray-500">
-              {isAr
-                ? 'اضغط "توليد" يسوّي الصوت تلقائياً عبر ElevenLabs ويحفظه مباشرة (نفس صوت صفحة النداء) — أو ارفع ملف mp3 جاهز بنفسك لو تبي تستبدله بتسجيل يدوي. عبارتين ثابتتين + اسم كل محطة، مرة وحدة بس، وتُستخدم دايماً بنفس الجودة.'
-                : 'Click "Generate" to create the audio automatically via ElevenLabs and save it directly (same voice as the announcement page) — or upload a ready-made mp3 file yourself to replace it with a manual recording. Two fixed phrases + each station name, once only, always used at the same quality.'}
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                { key: 'intro', label: isAr ? 'عبارة المقدمة' : 'Intro phrase', text: 'نداء على الركاب المسافرين إلى' },
-                { key: 'via', label: isAr ? 'عبارة "مروراً بـ"' : '"Via" phrase', text: 'مروراً بـ' },
-              ].map(p => (
-                <div key={p.key} className="border rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-1.5 gap-2">
-                    <span className="text-xs text-gray-600">{p.label} ("{p.text}")</span>
-                    <span className={`text-[10px] shrink-0 ${phraseClips[p.key] ? 'text-green-600' : 'text-amber-600'}`}>
-                      {phraseClips[p.key] ? (isAr ? '✓ مرفوع' : '✓ Uploaded') : (isAr ? 'غير مرفوع' : 'Not uploaded')}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button type="button" onClick={() => generatePhraseClip(p.key, p.text)} disabled={uploadingId === p.key}
-                      className="text-xs px-2.5 py-1 bg-nwbus-primary text-white rounded-lg disabled:opacity-40">
-                      {uploadingId === p.key ? (isAr ? 'جارٍ...' : 'Working...') : (isAr ? 'توليد' : 'Generate')}
-                    </button>
-                    <input type="file" accept="audio/*" disabled={uploadingId === p.key}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhraseClip(p.key, f); e.target.value = '' }}
-                      className="text-xs flex-1 min-w-0" />
-                    {phraseClips[p.key] && (
-                      <button type="button" onClick={() => new Audio(clipUrl(`phrases/${p.key}.mp3`)).play()}
-                        className="text-xs text-nwbus-primary shrink-0">▶</button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <input value={stationSearch} onChange={e => setStationSearch(e.target.value)} placeholder={isAr ? 'ابحث عن محطة...' : 'Search for a station...'}
-                  className="flex-1 border rounded-lg px-3 py-2 text-sm" />
-                <button type="button" onClick={generateAllMissing} disabled={!!bulkProgress || allStations.length === 0}
-                  className="text-xs px-3 py-2 bg-nwbus-primary text-white rounded-lg disabled:opacity-40 shrink-0 whitespace-nowrap">
-                  {bulkProgress ? (isAr ? `جارٍ التوليد ${bulkProgress.done}/${bulkProgress.total}...` : `Generating ${bulkProgress.done}/${bulkProgress.total}...`) : (isAr ? 'توليد كل الناقص' : 'Generate all missing')}
-                </button>
-              </div>
-              {(() => {
-                const latin = allStations.filter(s => hasLatin(s.name_ar))
-                if (!latin.length) return null
-                const ready = latin.map(s => ({ id: s.id, name: (nameDrafts[s.id] ?? arabizeStation(s.name_ar)).trim() })).filter(x => x.name && !hasLatin(x.name))
-                return (
-                  <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 flex items-center gap-3 flex-wrap">
-                    <p className="flex-1 min-w-[200px] text-xs text-amber-900 leading-relaxed">
-                      {isAr
-                        ? `${latin.length} محطة اسمها بالإنجليزية فيُنطق بشكل سيء في النداء. اقترحت لها أسماء عربية — راجعها أو عدّلها في الحقول أدناه ثم احفظ.`
-                        : `${latin.length} stations have English names, which sound poor in announcements. Arabic suggestions are filled in below — review, edit, then save.`}
-                    </p>
-                    <button type="button" disabled={!ready.length || !!renaming} onClick={() => setConfirmRename({ list: ready })}
-                      className="text-xs px-3 py-2 bg-amber-600 text-white rounded-lg disabled:opacity-40 shrink-0">
-                      {isAr ? `حفظ المقترحات المكتملة (${ready.length})` : `Save completed suggestions (${ready.length})`}
-                    </button>
-                  </div>
-                )
-              })()}
-              <div className="border rounded-lg divide-y divide-gray-100 max-h-72 overflow-y-auto">
-                {allStations.filter(s => matchesSearch(s.name_ar, stationSearch)).map(s => (
-                  <div key={s.id} className="flex items-center gap-2 px-3 py-2 flex-wrap">
-                    {hasLatin(s.name_ar) ? (
-                      <div className="w-full flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] text-gray-400 truncate max-w-[45%]" dir="ltr">{s.name_ar}</span>
-                        <input dir="rtl" value={nameDrafts[s.id] ?? arabizeStation(s.name_ar)}
-                          onChange={e => setNameDrafts(p => ({ ...p, [s.id]: e.target.value }))}
-                          className={`flex-1 min-w-[150px] border rounded-lg px-2.5 py-1.5 text-sm ${hasLatin(nameDrafts[s.id] ?? arabizeStation(s.name_ar)) ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`} />
-                        <button type="button" disabled={!!renaming || !(nameDrafts[s.id] ?? arabizeStation(s.name_ar)).trim()}
-                          onClick={() => setConfirmRename({ list: [{ id: s.id, name: (nameDrafts[s.id] ?? arabizeStation(s.name_ar)).trim() }] })}
-                          className="text-xs px-2.5 py-1.5 bg-amber-600 text-white rounded-lg disabled:opacity-40 shrink-0">{isAr ? 'حفظ الاسم' : 'Save name'}</button>
-                      </div>
-                    ) : (
-                    <span className="flex-1 text-sm text-gray-700 truncate">{s.name_ar}</span>
-                    )}
-                    <span className={`text-[10px] shrink-0 ${clipsIndex.has(s.id) ? 'text-green-600' : 'text-gray-400'}`}>
-                      {clipsIndex.has(s.id) ? '✓' : '—'}
-                    </span>
-                    {clipsIndex.has(s.id) && (
-                      <button type="button" onClick={() => new Audio(clipUrl(`stations/${s.id}.mp3`)).play()}
-                        className="text-xs text-nwbus-primary shrink-0">▶</button>
-                    )}
-                    <button type="button" onClick={() => generateStationClip(s)} disabled={uploadingId === s.id || !!bulkProgress}
-                      className="text-xs px-2 py-1 bg-nwbus-primary text-white rounded-lg disabled:opacity-40 shrink-0">
-                      {uploadingId === s.id ? '...' : (isAr ? 'توليد' : 'Generate')}
-                    </button>
-                    <input type="file" accept="audio/*" disabled={uploadingId === s.id}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadStationClip(s.id, f); e.target.value = '' }}
-                      className="text-xs w-20 sm:w-28 shrink-0" />
-                  </div>
-                ))}
-                {allStations.length === 0 && <p className="text-sm text-gray-400 py-3 text-center">{isAr ? 'جاري التحميل...' : 'Loading...'}</p>}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
       {confirmRename && (
         <ConfirmDialog danger={false}
           message={isAr

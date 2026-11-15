@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import ConfirmDialog from '../shared/ConfirmDialog'
+import { SettingsCard, Icon } from './ui'
 import { FEED_DATASETS, feedCode, sheetsScript } from '../../utils/excelFeedCode'
 import sheetFeedSource from '../../../supabase/functions/sheet-feed/index.ts?raw'
 
@@ -12,8 +13,7 @@ const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 const isOpen = d => !!d && new Date(d).getFullYear() > new Date().getFullYear() + 50   // بدون انتهاء
 const fmtExp = (d, isAr) => (isOpen(d) ? (isAr ? 'بدون انتهاء' : 'no expiry') : fmtDT(d))
 const fmtDT = d => (d ? new Date(d).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23' }) : '—')
-const inputStyle = { border: '1px solid var(--border-2)', borderRadius: 9, padding: '10px 12px', background: 'var(--surface)', color: 'var(--text-1)', fontSize: '0.85rem', fontFamily: 'inherit', minHeight: 44 }
-const btn = (primary, disabled) => ({ minHeight: 44, padding: '0 18px', borderRadius: 10, border: primary ? 'none' : '1px solid var(--border-2)', background: primary ? 'var(--solid-btn, #1C2B4A)' : 'var(--card)', color: primary ? '#fff' : 'var(--text-1)', fontWeight: 800, fontSize: '0.84rem', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.55 : 1, fontFamily: 'inherit' })
+const btn = (primary, disabled) => ({ minHeight: 46, padding: '0 20px', borderRadius: 12, border: primary ? 'none' : '1px solid var(--border-2)', background: primary ? 'var(--solid-btn, #1C2B4A)' : 'var(--card)', color: primary ? '#fff' : 'var(--text-1)', fontWeight: 800, fontSize: '0.9rem', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.55 : 1, fontFamily: 'inherit' })
 
 // تنزيل نص كملف (للأجهزة اللي تمنع النسخ بين المتصفح وأوفيس): يُفتح بالمفكرة ومنها يُنسخ
 function downloadText(name, text) {
@@ -74,33 +74,31 @@ export default function ExcelLiveLink({ isAr = true }) {
   const active = keys.filter(k => !k.revoked_at && new Date(k.expires_at) > new Date())
 
   return (
-    <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
-      <h3 style={{ margin: '0 0 6px', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{T('اتصال Excel المباشر', 'Live Excel connection')}</h3>
-      <p style={{ margin: '0 0 14px', fontSize: '0.78rem', lineHeight: 1.8, color: 'var(--text-3)' }}>
-        {T('ملف Excel واحد يسحب أحدث بيانات النظام (مبيعات، رحلات، إجازات، تقييمات…) بزر «تحديث»، بدل تنزيل نسخة كل يوم. المفتاح للقراءة فقط وللأدمن العام فقط، وينتهي تلقائياً، وتلغيه متى شئت.', 'One Excel file that pulls the latest system data with a Refresh button instead of daily copies. The key is read-only, general-admin only, expires automatically, and can be revoked any time.')}
-      </p>
+    <SettingsCard span icon="link" title={T('اتصال Excel المباشر', 'Live Excel connection')}
+      desc={T('ملف Excel واحد يسحب أحدث بيانات النظام (مبيعات، رحلات، إجازات، تقييمات…) بزر «تحديث»، بدل تنزيل نسخة كل يوم. المفتاح للقراءة فقط وللأدمن العام فقط، وينتهي تلقائياً، وتلغيه متى شئت.', 'One Excel file that pulls the latest system data with a Refresh button instead of daily copies. The key is read-only, general-admin only, expires automatically, and can be revoked any time.')}
+      aside={!loadErr && <span className="st-pill acc">{T('مفاتيح فعّالة', 'Active keys')} <b>{active.length}</b></span>}>
 
-      {loadErr && <p role="alert" style={{ margin: '0 0 12px', padding: '10px 12px', borderRadius: 9, background: 'var(--warn-bg, #fffbeb)', color: 'var(--warn, #b45309)', fontSize: '0.8rem', fontWeight: 700 }}>{loadErr}</p>}
+      {loadErr && <p role="alert" className="st-note warn" style={{ margin: '0 0 12px' }}>{loadErr}</p>}
 
       {!loadErr && (
         <>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: '1 1 160px', fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-3)' }}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: '1 1 200px', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-3)' }}>
               {T('اسم المفتاح', 'Key name')}
-              <input value={label} maxLength={60} onChange={e => setLabel(e.target.value)} style={inputStyle} />
+              <input value={label} maxLength={60} onChange={e => setLabel(e.target.value)} className="st-input" />
             </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-3)' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-3)' }}>
               {T('الصلاحية', 'Valid for')}
-              <select value={days} onChange={e => setDays(Number(e.target.value))} style={inputStyle}>
+              <select value={days} onChange={e => setDays(Number(e.target.value))} className="st-input">
                 <option value={0}>{T('بدون انتهاء (يُلغى يدوياً)', 'No expiry (revoke manually)')}</option><option value={30}>{T('30 يوماً', '30 days')}</option><option value={90}>{T('90 يوماً', '90 days')}</option><option value={180}>{T('180 يوماً', '180 days')}</option><option value={365}>{T('سنة', '1 year')}</option>
               </select>
             </label>
             <button type="button" onClick={create} disabled={busy} style={btn(true, busy)}>{busy ? T('جارٍ الإنشاء…', 'Creating…') : T('إنشاء مفتاح جديد', 'Create new key')}</button>
           </div>
-          {err && <p role="alert" style={{ margin: '10px 0 0', fontSize: '0.8rem', fontWeight: 700, color: 'var(--danger, #dc2626)' }}>{err}</p>}
+          {err && <p role="alert" className="st-note err" style={{ margin: '12px 0 0' }}>{err}</p>}
 
           {fresh && (
-            <div style={{ marginTop: 16, border: '1px solid var(--border-2)', borderRadius: 12, padding: 16, background: 'var(--surface)' }}>
+            <div style={{ marginTop: 20, border: '1px solid var(--border-2)', borderRadius: 16, padding: 'clamp(14px, 2vw, 24px)', background: 'var(--surface)' }}>
               <p style={{ margin: '0 0 8px', fontSize: '0.82rem', fontWeight: 800, color: 'var(--success)' }}>{T('تم إنشاء المفتاح. انسخ الكود الآن: لن يظهر المفتاح مرة ثانية.', 'Key created. Copy the code now — the key will not be shown again.')}</p>
               <p style={{ margin: '0 0 12px', fontSize: '0.74rem', color: 'var(--text-3)' }}>{T(`ينتهي: ${fmtExp(fresh.expires_at, true)}. لا ترسل ملف Excel لأحد بعد لصق الكود: المفتاح داخل الملف.`, `Expires: ${fmtExp(fresh.expires_at, false)}. Do not share the Excel file after pasting — the key is inside it.`)}</p>
 
@@ -114,7 +112,7 @@ export default function ExcelLiveLink({ isAr = true }) {
               <b style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-1)', marginBottom: 8 }}>{T('2) لكل ورقة بيانات: استعلام فارغ جديد ← المحرر المتقدم ← الصق هذا الكود', '2) For each data sheet: new Blank Query → Advanced Editor → paste this code')}</b>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 8 }}>
                 {FEED_DATASETS.map(d => (
-                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 9, background: 'var(--card)', border: '1px solid var(--border)' }}>
+                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
                     <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)' }}>{isAr ? d.ar : d.en}</span>
                     <CopyBtn text={sheetCode(d.id)} label={T('نسخ', 'Copy')} />
                   </div>
@@ -133,7 +131,7 @@ export default function ExcelLiveLink({ isAr = true }) {
                     ['B3', T('عدّاد التحديث (غيّره للتحديث الفوري)', 'Refresh counter (change to refresh now)'), '1'],
                     ['B4', T('عدد الأيام للخلف', 'Days back'), '365'],
                   ].map(([cellId, lbl, val]) => (
-                    <div key={cellId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 9, background: 'var(--card)', border: '1px solid var(--border)' }}>
+                    <div key={cellId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
                       <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)' }}>Settings!{cellId} <span style={{ fontWeight: 500, color: 'var(--text-3)' }}>· {lbl}</span></span>
                       <CopyBtn text={val} label={T('نسخ', 'Copy')} />
                     </div>
@@ -142,7 +140,7 @@ export default function ExcelLiveLink({ isAr = true }) {
                 <b style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-1)', marginBottom: 8 }}>{T('صيغة كل تبويب (الصقها في الخلية A1 من التبويب)', 'Formula per tab (paste into cell A1)')}</b>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 8 }}>
                   {FEED_DATASETS.map(d => (
-                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 9, background: 'var(--card)', border: '1px solid var(--border)' }}>
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 12, background: 'var(--card)', border: '1px solid var(--border)' }}>
                       <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)' }}>{isAr ? d.ar : d.en}</span>
                       <CopyBtn text={sheetFormula(d.id)} label={T('نسخ', 'Copy')} />
                     </div>
@@ -154,7 +152,7 @@ export default function ExcelLiveLink({ isAr = true }) {
           )}
 
           <details style={{ marginTop: 14 }}>
-            <summary style={{ cursor: 'pointer', fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-1)', minHeight: 40, display: 'flex', alignItems: 'center' }}>{T('تفعيل قوقل شيت (مرة واحدة في Supabase)', 'Enable Google Sheets (one time in Supabase)')}</summary>
+            <summary style={{ cursor: 'pointer', fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-1)', minHeight: 44, display: 'flex', alignItems: 'center' }}>{T('تفعيل قوقل شيت (مرة واحدة في Supabase)', 'Enable Google Sheets (one time in Supabase)')}</summary>
             <ol style={{ margin: '8px 0 0', paddingInlineStart: 20, fontSize: '0.8rem', lineHeight: 2, color: 'var(--text-2)' }}>
               <li>{T('في لوحة Supabase: Edge Functions ← Deploy a new function ← Via Editor، اسم الدالة sheet-feed بالضبط.', 'In Supabase: Edge Functions → Deploy a new function → Via Editor, name it exactly sheet-feed.')}</li>
               <li>{T('امسح الكود الموجود والصق كود الدالة (الزر تحت)، ثم Deploy.', 'Replace the sample code with the function code (button below), then Deploy.')}</li>
@@ -195,7 +193,7 @@ export default function ExcelLiveLink({ isAr = true }) {
             {keys.map(k => {
               const dead = !!k.revoked_at || new Date(k.expires_at) <= new Date()
               return (
-                <div key={k.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: dead ? 'var(--surface)' : 'var(--card)', opacity: dead ? 0.7 : 1 }}>
+                <div key={k.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '12px 14px', borderRadius: 14, border: '1px solid var(--border)', background: dead ? 'var(--surface)' : 'var(--card)', opacity: dead ? 0.7 : 1 }}>
                   <div style={{ flex: '1 1 220px', minWidth: 0 }}>
                     <b style={{ fontSize: '0.82rem', color: 'var(--text-1)' }}>{k.label || 'Excel'}</b>
                     <span dir="ltr" style={{ marginInlineStart: 8, fontFamily: 'monospace', fontSize: '0.74rem', color: 'var(--text-3)' }}>nwx_…{k.token_hint}</span>
@@ -221,6 +219,6 @@ export default function ExcelLiveLink({ isAr = true }) {
           confirmLabel={T('نعم، إلغاء المفتاح', 'Yes, revoke')} cancelLabel={T('تراجع', 'Back')}
           onConfirm={() => doRevoke(revoke.id)} onCancel={() => setRevoke(null)} />
       )}
-    </div>
+    </SettingsCard>
   )
 }

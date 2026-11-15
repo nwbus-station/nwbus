@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import SelectField from '../shared/SelectField'
+import { SettingsCard, Switch, Icon } from './ui'
 
 const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/
 const fmtDT = (v, isAr) => v ? new Date(v).toLocaleString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' }) : '—'
 
 // إعدادات النسخة الاحتياطية والتقرير اليومي — السكربت على Google يقرأ هذي القيم من قاعدة البيانات
-export default function BackupSettings({ isAr }) {
+export default function BackupSettings({ isAr, onSaved }) {
   const [cfg, setCfg] = useState(null)
   const [emails, setEmails] = useState([])
   const [draft, setDraft] = useState('')
@@ -49,6 +50,7 @@ export default function BackupSettings({ isAr }) {
     setBusy('')
     if (error) { setMsg({ ok: false, text: error.message }); return }
     setMsg({ ok: true, text: isAr ? 'تم حفظ الإعدادات' : 'Settings saved' })
+    onSaved?.(isAr ? 'تم حفظ إعدادات النسخ الاحتياطي' : 'Backup settings saved')
     load(false)
   }
 
@@ -63,91 +65,77 @@ export default function BackupSettings({ isAr }) {
     load(true)
   }
 
-  const card = { background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }
-  const lbl = { fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 6, display: 'block' }
+  const title = isAr ? 'النسخ الاحتياطي والتقرير اليومي' : 'Backup & daily report'
 
   if (missing) {
     return (
-      <div style={card}>
-        <h3 style={{ margin: '0 0 8px', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? 'النسخ الاحتياطي والتقرير اليومي' : 'Backup & daily report'}</h3>
-        <p style={{ margin: 0, fontSize: '0.78rem', color: '#B45309' }}>{isAr ? 'جدول الإعدادات غير مثبّت بقاعدة البيانات — شغّل ملف backup_settings.sql من SQL Editor.' : 'The settings table is not installed — run backup_settings.sql in the SQL Editor.'}</p>
-      </div>
+      <SettingsCard span icon="backup" title={title}>
+        <p className="st-note warn" style={{ margin: 0 }}>{isAr ? 'جدول الإعدادات غير مثبّت بقاعدة البيانات — شغّل ملف backup_settings.sql من SQL Editor.' : 'The settings table is not installed — run backup_settings.sql in the SQL Editor.'}</p>
+      </SettingsCard>
     )
   }
-  if (!cfg) return <div style={card}><p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-3)' }}>{isAr ? 'جاري التحميل…' : 'Loading…'}</p></div>
+  if (!cfg) return <SettingsCard span icon="backup" title={title}><p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-3)' }}>{isAr ? 'جاري التحميل…' : 'Loading…'}</p></SettingsCard>
 
   const status = cfg.last_run_at
-    ? (cfg.last_ok ? { c: '#15803D', bg: '#F0FDF4', bd: '#BBF7D0', t: isAr ? 'نجحت' : 'Succeeded' } : { c: '#B91C1C', bg: '#FEF2F2', bd: '#FECACA', t: isAr ? 'فشلت' : 'Failed' })
+    ? (cfg.last_ok ? { tone: 'ok', t: isAr ? 'نجحت' : 'Succeeded' } : { tone: 'err', t: isAr ? 'فشلت' : 'Failed' })
     : null
+  const canSave = !(!dirty && !draft.trim() || busy === 'save')
 
   return (
-    <div style={card}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+    <SettingsCard span icon="mail" title={title}
+      desc={isAr ? 'ملف Excel احترافي: لوحة تحليل تنفيذية، ترتيب المحطات، اتجاهات 30 يوماً، ورقة لكل محطة، ونسخة كاملة من الجداول — يُرسل للإيميلات أدناه.' : 'A professional Excel file: executive analysis dashboard, station ranking, 30-day trends, a sheet per station and a full data copy — sent to the emails below.'}
+      aside={<Switch checked={enabled} onChange={setEnabled} label={enabled ? (isAr ? 'الإرسال اليومي مفعّل' : 'Daily sending on') : (isAr ? 'الإرسال اليومي متوقف' : 'Daily sending off')} />}>
+
+      <div className="st-split">
         <div>
-          <h3 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? 'النسخ الاحتياطي والتقرير اليومي' : 'Backup & daily report'}</h3>
-          <p style={{ margin: '4px 0 0', fontSize: '0.74rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
-            {isAr ? 'ملف Excel احترافي: لوحة تحليل تنفيذية، ترتيب المحطات، اتجاهات 30 يوماً، ورقة لكل محطة، ونسخة كاملة من الجداول — يُرسل للإيميلات أدناه.' : 'A professional Excel file: executive analysis dashboard, station ranking, 30-day trends, a sheet per station and a full data copy — sent to the emails below.'}
-          </p>
+          <label className="st-lbl" htmlFor="st-bk-email">{isAr ? 'الإيميلات المستلمة' : 'Recipient emails'}</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, minHeight: 34 }}>
+            {emails.length === 0 && <span style={{ fontSize: '0.84rem', color: 'var(--text-3)' }}>{isAr ? 'لم تُضف إيميلات بعد' : 'No emails yet'}</span>}
+            {emails.map(e => (
+              <span key={e} className="st-chip" dir="ltr">
+                {e}
+                <button type="button" onClick={() => setEmails(p => p.filter(x => x !== e))} aria-label={isAr ? 'إزالة' : 'Remove'}>✕</button>
+              </span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <input id="st-bk-email" className="st-input" value={draft} onChange={e => setDraft(e.target.value)} dir="ltr" inputMode="email" placeholder="name@company.com"
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addEmail() } }} style={{ flex: 1 }} />
+            <button type="button" className="st-btn" onClick={() => addEmail()}>{isAr ? 'إضافة' : 'Add'}</button>
+          </div>
+
+          <label className="st-lbl">{isAr ? 'وقت الإرسال اليومي (بتوقيت الرياض)' : 'Daily send time (Riyadh)'}</label>
+          <div style={{ maxWidth: 220, marginBottom: 22 }}>
+            <SelectField value={hour} onChange={e => setHour(Number(e.target.value))} dir="ltr" className="st-input st-input-btn">
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
+            </SelectField>
+          </div>
+
+          {dirty && <p className="st-note warn" role="status" style={{ margin: '0 0 14px' }}>{isAr ? 'لديك تعديلات غير محفوظة. اضغط «حفظ» لتطبيقها.' : 'You have unsaved changes. Press Save to apply them.'}</p>}
+          <div className="st-actions">
+            <button type="button" className="st-btn pri" onClick={save} disabled={!canSave}>
+              {busy === 'save' ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'حفظ' : 'Save')}
+            </button>
+            <button type="button" className="st-btn" onClick={sendNow} disabled={busy === 'now' || pending}>
+              <Icon name="mail" size={18} />
+              {pending ? (isAr ? 'بانتظار التنفيذ…' : 'Waiting…') : (isAr ? 'إرسال الآن' : 'Send now')}
+            </button>
+          </div>
+          {msg && <p role={msg.ok ? 'status' : 'alert'} className={`st-note ${msg.ok ? 'ok' : 'err'}`} style={{ margin: '14px 0 0' }}>{msg.ok && <Icon name="check" size={16} />}{msg.text}</p>}
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', fontWeight: 700, color: enabled ? '#15803D' : 'var(--text-3)', cursor: 'pointer' }}>
-          <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} style={{ accentColor: '#15803D' }} />
-          {isAr ? 'الإرسال اليومي مفعّل' : 'Daily sending on'}
-        </label>
-      </div>
 
-      <label style={lbl}>{isAr ? 'الإيميلات المستلمة' : 'Recipient emails'}</label>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-        {emails.length === 0 && <span style={{ fontSize: '0.74rem', color: 'var(--text-3)' }}>{isAr ? 'لم تُضف إيميلات بعد' : 'No emails yet'}</span>}
-        {emails.map(e => (
-          <span key={e} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '4px 6px 4px 12px', fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-1)' }} dir="ltr">
-            {e}
-            <button type="button" onClick={() => setEmails(p => p.filter(x => x !== e))} aria-label="remove"
-              style={{ width: 18, height: 18, borderRadius: '50%', border: 'none', background: '#e2e8f0', color: '#475569', cursor: 'pointer', fontSize: 11, lineHeight: 1 }}>✕</button>
-          </span>
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        <input value={draft} onChange={e => setDraft(e.target.value)} dir="ltr" inputMode="email" placeholder="name@company.com"
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addEmail() } }}
-          style={{ flex: 1, padding: '9px 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: '0.82rem', outline: 'none' }} />
-        <button type="button" onClick={() => addEmail()} style={{ padding: '9px 16px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}>{isAr ? 'إضافة' : 'Add'}</button>
-      </div>
-
-      <label style={lbl}>{isAr ? 'وقت الإرسال اليومي (بتوقيت الرياض)' : 'Daily send time (Riyadh)'}</label>
-      <SelectField value={hour} onChange={e => setHour(Number(e.target.value))} dir="ltr"
-        style={{ padding: '9px 12px', borderRadius: 9, border: '1px solid var(--border)', fontSize: '0.82rem', background: 'var(--card)', marginBottom: 14 }}>
-        {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
-      </SelectField>
-
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button type="button" onClick={save} disabled={!dirty && !draft.trim() || busy === 'save'}
-          style={{ padding: '9px 20px', borderRadius: 9, border: 'none', background: 'var(--solid-btn)', color: 'var(--card)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: (!dirty && !draft.trim()) ? 0.4 : 1 }}>
-          {busy === 'save' ? (isAr ? 'جاري الحفظ…' : 'Saving…') : (isAr ? 'حفظ' : 'Save')}
-        </button>
-        <button type="button" onClick={sendNow} disabled={busy === 'now' || pending}
-          style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid var(--solid-btn)', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: (busy === 'now' || pending) ? 0.5 : 1 }}>
-          {pending ? (isAr ? 'بانتظار التنفيذ…' : 'Waiting…') : (isAr ? 'إرسال الآن' : 'Send now')}
-        </button>
-        {msg && <span style={{ fontSize: '0.76rem', fontWeight: 600, color: msg.ok ? '#15803D' : '#B91C1C' }}>{msg.text}</span>}
-      </div>
-
-      <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-        <div style={{ background: 'var(--surface)', borderRadius: 9, padding: '10px 14px' }}>
-          <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginBottom: 3 }}>{isAr ? 'آخر إرسال' : 'Last run'}</div>
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{fmtDT(cfg.last_run_at, isAr)}</div>
-        </div>
-        <div style={{ background: 'var(--surface)', borderRadius: 9, padding: '10px 14px' }}>
-          <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginBottom: 3 }}>{isAr ? 'النتيجة' : 'Result'}</div>
-          {status ? <span style={{ fontSize: '0.74rem', fontWeight: 800, color: status.c, background: status.bg, border: `1px solid ${status.bd}`, borderRadius: 99, padding: '2px 10px' }}>{status.t}</span> : <span style={{ fontSize: '0.8rem' }}>—</span>}
-        </div>
-        <div style={{ background: 'var(--surface)', borderRadius: 9, padding: '10px 14px' }}>
-          <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginBottom: 3 }}>{isAr ? 'الصفوف المنسوخة' : 'Rows copied'}</div>
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }} dir="ltr">{cfg.last_rows != null ? Number(cfg.last_rows).toLocaleString('en-US') : '—'}{cfg.last_seconds != null ? ` · ${cfg.last_seconds}s` : ''}</div>
+        <div className="st-panel">
+          <div className="st-lbl" style={{ marginBottom: 12 }}>{isAr ? 'حالة آخر تشغيل' : 'Last run status'}</div>
+          <div className="st-kv" style={{ gridTemplateColumns: 'minmax(0,1fr)' }}>
+            <div><span>{isAr ? 'آخر إرسال' : 'Last run'}</span><b>{fmtDT(cfg.last_run_at, isAr)}</b></div>
+            <div><span>{isAr ? 'النتيجة' : 'Result'}</span>{status ? <b className={`st-note ${status.tone}`} style={{ display: 'inline-flex', padding: '2px 12px', borderRadius: 99 }}>{status.t}</b> : <b>—</b>}</div>
+            <div><span>{isAr ? 'الصفوف المنسوخة' : 'Rows copied'}</span><b dir="ltr">{cfg.last_rows != null ? Number(cfg.last_rows).toLocaleString('en-US') : '—'}{cfg.last_seconds != null ? ` · ${cfg.last_seconds}s` : ''}</b></div>
+          </div>
+          {cfg.last_message && (
+            <p style={{ margin: '12px 0 0', fontSize: '0.84rem', color: cfg.last_ok ? 'var(--text-3)' : 'var(--danger)', lineHeight: 1.7 }}>{cfg.last_message}</p>
+          )}
         </div>
       </div>
-      {cfg.last_message && (
-        <p style={{ margin: '10px 0 0', fontSize: '0.74rem', color: cfg.last_ok ? 'var(--text-3)' : '#B91C1C', lineHeight: 1.7 }}>{cfg.last_message}</p>
-      )}
-    </div>
+    </SettingsCard>
   )
 }

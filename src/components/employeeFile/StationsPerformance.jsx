@@ -9,6 +9,7 @@ import { isRestStation } from '../../utils/stations'
 import { shiftIdx, SHIFT_AR } from '../../utils/shifts'
 import { shiftsOfStation } from '../../utils/stationShifts'
 import { esc, docHeader, docShell, openDocWindow } from '../../utils/printDoc'
+import { f } from './ui'
 import { usePresence } from '../../lib/presence'
 
 const MONO = 'ui-monospace, Menlo, Consolas, monospace'
@@ -524,20 +525,20 @@ export default function StationsPerformance({ isAr = true }) {
 
   // ── الواجهة ──
   const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14 }
-  const pill = on => ({ padding: '7px 14px', borderRadius: 99, fontSize: '0.78rem', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', border: `1.5px solid ${on ? '#1C2B4A' : 'var(--border)'}`, background: on ? '#1C2B4A' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' })
+  const pill = on => ({ padding: '7px 14px', borderRadius: 99, fontSize: f('0.78rem'), fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', border: `1.5px solid ${on ? '#1C2B4A' : 'var(--border)'}`, background: on ? '#1C2B4A' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' })
   const PRESETS = [[isAr ? 'اليوم' : 'Today', 0, 0], [isAr ? 'أمس' : 'Yesterday', -1, -1], [isAr ? '7 أيام' : '7 days', -6, 0], [isAr ? '14 يوماً' : '14 days', -13, 0], [isAr ? '30 يوماً' : '30 days', -29, 0]]
   const Ring = ({ v, c }) => (
     <div style={{ width: 74, height: 74, borderRadius: '50%', background: `conic-gradient(${c} ${v * 3.6}deg, var(--surface-2) 0)`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-      <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--card)', display: 'grid', placeItems: 'center', fontFamily: MONO, fontWeight: 900, fontSize: '1.15rem', color: 'var(--text-1)' }}>{v}</div>
+      <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--card)', display: 'grid', placeItems: 'center', fontFamily: MONO, fontWeight: 900, fontSize: f('1.15rem'), color: 'var(--text-1)' }}>{v}</div>
     </div>
   )
   const Meter = ({ label, p, sub }) => {
     const [bg] = heat(p)
     return (
       <div style={{ minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)' }}><span>{label}</span><span style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{p == null ? '—' : p + '%'}</span></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)' }}><span>{label}</span><span style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{p == null ? '—' : p + '%'}</span></div>
         <div style={{ height: 7, borderRadius: 99, background: 'var(--surface-2)', marginTop: 4, overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${p ?? 0}%`, background: bg, borderRadius: 99 }} /></div>
-        {sub && <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', marginTop: 3 }}>{sub}</div>}
+        {sub && <div style={{ fontSize: f('0.64rem'), color: 'var(--text-3)', marginTop: 3 }}>{sub}</div>}
       </div>
     )
   }
@@ -547,27 +548,27 @@ export default function StationsPerformance({ isAr = true }) {
       {/* الفترة */}
       <div style={{ ...card, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div><label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'من' : 'From'}</label>
+          <div><label style={{ display: 'block', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'من' : 'From'}</label>
             <DatePicker value={from} onChange={v => { setFrom(v); if (v > to) setTo(v) }} isAr={isAr} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-40" /></div>
-          <div><label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'إلى' : 'To'}</label>
+          <div><label style={{ display: 'block', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'إلى' : 'To'}</label>
             <DatePicker value={to} onChange={v => { setTo(v); if (v < from) setFrom(v) }} max={today} isAr={isAr} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-40" /></div>
           <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'بحث بالمحطة أو المدير' : 'Search station or manager'}</label>
+            <label style={{ display: 'block', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'بحث بالمحطة أو المدير' : 'Search station or manager'}</label>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder={isAr ? 'اسم محطة أو مدير…' : 'Station or manager…'} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-full" />
           </div>
           <button type="button" onClick={printReport} disabled={!result || loading}
-            style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit', cursor: result && !loading ? 'pointer' : 'not-allowed', opacity: result && !loading ? 1 : 0.5 }}>
+            style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: f('0.82rem'), fontFamily: 'inherit', cursor: result && !loading ? 'pointer' : 'not-allowed', opacity: result && !loading ? 1 : 0.5 }}>
             {isAr ? 'طباعة التقرير / PDF' : 'Print / PDF'}
           </button>
           <button type="button" onClick={() => printStationPages(visible)} disabled={!result || loading || !visible.length}
-            style={{ padding: '10px 22px', borderRadius: 10, border: '1.5px solid #1C2B4A', background: 'var(--card)', color: '#1C2B4A', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit', cursor: result && !loading && visible.length ? 'pointer' : 'not-allowed', opacity: result && !loading && visible.length ? 1 : 0.5 }}>
+            style={{ padding: '10px 22px', borderRadius: 10, border: '1.5px solid #1C2B4A', background: 'var(--card)', color: '#1C2B4A', fontWeight: 800, fontSize: f('0.82rem'), fontFamily: 'inherit', cursor: result && !loading && visible.length ? 'pointer' : 'not-allowed', opacity: result && !loading && visible.length ? 1 : 0.5 }}>
             {isAr ? `صفحة لكل محطة (${visible.length})` : `Page per station (${visible.length})`}
           </button>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {PRESETS.map(([l, a, b]) => { const f = addDays(today, a), t = addDays(today, b); return <button key={l} type="button" onClick={() => { setFrom(f); setTo(t) }} style={pill(from === f && to === t)}>{l}</button> })}
         </div>
-        <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
+        <p style={{ margin: 0, fontSize: f('0.7rem'), color: 'var(--text-3)', lineHeight: 1.7 }}>
           {isAr ? 'التقييم بالإدخالات فقط (رحلات مدخلة، وتغطية الورديات بالإيرادات، وتقييم العملاء) بدون مبالغ ولا أعداد ركاب. الفترات الطويلة تحتاج وقتاً أطول للتحميل.' : 'Scored on entries only (trips entered, sales shift coverage, customer ratings) — no amounts or passenger counts.'}
         </p>
       </div>
@@ -575,11 +576,11 @@ export default function StationsPerformance({ isAr = true }) {
       {result && (
         <div style={{ display: 'inline-flex', alignSelf: 'flex-start', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--card)' }}>
           {[['stations', isAr ? 'أداء المحطات' : 'Stations'], ['accounts', isAr ? 'أداء الحسابات' : 'Accounts']].map(([k, l]) => (
-            <button key={k} type="button" onClick={() => setTab(k)} style={{ padding: '9px 20px', border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', background: tab === k ? '#1C2B4A' : 'transparent', color: tab === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
+            <button key={k} type="button" onClick={() => setTab(k)} style={{ padding: '9px 20px', border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: f('0.82rem'), cursor: 'pointer', background: tab === k ? '#1C2B4A' : 'transparent', color: tab === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
           ))}
         </div>
       )}
-      {err && <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: '0.82rem' }}>{err}</div>}
+      {err && <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: f('0.82rem') }}>{err}</div>}
       {loading && !result && <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'جارٍ تحليل المحطات…' : 'Analysing stations…'}</div>}
 
       {result && tab === 'stations' && (
@@ -594,8 +595,8 @@ export default function StationsPerformance({ isAr = true }) {
               [result.notRated.length, isAr ? 'لم تُقيَّم من العملاء' : 'No customer ratings', '#7c3aed'],
             ].map(([v, l, c]) => (
               <div key={l} style={{ ...card, borderTop: `4px solid ${c}`, padding: '12px 14px' }}>
-                <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '1.7rem', color: 'var(--text-1)', lineHeight: 1.1 }}>{v}</div>
-                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', marginTop: 4 }}>{l}</div>
+                <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: f('1.7rem'), color: 'var(--text-1)', lineHeight: 1.1 }}>{v}</div>
+                <div style={{ fontSize: f('0.72rem'), fontWeight: 700, color: 'var(--text-3)', marginTop: 4 }}>{l}</div>
               </div>
             ))}
           </div>
@@ -603,17 +604,17 @@ export default function StationsPerformance({ isAr = true }) {
           {/* فترات اليوم */}
           <div style={{ ...card, padding: '16px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'جودة الإدخال حسب فترات اليوم' : 'Entry quality by period of day'}</h3>
-              <span style={{ fontSize: '0.68rem', color: 'var(--text-3)' }}>{isAr ? 'متوسط إدخال الرحلات وتغطية الإيرادات لكل وردية، على كل المحطات' : 'Average of trip entry and sales coverage per shift'}</span>
+              <h3 style={{ margin: 0, fontSize: f('0.95rem'), fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'جودة الإدخال حسب فترات اليوم' : 'Entry quality by period of day'}</h3>
+              <span style={{ fontSize: f('0.68rem'), color: 'var(--text-3)' }}>{isAr ? 'متوسط إدخال الرحلات وتغطية الإيرادات لكل وردية، على كل المحطات' : 'Average of trip entry and sales coverage per shift'}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, result.netShifts.length)}, minmax(0, 1fr))`, gap: 10, marginTop: 12 }}>
               {result.netShifts.map(s => {
                 const [bg, fg] = heat(s.score)
                 return (
                   <div key={s.k} style={{ borderRadius: 12, padding: '12px 10px', background: bg, color: fg, textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.74rem', fontWeight: 800, opacity: 0.9 }}>{s.ar}</div>
-                    <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '1.7rem', lineHeight: 1.15 }}>{s.score == null ? '—' : s.score + '%'}</div>
-                    <div style={{ fontSize: '0.64rem', opacity: 0.85, marginTop: 2 }}>{isAr ? `رحلات ${s.trips ?? '—'}% · إيرادات ${s.sales ?? '—'}%` : `trips ${s.trips ?? '—'}% · sales ${s.sales ?? '—'}%`}</div>
+                    <div style={{ fontSize: f('0.74rem'), fontWeight: 800, opacity: 0.9 }}>{s.ar}</div>
+                    <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: f('1.7rem'), lineHeight: 1.15 }}>{s.score == null ? '—' : s.score + '%'}</div>
+                    <div style={{ fontSize: f('0.64rem'), opacity: 0.85, marginTop: 2 }}>{isAr ? `رحلات ${s.trips ?? '—'}% · إيرادات ${s.sales ?? '—'}%` : `trips ${s.trips ?? '—'}% · sales ${s.sales ?? '—'}%`}</div>
                   </div>
                 )
               })}
@@ -630,7 +631,7 @@ export default function StationsPerformance({ isAr = true }) {
 
           {/* المحطات */}
           {visible.length === 0 ? (
-            <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.88rem' }}>{isAr ? 'لا توجد محطات مطابقة' : 'No matching stations'}</div>
+            <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: f('0.88rem') }}>{isAr ? 'لا توجد محطات مطابقة' : 'No matching stations'}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, opacity: loading ? 0.6 : 1 }}>
               {visible.map((r, i) => (
@@ -639,35 +640,35 @@ export default function StationsPerformance({ isAr = true }) {
                     <Ring v={r.score} c={heat(r.score)[0]} />
                     <div style={{ flex: '1 1 260px', minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontFamily: MONO, fontSize: '0.7rem', color: 'var(--text-3)' }}>#{i + 1}</span>
-                        <span style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--text-1)' }}>{r.name}</span>
-                        <span style={{ fontSize: '0.74rem', fontWeight: 800, padding: '3px 12px', borderRadius: 99, background: r.verdict.bg, color: r.verdict.c }}>{r.verdict.ar}</span>
-                        {r.agent && <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '2px 8px', borderRadius: 6, background: '#ede9fe', color: '#6d28d9' }}>{isAr ? 'وكيل' : 'Agent'}</span>}
-                        <button type="button" onClick={() => printStationPages([r])} style={{ marginInlineStart: 'auto', fontSize: '0.68rem', fontWeight: 800, padding: '3px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'صفحة المحطة' : 'Station page'}</button>
+                        <span style={{ fontFamily: MONO, fontSize: f('0.7rem'), color: 'var(--text-3)' }}>#{i + 1}</span>
+                        <span style={{ fontSize: f('1.05rem'), fontWeight: 900, color: 'var(--text-1)' }}>{r.name}</span>
+                        <span style={{ fontSize: f('0.74rem'), fontWeight: 800, padding: '3px 12px', borderRadius: 99, background: r.verdict.bg, color: r.verdict.c }}>{r.verdict.ar}</span>
+                        {r.agent && <span style={{ fontSize: f('0.66rem'), fontWeight: 800, padding: '2px 8px', borderRadius: 6, background: '#ede9fe', color: '#6d28d9' }}>{isAr ? 'وكيل' : 'Agent'}</span>}
+                        <button type="button" onClick={() => printStationPages([r])} style={{ marginInlineStart: 'auto', fontSize: f('0.68rem'), fontWeight: 800, padding: '3px 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'صفحة المحطة' : 'Station page'}</button>
                       </div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-2)', marginTop: 4, fontWeight: 600 }}>
+                      <div style={{ fontSize: f('0.74rem'), color: 'var(--text-2)', marginTop: 4, fontWeight: 600 }}>
                         {isAr ? 'المدير: ' : 'Manager: '}<b style={{ color: 'var(--text-1)' }}>{r.managers.length ? r.managers.slice(0, 2).join('، ') + (r.managers.length > 2 ? ` +${r.managers.length - 2}` : '') : (isAr ? 'غير معيّن' : 'Not assigned')}</b>
                         <span style={{ margin: '0 8px', opacity: 0.4 }}>|</span>{isAr ? `${r.staff} موظف نشط` : `${r.staff} active staff`}
                       </div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-2)', marginTop: 6, lineHeight: 1.7 }}>
+                      <div style={{ fontSize: f('0.78rem'), color: 'var(--text-2)', marginTop: 6, lineHeight: 1.7 }}>
                         <b style={{ color: r.verdict.c }}>{r.story.status}</b> {r.story.diag.join(' ')}
                       </div>
-                      <div style={{ fontSize: '0.76rem', color: 'var(--text-1)', marginTop: 4, fontWeight: 800 }}>{r.story.action}</div>
+                      <div style={{ fontSize: f('0.76rem'), color: 'var(--text-1)', marginTop: 4, fontWeight: 800 }}>{r.story.action}</div>
                     </div>
                     <div style={{ flex: '1 1 300px', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px 18px' }}>
                       <Meter label={isAr ? 'إدخال الرحلات' : 'Trips entered'} p={r.tripsPct} sub={r.expected ? `${r.entered} / ${r.expected}` : (isAr ? 'لا رحلات' : 'none scheduled')} />
                       <Meter label={isAr ? 'تغطية الإيرادات' : 'Sales coverage'} p={r.salesPct} sub={r.salesApplicable ? `${r.salesCovered} / ${r.salesExpected} ${isAr ? 'وردية' : 'shifts'}` : (isAr ? 'لا إيرادات مُدخلة' : 'no sales entered')} />
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'تقييم العملاء' : 'Customer ratings'}
-                        <div style={{ marginTop: 3, fontFamily: MONO, fontWeight: 900, fontSize: '0.95rem', color: r.rate ? 'var(--text-1)' : '#7c3aed' }}>{r.rate || (isAr ? 'لم تُقيَّم' : 'none')}</div></div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'الموجودات المسجلة' : 'Lost & found logged'}
-                        <div style={{ marginTop: 3, fontFamily: MONO, fontWeight: 900, fontSize: '0.95rem', color: 'var(--text-1)' }}>{r.lost}</div></div>
+                      <div style={{ fontSize: f('0.7rem'), color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'تقييم العملاء' : 'Customer ratings'}
+                        <div style={{ marginTop: 3, fontFamily: MONO, fontWeight: 900, fontSize: f('0.95rem'), color: r.rate ? 'var(--text-1)' : '#7c3aed' }}>{r.rate || (isAr ? 'لم تُقيَّم' : 'none')}</div></div>
+                      <div style={{ fontSize: f('0.7rem'), color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'الموجودات المسجلة' : 'Lost & found logged'}
+                        <div style={{ marginTop: 3, fontFamily: MONO, fontWeight: 900, fontSize: f('0.95rem'), color: 'var(--text-1)' }}>{r.lost}</div></div>
                     </div>
                   </div>
                   {/* موظفو المحطة ومتى دخلوا لحساباتهم */}
                   <button type="button" onClick={() => setOpenStaff(o => ({ ...o, [r.id]: !o[r.id] }))}
                     style={{ marginTop: 12, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? `الموظفون والمشرفون (${r.staffRows.length}) — دخل لحسابه خلال الفترة ${r.loggedIn} من ${r.staffRows.length}` : `Staff & supervisors (${r.staffRows.length}) — logged in during period: ${r.loggedIn}`}</span>
-                    <span style={{ fontSize: '0.74rem', color: 'var(--text-3)' }}>{openStaff[r.id] ? '▲' : '▼'}</span>
+                    <span style={{ fontSize: f('0.78rem'), fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? `الموظفون والمشرفون (${r.staffRows.length}) — دخل لحسابه خلال الفترة ${r.loggedIn} من ${r.staffRows.length}` : `Staff & supervisors (${r.staffRows.length}) — logged in during period: ${r.loggedIn}`}</span>
+                    <span style={{ fontSize: f('0.74rem'), color: 'var(--text-3)' }}>{openStaff[r.id] ? '▲' : '▼'}</span>
                   </button>
                   {openStaff[r.id] && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 8, marginTop: 8 }}>
@@ -677,9 +678,9 @@ export default function StationsPerformance({ isAr = true }) {
                         return (
                           <div key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--card)', minWidth: 0 }}>
                             <i style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: live ? (live.active ? '#16a34a' : '#f59e0b') : '#d1d5db' }} title={live ? (live.active ? 'متصل الآن' : 'متصل · خامل') : 'غير متصل'} />
-                            <span style={{ flex: 1, minWidth: 0, fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.name}</span>
-                            {x.isMgr && <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{isAr ? 'مشرف' : 'Sup.'}</span>}
-                            <span style={{ fontSize: '0.66rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99, background: bg, color: fg, whiteSpace: 'nowrap', fontFamily: MONO }}>{live ? (isAr ? 'متصل الآن' : 'online') : (fmtLogin(x.last) || (isAr ? 'لم يدخل' : 'never'))}</span>
+                            <span style={{ flex: 1, minWidth: 0, fontSize: f('0.78rem'), fontWeight: 700, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.name}</span>
+                            {x.isMgr && <span style={{ fontSize: f('0.6rem'), fontWeight: 800, padding: '1px 6px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{isAr ? 'مشرف' : 'Sup.'}</span>}
+                            <span style={{ fontSize: f('0.66rem'), fontWeight: 800, padding: '2px 8px', borderRadius: 99, background: bg, color: fg, whiteSpace: 'nowrap', fontFamily: MONO }}>{live ? (isAr ? 'متصل الآن' : 'online') : (fmtLogin(x.last) || (isAr ? 'لم يدخل' : 'never'))}</span>
                           </div>
                         )
                       })}
@@ -692,8 +693,8 @@ export default function StationsPerformance({ isAr = true }) {
                       return (
                         <div key={s.k} title={`${s.ar} · ${s.range}\n${isAr ? 'رحلات' : 'trips'}: ${s.trips ?? '—'}%\n${isAr ? 'إيرادات' : 'sales'}: ${s.sales ?? '—'}%`}
                           style={{ borderRadius: 9, padding: '7px 6px', background: bg, color: fg, textAlign: 'center' }}>
-                          <div style={{ fontSize: '0.64rem', fontWeight: 800, opacity: 0.92 }}>{s.ar}</div>
-                          <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '0.95rem' }}>{s.score == null ? '—' : s.score + '%'}</div>
+                          <div style={{ fontSize: f('0.64rem'), fontWeight: 800, opacity: 0.92 }}>{s.ar}</div>
+                          <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: f('0.95rem') }}>{s.score == null ? '—' : s.score + '%'}</div>
                         </div>
                       )
                     })}
@@ -712,30 +713,30 @@ export default function StationsPerformance({ isAr = true }) {
           <div style={{ ...card, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-                <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'المحطة' : 'Station'}</label>
+                <label style={{ display: 'block', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'المحطة' : 'Station'}</label>
                 <select value={aSt} onChange={e => { setASt(e.target.value); setAMore(100) }} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-full">
                   <option value="all">{isAr ? `كل المحطات (${result.accounts.length} حساب)` : `All stations (${result.accounts.length})`}</option>
                   {accStations.map(x => <option key={x.id} value={String(x.id)}>{x.name} ({x.n})</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'الصفة' : 'Role'}</label>
+                <label style={{ display: 'block', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'الصفة' : 'Role'}</label>
                 <select value={aRole} onChange={e => { setARole(e.target.value); setAMore(100) }} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
                   <option value="all">{isAr ? 'الكل' : 'All'}</option><option value="emp">{isAr ? 'الموظفون' : 'Employees'}</option><option value="mgr">{isAr ? 'المشرفون' : 'Supervisors'}</option>
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'الترتيب' : 'Sort'}</label>
+                <label style={{ display: 'block', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'الترتيب' : 'Sort'}</label>
                 <select value={aSort} onChange={e => setASort(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
                   <option value="low">{isAr ? 'الأقل نشاطاً أولاً' : 'Least active first'}</option><option value="top">{isAr ? 'الأكثر إدخالاً' : 'Most entries'}</option><option value="login">{isAr ? 'آخر دخول' : 'Last login'}</option>
                 </select>
               </div>
               <div style={{ flex: '1 1 180px', minWidth: 0 }}>
-                <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'بحث بالاسم' : 'Search name'}</label>
+                <label style={{ display: 'block', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'بحث بالاسم' : 'Search name'}</label>
                 <input value={aQ} onChange={e => { setAQ(e.target.value); setAMore(100) }} placeholder={isAr ? 'اسم الحساب…' : 'Name…'} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-full" />
               </div>
               <button type="button" onClick={printAccounts} disabled={loading || accList.length === 0}
-                style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit', cursor: accList.length ? 'pointer' : 'not-allowed', opacity: accList.length ? 1 : 0.5 }}>
+                style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: f('0.82rem'), fontFamily: 'inherit', cursor: accList.length ? 'pointer' : 'not-allowed', opacity: accList.length ? 1 : 0.5 }}>
                 {isAr ? 'طباعة القائمة / PDF' : 'Print / PDF'}
               </button>
             </div>
@@ -743,13 +744,13 @@ export default function StationsPerformance({ isAr = true }) {
               <button type="button" onClick={() => { setAStatus('all'); setAMore(100) }} style={pill(aStatus === 'all')}>{isAr ? 'الكل' : 'All'} <span style={{ fontFamily: MONO, opacity: 0.8 }}>{accCounts.all}</span></button>
               {ACC_STATUS.map(x => <button key={x.key} type="button" onClick={() => { setAStatus(aStatus === x.key ? 'all' : x.key); setAMore(100) }} style={pill(aStatus === x.key)}>{x.ar} <span style={{ fontFamily: MONO, opacity: 0.8 }}>{accCounts[x.key]}</span></button>)}
             </div>
-            <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
+            <p style={{ margin: 0, fontSize: f('0.7rem'), color: 'var(--text-3)', lineHeight: 1.7 }}>
               {isAr ? 'نشاط الحساب = الأيام التي أدخل فيها رحلات أو إيرادات خلال الفترة. من يعمل بورديات متناوبة قد لا يعمل كل الأيام، فاقرأ الحالة مع جدول دوامه.' : 'Activity = days with trip or sales entries in the period.'}
             </p>
           </div>
 
           {accList.length === 0 ? (
-            <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.88rem' }}>{isAr ? 'لا توجد حسابات مطابقة' : 'No matching accounts'}</div>
+            <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)', fontSize: f('0.88rem') }}>{isAr ? 'لا توجد حسابات مطابقة' : 'No matching accounts'}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: loading ? 0.6 : 1 }}>
               {accList.slice(0, aMore).map(a => {
@@ -759,21 +760,21 @@ export default function StationsPerformance({ isAr = true }) {
                     <div style={{ flex: '1 1 220px', minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
                         <i style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: live ? (live.active ? '#16a34a' : '#f59e0b') : '#d1d5db' }} title={live ? 'متصل الآن' : 'غير متصل'} />
-                        <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
-                        {a.isMgr && <span style={{ fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>{isAr ? 'مشرف' : 'Sup.'}</span>}
+                        <span style={{ fontSize: f('0.88rem'), fontWeight: 800, color: 'var(--text-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name}</span>
+                        {a.isMgr && <span style={{ fontSize: f('0.6rem'), fontWeight: 800, padding: '1px 6px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>{isAr ? 'مشرف' : 'Sup.'}</span>}
                       </div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 2 }}>{a.station} · {live ? (isAr ? 'متصل الآن' : 'online') : (isAr ? 'آخر دخول: ' : 'Last login: ') + (fmtLogin(a.last) || (isAr ? 'لم يدخل' : 'never'))}</div>
+                      <div style={{ fontSize: f('0.72rem'), color: 'var(--text-3)', marginTop: 2 }}>{a.station} · {live ? (isAr ? 'متصل الآن' : 'online') : (isAr ? 'آخر دخول: ' : 'Last login: ') + (fmtLogin(a.last) || (isAr ? 'لم يدخل' : 'never'))}</div>
                     </div>
                     <div style={{ flex: '1 1 150px', minWidth: 130 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)' }}><span>{isAr ? 'أيام الإدخال' : 'Active days'}</span><span style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{a.activeDays}/{result.days}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)' }}><span>{isAr ? 'أيام الإدخال' : 'Active days'}</span><span style={{ fontFamily: MONO, color: 'var(--text-1)' }}>{a.activeDays}/{result.days}</span></div>
                       <div style={{ height: 7, borderRadius: 99, background: 'var(--surface-2)', marginTop: 4, overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${pc}%`, background: a.status.c, borderRadius: 99 }} /></div>
                     </div>
-                    <div style={{ display: 'flex', gap: 16, fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)' }}>
-                      <div>{isAr ? 'رحلات' : 'Trips'}<div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '0.95rem', color: 'var(--text-1)' }}>{a.trips}</div></div>
-                      <div>{isAr ? 'إيراد' : 'Sales'}<div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '0.95rem', color: 'var(--text-1)' }}>{a.sales}</div></div>
-                      <div>{isAr ? 'آخر إدخال' : 'Last entry'}<div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '0.95rem', color: 'var(--text-1)' }}>{a.lastEntry ? a.lastEntry.slice(5).replace('-', '/') : '—'}</div></div>
+                    <div style={{ display: 'flex', gap: 16, fontSize: f('0.7rem'), fontWeight: 700, color: 'var(--text-3)' }}>
+                      <div>{isAr ? 'رحلات' : 'Trips'}<div style={{ fontFamily: MONO, fontWeight: 900, fontSize: f('0.95rem'), color: 'var(--text-1)' }}>{a.trips}</div></div>
+                      <div>{isAr ? 'إيراد' : 'Sales'}<div style={{ fontFamily: MONO, fontWeight: 900, fontSize: f('0.95rem'), color: 'var(--text-1)' }}>{a.sales}</div></div>
+                      <div>{isAr ? 'آخر إدخال' : 'Last entry'}<div style={{ fontFamily: MONO, fontWeight: 900, fontSize: f('0.95rem'), color: 'var(--text-1)' }}>{a.lastEntry ? a.lastEntry.slice(5).replace('-', '/') : '—'}</div></div>
                     </div>
-                    <span style={{ fontSize: '0.74rem', fontWeight: 800, padding: '3px 12px', borderRadius: 99, background: a.status.bg, color: a.status.c, whiteSpace: 'nowrap' }}>{a.status.ar}</span>
+                    <span style={{ fontSize: f('0.74rem'), fontWeight: 800, padding: '3px 12px', borderRadius: 99, background: a.status.bg, color: a.status.c, whiteSpace: 'nowrap' }}>{a.status.ar}</span>
                   </div>
                 )
               })}

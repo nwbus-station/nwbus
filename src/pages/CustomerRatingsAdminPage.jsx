@@ -1,89 +1,54 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { supabase } from '../lib/supabase'
 import { todayStr } from '../utils/dates'
-import { escapeHtml, toLatinDigits, matchesSearch } from '../utils/digits'
 import DatePicker from '../components/shared/DatePicker'
 import { useAuth } from '../context/AuthContext'
 import FeedbackReport from '../components/feedback/FeedbackReport'
 import SelectField from '../components/shared/SelectField'
-import { brandHeader, previewBar, PAPER_CSS } from '../utils/printDoc'
 import { buildRatingsReportHtml } from '../utils/ratingsReport'
+import { useMedia } from '../components/dispatch/Sheet'
+import EmployeePicker from '../components/customerRatings/EmployeePicker'
+import RatingsHeader from '../components/customerRatings/RatingsHeader'
+import RatingsFilterBar from '../components/customerRatings/RatingsFilterBar'
+import RatingsInsights from '../components/customerRatings/RatingsInsights'
+import RatingsTrend from '../components/customerRatings/RatingsTrend'
+import RatingsTable from '../components/customerRatings/RatingsTable'
+import RatingDetailSheet from '../components/customerRatings/RatingDetailSheet'
+import MessagesGrid from '../components/customerRatings/MessagesGrid'
+import { SHIFTS, CR_CSS, stationLabel, summarize, f1, toneVar } from '../components/customerRatings/shared'
 
-const SHIFTS = [
-  { value: 'A', ar: 'الوردية أ', en: 'Shift A' },
-  { value: 'B', ar: 'الوردية ب', en: 'Shift B' },
-  { value: 'C', ar: 'الوردية ج', en: 'Shift C' },
-]
-
-const JOB_TITLE_AR = { customer_service: 'خدمة عملاء', dispatcher: 'مرحّل' }
-const JOB_TITLE_EN = { customer_service: 'Customer Service', dispatcher: 'Dispatcher' }
-
-function stationLabel(st, isAr) {
-  if (!st) return st
-  return isAr ? st.name_ar : (st.name_en || st.name_ar)
-}
-
-// قائمة موظفين قابلة للبحث بالاسم أو الرقم الوظيفي — بديل عن <SelectField> عادي لما تكون
-// القائمة طويلة (كل من عنده صلاحية "يُقيّم من العميل" بكل المحطات)
-function EmployeePicker({ employees, value, onChange, defaultLabel }) {
-  const { i18n } = useTranslation()
-  const isAr = i18n.language === 'ar'
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const ref = useRef(null)
-  const selected = employees.find(e => e.id === value)
-
-  useEffect(() => {
-    if (!open) return
-    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [open])
-
-  const q = query.trim()
-  const filtered = !q ? employees : employees.filter(e =>
-    matchesSearch(e.full_name_ar, q) || matchesSearch(e.job_number, q)
-  )
-
-  return (
-    <div className="relative" ref={ref}>
-      <button type="button" onClick={() => { setOpen(o => !o); setQuery('') }}
-        className="border rounded-lg px-3 py-2 text-sm bg-white text-start w-48 truncate">
-        {selected ? `${selected.full_name_ar}${selected.job_number ? ` (${selected.job_number})` : ''}` : defaultLabel}
-      </button>
-      {open && (
-        <div className="absolute z-50 mt-1 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 p-2">
-          <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
-            placeholder={isAr ? 'بحث بالاسم أو الرقم الوظيفي...' : 'Search by name or job number...'}
-            className="w-full border rounded-lg px-3 py-1.5 text-sm mb-2" />
-          <div className="max-h-56 overflow-y-auto">
-            <button type="button" onClick={() => { onChange(''); setOpen(false) }}
-              className={`block w-full text-start px-2 py-1.5 rounded-lg text-sm hover:bg-gray-50 ${!value ? 'font-bold text-nwbus-primary' : 'text-gray-700'}`}>
-              {defaultLabel}
-            </button>
-            {filtered.map(e => (
-              <button key={e.id} type="button" onClick={() => { onChange(e.id); setOpen(false) }}
-                className={`block w-full text-start px-2 py-1.5 rounded-lg text-sm hover:bg-gray-50 ${value === e.id ? 'font-bold text-nwbus-primary' : 'text-gray-700'}`}>
-                {e.full_name_ar}{e.job_number ? ` (${e.job_number})` : ''}
-              </button>
-            ))}
-            {filtered.length === 0 && <p className="text-xs text-gray-400 text-center py-3">{isAr ? 'لا يوجد نتائج' : 'No results'}</p>}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+// حاوية الكمبيوتر: عرض صريح (الـ CSS العام يعيد كتابة max-width الشائعة داخل main)
+const DESK_WRAP = { maxWidth: 'min(100%, 1560px)', margin: '0 auto', padding: 'clamp(16px, 2vw, 32px)' }
+// يوم التقييم بتوقيت الرياض بصيغة YYYY-MM-DD
+const dayOf = d => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' })
 
 export default function CustomerRatingsAdminPage() {
   const { allowCap } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
-  const [tab, setTab] = useState('ratings') // 'ratings' | 'messages'
+  const [tab, setTab] = useState('ratings') // 'ratings' | 'messages' | 'survey'
+  const desk = useMedia('(min-width: 900px)')
 
   if (!allowCap('customer_ratings_view')) {
-    return <div className="max-w-5xl mx-auto p-10 text-center text-gray-500" dir={isAr ? 'rtl' : 'ltr'}>{isAr ? 'ما عندك صلاحية لعرض تقييمات العملاء' : "You don't have permission to view customer ratings"}</div>
+    return <div className={desk ? 'text-center text-gray-500' : 'max-w-5xl mx-auto p-10 text-center text-gray-500'} style={desk ? { ...DESK_WRAP, padding: 'clamp(32px, 6vw, 80px)' } : undefined} dir={isAr ? 'rtl' : 'ltr'}>{isAr ? 'ما عندك صلاحية لعرض تقييمات العملاء' : "You don't have permission to view customer ratings"}</div>
+  }
+
+  // الكمبيوتر: ترويسة موحّدة بالمؤشرات والتبويبات (تُرسم داخل كل تبويب ليحصل على مؤشراته)، الجوال: كما كان
+  if (desk) {
+    return (
+      <div className="cr-root" style={DESK_WRAP} dir={isAr ? 'rtl' : 'ltr'}>
+        <style>{CR_CSS}</style>
+        {tab === 'ratings' ? <RatingsTab desk onTab={setTab} />
+          : tab === 'messages' ? <MessagesTab desk onTab={setTab} />
+          : (
+            <>
+              <RatingsHeader isAr={isAr} tab={tab} onTab={setTab} />
+              <FeedbackReport />
+            </>
+          )}
+      </div>
+    )
   }
 
   return (
@@ -105,7 +70,7 @@ export default function CustomerRatingsAdminPage() {
   )
 }
 
-function RatingsTab() {
+function RatingsTab({ desk = false, onTab }) {
   const { profile } = useAuth()
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -124,6 +89,11 @@ function RatingsTab() {
   const [dateTo, setDateTo] = useState(todayStr())
   const [sortBy, setSortBy] = useState('date') // 'date' | 'best' | 'worst'
   const [printing, setPrinting] = useState(false)
+  // حالات عرض فقط (الكمبيوتر): عدد الصفوف الظاهرة، التقييم المفتوح بالتفاصيل
+  const wide = useMedia('(min-width: 1560px)')
+  const roomy = useMedia('(min-width: 1280px)') // الجدول يتّسع بلا تمرير أفقي فيثبت رأسه
+  const [limit, setLimit] = useState(100)
+  const [detail, setDetail] = useState(null)
 
   useEffect(() => {
     supabase.from('stations').select('id, name_ar, name_en').order('name_ar').then(({ data }) => setStations(data || []))
@@ -144,6 +114,7 @@ function RatingsTab() {
 
   function load() {
     setLoading(true)
+    setLimit(100)
     let q = supabase.from('customer_ratings')
       .select('id, window_number, shift, ticket_number, reference_number, ticket_date, rating, comment, created_at, employee:employee_id(full_name_ar, job_number, job_title), station:station_id(name_ar, name_en)')
     if (stationFilter) q = q.eq('station_id', stationFilter)
@@ -164,6 +135,7 @@ function RatingsTab() {
   })
 
   const avg = rows.length ? (rows.reduce((s, r) => s + r.rating, 0) / rows.length).toFixed(1) : '—'
+  const summary = useMemo(() => summarize(rows, dayOf), [rows])
 
   // التقرير يقرأ كل التقييمات المطابقة للفلاتر (الشاشة محدودة بـ 2000) ثم يبنيه مجمّعاً بالمحطة
   async function printReport() {
@@ -203,6 +175,54 @@ function RatingsTab() {
     setPrinting(false)
   }
 
+  const printLabel = printing ? (isAr ? 'جارٍ إعداد التقرير...' : 'Preparing report...') : employeeFilter ? (isAr ? 'طباعة تقرير الموظف' : 'Print employee report') : stationFilter ? (isAr ? 'طباعة تقرير المحطة' : 'Print station report') : (isAr ? 'طباعة التقرير' : 'Print report')
+
+  // الكمبيوتر: ترويسة بمؤشرات + فلاتر بتسميات + رسم ومخططات + جدول عريض (الجوال أدناه كما كان)
+  if (desk) {
+    const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
+    const activeStationKey = stations.find(s => s.id === stationFilter)?.name_ar
+    const pickStation = nameAr => {
+      const st = stations.find(s => s.name_ar === nameAr)
+      if (st) setStationFilter(f => (f === st.id ? '' : st.id))
+    }
+    const dirty = !!(stationFilter || shiftFilter || employeeFilter || dateFrom || dateTo !== todayStr())
+    const resetFilters = () => { setStationFilter(''); setShiftFilter(''); setEmployeeFilter(''); setDateFrom(''); setDateTo(todayStr()) }
+    const hasRows = summary.n > 0
+    const stats = [
+      { label: isAr ? 'إجمالي التقييمات' : 'Total ratings', value: summary.n, hint: summary.n >= 2000 ? (isAr ? 'أحدث 2000 تقييم' : 'Latest 2000 ratings') : (isAr ? 'ضمن الفلاتر الحالية' : 'Within current filters') },
+      { label: isAr ? 'متوسط التقييم' : 'Average rating', value: hasRows ? <bdi dir="ltr">{f1(summary.avg)} / 5</bdi> : '—', color: hasRows ? toneVar(summary.avg) : undefined, hint: isAr ? 'من 5 درجات' : 'Out of 5' },
+      { label: isAr ? 'نسبة الرضا (4 فأعلى)' : 'Satisfaction (4+)', value: hasRows ? `${pct(summary.high, summary.n)}%` : '—', color: hasRows ? 'var(--success)' : undefined, hint: `${summary.high} ${isAr ? 'تقييم' : 'ratings'}` },
+      { label: isAr ? 'تقييمات منخفضة (2 فأقل)' : 'Low ratings (2 or less)', value: summary.low, color: summary.low ? 'var(--danger)' : undefined, hint: hasRows ? `${pct(summary.low, summary.n)}%` : undefined },
+      { label: isAr ? 'تقييمات بتعليق' : 'With comments', value: summary.withComment, hint: hasRows ? `${pct(summary.withComment, summary.n)}%` : undefined },
+    ]
+    const printBtn = <button type="button" className="cr-btn" onClick={printReport} disabled={printing}>{printLabel}</button>
+    const insights = <RatingsInsights summary={summary} isAr={isAr} wide={wide} activeStationKey={activeStationKey} onPickStation={pickStation} />
+    const note = msg => <div className="cr-card" style={{ padding: 48, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.95rem' }}>{msg}</div>
+    return (
+      <div>
+        <RatingsHeader isAr={isAr} tab="ratings" onTab={onTab} stats={stats} actions={printBtn} />
+        <RatingsFilterBar isAr={isAr} stations={stations} employees={employees}
+          stationFilter={stationFilter} setStationFilter={setStationFilter} shiftFilter={shiftFilter} setShiftFilter={setShiftFilter}
+          employeeFilter={employeeFilter} setEmployeeFilter={setEmployeeFilter} dateFrom={dateFrom} setDateFrom={setDateFrom}
+          dateTo={dateTo} setDateTo={setDateTo} sortBy={sortBy} setSortBy={setSortBy} dirty={dirty} onReset={resetFilters} />
+        {loading ? note(isAr ? 'جارٍ التحميل...' : 'Loading...')
+          : sorted.length === 0 ? note(isAr ? 'لا توجد تقييمات بهذي الفلاتر' : 'No ratings match these filters')
+          : (
+            <div style={wide ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 360px', gap: 16, alignItems: 'start' } : { display: 'grid', gap: 16 }}>
+              {!wide && insights}
+              <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+                <RatingsTrend days={summary.days} isAr={isAr} />
+                <RatingsTable rows={sorted.slice(0, limit)} total={sorted.length} isAr={isAr} loc={loc} ratedDate={ratedDate} ratedTime={ratedTime}
+                  sticky={roomy} onOpen={setDetail} onMore={() => setLimit(l => l + 100)} />
+              </div>
+              {wide && insights}
+            </div>
+          )}
+        {detail && <RatingDetailSheet rating={detail} isAr={isAr} loc={loc} ratedDate={ratedDate} ratedTime={ratedTime} onClose={() => setDetail(null)} />}
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap gap-3 items-center mb-4">
@@ -225,7 +245,7 @@ function RatingsTab() {
           <option value="worst">{isAr ? 'الأقل تقييماً' : 'Lowest rated'}</option>
         </SelectField>
         <button onClick={printReport} disabled={printing} className="ms-auto bg-nwbus-primary text-white rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
-          🖨 {printing ? (isAr ? 'جارٍ إعداد التقرير...' : 'Preparing report...') : employeeFilter ? (isAr ? 'طباعة تقرير الموظف' : 'Print employee report') : stationFilter ? (isAr ? 'طباعة تقرير المحطة' : 'Print station report') : (isAr ? 'طباعة التقرير' : 'Print report')}
+          {printing ? (isAr ? 'جارٍ إعداد التقرير...' : 'Preparing report...') : employeeFilter ? (isAr ? 'طباعة تقرير الموظف' : 'Print employee report') : stationFilter ? (isAr ? 'طباعة تقرير المحطة' : 'Print station report') : (isAr ? 'طباعة التقرير' : 'Print report')}
         </button>
       </div>
 
@@ -236,7 +256,7 @@ function RatingsTab() {
         </div>
         <div className="bg-white border border-gray-200 rounded-xl px-5 py-3">
           <p className="text-xs text-gray-400">{isAr ? 'متوسط التقييم' : 'Average rating'}</p>
-          <p className="text-xl font-bold text-amber-500">{avg} / 5</p>
+          <p className="text-xl font-bold text-amber-500"><bdi dir="ltr">{avg} / 5</bdi></p>
         </div>
       </div>
 
@@ -269,7 +289,7 @@ function RatingsTab() {
                       <td className="px-4 py-2.5 text-gray-500">{stationLabel(r.station, isAr) || '—'}</td>
                       <td className="px-4 py-2.5 text-gray-500 font-mono">{r.window_number || '—'}</td>
                       <td className="px-4 py-2.5">
-                        <span className={`font-bold ${r.rating >= 4 ? 'text-green-600' : r.rating === 3 ? 'text-amber-500' : 'text-red-500'}`}>{r.rating} / 5</span>
+                        <span className={`font-bold ${r.rating >= 4 ? 'text-green-600' : r.rating === 3 ? 'text-amber-500' : 'text-red-500'}`}><bdi dir="ltr">{r.rating} / 5</bdi></span>
                         {r.comment && <p className="text-xs text-gray-400 mt-0.5">{r.comment}</p>}
                       </td>
                       <td className="px-4 py-2.5 text-gray-500 font-mono">{r.ticket_number || '—'}</td>
@@ -291,7 +311,7 @@ function RatingsTab() {
                       <p className="font-semibold text-gray-800 truncate">{r.employee?.full_name_ar || '—'}</p>
                       <p className="text-xs text-gray-500 mt-0.5">{stationLabel(r.station, isAr) || '—'}{r.window_number ? ` · ${isAr ? 'شباك' : 'Window'} ${r.window_number}` : ''}</p>
                     </div>
-                    <span className={`shrink-0 font-bold text-sm px-2 py-0.5 rounded-full ${r.rating >= 4 ? 'bg-green-50 text-green-600' : r.rating === 3 ? 'bg-amber-50 text-amber-500' : 'bg-red-50 text-red-500'}`}>{r.rating} / 5</span>
+                    <span className={`shrink-0 font-bold text-sm px-2 py-0.5 rounded-full ${r.rating >= 4 ? 'bg-green-50 text-green-600' : r.rating === 3 ? 'bg-amber-50 text-amber-500' : 'bg-red-50 text-red-500'}`}><bdi dir="ltr">{r.rating} / 5</bdi></span>
                   </div>
                   {r.comment && <p className="text-xs text-gray-500 mt-2 bg-gray-50 rounded-lg px-2.5 py-1.5">{r.comment}</p>}
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5 text-[11px] text-gray-400">
@@ -310,13 +330,14 @@ function RatingsTab() {
   )
 }
 
-function MessagesTab() {
+function MessagesTab({ desk = false, onTab }) {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const [stations, setStations] = useState([])
   const [msgs, setMsgs] = useState({})
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
+  const [savedId, setSavedId] = useState(null) // عرض فقط: تأكيد الحفظ بالكمبيوتر
 
   useEffect(() => {
     Promise.all([
@@ -338,12 +359,32 @@ function MessagesTab() {
   async function save(stationId) {
     setSavingId(stationId)
     const row = msgs[stationId] || {}
-    await supabase.from('station_rating_messages').upsert({
+    const { error } = await supabase.from('station_rating_messages').upsert({
       station_id: stationId,
       welcome_message: row.welcome_message || null,
       closing_message: row.closing_message || null,
     }, { onConflict: 'station_id' })
     setSavingId(null)
+    if (error) return
+    setSavedId(stationId)
+    setTimeout(() => setSavedId(cur => (cur === stationId ? null : cur)), 2500)
+  }
+
+  if (desk) {
+    const custom = k => Object.values(msgs).filter(m => m[k]).length
+    const stats = [
+      { label: isAr ? 'عدد المحطات' : 'Stations', value: loading ? '—' : stations.length },
+      { label: isAr ? 'ترحيب مخصص' : 'Custom welcome', value: loading ? '—' : custom('welcome_message'), hint: isAr ? 'محطات لها رسالة ترحيب خاصة' : 'Stations with their own welcome' },
+      { label: isAr ? 'ختام مخصص' : 'Custom closing', value: loading ? '—' : custom('closing_message'), hint: isAr ? 'محطات لها رسالة ختام خاصة' : 'Stations with their own closing' },
+    ]
+    return (
+      <div>
+        <RatingsHeader isAr={isAr} tab="messages" onTab={onTab} stats={stats} />
+        {loading
+          ? <div className="cr-card" style={{ padding: 48, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.95rem' }}>{isAr ? 'جارٍ التحميل...' : 'Loading...'}</div>
+          : <MessagesGrid stations={stations} msgs={msgs} setField={setField} save={save} savingId={savingId} savedId={savedId} isAr={isAr} />}
+      </div>
+    )
   }
 
   if (loading) return <div className="text-center py-10 text-gray-400 text-sm">{isAr ? 'جارٍ التحميل...' : 'Loading...'}</div>

@@ -7,6 +7,13 @@ import { ADMIN_ROLE_VALUES, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_
 import { createNotification } from '../utils/notifications'
 import SelectField from '../components/shared/SelectField'
 import { brandLogo, previewBar } from '../utils/printDoc'
+import PageHeader from '../components/shared/PageHeader'
+import { useMedia } from '../components/dispatch/Sheet'
+import EvalSheet from '../components/evaluation/EvalSheet'
+import { SCORE_LABELS, SCORE_LABELS_EN, SCORE_COLORS, toneOf } from '../components/evaluation/evalUi'
+import {
+  DESK_CSS, EvalTabs, SearchInput, Segmented, Toolbar, PeopleTable, SummaryPanel, StationCards, MyEvalPanel,
+} from '../components/evaluation/EvalDesktop'
 
 // ── تقييم الموظفين متعدد المصادر: مشرف الوردية + مشرف المحطة + المدير التنفيذي للمحطات ──
 // كل مصدر له وزنه، والنتيجة النهائية تُحسب فقط بعد اكتمال الثلاثة
@@ -97,7 +104,8 @@ function computeSupFinalScore(targetRole, rows) {
 }
 
 // ── سجل: نظرة عامة على كل محطة (عدد الموظفين/المقيّمين، متوسط النتيجة، نسبة ممتاز+جيد جداً) ──
-function StationOverview({ employees, empEvals, stations, isAr }) {
+function StationOverview({ employees, empEvals, stations, isAr, large = false }) {
+  const pad = large ? '15px 22px' : '10px 14px'
   const rows = stations.map(stn => {
     const stEmployees = employees.filter(e => e.station_id === stn.id)
     const finals = stEmployees.map(e => computeFinalScore(empEvals.filter(x => x.employee_id === e.id)))
@@ -117,30 +125,30 @@ function StationOverview({ employees, empEvals, stations, isAr }) {
   }).filter(r => r.empCount > 0)
 
   return (
-    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: large ? 18 : 10, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', direction: 'rtl' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: large ? '0.95rem' : '0.8rem', direction: 'rtl' }}>
           <thead>
             <tr style={{ background: 'var(--surface)', textAlign: 'right' }}>
-              <th style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'المحطة' : 'Station'}</th>
-              <th style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'عدد الموظفين' : 'Employees'}</th>
-              <th style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'عدد المقيّمين' : 'Raters'}</th>
-              <th style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'متوسط التقييم من ١٠' : 'Avg score /10'}</th>
-              <th style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'نسبة ممتاز + جيد جداً' : '% excellent + very good'}</th>
+              <th style={{ padding: pad, fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'المحطة' : 'Station'}</th>
+              <th style={{ padding: pad, fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'عدد الموظفين' : 'Employees'}</th>
+              <th style={{ padding: pad, fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'عدد المقيّمين' : 'Raters'}</th>
+              <th style={{ padding: pad, fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'متوسط التقييم من ١٠' : 'Avg score /10'}</th>
+              <th style={{ padding: pad, fontWeight: 700, color: 'var(--text-2)' }}>{isAr ? 'نسبة ممتاز + جيد جداً' : '% excellent + very good'}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map(r => (
               <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
-                <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--text-1)' }}>{r.name}</td>
-                <td style={{ padding: '10px 14px', fontFamily: MONO, color: 'var(--text-2)' }}>{r.empCount}</td>
-                <td style={{ padding: '10px 14px', fontFamily: MONO, color: 'var(--text-2)' }}>{r.raterCount}</td>
-                <td style={{ padding: '10px 14px', fontFamily: MONO, fontWeight: 700, color: 'var(--text-1)' }}>{r.avg != null ? (r.avg / 10).toFixed(1) : '—'}</td>
-                <td style={{ padding: '10px 14px', fontFamily: MONO, color: 'var(--text-1)' }}>{r.goodPct != null ? `${r.goodPct}%` : '—'}</td>
+                <td style={{ padding: pad, fontWeight: 600, color: 'var(--text-1)' }}>{r.name}</td>
+                <td style={{ padding: pad, fontFamily: MONO, color: 'var(--text-2)' }}>{r.empCount}</td>
+                <td style={{ padding: pad, fontFamily: MONO, color: 'var(--text-2)' }}>{r.raterCount}</td>
+                <td style={{ padding: pad, fontFamily: MONO, fontWeight: 700, color: 'var(--text-1)' }}>{r.avg != null ? (r.avg / 10).toFixed(1) : '—'}</td>
+                <td style={{ padding: pad, fontFamily: MONO, color: 'var(--text-1)' }}>{r.goodPct != null ? `${r.goodPct}%` : '—'}</td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'لا توجد بيانات' : 'No data'}</td></tr>
+              <tr><td colSpan={5} style={{ padding: large ? '36px' : '20px', textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'لا توجد بيانات' : 'No data'}</td></tr>
             )}
           </tbody>
         </table>
@@ -187,9 +195,6 @@ const STN_CRITERIA = [
   { key: 'stn_appear',    ar: 'المظهر الخارجي للمحطة',                en: 'Station Appearance',                weight: 5  },
 ]
 
-const SCORE_LABELS    = ['', 'ضعيف', 'مقبول', 'جيد', 'جيد جداً', 'ممتاز']
-const SCORE_LABELS_EN = ['', 'Poor',  'Acceptable', 'Good', 'Very Good', 'Excellent']
-const SCORE_COLORS    = ['', '#DC2626', '#D97706', '#2563EB', '#059669', '#7C3AED']
 
 const ROLE_LABELS = {
   general_admin:    'أدمن عام',
@@ -226,7 +231,7 @@ const ROLE_LABELS_EN = {
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
 const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
-function StationPicker({ stations, value, onChange, isAr, counts }) {
+function StationPicker({ stations, value, onChange, isAr, counts, large = false }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const ref = useRef(null)
@@ -243,14 +248,16 @@ function StationPicker({ stations, value, onChange, isAr, counts }) {
   return (
     <div ref={ref} style={{ position: 'relative', flex: '0 0 auto' }}>
       <button type="button" onClick={() => setOpen(o => !o)}
-        style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--card)', color:'var(--text-1)', fontSize:'0.82rem', fontFamily:'inherit', cursor:'pointer', minWidth:160, justifyContent:'space-between' }}>
+        style={large
+          ? { display:'flex', alignItems:'center', gap:10, height:46, padding:'0 16px', borderRadius:12, border:'1px solid var(--border-2)', background:'var(--card)', color:'var(--text-1)', fontSize:'0.92rem', fontWeight:700, fontFamily:'inherit', cursor:'pointer', minWidth:220, justifyContent:'space-between' }
+          : { display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--card)', color:'var(--text-1)', fontSize:'0.82rem', fontFamily:'inherit', cursor:'pointer', minWidth:160, justifyContent:'space-between' }}>
         <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
           {selected ? (isAr ? selected.name_ar : (selected.name_en || selected.name_ar)) : (isAr ? 'كل المحطات' : 'All Stations')}
         </span>
         <span style={{ fontSize:'0.65rem', color:'var(--text-3)', flexShrink:0 }}>▼</span>
       </button>
       {open && (
-        <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:200, background:'var(--card)', border:'1px solid var(--border)', borderRadius:10, boxShadow:'0 6px 24px rgba(0,0,0,0.12)', minWidth:220, maxWidth:300, overflow:'hidden' }}>
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:200, background:'var(--card)', border:'1px solid var(--border)', borderRadius: large ? 14 : 10, boxShadow:'0 10px 32px rgba(0,0,0,0.16)', minWidth: large ? 280 : 220, maxWidth: large ? 360 : 300, overflow:'hidden', fontSize: large ? '1.08em' : undefined }}>
           <div style={{ padding:'8px 10px', borderBottom:'1px solid var(--border)' }}>
             <input autoFocus value={q} onChange={e => setQ(e.target.value)}
               placeholder={isAr ? 'ابحث عن محطة...' : 'Search station...'}
@@ -494,6 +501,21 @@ function EmployeeEvalModal({ employee, month, year, existing, sourceRole, onClos
   const now = new Date()
   const isCurrentEvalPeriod = month === now.getMonth() + 1 && year === now.getFullYear()
   const readonly = !!existing && !isAdmin && !isCurrentEvalPeriod
+  const desk = useMedia('(min-width: 900px)')
+
+  if (desk) {
+    return (
+      <EvalSheet
+        isAr={isAr} onClose={onClose} accent="#5B5BD6"
+        title={`${isAr ? 'تقييم:' : 'Evaluate:'} ${employee.full_name_ar || employee.full_name}`}
+        sub={`${isAr ? MONTHS_AR[month - 1] : MONTHS_EN[month - 1]} ${year} · ${getJobTitle(employee, isAr)}${sourceRole ? ` · ${isAr ? `كـ${EVAL_SOURCE_LABELS[sourceRole]}` : `as ${EVAL_SOURCE_LABELS_EN[sourceRole]}`}` : ''}`}
+        criteria={EMP_CRITERIA} scores={scores} onScore={(k, v) => setScores(p => ({ ...p, [k]: v }))}
+        notes={notes} onNotes={setNotes} disabled={readonly} readonly={readonly}
+        totalScore={totalScore} allFilled={allFilled} err={err} saving={saving} onSave={handleSave}
+        saveLabel={existing ? (isAr ? 'تحديث التقييم' : 'Update Evaluation') : (isAr ? 'حفظ التقييم' : 'Save Evaluation')}
+      />
+    )
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
@@ -642,6 +664,21 @@ function SupervisorEvalModal({ supervisor, month, year, existing, sourceRole, on
   const supRoleLabel = isAr
     ? (supervisor.role === 'area_supervisor' ? 'مشرف المنطقة' : supervisor.role === 'shift_supervisor' ? 'مشرف الوردية' : 'مشرف المحطة')
     : (supervisor.role === 'area_supervisor' ? 'Area Supervisor' : supervisor.role === 'shift_supervisor' ? 'Shift Supervisor' : 'Station Supervisor')
+  const desk = useMedia('(min-width: 900px)')
+
+  if (desk) {
+    return (
+      <EvalSheet
+        isAr={isAr} onClose={onClose} accent="#7C3AED"
+        title={`${isAr ? 'تقييم:' : 'Evaluate:'} ${supervisor.full_name_ar || supervisor.full_name}`}
+        sub={`${isAr ? MONTHS_AR[month - 1] : MONTHS_EN[month - 1]} ${year} · ${supRoleLabel}${supervisor.station?.name_ar ? ` · ${supervisor.station.name_ar}` : ''}${sourceRole ? ` · ${isAr ? `كـ${SUP_EVAL_LABELS[sourceRole]}` : `as ${SUP_EVAL_LABELS_EN[sourceRole]}`}` : ''}`}
+        criteria={SUP_CRITERIA} scores={scores} onScore={(k, v) => setScores(p => ({ ...p, [k]: v }))}
+        notes={notes} onNotes={setNotes}
+        totalScore={totalScore} allFilled={allFilled} err={err} saving={saving} onSave={handleSave}
+        saveLabel={existing ? (isAr ? 'تحديث التقييم' : 'Update Evaluation') : (isAr ? 'حفظ التقييم' : 'Save Evaluation')}
+      />
+    )
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
@@ -733,6 +770,22 @@ function StationEvalModal({ station, month, year, existing, onClose, onSave, eva
     onSave()
   }
 
+  const desk = useMedia('(min-width: 900px)')
+
+  if (desk) {
+    return (
+      <EvalSheet
+        isAr={isAr} onClose={onClose} accent="#5B5BD6"
+        title={`${isAr ? 'تقييم محطة:' : 'Station Evaluation:'} ${station.name_ar}`}
+        sub={`${isAr ? MONTHS_AR[month - 1] : MONTHS_EN[month - 1]} ${year}`}
+        criteria={STN_CRITERIA} scores={scores} onScore={(k, v) => setScores(p => ({ ...p, [k]: v }))}
+        notes={notes} onNotes={setNotes}
+        totalScore={totalScore} allFilled={allFilled} err={err} saving={saving} onSave={handleSave}
+        saveLabel={existing ? (isAr ? 'تحديث' : 'Update') : (isAr ? 'حفظ التقييم' : 'Save Evaluation')}
+      />
+    )
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '20px', overflowY: 'auto' }}>
       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, width: '100%', maxWidth: 700, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
@@ -793,7 +846,7 @@ function StationEvalModal({ station, month, year, existing, onClose, onSave, eva
 // ══════════════════════════════════════════════════════════════
 // الصفحة الرئيسية
 // ══════════════════════════════════════════════════════════════
-function PrintDropdown({ isAr, onSelect }) {
+function PrintDropdown({ isAr, onSelect, large = false }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useEffect(() => {
@@ -811,10 +864,10 @@ function PrintDropdown({ isAr, onSelect }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button onClick={() => setOpen(p => !p)} style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        padding: '7px 14px', background: '#1C2B4A', color: '#fff',
-        border: 'none', borderRadius: 8, cursor: 'pointer',
-        fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600,
+        display: 'flex', alignItems: 'center', gap: large ? 8 : 6,
+        padding: large ? '0 20px' : '7px 14px', height: large ? 44 : undefined, background: large ? 'var(--accent)' : '#1C2B4A', color: '#fff',
+        border: 'none', borderRadius: large ? 12 : 8, cursor: 'pointer',
+        fontFamily: 'inherit', fontSize: large ? '0.92rem' : '0.75rem', fontWeight: large ? 800 : 600,
       }}>
         <Svg d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" size={13} />
         {isAr ? 'طباعة' : 'Print'}
@@ -824,8 +877,8 @@ function PrintDropdown({ isAr, onSelect }) {
         <div style={{
           position: 'absolute', top: 'calc(100% + 6px)', left: 0,
           background: 'var(--card)', border: '1px solid var(--border)',
-          borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          minWidth: 190, zIndex: 999, overflow: 'hidden',
+          borderRadius: large ? 14 : 10, boxShadow: '0 10px 32px rgba(0,0,0,0.16)',
+          minWidth: large ? 230 : 190, zIndex: 999, overflow: 'hidden', fontSize: large ? '1.1em' : undefined,
         }}>
           {items.map((item, i) => (
             <button key={item.type} onClick={() => { onSelect(item.type); setOpen(false) }} style={{
@@ -848,6 +901,94 @@ function PrintDropdown({ isAr, onSelect }) {
   )
 }
 
+// ══════════════════════════════════════════════════════════════
+// نماذج العرض لنسخة الكمبيوتر (عرض فقط — تُبنى من نفس الحسابات الموجودة أعلاه دون تغيير منطقها)
+// ══════════════════════════════════════════════════════════════
+function buildEmployeeModels({ list, empEvals, isEvalAdmin, myEvalSource, presence, isAr }) {
+  return list.map(emp => {
+    const evRows = empEvals.filter(x => x.employee_id === emp.id)
+    const base = { id: emp.id, name: emp.full_name_ar || '—', title: getJobTitle(emp, isAr), jobNumber: emp.job_number, station: emp.station?.name_ar }
+    if (!isEvalAdmin) {
+      const ev = evRows[0] || null
+      let dispInfo = null
+      if (myEvalSource === DISPATCHER_SOURCE) {
+        const p = presence[emp.id], st = p?.has('station_admin'), sh = p?.has('shift_supervisor')
+        if (st && sh) dispInfo = { locked: true, text: isAr ? 'اكتمل تقييمه من مشرف المحطة ومشرف الوردية — لا يُحتسب تقييمك' : 'Already rated by the station and shift supervisors — your rating is not counted' }
+        else if (!st) dispInfo = { text: isAr ? 'يُحتسب بنسبة مشرف المحطة (35%)' : 'Counts as the station supervisor (35%)' }
+        else dispInfo = { text: isAr ? 'يُحتسب بنسبة مشرف الوردية (25%)' : 'Counts as the shift supervisor (25%)' }
+      }
+      return { ...base, mode: 'single', ev, score: ev ? ev.total_score : null, dispInfo, open: { employee: emp, existing: ev, sourceRole: myEvalSource } }
+    }
+    const { bySource, complete, final, effectiveWeights, dispatcher } = computeFinalScore(evRows)
+    return {
+      ...base, mode: 'multi', score: final, complete, hasStar: complete && final >= STAR_THRESHOLD,
+      ratedCount: Object.keys(bySource).length, totalSources: EVAL_SOURCE_ORDER.length,
+      note: dispatcher && !dispatcher.slot ? (isAr ? 'تقييم مشرف المرحّلين غير محتسب (اكتمل مشرف المحطة والوردية)' : 'Dispatchers supervisor rating not counted (station and shift supervisors both rated)') : null,
+      sources: EVAL_SOURCE_ORDER.map(role => {
+        const r = bySource[role]
+        return {
+          key: role, label: isAr ? EVAL_SOURCE_LABELS[role] : EVAL_SOURCE_LABELS_EN[role], weight: effectiveWeights[role] ?? EVAL_SOURCE_WEIGHTS[role],
+          evaluator: r?.evaluator?.full_name_ar ?? null, score: r ? r.total_score : null, substitute: !!r?.substitute,
+          open: { employee: emp, existing: r || null, sourceRole: r?.substitute ? DISPATCHER_SOURCE : role },
+        }
+      }),
+    }
+  })
+}
+
+function buildSupervisorModels({ list, supEvals, isEvalAdmin, myEvalSourceForSup, isAr }) {
+  return list.map(sup => {
+    const evRows = supEvals.filter(x => x.supervisor_id === sup.id)
+    const roleLabel = sup.role === 'area_supervisor' ? (isAr ? 'مشرف المنطقة' : 'Area Supervisor')
+      : sup.role === 'shift_supervisor' ? (isAr ? 'مشرف وردية' : 'Shift Supervisor')
+      : (isAr ? 'مشرف المحطة' : 'Station Supervisor')
+    const base = { id: sup.id, name: sup.full_name_ar || '—', title: roleLabel, jobNumber: sup.job_number, station: sup.station?.name_ar }
+    if (!isEvalAdmin) {
+      const ev = evRows[0] || null
+      return { ...base, mode: 'single', ev, score: ev ? ev.total_score : null, open: { supervisor: sup, existing: ev, sourceRole: myEvalSourceForSup } }
+    }
+    const sources = supEvalSources(sup.role)
+    const { bySource, complete, final, effectiveWeights } = computeSupFinalScore(sup.role, evRows)
+    return {
+      ...base, mode: 'multi', score: final, complete, hasStar: complete && final >= STAR_THRESHOLD,
+      ratedCount: Object.keys(bySource).length, totalSources: sources.length,
+      sources: sources.map(role => {
+        const r = bySource[role]
+        return {
+          key: role, label: isAr ? SUP_EVAL_LABELS[role] : SUP_EVAL_LABELS_EN[role], weight: effectiveWeights[role] ?? SUP_EVAL_WEIGHTS[role],
+          evaluator: r?.evaluator?.full_name_ar ?? null, score: r ? r.total_score : null,
+          open: { supervisor: sup, existing: r || null, sourceRole: role },
+        }
+      }),
+    }
+  })
+}
+
+const TIER_DEFS = [
+  { key: 'star', ar: 'متميز', en: 'Outstanding' },
+  { key: 'great', ar: 'ممتاز', en: 'Excellent' },
+  { key: 'vgood', ar: 'جيد جداً', en: 'Very good' },
+  { key: 'good', ar: 'جيد', en: 'Good' },
+  { key: 'low', ar: 'يحتاج تحسين', en: 'Needs improvement' },
+]
+
+function summarizeModels(models, multi, isAr) {
+  const rated = models.filter(m => m.score != null)
+  const tiers = TIER_DEFS.map(d => {
+    const matching = rated.filter(m => toneOf(m.score, m.complete !== false).key === d.key)
+    return { key: d.key, label: isAr ? d.ar : d.en, color: toneOf(d.key === 'star' ? 100 : d.key === 'great' ? 90 : d.key === 'vgood' ? 75 : d.key === 'good' ? 60 : 10).color, count: matching.length }
+  })
+  return {
+    total: models.length,
+    evaluated: rated.length,
+    completeCount: multi ? models.filter(m => m.complete).length : null,
+    avg: rated.length ? rated.reduce((a, m) => a + m.score, 0) / rated.length : null,
+    tiers,
+    top: [...rated].sort((a, b) => b.score - a.score).slice(0, 5).map(m => ({ id: m.id, name: m.name, score: m.score })),
+    pending: models.filter(m => m.score == null).map(m => ({ id: m.id, name: m.name, open: m.mode === 'single' && !m.dispInfo?.locked ? m.open : null })),
+  }
+}
+
 export default function EvaluationPage() {
   const { profile, isAdmin, isGeneralAdmin, isAreaSupervisor, allowedStationIds, evaluatesOwnEmployees: isAssistantDirector, supervisedStationIds, grantCap, allowCap, assignedEmployeeIds, isRestricted, jobsFor, customTitle } = useAuth()
   const assignedOnly = grantCap('assigned_evaluate')
@@ -857,6 +998,8 @@ export default function EvaluationPage() {
   const dispatchersOnly = grantCap('evaluation_dispatchers_only')
   const { i18n }   = useTranslation()
   const isAr       = i18n.language === 'ar'
+  const desk       = useMedia('(min-width: 900px)')   // تخطيط الكمبيوتر
+  const wide       = useMedia('(min-width: 1500px)')  // لوحة الملخص الجانبية
   const canEvalEmp = [...ADMIN_ROLE_VALUES,'station_admin','shift_supervisor','area_supervisor'].includes(profile?.role) && allowCap('evaluation_employees_tab')
   const canEvalStn = [...ADMIN_ROLE_VALUES,'station_admin','area_supervisor'].includes(profile?.role) && !dispatchersOnly && allowCap('evaluation_stations_tab')
   // مشرف المحطة/المنطقة يفتح تبويب تقييم المشرفين كمان — بس عشان يقيّم مشرفي الورديات
@@ -1116,10 +1259,164 @@ export default function EvaluationPage() {
     if (!canEvalEmp && !canEvalSup && !canEvalStn) setTab('my_eval')
   }, [canEvalEmp, canEvalSup, canEvalStn])
 
+
+  // ══ نسخة الكمبيوتر (عرض فقط) ══════════════════════════════════
+  const monthLabel = `${isAr ? MONTHS_AR[selMonth - 1] : MONTHS_EN[selMonth - 1]} ${selYear}`
+  const empModels = desk && tab === 'employees' && canEvalEmp
+    ? buildEmployeeModels({ list: filteredEmployees, empEvals, isEvalAdmin, myEvalSource, presence, isAr }) : []
+  const supModels = desk && tab === 'supervisors' && canEvalSup
+    ? buildSupervisorModels({ list: supervisors, supEvals, isEvalAdmin, myEvalSourceForSup, isAr }) : []
+  const empSummary = summarizeModels(empModels, isEvalAdmin, isAr)
+  const supSummary = summarizeModels(supModels, isEvalAdmin, isAr)
+  const deskStns = desk && tab === 'stations' && canEvalStn
+    ? stations.filter(s => !stnSearchQuery || s.name_ar.includes(stnSearchQuery) || (s.name_en || '').toLowerCase().includes(stnSearchQuery.toLowerCase()))
+        .map(stn => ({ stn, ev: stnEvals.find(x => x.station_id === stn.id) || null }))
+    : []
+  const stnRated = stnEvals.filter(e => stations.some(s => s.id === e.station_id))
+  const stnAvg = stnRated.length ? stnRated.reduce((a, e) => a + e.total_score, 0) / stnRated.length : null
+
+  let myData = null
+  if (desk && tab === 'my_eval') {
+    const selfSup = ['shift_supervisor', 'station_admin', 'area_supervisor'].includes(profile?.role)
+    const rows = selfSup ? mySupEvals : myEvals
+    const srcs = selfSup ? supEvalSources(profile?.role) : EVAL_SOURCE_ORDER
+    const weights = selfSup ? SUP_EVAL_WEIGHTS : EVAL_SOURCE_WEIGHTS
+    const labels = selfSup ? (isAr ? SUP_EVAL_LABELS : SUP_EVAL_LABELS_EN) : (isAr ? EVAL_SOURCE_LABELS : EVAL_SOURCE_LABELS_EN)
+    const { bySource, complete, final } = selfSup ? computeSupFinalScore(profile?.role, rows) : computeFinalScore(rows)
+    myData = {
+      hasRows: rows.length > 0, final, complete, monthLabel, ratedCount: Object.keys(bySource).length, totalCount: srcs.length,
+      sources: srcs.map(role => {
+        const ev = bySource[role]
+        return { key: role, label: labels[role], weight: weights[role], evaluator: ev?.evaluator?.full_name_ar ?? null, score: ev ? ev.total_score : null, notes: ev?.notes || null }
+      }),
+    }
+  }
+
+  const amber = '#B45309'
+  let deskStats = []
+  if (tab === 'employees') {
+    const pend = empSummary.total - empSummary.evaluated
+    deskStats = [
+      { label: isAr ? 'مُقيَّم' : 'Evaluated', value: `${empSummary.evaluated}/${empSummary.total}`, hint: empSummary.total ? `${Math.round(empSummary.evaluated / empSummary.total * 100)}%` : undefined },
+      { label: isAr ? 'بانتظار التقييم' : 'Pending', value: pend, color: pend ? amber : undefined },
+      isEvalAdmin ? { label: isAr ? 'مكتمل المصادر' : 'Fully rated', value: empSummary.completeCount, color: '#059669' } : null,
+      { label: isAr ? 'متوسط النتيجة /10' : 'Avg score /10', value: empSummary.avg != null ? (empSummary.avg / 10).toFixed(1) : '—' },
+      { label: isAr ? 'متميزون' : 'Outstanding', value: empSummary.tiers[0].count, color: '#7C3AED' },
+    ].filter(Boolean)
+  } else if (tab === 'supervisors') {
+    const pend = supSummary.total - supSummary.evaluated
+    deskStats = [
+      { label: isAr ? 'مُقيَّم' : 'Evaluated', value: `${supSummary.evaluated}/${supSummary.total}`, hint: supSummary.total ? `${Math.round(supSummary.evaluated / supSummary.total * 100)}%` : undefined },
+      { label: isAr ? 'بانتظار التقييم' : 'Pending', value: pend, color: pend ? amber : undefined },
+      isEvalAdmin ? { label: isAr ? 'مكتمل المصادر' : 'Fully rated', value: supSummary.completeCount, color: '#059669' } : null,
+      { label: isAr ? 'متوسط النتيجة /10' : 'Avg score /10', value: supSummary.avg != null ? (supSummary.avg / 10).toFixed(1) : '—' },
+    ].filter(Boolean)
+  } else if (tab === 'stations') {
+    const done = stations.filter(s => stnEvals.find(ev => ev.station_id === s.id)).length
+    deskStats = [
+      { label: isAr ? 'محطات مُقيَّمة' : 'Evaluated', value: `${done}/${stations.length}` },
+      { label: isAr ? 'بانتظار التقييم' : 'Pending', value: stations.length - done, color: stations.length - done ? amber : undefined },
+      { label: isAr ? 'متوسط النتيجة /10' : 'Avg score /10', value: stnAvg != null ? (stnAvg / 10).toFixed(1) : '—' },
+    ]
+  } else if (tab === 'my_eval' && myData) {
+    deskStats = [
+      { label: isAr ? 'نتيجتك /10' : 'Your score /10', value: myData.final != null ? (myData.final / 10).toFixed(1) : '—', color: myData.final != null ? toneOf(myData.final, myData.complete).color : undefined },
+      { label: isAr ? 'مصادر قيّمتك' : 'Sources rated', value: `${myData.ratedCount}/${myData.totalCount}` },
+    ]
+  }
+
+  const empColumns = EVAL_SOURCE_ORDER.map(r => ({ key: r, label: isAr ? EVAL_SOURCE_LABELS[r] : EVAL_SOURCE_LABELS_EN[r], weight: EVAL_SOURCE_WEIGHTS[r] }))
+  const supColumns = ['assigned_supervisor', 'stations_executive_director'].map(r => ({ key: r, label: isAr ? SUP_EVAL_LABELS[r] : SUP_EVAL_LABELS_EN[r], weight: null }))
+  const deskTabs = TABS.map(t => ({
+    id: t.id, label: isAr ? t.ar : t.en,
+    count: t.id === 'employees' ? employees.length : t.id === 'supervisors' ? supervisors.length : t.id === 'stations' ? stations.length : null,
+  }))
+
+  const deskView = !desk ? null : (
+    <div style={{ maxWidth: 'min(100%, 1560px)', margin: '0 auto', padding: 'clamp(16px, 2vw, 32px)', boxSizing: 'border-box' }}>
+      <PageHeader
+        accent="#5B5BD6"
+        title={isAr ? 'نظام التقييم الوظيفي' : 'Employee Evaluation System'}
+        subtitle={`${monthLabel} — ${isAr ? 'تقييم دوري شهري' : 'Monthly Periodic Evaluation'}`}
+        actions={<>
+          <SelectField value={selMonth} onChange={e => setSelMonth(+e.target.value)} className="evd-select" style={{ minWidth: 130 }}>
+            {MONTHS_AR.map((m, i) => <option key={i} value={i + 1}>{isAr ? m : MONTHS_EN[i]}</option>)}
+          </SelectField>
+          <SelectField value={selYear} onChange={e => setSelYear(+e.target.value)} className="evd-select" style={{ minWidth: 100 }}>
+            {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+          </SelectField>
+          {isAdmin && <PrintDropdown isAr={isAr} onSelect={setPrintModal} large />}
+        </>}
+        stats={deskStats}
+      />
+
+      {TABS.length > 1 && <EvalTabs tabs={deskTabs} tab={tab} onChange={setTab} />}
+
+      {/* ══ تقييم الموظفين ══ */}
+      {tab === 'employees' && canEvalEmp && (
+        <>
+          {empListErr && (
+            <div style={{ padding: '12px 18px', marginBottom: 16, borderRadius: 12, background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', fontSize: '.9rem', fontWeight: 700 }}>{empListErr}</div>
+          )}
+          <Toolbar>
+            <SearchInput value={searchQuery} onChange={setSearchQuery} isAr={isAr} placeholder={isAr ? 'بحث: اسم، رقم وظيفي، محطة...' : 'Search: name, job no., station...'} />
+            {isAssistantDirector && (
+              <Segmented value={onlyMine} onChange={setOnlyMine} options={[[true, isAr ? 'موظفيني' : 'My employees'], [false, isAr ? 'الكل' : 'All']]} />
+            )}
+            {isAdmin && <StationPicker large stations={pickerStations} counts={stationEmpCounts} value={filterStation} onChange={setFilterStation} isAr={isAr} />}
+            {isEvalAdmin && (
+              <button type="button" className="evd-btn evd-btn-ghost" style={{ height: 46 }} onClick={() => setShowStationOverview(v => !v)}>
+                {showStationOverview ? (isAr ? 'إخفاء نظرة عامة' : 'Hide overview') : (isAr ? 'نظرة عامة على المحطات' : 'Stations overview')}
+              </button>
+            )}
+          </Toolbar>
+          {showStationOverview && isEvalAdmin && (
+            <div style={{ marginBottom: 16 }}><StationOverview employees={employees} empEvals={empEvals} stations={stations} isAr={isAr} large /></div>
+          )}
+          {!wide && !loading && empModels.length > 0 && <SummaryPanel summary={empSummary} mode={isEvalAdmin ? 'top' : 'pending'} layout="row" isAr={isAr} onOpen={setEmpModal} />}
+          <div className={`evd-split${wide ? ' evd-side' : ''}`}>
+            <PeopleTable
+              models={empModels} columns={isEvalAdmin ? empColumns : null} isAr={isAr} loading={loading} onOpen={setEmpModal}
+              emptyText={(isShiftSupervisor || assignedOnly)
+                ? (isAr ? 'ما تم تحديد أي موظف لك للتقييم — تواصل مع الإدمن ليحدد لك الموظفين من صفحة تعديل حسابك' : 'No employees have been assigned to you yet — ask an admin to assign them from your user profile')
+                : (isAr ? 'لا يوجد موظفون' : 'No employees')} />
+            {wide && !loading && empModels.length > 0 && <SummaryPanel summary={empSummary} mode={isEvalAdmin ? 'top' : 'pending'} layout="side" sticky={76} isAr={isAr} onOpen={setEmpModal} />}
+          </div>
+        </>
+      )}
+
+      {/* ══ تقييم المشرفين ══ */}
+      {tab === 'supervisors' && canEvalSup && (
+        <>
+          {!wide && !loading && supModels.length > 0 && <SummaryPanel summary={supSummary} mode={isEvalAdmin ? 'top' : 'pending'} layout="row" isAr={isAr} onOpen={setSupModal} />}
+          <div className={`evd-split${wide ? ' evd-side' : ''}`}>
+            <PeopleTable models={supModels} columns={isEvalAdmin ? supColumns : null} isAr={isAr} loading={loading} onOpen={setSupModal} skeleton={3}
+              emptyText={isAr ? 'لا يوجد مشرفون' : 'No supervisors'} />
+            {wide && !loading && supModels.length > 0 && <SummaryPanel summary={supSummary} mode={isEvalAdmin ? 'top' : 'pending'} layout="side" sticky={76} isAr={isAr} onOpen={setSupModal} />}
+          </div>
+        </>
+      )}
+
+      {/* ══ تقييم المحطات ══ */}
+      {tab === 'stations' && canEvalStn && (
+        <>
+          <Toolbar>
+            <SearchInput value={stnSearchQuery} onChange={setStnSearchQuery} isAr={isAr} placeholder={isAr ? 'بحث باسم المحطة...' : 'Search by station name...'} />
+          </Toolbar>
+          <StationCards items={deskStns} isAr={isAr} loading={loading} emptyText={isAr ? 'لا توجد نتائج' : 'No results'} onOpen={setStnModal} />
+        </>
+      )}
+
+      {/* ══ تقييمي ══ */}
+      {tab === 'my_eval' && myData && <MyEvalPanel data={myData} hasRows={myData.hasRows} loading={loading} isAr={isAr} />}
+    </div>
+  )
+
   return (
     <>
     <style>{`
       @keyframes spin { to { transform: rotate(360deg) } }
+      ${DESK_CSS}
       .ev-row { display:flex; flex-direction:row; align-items:center; gap:14px; padding:14px 20px; transition:background 0.1s; direction:ltr; }
       .ev-row:hover { background: var(--surface); }
       .ev-avatar { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.85rem; flex-shrink:0; }
@@ -1144,6 +1441,7 @@ export default function EvaluationPage() {
     `}</style>
     <div dir="rtl" style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }}>
 
+      {desk ? deskView : (<>
       {/* ── رأس الصفحة ── */}
       <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '16px 24px 0' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -1721,6 +2019,7 @@ export default function EvaluationPage() {
           )
         })()}
       </div>
+      </>)}
 
       {/* ── Modals ── */}
       {empModal && (

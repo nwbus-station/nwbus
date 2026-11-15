@@ -13,6 +13,12 @@ import { matchesSearch } from '../utils/digits'
 import { yearsOfService, annualEntitlement, accruedBalance, leaveRemaining } from '../utils/leaveBalance'
 import { NWB_LOGO_SVG } from '../utils/logo'
 import { useAppSettings } from '../context/AppSettingsContext'
+import PageHeader from '../components/shared/PageHeader'
+import Sheet, { useMedia } from '../components/dispatch/Sheet'
+import LeaveTabs from '../components/leave/LeaveTabs'
+import LeaveFilterBar from '../components/leave/LeaveFilterBar'
+import NewLeaveAside from '../components/leave/NewLeaveAside'
+import BalancesPanel from '../components/leave/BalancesPanel'
 
 /* ─── ثوابت ─── */
 const LEAVE_TYPES = [
@@ -173,26 +179,30 @@ const inp = {
   fontFamily: 'inherit', color: 'var(--text-1)', background: 'var(--card)',
   boxSizing: 'border-box', outline: 'none',
 }
+// حقول الكمبيوتر: أكبر وأريح
+const inpDesk = { ...inp, padding: '11px 13px', borderRadius: 10, fontSize: '0.95rem' }
+// يكبّر الخطوط على الكمبيوتر فقط (الجوال كما هو)
+const scaleRem = (rem, desk, k = 1.14) => `${(desk ? rem * k : rem).toFixed(3)}rem`
 
 // عنوان خطوة مرقّمة داخل النموذج
-function Step({ n, title }) {
+function Step({ n, title, desk = false }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-      <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#1C2B4A', color: '#fff', fontSize: '0.74rem', fontWeight: 800, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{n}</span>
-      <span style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--text-1)' }}>{title}</span>
+      <span style={{ width: desk ? 30 : 24, height: desk ? 30 : 24, borderRadius: '50%', background: '#1C2B4A', color: '#fff', fontSize: desk ? '0.86rem' : '0.74rem', fontWeight: 800, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{n}</span>
+      <span style={{ fontWeight: 800, fontSize: desk ? '1.02rem' : '0.88rem', color: 'var(--text-1)' }}>{title}</span>
       <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
     </div>
   )
 }
 
-function Field({ label, children, hint }) {
+function Field({ label, children, hint, desk = false }) {
   return (
-    <div>
-      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: 4 }}>
+    <div style={{ minWidth: 0 }}>
+      <label style={{ display: 'block', fontSize: desk ? '0.82rem' : '0.72rem', fontWeight: 700, color: 'var(--text-2)', marginBottom: desk ? 6 : 4 }}>
         {label}
       </label>
       {children}
-      {hint && <p style={{ margin: '3px 0 0', fontSize: '0.65rem', color: 'var(--text-3)' }}>{hint}</p>}
+      {hint && <p style={{ margin: '4px 0 0', fontSize: desk ? '0.74rem' : '0.65rem', color: 'var(--text-3)' }}>{hint}</p>}
     </div>
   )
 }
@@ -463,7 +473,9 @@ async function findSupervisorIds(stationId, directSupervisorId, employeeId, empl
 /* ══════════════════════════════════════════
    فورم طلب إجازة جديد
 ══════════════════════════════════════════ */
-function NewLeaveForm({ profile, onSaved, isAr = true }) {
+function NewLeaveForm({ profile, onSaved, isAr = true, desk = false }) {
+  const s = r => scaleRem(r, desk)
+  const inpx = desk ? inpDesk : inp
   const empty = {
     leave_type: 'annual', bereavement_rel: 'spouse',
     start_date: todayStr(), end_date: todayStr(), return_date: '', notes: '',
@@ -731,26 +743,49 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
   const relLabel    = form.leave_type === 'bereavement' ? BEREAVEMENT_RELS.find(r => r.id === form.bereavement_rel)?.ar : null
   const compLabel   = form.leave_type === 'compensatory' ? (compReason === 'other' ? compOther.trim() : COMPENSATORY_REASONS.find(r => r.id === compReason)?.ar) : null
 
+  // ملخص الطلب الجانبي (الكمبيوتر): قواعد الطلب بحسب النوع، ومعلومات الرصيد
+  const isCasualForm = form.leave_type === 'casual'
+  const casualOver = isCasualForm && quota.hours > 0 && casualHours > permRemaining + 1e-6
+  const autoApprovedType = NO_APPROVAL_TYPES.includes(form.leave_type)
+  const asideRules = []
+  if (form.leave_type === 'annual') asideRules.push('تُقدَّم قبل بدايتها بـ 10 أيام على الأقل', 'فترتان كحد أقصى في السنة الواحدة')
+  if (form.leave_type === 'compensatory') asideRules.push('تُقدَّم قبل بدايتها بيومين على الأقل')
+  if (maxDays) asideRules.push(`الحد الأقصى لهذه الإجازة ${maxDays} أيام`)
+  if (REASON_TYPES[form.leave_type]) asideRules.push('كتابة السبب إلزامية')
+  if (isCasualForm && quota.hours > 0) asideRules.push(`حدّ الاستئذان ${quota.period === 'year' ? 'السنوي' : 'الشهري'}: ${quota.hours} ساعة لكل موظف`)
+  if (PROOF_TYPES.includes(form.leave_type)) asideRules.push(PROOF_NO_DEADLINE.includes(form.leave_type) ? 'مرفق الإثبات يُرفع في أي وقت على نفس الطلب' : `مرفق الإثبات يُرفع خلال ${PROOF_DAYS} أيام من تاريخ التبليغ`)
+  asideRules.push('لا يُقبل طلب جديد وأنت لديك طلب قيد المراجعة')
+  const asideAnnual = form.leave_type === 'annual' && profile?.hire_date
+    ? { years: yearsOfService(profile.hire_date), entitlement, accrued: accruedBalance(profile.hire_date, entitlement) } : null
+  const asideQuota = isCasualForm && quota.hours > 0
+    ? { hours: quota.hours, period: quota.period, used: permUsed, after: Math.max(0, permRemaining - casualHours), over: casualOver, pct: Math.min(100, ((permUsed + casualHours) / quota.hours) * 100), hhmm: hhmmOf } : null
+  const dpCls = desk
+    ? 'w-full px-3 py-2.5 rounded-lg border border-gray-200 text-base bg-white text-right'
+    : 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white text-right'
+
   return (
-    <form onSubmit={e => { e.preventDefault(); setError(''); setShowConfirm(true) }} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <form onSubmit={e => { e.preventDefault(); setError(''); setShowConfirm(true) }}
+      style={desk ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) clamp(320px, 26vw, 400px)', gap: 24, alignItems: 'start' } : { display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={desk ? { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 18, padding: 'clamp(22px, 2vw, 32px)', display: 'flex', flexDirection: 'column', gap: 26, minWidth: 0 } : { display: 'flex', flexDirection: 'column', gap: 20 }}>
       {error && (
-        <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: '0.82rem' }}>
+        <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: s(0.82) }}>
           {error}
         </div>
       )}
 
       {/* ── اختيار الفئة الرئيسية ── */}
-      <Step n={1} title={isAr ? 'نوع الطلب' : 'Request type'} />
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <Step desk={desk} n={1} title={isAr ? 'نوع الطلب' : 'Request type'} />
+      <div style={desk ? { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 } : { display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {MAIN_CATS.map(cat => {
           const sel = activeCat.id === cat.id
           return (
             <button key={cat.id} type="button"
               onClick={() => set('leave_type', cat.defaultType)}
               style={catTileStyle(sel)}>
-              <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+              <div style={{ fontWeight: 700, fontSize: s(0.85) }}>
                 {isAr ? cat.ar : cat.en}
               </div>
+              {desk && <div style={{ fontSize: s(0.74), fontWeight: 500, opacity: 0.75, marginTop: 5, lineHeight: 1.5 }}>{cat.desc_ar}</div>}
             </button>
           )
         })}
@@ -759,14 +794,14 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
       {/* ── خيارات الإجازة الاضطرارية ── */}
       {activeCat.id === 'emergency' && (
         <div>
-          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 8, letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: s(0.7), fontWeight: 700, color: 'var(--text-3)', marginBottom: 8, letterSpacing: '0.05em' }}>
             {isAr ? 'نوع الإجازة الاضطرارية' : 'Emergency Leave Type'}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {EMERGENCY_TYPES.map(t => (
               <button key={t.id} type="button" onClick={() => set('leave_type', t.id)}
                 style={{
-                  padding: '7px 16px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600,
+                  padding: '7px 16px', borderRadius: 8, fontSize: s(0.8), fontWeight: 600,
                   fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.12s',
                   border: `1.5px solid ${form.leave_type === t.id ? '#1C2B4A' : 'var(--border)'}`,
                   background: form.leave_type === t.id ? '#1C2B4A' : 'var(--card)',
@@ -779,20 +814,20 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
           {/* قرابة الوفاة */}
           {form.leave_type === 'bereavement' && (
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 8, letterSpacing: '0.05em' }}>
+              <div style={{ fontSize: s(0.7), fontWeight: 700, color: 'var(--text-3)', marginBottom: 8, letterSpacing: '0.05em' }}>
                 {isAr ? 'درجة القرابة' : 'Relation'}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {BEREAVEMENT_RELS.map(r => (
                   <button key={r.id} type="button" onClick={() => set('bereavement_rel', r.id)}
                     style={{
-                      padding: '7px 16px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600,
+                      padding: '7px 16px', borderRadius: 8, fontSize: s(0.8), fontWeight: 600,
                       fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.12s',
                       border: `1.5px solid ${form.bereavement_rel === r.id ? '#1C2B4A' : 'var(--border)'}`,
                       background: form.bereavement_rel === r.id ? '#1C2B4A' : 'var(--card)',
                       color: form.bereavement_rel === r.id ? '#fff' : 'var(--text-2)',
                     }}>
-                    {r.ar} <span style={{ opacity: 0.6, fontSize: '0.7rem' }}>({r.days} أيام)</span>
+                    {r.ar} <span style={{ opacity: 0.6, fontSize: s(0.7) }}>({r.days} أيام)</span>
                   </button>
                 ))}
               </div>
@@ -804,14 +839,14 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
       {/* ── خيارات الإجازة التعويضية ── */}
       {activeCat.id === 'compensatory' && (
         <div>
-          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 8, letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: s(0.7), fontWeight: 700, color: 'var(--text-3)', marginBottom: 8, letterSpacing: '0.05em' }}>
             {isAr ? 'سبب الإجازة التعويضية' : 'Reason'}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {COMPENSATORY_REASONS.map(r => (
               <button key={r.id} type="button" onClick={() => setCompReason(r.id)}
                 style={{
-                  padding: '7px 16px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 600,
+                  padding: '7px 16px', borderRadius: 8, fontSize: s(0.8), fontWeight: 600,
                   fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.12s',
                   border: `1.5px solid ${compReason === r.id ? '#1C2B4A' : 'var(--border)'}`,
                   background: compReason === r.id ? '#1C2B4A' : 'var(--card)',
@@ -824,22 +859,22 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
           {compReason === 'other' && (
             <input value={compOther} onChange={e => setCompOther(e.target.value)} maxLength={60}
               placeholder={isAr ? 'اكتب السبب، مثال: راحات رمضان' : 'Type the reason, e.g. Ramadan rests'}
-              style={{ ...inp, marginTop: 10, borderColor: !compOther.trim() ? '#fca5a5' : undefined }} />
+              style={{ ...inpx, marginTop: 10, borderColor: !compOther.trim() ? '#fca5a5' : undefined }} />
           )}
         </div>
       )}
 
       {/* ── معلومات الإجازة السنوية ── */}
-      {activeCat.id === 'annual' && profile?.hire_date && (
+      {activeCat.id === 'annual' && profile?.hire_date && !desk && (
         <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
           <div style={{ flex: 1, padding: '12px 16px', background: 'var(--surface)', textAlign: 'center' }}>
-            <div style={{ fontSize: '0.65rem', color: 'var(--text-3)', marginBottom: 2 }}>{isAr ? 'سنوات الخدمة' : 'Service'}</div>
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-1)' }}>{yearsOfService(profile.hire_date)}</div>
+            <div style={{ fontSize: s(0.65), color: 'var(--text-3)', marginBottom: 2 }}>{isAr ? 'سنوات الخدمة' : 'Service'}</div>
+            <div style={{ fontWeight: 800, fontSize: s(1), color: 'var(--text-1)' }}>{yearsOfService(profile.hire_date)}</div>
           </div>
           <div style={{ width: 1, background: 'var(--border)' }} />
           <div style={{ flex: 1, padding: '12px 16px', background: 'var(--surface)', textAlign: 'center' }}>
-            <div style={{ fontSize: '0.65rem', color: 'var(--text-3)', marginBottom: 2 }}>{isAr ? 'الرصيد السنوي' : 'Entitlement'}</div>
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-1)' }}>{entitlement} {isAr ? 'يوم' : 'd'}</div>
+            <div style={{ fontSize: s(0.65), color: 'var(--text-3)', marginBottom: 2 }}>{isAr ? 'الرصيد السنوي' : 'Entitlement'}</div>
+            <div style={{ fontWeight: 800, fontSize: s(1), color: 'var(--text-1)' }}>{entitlement} {isAr ? 'يوم' : 'd'}</div>
           </div>
         </div>
       )}
@@ -847,7 +882,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
       {/* ── استثناء الأدمن ── */}
       {isAdmin && ['compensatory', 'annual'].includes(form.leave_type) && (
         <button type="button" onClick={() => setBypassDeadline(b => !b)}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${bypassDeadline ? '#dc2626' : 'var(--border)'}`, background: bypassDeadline ? '#fef2f2' : 'var(--surface)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, color: bypassDeadline ? '#dc2626' : 'var(--text-3)', transition: 'all 0.15s', width: '100%' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 8, border: `1.5px solid ${bypassDeadline ? '#dc2626' : 'var(--border)'}`, background: bypassDeadline ? '#fef2f2' : 'var(--surface)', cursor: 'pointer', fontSize: s(0.78), fontWeight: 600, color: bypassDeadline ? '#dc2626' : 'var(--text-3)', transition: 'all 0.15s', width: '100%' }}>
           <div style={{ width: 32, height: 18, borderRadius: 9, background: bypassDeadline ? '#dc2626' : '#d1d5db', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
             <div style={{ position: 'absolute', top: 2, right: bypassDeadline ? 2 : 14, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'right 0.2s' }} />
           </div>
@@ -856,40 +891,40 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
       )}
 
       {/* ── الفترة ── */}
-      <Step n={2} title={form.leave_type === 'casual' ? (isAr ? 'الموعد' : 'Schedule') : (isAr ? 'الفترة' : 'Period')} />
+      <Step desk={desk} n={2} title={form.leave_type === 'casual' ? (isAr ? 'الموعد' : 'Schedule') : (isAr ? 'الفترة' : 'Period')} />
 
       {/* ── التواريخ ── */}
       {form.leave_type === 'casual' ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <Field label={isAr ? 'التاريخ' : 'Date'}>
+          <Field desk={desk} label={isAr ? 'التاريخ' : 'Date'}>
             <DatePicker value={form.start_date} onChange={v => { set('start_date', v); set('end_date', v) }}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white text-right" isAr={true} />
+              className={dpCls} isAr={true} />
           </Field>
-          <Field label={isAr ? 'من الساعة' : 'From'}>
-            <TimePicker value={timeFrom} onChange={setTimeFrom} style={{ ...inp }} />
+          <Field desk={desk} label={isAr ? 'من الساعة' : 'From'}>
+            <TimePicker value={timeFrom} onChange={setTimeFrom} style={{ ...inpx }} />
           </Field>
-          <Field label={isAr ? 'إلى الساعة' : 'To'}>
-            <TimePicker value={timeTo} onChange={setTimeTo} style={{ ...inp }} />
+          <Field desk={desk} label={isAr ? 'إلى الساعة' : 'To'}>
+            <TimePicker value={timeTo} onChange={setTimeTo} style={{ ...inpx }} />
           </Field>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
-          <Field label={isAr ? 'من تاريخ' : 'Start Date'}>
+        <div style={{ display: 'grid', gridTemplateColumns: desk ? '1fr 1fr 1fr 1fr' : '1fr 1fr', gap: 12 }}>
+          <Field desk={desk} label={isAr ? 'من تاريخ' : 'Start Date'}>
             <DatePicker value={form.start_date} onChange={v => set('start_date', v)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white text-right" isAr={true} />
+              className={dpCls} isAr={true} />
           </Field>
-          <Field label={isAr ? 'إلى تاريخ' : 'End Date'}>
+          <Field desk={desk} label={isAr ? 'إلى تاريخ' : 'End Date'}>
             <DatePicker value={form.end_date} onChange={v => set('end_date', v)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white text-right" isAr={true} />
+              className={dpCls} isAr={true} />
           </Field>
-          <Field label={isAr ? 'عدد الأيام' : 'Days'}>
-            <div style={{ ...inp, background: 'var(--surface)', color: days > (maxDays ?? Infinity) ? '#dc2626' : 'var(--text-1)', fontWeight: 800 }}>
+          <Field desk={desk} label={isAr ? 'عدد الأيام' : 'Days'}>
+            <div style={{ ...inpx, background: 'var(--surface)', color: days > (maxDays ?? Infinity) ? '#dc2626' : 'var(--text-1)', fontWeight: 800 }}>
               {days} {isAr ? 'يوم' : 'd'}{maxDays ? ` / ${maxDays}` : ''}
             </div>
           </Field>
-          <Field label={isAr ? 'تاريخ المباشرة' : 'Return Date'}>
+          <Field desk={desk} label={isAr ? 'تاريخ المباشرة' : 'Return Date'}>
             <DatePicker value={form.return_date} onChange={v => set('return_date', v)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white text-right" isAr={true} />
+              className={dpCls} isAr={true} />
           </Field>
         </div>
       )}
@@ -901,17 +936,17 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
         const pct = quota.hours > 0 ? Math.min(100, ((permUsed + casualHours) / quota.hours) * 100) : 0
         const mini = (l, v, c) => (
           <div style={{ textAlign: 'center', minWidth: 78 }}>
-            <div style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontWeight: 800, fontSize: '1.15rem', color: c || 'var(--text-1)', letterSpacing: '0.04em' }} dir="ltr">{v}</div>
-            <div style={{ fontSize: '0.62rem', color: 'var(--text-3)', fontWeight: 700 }}>{l}</div>
+            <div style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontWeight: 800, fontSize: s(1.15), color: c || 'var(--text-1)', letterSpacing: '0.04em' }} dir="ltr">{v}</div>
+            <div style={{ fontSize: s(0.62), color: 'var(--text-3)', fontWeight: 700 }}>{l}</div>
           </div>
         )
         return (
           <div style={{ border: `1.5px solid ${over ? '#fca5a5' : 'var(--border)'}`, borderRadius: 12, background: over ? '#fff7f7' : 'var(--surface)', padding: '14px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
               <div style={{ textAlign: 'center', minWidth: 130 }}>
-                <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'المدة المطلوبة' : 'Requested'}</div>
-                <div style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontWeight: 800, fontSize: '2.1rem', color: over ? '#dc2626' : 'var(--text-1)', letterSpacing: '0.05em', lineHeight: 1.1 }} dir="ltr">{hhmmOf(casualHours)}</div>
-                <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'ساعة : دقيقة' : 'hh : mm'}</div>
+                <div style={{ fontSize: s(0.66), color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'المدة المطلوبة' : 'Requested'}</div>
+                <div style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontWeight: 800, fontSize: s(2.1), color: over ? '#dc2626' : 'var(--text-1)', letterSpacing: '0.05em', lineHeight: 1.1 }} dir="ltr">{hhmmOf(casualHours)}</div>
+                <div style={{ fontSize: s(0.64), color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'ساعة : دقيقة' : 'hh : mm'}</div>
               </div>
               {quota.hours > 0 && (
                 <>
@@ -933,87 +968,97 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
         )
       })()}
 
-      <Step n={3} title={isAr ? 'التفاصيل' : 'Details'} />
+      <Step desk={desk} n={3} title={isAr ? 'التفاصيل' : 'Details'} />
 
       {/* مرفق الإثبات */}
       {PROOF_TYPES.includes(form.leave_type) && (
-        <Field label={isAr ? 'مرفق الإثبات' : 'Proof Attachment'}
+        <Field desk={desk} label={isAr ? 'مرفق الإثبات' : 'Proof Attachment'}
           hint={PROOF_NO_DEADLINE.includes(form.leave_type)
             ? (isAr ? 'يمكن رفعه الآن أو لاحقاً على نفس الطلب' : 'Can be uploaded now or later on the same request')
             : (isAr ? `يمكن رفعه الآن أو خلال ${PROOF_DAYS} أيام من تاريخ التبليغ` : `Can upload now or within ${PROOF_DAYS} days`)}>
           <input key={form.leave_type} type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
             onChange={e => setProofFile(e.target.files?.[0] ?? null)}
-            style={{ ...inp, padding: '7px 10px', cursor: 'pointer' }} />
+            style={{ ...inpx, padding: '7px 10px', cursor: 'pointer' }} />
           {proofFile && (
-            <p style={{ margin: '4px 0 0', fontSize: '0.7rem', color: 'var(--text-2)', fontWeight: 600 }}>✓ {proofFile.name}</p>
+            <p style={{ margin: '4px 0 0', fontSize: s(0.7), color: 'var(--text-2)', fontWeight: 600 }}>✓ {proofFile.name}</p>
           )}
         </Field>
       )}
 
       {/* ملاحظات */}
-      <Field label={REASON_TYPES[form.leave_type] ? (isAr ? `${REASON_TYPES[form.leave_type].label} *` : `${REASON_TYPES[form.leave_type].labelEn} *`) : (isAr ? 'ملاحظات' : 'Notes')}>
-        <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)}
-          style={{ ...inp, resize: 'none', borderColor: REASON_TYPES[form.leave_type] && !form.notes?.trim() ? '#fca5a5' : undefined }}
+      <Field desk={desk} label={REASON_TYPES[form.leave_type] ? (isAr ? `${REASON_TYPES[form.leave_type].label} *` : `${REASON_TYPES[form.leave_type].labelEn} *`) : (isAr ? 'ملاحظات' : 'Notes')}>
+        <textarea rows={desk ? 3 : 2} value={form.notes} onChange={e => set('notes', e.target.value)}
+          style={{ ...inpx, resize: 'none', borderColor: REASON_TYPES[form.leave_type] && !form.notes?.trim() ? '#fca5a5' : undefined }}
           placeholder={REASON_TYPES[form.leave_type] ? (isAr ? REASON_TYPES[form.leave_type].ph : 'Enter reason (required)...') : (isAr ? 'أي تفاصيل إضافية...' : 'Any additional details...')} />
       </Field>
 
-      <button type="submit"
-        style={{ padding: '13px 32px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.92rem', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>
-        {form.leave_type === 'casual' ? (isAr ? 'رفع طلب' : 'Submit Request') : (isAr ? 'رفع طلب الإجازة' : 'Submit Leave Request')}
-      </button>
+      {!desk && (
+        <button type="submit"
+          style={{ padding: '13px 32px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: s(0.92), cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>
+          {form.leave_type === 'casual' ? (isAr ? 'رفع طلب' : 'Submit Request') : (isAr ? 'رفع طلب الإجازة' : 'Submit Leave Request')}
+        </button>
+      )}
+      </div>
+
+      {desk && (
+        <NewLeaveAside
+          profile={profile}
+          typeLabel={typeLabel + (relLabel ? ` — ${relLabel}` : '') + (compLabel ? ` — ${compLabel}` : '')}
+          isCasual={isCasualForm}
+          startDate={form.start_date} endDate={form.end_date} returnDate={form.return_date}
+          timeFrom={timeFrom} timeTo={timeTo}
+          durationValue={isCasualForm ? hhmmOf(casualHours) : String(days)}
+          durationUnit={isCasualForm ? 'ساعة : دقيقة' : (days === 1 ? 'يوم' : 'أيام')}
+          durationMax={!isCasualForm && maxDays ? maxDays : null}
+          over={isCasualForm ? casualOver : !!(maxDays && days > maxDays)}
+          annual={asideAnnual} quota={asideQuota} rules={asideRules}
+          autoApproved={autoApprovedType}
+          submitLabel={form.leave_type === 'casual' ? 'رفع طلب الاستئذان' : 'رفع طلب الإجازة'}
+        />
+      )}
 
       {/* ── نافذة تأكيد الطلب ── */}
       {showConfirm && (
-        <div onClick={e => { if (e.target === e.currentTarget) setShowConfirm(false) }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(2px)' }}>
-          <div style={{ background: 'var(--card, #fff)', borderRadius: 12, boxShadow: '0 4px 32px rgba(0,0,0,0.14)', width: '100%', maxWidth: 400, direction: 'rtl', overflow: 'hidden' }}>
-
-            {/* رأس */}
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{form.leave_type === 'casual' ? (isAr ? 'تأكيد الطلب' : 'Confirm Request') : (isAr ? 'تأكيد طلب الإجازة' : 'Confirm Leave Request')}</span>
-              <button onClick={() => setShowConfirm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: '1.1rem', lineHeight: 1, padding: 0, fontFamily: 'inherit' }}>✕</button>
-            </div>
-
-            {/* تفاصيل الطلب */}
-            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                { label: isAr ? 'الاسم' : 'Name', value: profile?.full_name_ar ?? '—' },
-                { label: isAr ? 'المحطة' : 'Station', value: profile?.station?.name_ar ?? profile?.station_name ?? '—' },
-                { label: isAr ? 'الوظيفة' : 'Job Title', value: profile?.job_title ?? '—' },
-                { label: form.leave_type === 'casual' ? (isAr ? 'نوع الطلب' : 'Request Type') : (isAr ? 'نوع الإجازة' : 'Leave Type'), value: typeLabel + (relLabel ? ` — ${relLabel}` : '') + (compLabel ? ` — ${compLabel}` : '') },
-                form.leave_type === 'casual'
-                  ? { label: isAr ? 'المدة' : 'Duration', value: formatHoursAr(casualHours) }
-                  : { label: isAr ? 'الفترة' : 'Period', value: `${form.start_date} ← ${form.end_date} (${days} ${isAr ? 'يوم' : 'days'})` },
-                form.return_date && form.leave_type !== 'casual'
-                  ? { label: isAr ? 'تاريخ المباشرة' : 'Return', value: form.return_date }
-                  : null,
-                form.notes?.trim()
-                  ? { label: REASON_TYPES[form.leave_type] ? (isAr ? 'السبب' : 'Reason') : (isAr ? 'ملاحظات' : 'Notes'), value: form.notes }
-                  : null,
-              ].filter(Boolean).map((row, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, fontSize: '0.83rem' }}>
-                  <span style={{ color: 'var(--text-3)', flexShrink: 0 }}>{row.label}</span>
-                  <span style={{ color: 'var(--text-1)', fontWeight: 600, textAlign: 'left' }}>{row.value}</span>
-                </div>
-              ))}
-
-              {error && (
-                <div style={{ padding: '9px 12px', borderRadius: 7, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: '0.78rem' }}>{error}</div>
-              )}
-            </div>
-
-            {/* أزرار */}
-            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowConfirm(false)} style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+        <Sheet variant="modal" width={520} accent="#1C2B4A" isAr={isAr} onClose={() => setShowConfirm(false)}
+          title={form.leave_type === 'casual' ? (isAr ? 'تأكيد الطلب' : 'Confirm Request') : (isAr ? 'تأكيد طلب الإجازة' : 'Confirm Leave Request')}
+          sub={isAr ? 'راجع البيانات قبل الرفع' : 'Review the details before submitting'}
+          footer={(
+            <>
+              <button type="button" onClick={() => setShowConfirm(false)} style={{ padding: '10px 22px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-2)', fontWeight: 700, fontSize: s(0.88), cursor: 'pointer', fontFamily: 'inherit' }}>
                 {isAr ? 'تعديل' : 'Edit'}
               </button>
-              <button onClick={async () => { await handleSubmit({ preventDefault: () => {} }); setShowConfirm(false) }} disabled={saving}
-                style={{ padding: '8px 24px', borderRadius: 8, border: '1.5px solid var(--text-1)', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>
+              <button type="button" onClick={async () => { await handleSubmit({ preventDefault: () => {} }); setShowConfirm(false) }} disabled={saving}
+                style={{ padding: '10px 28px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: s(0.88), cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>
                 {saving ? (isAr ? 'جارٍ الإرسال...' : 'Submitting...') : (isAr ? 'تأكيد الرفع' : 'Confirm')}
               </button>
-            </div>
+            </>
+          )}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {[
+              { label: isAr ? 'الاسم' : 'Name', value: profile?.full_name_ar ?? '—' },
+              { label: isAr ? 'المحطة' : 'Station', value: profile?.station?.name_ar ?? profile?.station_name ?? '—' },
+              { label: isAr ? 'الوظيفة' : 'Job Title', value: profile?.job_title ?? '—' },
+              { label: form.leave_type === 'casual' ? (isAr ? 'نوع الطلب' : 'Request Type') : (isAr ? 'نوع الإجازة' : 'Leave Type'), value: typeLabel + (relLabel ? ` — ${relLabel}` : '') + (compLabel ? ` — ${compLabel}` : '') },
+              form.leave_type === 'casual'
+                ? { label: isAr ? 'المدة' : 'Duration', value: formatHoursAr(casualHours) }
+                : { label: isAr ? 'الفترة' : 'Period', value: `${form.start_date} ← ${form.end_date} (${days} ${isAr ? 'يوم' : 'days'})` },
+              form.return_date && form.leave_type !== 'casual'
+                ? { label: isAr ? 'تاريخ المباشرة' : 'Return', value: form.return_date }
+                : null,
+              form.notes?.trim()
+                ? { label: REASON_TYPES[form.leave_type] ? (isAr ? 'السبب' : 'Reason') : (isAr ? 'ملاحظات' : 'Notes'), value: form.notes }
+                : null,
+            ].filter(Boolean).map((row, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, fontSize: s(0.88), padding: '11px 0', borderTop: i ? '1px solid var(--border)' : 'none' }}>
+                <span style={{ color: 'var(--text-3)', flexShrink: 0 }}>{row.label}</span>
+                <span style={{ color: 'var(--text-1)', fontWeight: 700, textAlign: 'end', minWidth: 0, wordBreak: 'break-word' }}>{row.value}</span>
+              </div>
+            ))}
+            {error && (
+              <div style={{ marginTop: 10, padding: '9px 12px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: s(0.8) }}>{error}</div>
+            )}
           </div>
-        </div>
+        </Sheet>
       )}
     </form>
   )
@@ -1024,7 +1069,7 @@ function NewLeaveForm({ profile, onSaved, isAr = true }) {
 ══════════════════════════════════════════ */
 // نافذة «سجل الموظف»: كم مرة استأذن وأخذ إجازة وقدّم طلباً
 // بطاقة الأدمن: حدّ ساعات الاستئذان لكل الموظفين (شهرياً أو سنوياً)
-function PermissionQuotaCard({ isAr = true }) {
+function PermissionQuotaCard({ isAr = true, stacked = false }) {
   const { settings, saveSetting } = useAppSettings()
   const cur = readQuota(settings)
   const [hours, setHours] = useState(String(cur.hours || ''))
@@ -1038,6 +1083,34 @@ function PermissionQuotaCard({ isAr = true }) {
     await saveSetting('leave_permission_period', period)
     setHours(h ? String(h) : ''); setMsg(isAr ? 'تم الحفظ' : 'Saved'); setTimeout(() => setMsg(''), 2500)
   }
+  const periodBtns = [['month', isAr ? 'شهرياً' : 'per month'], ['year', isAr ? 'سنوياً' : 'per year']].map(([k, l]) => (
+    <button key={k} type="button" onClick={() => setPeriod(k)} style={{
+      padding: stacked ? '9px 16px' : '7px 16px', borderRadius: 8, fontSize: stacked ? '0.88rem' : '0.8rem', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', flex: stacked ? 1 : undefined,
+      border: `1.5px solid ${period === k ? '#1C2B4A' : 'var(--border)'}`, background: period === k ? '#1C2B4A' : 'var(--card)', color: period === k ? '#fff' : 'var(--text-2)',
+    }}>{l}</button>
+  ))
+  if (stacked) {
+    return (
+      <section style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+          <div style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-1)' }}>{isAr ? 'حدّ ساعات الاستئذان' : 'Permission hours limit'}</div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: 3, lineHeight: 1.6 }}>{isAr ? 'لكل الموظفين — اتركه فارغاً أو 0 لإلغاء الحد' : 'All employees — leave empty or 0 for no limit'}</div>
+        </div>
+        <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input type="number" lang="en" min="0" step="0.25" value={hours} onChange={e => setHours(e.target.value)} placeholder="0"
+              style={{ ...inpDesk, flex: 1, textAlign: 'center', fontWeight: 800, fontSize: '1.3rem' }} />
+            <span style={{ fontSize: '0.95rem', color: 'var(--text-2)', fontWeight: 700 }}>{isAr ? 'ساعة' : 'hours'}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>{periodBtns}</div>
+          <button type="button" onClick={save} disabled={!dirty} style={{ padding: '12px 22px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.92rem', cursor: dirty ? 'pointer' : 'default', fontFamily: 'inherit', opacity: dirty ? 1 : 0.4 }}>
+            {isAr ? 'حفظ الحد' : 'Save'}
+          </button>
+          {msg && <span style={{ fontSize: '0.84rem', color: '#15803d', fontWeight: 700 }}>{msg}</span>}
+        </div>
+      </section>
+    )
+  }
   return (
     <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
       <div style={{ minWidth: 190 }}>
@@ -1047,14 +1120,7 @@ function PermissionQuotaCard({ isAr = true }) {
       <input type="number" min="0" step="0.25" value={hours} onChange={e => setHours(e.target.value)} placeholder="0"
         style={{ ...inp, width: 110, textAlign: 'center', fontWeight: 800 }} />
       <span style={{ fontSize: '0.8rem', color: 'var(--text-2)', fontWeight: 600 }}>{isAr ? 'ساعة' : 'hours'}</span>
-      <div style={{ display: 'flex', gap: 6 }}>
-        {[['month', isAr ? 'شهرياً' : 'per month'], ['year', isAr ? 'سنوياً' : 'per year']].map(([k, l]) => (
-          <button key={k} type="button" onClick={() => setPeriod(k)} style={{
-            padding: '7px 16px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-            border: `1.5px solid ${period === k ? '#1C2B4A' : 'var(--border)'}`, background: period === k ? '#1C2B4A' : 'var(--card)', color: period === k ? '#fff' : 'var(--text-2)',
-          }}>{l}</button>
-        ))}
-      </div>
+      <div style={{ display: 'flex', gap: 6 }}>{periodBtns}</div>
       <button type="button" onClick={save} disabled={!dirty} style={{ padding: '8px 22px', borderRadius: 8, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', opacity: dirty ? 1 : 0.4 }}>
         {isAr ? 'حفظ' : 'Save'}
       </button>
@@ -1064,6 +1130,8 @@ function PermissionQuotaCard({ isAr = true }) {
 }
 
 function EmployeeStatsModal({ leave, onClose, isAr = true }) {
+  const desk = useMedia('(min-width: 900px)')
+  const s = r => scaleRem(r, desk, 1.1)
   const [stats, setStats] = useState(null)
   const { settings } = useAppSettings()
   const quota = readQuota(settings)
@@ -1072,9 +1140,9 @@ function EmployeeStatsModal({ leave, onClose, isAr = true }) {
   const mono = { fontFamily: 'ui-monospace, Menlo, Consolas, monospace', letterSpacing: '0.03em' }
   const tile = (title, val, sub, tone) => (
     <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)', borderTop: `3px solid ${tone}` }}>
-      <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', fontWeight: 700 }}>{title}</div>
-      <div style={{ ...mono, fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.2, marginTop: 2 }} dir="ltr">{val}</div>
-      {sub != null && <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', marginTop: 2, fontWeight: 600 }}>{sub}</div>}
+      <div style={{ fontSize: s(0.66), color: 'var(--text-3)', fontWeight: 700 }}>{title}</div>
+      <div style={{ ...mono, fontSize: s(1.65), fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.2, marginTop: 2 }} dir="ltr">{val}</div>
+      {sub != null && <div style={{ fontSize: s(0.64), color: 'var(--text-3)', marginTop: 2, fontWeight: 600 }}>{sub}</div>}
     </div>
   )
   // استخدام حدّ الاستئذان في الفترة الحالية (مقبولة + قيد المراجعة)
@@ -1082,8 +1150,8 @@ function EmployeeStatsModal({ leave, onClose, isAr = true }) {
   const permUsed = (stats?.rows ?? []).filter(r => r.leave_type === 'casual' && ['approved', 'pending'].includes(r.status) && r.start_date >= qb.from && r.start_date <= qb.to)
     .reduce((a, r) => a + (Number(r.days_count) || 0) * 24, 0)
   const pct = quota.hours > 0 ? Math.min(100, (permUsed / quota.hours) * 100) : 0
-  const th = (c, extra = {}) => ({ padding: '7px 8px', color: '#fff', fontSize: '0.68rem', fontWeight: 700, textAlign: 'center', background: c, ...extra })
-  const td = (extra = {}) => ({ padding: '9px 8px', textAlign: 'center', fontSize: '0.84rem', borderTop: '1px solid var(--border)', ...mono, ...extra })
+  const th = (c, extra = {}) => ({ padding: '7px 8px', color: '#fff', fontSize: s(0.68), fontWeight: 700, textAlign: 'center', background: c, ...extra })
+  const td = (extra = {}) => ({ padding: '9px 8px', textAlign: 'center', fontSize: s(0.84), borderTop: '1px solid var(--border)', ...mono, ...extra })
   const rowOf = (name, b) => (
     <tr key={name}>
       <td style={td({ textAlign: 'right', fontFamily: 'inherit', fontWeight: 800, background: 'var(--surface)' })}>{name}</td>
@@ -1095,24 +1163,16 @@ function EmployeeStatsModal({ leave, onClose, isAr = true }) {
   const ST_COL = { approved: ['#15803d', '#dcfce7', 'مقبولة'], rejected: ['#b91c1c', '#fee2e2', 'مرفوضة'], pending: ['#b45309', '#fef3c7', 'قيد المراجعة'] }
   const initial = String(leave.employee_name || '?').trim().charAt(0).toUpperCase()
   return (
-    <div onClick={e => { if (e.target === e.currentTarget) onClose() }} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
-      <div dir={isAr ? 'rtl' : 'ltr'} style={{ background: 'var(--card, #fff)', borderRadius: 16, width: '100%', maxWidth: 740, maxHeight: '92vh', overflow: 'auto', boxShadow: '0 12px 50px rgba(0,0,0,0.28)' }}>
-        {/* الرأس */}
-        <div style={{ padding: '16px 22px', display: 'flex', alignItems: 'center', gap: 14, background: '#1C2B4A', color: '#fff', borderRadius: '16px 16px 0 0' }}>
-          <span style={{ width: 44, height: 44, borderRadius: '50%', background: '#EE712D', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '1.15rem', flexShrink: 0 }}>{initial}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: '1.02rem' }}>{leave.employee_name}</div>
-            <div style={{ fontSize: '0.74rem', opacity: 0.8, marginTop: 2 }}>{[leave.job_title, isAr ? leave.station?.name_ar : leave.station?.name_en].filter(Boolean).join(' · ') || (isAr ? 'سجل الإجازات والاستئذان' : 'Leave & permission record')}</div>
-          </div>
-          <button onClick={onClose} aria-label="close" style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', color: '#fff', fontSize: '1rem', fontFamily: 'inherit' }}>✕</button>
-        </div>
-
-        <div style={{ padding: '18px 22px 22px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <Sheet variant="modal" width={860} accent="#1C2B4A" isAr={isAr} onClose={onClose}
+      icon={<span style={{ fontWeight: 800, fontSize: s(1.1) }}>{initial}</span>}
+      title={leave.employee_name}
+      sub={[leave.job_title, isAr ? leave.station?.name_ar : leave.station?.name_en].filter(Boolean).join(' · ') || (isAr ? 'سجل الإجازات والاستئذان' : 'Leave & permission record')}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {!stats ? <div style={{ textAlign: 'center', color: 'var(--text-3)', padding: 30 }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div> : (
             <>
               {/* ملخص هذا العام */}
               <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>{isAr ? `ملخص ${stats.year}` : `Summary ${stats.year}`}</div>
+                <div style={{ fontSize: s(0.78), fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>{isAr ? `ملخص ${stats.year}` : `Summary ${stats.year}`}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 10 }}>
                   {tile(isAr ? 'إجمالي الطلبات' : 'All requests', String(stats.yr.total).padStart(2, '0'), stats.yr.pending ? `${stats.yr.pending} ${isAr ? 'قيد المراجعة' : 'pending'}` : null, '#1C2B4A')}
                   {tile(isAr ? 'الاستئذان المقبول' : 'Permission time', hhmmOf(stats.yr.permHours), `${stats.yr.permOk} ${isAr ? 'مرة من' : 'of'} ${stats.yr.permReq}`, '#7c3aed')}
@@ -1125,13 +1185,13 @@ function EmployeeStatsModal({ leave, onClose, isAr = true }) {
               {quota.hours > 0 && (
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', background: 'var(--surface)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? `حدّ الاستئذان ${quota.period === 'year' ? 'السنوي' : 'الشهري'} (${qb.label})` : 'Permission limit'}</span>
-                    <span style={{ ...mono, fontWeight: 800, fontSize: '0.95rem', color: pct >= 100 ? '#dc2626' : 'var(--text-1)' }} dir="ltr">{hhmmOf(permUsed)} / {hhmmOf(quota.hours)}</span>
+                    <span style={{ fontSize: s(0.78), fontWeight: 800, color: 'var(--text-1)' }}>{isAr ? `حدّ الاستئذان ${quota.period === 'year' ? 'السنوي' : 'الشهري'} (${qb.label})` : 'Permission limit'}</span>
+                    <span style={{ ...mono, fontWeight: 800, fontSize: s(0.95), color: pct >= 100 ? '#dc2626' : 'var(--text-1)' }} dir="ltr">{hhmmOf(permUsed)} / {hhmmOf(quota.hours)}</span>
                   </div>
                   <div style={{ marginTop: 8, height: 9, borderRadius: 99, background: 'var(--border)', overflow: 'hidden' }}>
                     <div style={{ width: `${pct}%`, height: '100%', borderRadius: 99, background: pct >= 100 ? '#dc2626' : pct > 80 ? '#d97706' : '#1C2B4A' }} />
                   </div>
-                  <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', marginTop: 5 }}>{isAr ? `المتبقي ${hhmmOf(Math.max(0, quota.hours - permUsed))}` : `Remaining ${hhmmOf(Math.max(0, quota.hours - permUsed))}`}</div>
+                  <div style={{ fontSize: s(0.66), color: 'var(--text-3)', marginTop: 5 }}>{isAr ? `المتبقي ${hhmmOf(Math.max(0, quota.hours - permUsed))}` : `Remaining ${hhmmOf(Math.max(0, quota.hours - permUsed))}`}</div>
                 </div>
               )}
 
@@ -1158,11 +1218,11 @@ function EmployeeStatsModal({ leave, onClose, isAr = true }) {
               {/* حسب النوع */}
               {Object.entries(stats.yr.byType).filter(([, n]) => n > 0).length > 0 && (
                 <div>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>{isAr ? 'الإجازات المقبولة هذا العام حسب النوع' : 'Approved leaves this year by type'}</div>
+                  <div style={{ fontSize: s(0.78), fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>{isAr ? 'الإجازات المقبولة هذا العام حسب النوع' : 'Approved leaves this year by type'}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {Object.entries(stats.yr.byType).filter(([, n]) => n > 0).map(([k, n]) => {
                       const [c, bg] = TYPE_TONE[k] ?? ['#334155', '#e2e8f0']
-                      return <span key={k} style={{ background: bg, color: c, borderRadius: 8, padding: '4px 12px', fontSize: '0.76rem', fontWeight: 800 }}>{LEAVE_TYPES.find(t => t.id === k)?.ar ?? k} <span style={{ ...mono }}>× {n}</span></span>
+                      return <span key={k} style={{ background: bg, color: c, borderRadius: 8, padding: '4px 12px', fontSize: s(0.76), fontWeight: 800 }}>{LEAVE_TYPES.find(t => t.id === k)?.ar ?? k} <span style={{ ...mono }}>× {n}</span></span>
                     })}
                   </div>
                 </div>
@@ -1171,18 +1231,18 @@ function EmployeeStatsModal({ leave, onClose, isAr = true }) {
               {/* آخر الطلبات */}
               {stats.recent?.length > 0 && (
                 <div>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>{isAr ? 'آخر الطلبات' : 'Latest requests'}</div>
+                  <div style={{ fontSize: s(0.78), fontWeight: 800, color: 'var(--text-1)', marginBottom: 8 }}>{isAr ? 'آخر الطلبات' : 'Latest requests'}</div>
                   <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
                     {stats.recent.map((r, i) => {
                       const [c, bg] = TYPE_TONE[r.leave_type] ?? ['#334155', '#e2e8f0']
                       const sc = ST_COL[r.status] ?? ST_COL.pending
                       return (
                         <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderTop: i ? '1px solid var(--border)' : 'none', flexWrap: 'wrap' }}>
-                          <span style={{ background: bg, color: c, borderRadius: 7, padding: '2px 10px', fontSize: '0.74rem', fontWeight: 800, minWidth: 92, textAlign: 'center' }}>{LEAVE_TYPES.find(t => t.id === r.leave_type)?.ar ?? r.leave_type}</span>
-                          <span style={{ ...mono, fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-1)' }}>{r.start_date}</span>
-                          <span style={{ ...mono, fontSize: '0.8rem', color: 'var(--text-2)' }}>{r.leave_type === 'casual' ? hhmmOf((Number(r.days_count) || 0) * 24) : `${Number(r.days_count) || 0} ${isAr ? 'يوم' : 'd'}`}</span>
+                          <span style={{ background: bg, color: c, borderRadius: 7, padding: '2px 10px', fontSize: s(0.74), fontWeight: 800, minWidth: 92, textAlign: 'center' }}>{LEAVE_TYPES.find(t => t.id === r.leave_type)?.ar ?? r.leave_type}</span>
+                          <span style={{ ...mono, fontSize: s(0.8), fontWeight: 700, color: 'var(--text-1)' }}>{r.start_date}</span>
+                          <span style={{ ...mono, fontSize: s(0.8), color: 'var(--text-2)' }}>{r.leave_type === 'casual' ? hhmmOf((Number(r.days_count) || 0) * 24) : `${Number(r.days_count) || 0} ${isAr ? 'يوم' : 'd'}`}</span>
                           <span style={{ flex: 1 }} />
-                          <span style={{ background: sc[1], color: sc[0], borderRadius: 99, padding: '2px 11px', fontSize: '0.7rem', fontWeight: 800 }}>{sc[2]}</span>
+                          <span style={{ background: sc[1], color: sc[0], borderRadius: 99, padding: '2px 11px', fontSize: s(0.7), fontWeight: 800 }}>{sc[2]}</span>
                         </div>
                       )
                     })}
@@ -1192,8 +1252,7 @@ function EmployeeStatsModal({ leave, onClose, isAr = true }) {
             </>
           )}
         </div>
-      </div>
-    </div>
+    </Sheet>
   )
 }
 
@@ -1202,6 +1261,8 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
   const [showNotes, setShowNotes]  = useState(false)
   const [actionNotes, setActionNotes] = useState('')
   const [uploadingProof, setUploadingProof] = useState(false)
+  const desk = useMedia('(min-width: 900px)')
+  const s = r => scaleRem(r, desk)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const proofInputRef = useRef(null)
@@ -1290,8 +1351,8 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
     ]),
   ]
   const dot = st => (st === 'approved' || st === 'done' ? ['#16a34a', '✓'] : st === 'rejected' ? ['#dc2626', '✕'] : ['#d97706', '●'])
-  const lbl = { fontSize: '0.64rem', color: 'var(--text-3)', fontWeight: 700, marginBottom: 4 }
-  const sbtn = { padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }
+  const lbl = { fontSize: s(0.64), color: 'var(--text-3)', fontWeight: 700, marginBottom: 4 }
+  const sbtn = { padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', fontSize: s(0.72), fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }
 
   return (
     <div dir="rtl" style={{
@@ -1303,20 +1364,20 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
       <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 800, fontSize: '0.8rem', color: tone, background: toneBg, borderRadius: 7, padding: '3px 12px' }}>{typeLabel}</span>
-            <span style={{ fontWeight: 800, fontSize: '0.7rem', color: ST.color, background: ST.bg, border: `1px solid ${ST.border}`, borderRadius: 99, padding: '2px 11px' }}>{statusText}</span>
-            <span style={{ fontSize: '0.66rem', color: 'var(--text-3)', fontWeight: 600 }} dir="ltr">#{docNo}</span>
+            <span style={{ fontWeight: 800, fontSize: s(0.8), color: tone, background: toneBg, borderRadius: 7, padding: '3px 12px' }}>{typeLabel}</span>
+            <span style={{ fontWeight: 800, fontSize: s(0.7), color: ST.color, background: ST.bg, border: `1px solid ${ST.border}`, borderRadius: 99, padding: '2px 11px' }}>{statusText}</span>
+            <span style={{ fontSize: s(0.66), color: 'var(--text-3)', fontWeight: 600 }} dir="ltr">#{docNo}</span>
           </div>
-          <div style={{ marginTop: 8, fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-1)' }}>{leave.employee_name}</div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 2 }}>
+          <div style={{ marginTop: 8, fontWeight: 800, fontSize: s(0.95), color: 'var(--text-1)' }}>{leave.employee_name}</div>
+          <div style={{ fontSize: s(0.72), color: 'var(--text-3)', marginTop: 2 }}>
             {[leave.job_title, isAr ? leave.station?.name_ar : leave.station?.name_en].filter(Boolean).join(' · ')}
             {leave.created_at ? `  ·  ${isAr ? 'رُفع' : 'Submitted'} ${fmtDT(leave.created_at)}` : ''}
           </div>
         </div>
         {/* المدة كعدّاد */}
         <div style={{ textAlign: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 18px', minWidth: 110 }}>
-          <div style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontWeight: 800, fontSize: '1.55rem', color: 'var(--text-1)', letterSpacing: '0.04em', lineHeight: 1.15 }} dir="ltr">{durText}</div>
-          <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontWeight: 700 }}>{isCasual ? (isAr ? 'ساعة : دقيقة' : 'hh : mm') : (Number(leave.days_count) === 1 ? (isAr ? 'يوم' : 'day') : (isAr ? 'أيام' : 'days'))}</div>
+          <div style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontWeight: 800, fontSize: s(1.55), color: 'var(--text-1)', letterSpacing: '0.04em', lineHeight: 1.15 }} dir="ltr">{durText}</div>
+          <div style={{ fontSize: s(0.64), color: 'var(--text-3)', fontWeight: 700 }}>{isCasual ? (isAr ? 'ساعة : دقيقة' : 'hh : mm') : (Number(leave.days_count) === 1 ? (isAr ? 'يوم' : 'day') : (isAr ? 'أيام' : 'days'))}</div>
         </div>
       </div>
 
@@ -1324,21 +1385,21 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
       <div style={{ padding: '14px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
         <div>
           <div style={lbl}>{isCasual ? (isAr ? 'الموعد' : 'Time') : (isAr ? 'الفترة' : 'Period')}</div>
-          <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-1)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: s(0.86), fontWeight: 800, color: 'var(--text-1)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>{leave.start_date}</span>
             {!isCasual && <><span style={{ color: 'var(--text-3)' }}>←</span><span>{leave.end_date}</span></>}
           </div>
-          {leave.time_from && leave.time_to && <div style={{ fontSize: '0.74rem', color: 'var(--text-2)', marginTop: 3, fontWeight: 600 }} dir="ltr">{leave.time_from} — {leave.time_to}</div>}
+          {leave.time_from && leave.time_to && <div style={{ fontSize: s(0.74), color: 'var(--text-2)', marginTop: 3, fontWeight: 600 }} dir="ltr">{leave.time_from} — {leave.time_to}</div>}
         </div>
         {!isCasual && leave.return_date && (
-          <div><div style={lbl}>{isAr ? 'تاريخ المباشرة' : 'Return'}</div><div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--text-1)' }}>{leave.return_date}</div></div>
+          <div><div style={lbl}>{isAr ? 'تاريخ المباشرة' : 'Return'}</div><div style={{ fontSize: s(0.86), fontWeight: 800, color: 'var(--text-1)' }}>{leave.return_date}</div></div>
         )}
         {(compLabel || relLabel || leave.notes) && (
           <div style={{ gridColumn: 'span 2', minWidth: 0 }}>
             <div style={lbl}>{REASON_TYPES[leave.leave_type] ? (isAr ? 'السبب' : 'Reason') : (isAr ? 'التفاصيل' : 'Details')}</div>
-            {compLabel && <div style={{ fontSize: '0.8rem', color: 'var(--text-1)', fontWeight: 700 }}>{compLabel}</div>}
-            {relLabel && <div style={{ fontSize: '0.8rem', color: 'var(--text-1)', fontWeight: 700 }}>{relLabel}</div>}
-            {leave.notes && <div style={{ fontSize: '0.78rem', color: 'var(--text-2)', lineHeight: 1.6, wordBreak: 'break-word' }}>{leave.notes}</div>}
+            {compLabel && <div style={{ fontSize: s(0.8), color: 'var(--text-1)', fontWeight: 700 }}>{compLabel}</div>}
+            {relLabel && <div style={{ fontSize: s(0.8), color: 'var(--text-1)', fontWeight: 700 }}>{relLabel}</div>}
+            {leave.notes && <div style={{ fontSize: s(0.78), color: 'var(--text-2)', lineHeight: 1.6, wordBreak: 'break-word' }}>{leave.notes}</div>}
           </div>
         )}
         {needsProof && (
@@ -1352,9 +1413,9 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
                 <button onClick={() => proofInputRef.current?.click()} disabled={uploadingProof} style={{ ...sbtn, opacity: uploadingProof ? 0.6 : 1, color: 'var(--text-1)' }}>
                   {uploadingProof ? (isAr ? 'جارٍ الرفع...' : 'Uploading...') : (isAr ? 'رفع المرفق' : 'Upload Proof')}
                 </button>
-                {hasDeadline && <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', marginTop: 4 }}>{isAr ? `المهلة ${PROOF_DAYS} أيام` : `Deadline: ${PROOF_DAYS} days`}</div>}
+                {hasDeadline && <div style={{ fontSize: s(0.64), color: 'var(--text-3)', marginTop: 4 }}>{isAr ? `المهلة ${PROOF_DAYS} أيام` : `Deadline: ${PROOF_DAYS} days`}</div>}
               </>
-            ) : <span style={{ fontSize: '0.72rem', color: 'var(--text-3)' }}>{isAr ? 'لا يوجد مرفق' : 'No proof'}</span>}
+            ) : <span style={{ fontSize: s(0.72), color: 'var(--text-3)' }}>{isAr ? 'لا يوجد مرفق' : 'No proof'}</span>}
           </div>
         )}
       </div>
@@ -1365,22 +1426,22 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
           <div style={{ minWidth: 200, flex: 1 }}>
             <div style={lbl}>{isAr ? 'آخر طلب سابق' : 'Previous request'}</div>
             {lastPrev ? (
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-1)', fontWeight: 700 }}>
+              <div style={{ fontSize: s(0.78), color: 'var(--text-1)', fontWeight: 700 }}>
                 {LEAVE_TYPES.find(t => t.id === lastPrev.leave_type)?.ar ?? lastPrev.leave_type} · {lastPrev.start_date}
                 {' · '}{lastPrev.leave_type === 'casual' ? hhmmOf((lastPrev.days_count ?? 0) * 24) : `${Number(lastPrev.days_count) || 0} ${isAr ? 'يوم' : 'd'}`}
                 {' · '}<span style={{ color: lastPrev.status === 'approved' ? '#15803d' : lastPrev.status === 'rejected' ? '#dc2626' : '#b45309' }}>{(STATUS_STYLE[lastPrev.status] ?? STATUS_STYLE.pending).ar}</span>
               </div>
-            ) : <div style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>{isAr ? 'لا يوجد طلب سابق' : 'None'}</div>}
+            ) : <div style={{ fontSize: s(0.78), color: 'var(--text-3)' }}>{isAr ? 'لا يوجد طلب سابق' : 'None'}</div>}
           </div>
           <div style={{ display: 'flex', gap: 14 }}>
             {[[isAr ? 'استئذانات' : 'Permissions', yr.permReq], [isAr ? 'إجازات' : 'Leaves', yr.leaveReq], [isAr ? 'مرفوضة' : 'Rejected', yr.rejected], [isAr ? 'الإجمالي' : 'Total', yr.total]].map(([l, n]) => (
               <div key={l} style={{ textAlign: 'center', minWidth: 52 }}>
-                <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-1)' }}>{String(n).padStart(2, '0')}</div>
-                <div style={{ fontSize: '0.62rem', color: 'var(--text-3)', fontWeight: 700 }}>{l}</div>
+                <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontWeight: 800, fontSize: s(1.05), color: 'var(--text-1)' }}>{String(n).padStart(2, '0')}</div>
+                <div style={{ fontSize: s(0.62), color: 'var(--text-3)', fontWeight: 700 }}>{l}</div>
               </div>
             ))}
           </div>
-          <div style={{ fontSize: '0.62rem', color: 'var(--text-3)', fontWeight: 600 }}>{isAr ? `هذا العام ${new Date().getFullYear()}` : `This year`}</div>
+          <div style={{ fontSize: s(0.62), color: 'var(--text-3)', fontWeight: 600 }}>{isAr ? `هذا العام ${new Date().getFullYear()}` : `This year`}</div>
         </div>
       )}
 
@@ -1392,38 +1453,38 @@ function LeaveCard({ leave: rawLeave, profile, onAction, onPrint, onStats, onPro
             return (
               <div key={st.key} style={{ display: 'flex', alignItems: 'flex-start', flex: i === steps.length - 1 ? '0 0 auto' : 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', minWidth: 0 }}>
-                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: c, color: '#fff', fontSize: '0.7rem', fontWeight: 800, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{ic}</span>
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', background: c, color: '#fff', fontSize: s(0.7), fontWeight: 800, display: 'grid', placeItems: 'center', flexShrink: 0 }}>{ic}</span>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-1)' }}>{st.label}</div>
-                    <div style={{ fontSize: '0.66rem', color: st.state === 'pending' ? '#b45309' : 'var(--text-3)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>
+                    <div style={{ fontSize: s(0.7), fontWeight: 800, color: 'var(--text-1)' }}>{st.label}</div>
+                    <div style={{ fontSize: s(0.66), color: st.state === 'pending' ? '#b45309' : 'var(--text-3)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>
                       {st.state === 'pending' ? (isAr ? 'بانتظار الموافقة' : 'Awaiting') : (st.by || '')}
                     </div>
-                    {st.at && st.state !== 'pending' && <div style={{ fontSize: '0.6rem', color: 'var(--text-3)' }}>{fmtDT(st.at)}</div>}
+                    {st.at && st.state !== 'pending' && <div style={{ fontSize: s(0.6), color: 'var(--text-3)' }}>{fmtDT(st.at)}</div>}
                   </div>
                 </div>
                 {i < steps.length - 1 && <div style={{ flex: 1, height: 2, background: st.state === 'pending' ? 'var(--border)' : '#86efac', margin: '10px 10px 0', borderRadius: 2, minWidth: 14 }} />}
               </div>
             )
           })}
-          {autoAppr && <span style={{ marginInlineStart: 'auto', fontSize: '0.66rem', fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 99, padding: '3px 12px' }}>{isAr ? 'اعتماد تلقائي' : 'Auto-approved'}</span>}
+          {autoAppr && <span style={{ marginInlineStart: 'auto', fontSize: s(0.66), fontWeight: 700, color: '#15803d', background: '#dcfce7', borderRadius: 99, padding: '3px 12px' }}>{isAr ? 'اعتماد تلقائي' : 'Auto-approved'}</span>}
         </div>
       </div>
 
       {/* ── الإجراءات ── */}
       <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {canAct && showNotes && (
-          <textarea value={actionNotes} onChange={e => setActionNotes(e.target.value)} placeholder={isAr ? 'ملاحظة (اختياري)...' : 'Note (optional)...'} rows={2} style={{ ...inp, resize: 'none', fontSize: '0.8rem' }} />
+          <textarea value={actionNotes} onChange={e => setActionNotes(e.target.value)} placeholder={isAr ? 'ملاحظة (اختياري)...' : 'Note (optional)...'} rows={2} style={{ ...inp, resize: 'none', fontSize: s(0.8) }} />
         )}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {canAct && (
             <>
-              <button onClick={() => act('approved')} style={{ padding: '8px 26px', borderRadius: 8, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'قبول' : 'Approve'}</button>
-              <button onClick={() => { setShowNotes(true); act('rejected') }} style={{ padding: '8px 22px', borderRadius: 8, border: '1.5px solid #dc2626', background: 'var(--card)', color: '#dc2626', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'رفض' : 'Reject'}</button>
-              <button onClick={() => setShowNotes(v => !v)} title={isAr ? 'إضافة ملاحظة' : 'Add note'} style={{ ...sbtn, fontSize: '0.85rem' }}>✎</button>
+              <button onClick={() => act('approved')} style={{ padding: '8px 26px', borderRadius: 8, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: s(0.82), cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'قبول' : 'Approve'}</button>
+              <button onClick={() => { setShowNotes(true); act('rejected') }} style={{ padding: '8px 22px', borderRadius: 8, border: '1.5px solid #dc2626', background: 'var(--card)', color: '#dc2626', fontWeight: 700, fontSize: s(0.82), cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'رفض' : 'Reject'}</button>
+              <button onClick={() => setShowNotes(v => !v)} title={isAr ? 'إضافة ملاحظة' : 'Add note'} style={sbtn}>{isAr ? 'ملاحظة' : 'Note'}</button>
             </>
           )}
           {!canAct && !isOwn && !inMySupervisedStations && !isAdmin && jobsFor('view').includes(leave.cur_job ?? leave.job_title) && (
-            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 12px' }}>{isAr ? 'اطلاع فقط' : 'View only'}</span>
+            <span style={{ fontSize: s(0.7), fontWeight: 700, color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 12px' }}>{isAr ? 'اطلاع فقط' : 'View only'}</span>
           )}
           {canEditOwn && (
             <>
@@ -1512,6 +1573,11 @@ export default function LeavePage() {
   const [balances, setBalances] = useState([])
   const [loadingBalances, setLoadingBalances] = useState(false)
   const [balanceSearch, setBalanceSearch] = useState('')
+  const [query, setQuery] = useState('')            // بحث بالموظف (عرض فقط — كمبيوتر)
+  const [typeFilter, setTypeFilter] = useState('all') // تصفية بنوع الطلب (عرض فقط — كمبيوتر)
+  const desk = useMedia('(min-width: 900px)')
+  const { settings: appSettings } = useAppSettings()
+  const quotaCfg = readQuota(appSettings)
 
   const visibleTabs = TABS_CFG.filter(t => {
     if (t.adminOnly && !isGeneralAdmin) return false
@@ -1741,66 +1807,109 @@ export default function LeavePage() {
     printLeave(w, leave, emp?.full_name_ar ?? leave.employee_name, stationName, empProfile, usedAnnual, stats)
   }
 
-  const filtered = leaves.filter(l => filterStatus === 'all' || l.status === filterStatus)
+  const qn = desk && tab !== 'mine' ? query.trim() : ''
+  const filtered = leaves.filter(l =>
+    (filterStatus === 'all' || l.status === filterStatus)
+    && (!desk || typeFilter === 'all' || l.leave_type === typeFilter)
+    && (!qn || matchesSearch(l.employee_name, qn) || matchesSearch(l.job_number, qn)))
+  const counts = {
+    all: leaves.length,
+    pending: leaves.filter(l => l.status === 'pending').length,
+    approved: leaves.filter(l => l.status === 'approved').length,
+    rejected: leaves.filter(l => l.status === 'rejected').length,
+  }
+  const hire = profile?.hire_date
+
+  // مؤشرات الترويسة بحسب التبويب
+  let headerStats
+  if (tab === 'new') {
+    headerStats = desk ? [
+      { label: 'سنوات الخدمة', value: hire ? yearsOfService(hire) : '—', hint: 'منذ تاريخ المباشرة', color: '#1d4ed8' },
+      { label: 'الاستحقاق السنوي', value: hire ? annualEntitlement(hire) : '—', hint: 'يوم في السنة' },
+      { label: 'الرصيد المتراكم', value: hire ? accruedBalance(hire, annualEntitlement(hire)).toFixed(1) : '—', hint: 'يوم — قبل خصم المستخدم', color: '#15803d' },
+      { label: 'حدّ الاستئذان', value: quotaCfg.hours > 0 ? quotaCfg.hours : 'بدون', hint: quotaCfg.hours > 0 ? (quotaCfg.period === 'year' ? 'ساعة في السنة' : 'ساعة في الشهر') : 'لا يوجد حد', color: '#7c3aed' },
+    ] : undefined
+  } else if (tab === 'balances') {
+    const ok = !loadingBalances && balances.length > 0
+    const sum = balances.reduce((a, b) => a + (Number(b.remaining) || 0), 0)
+    headerStats = desk ? [
+      { label: 'الموظفون', value: loadingBalances ? '—' : balances.length, hint: 'لديهم رصيد إجازة' },
+      { label: 'نفد رصيدهم', value: loadingBalances ? '—' : balances.filter(b => !(b.remaining > 0)).length, hint: 'المتبقي صفر', color: '#dc2626' },
+      { label: 'متوسط المتبقي', value: ok ? (sum / balances.length).toFixed(1) : '—', hint: 'يوم لكل موظف', color: '#15803d' },
+      { label: 'إجمالي المتبقي', value: ok ? sum.toFixed(0) : '—', hint: 'يوم', color: '#1d4ed8' },
+    ] : undefined
+  } else {
+    headerStats = [
+      ...(desk ? [{ label: 'كل الطلبات', value: counts.all, hint: 'في هذا القسم', onClick: () => setFilterStatus('all') }] : []),
+      { label: 'قيد المراجعة', value: counts.pending, color: '#d97706', hint: 'بانتظار القرار', onClick: () => setFilterStatus('pending') },
+      { label: 'مقبولة', value: counts.approved, color: '#16a34a', hint: 'معتمدة', onClick: () => setFilterStatus('approved') },
+      { label: 'مرفوضة', value: counts.rejected, color: '#dc2626', hint: 'لم تُعتمد', onClick: () => setFilterStatus('rejected') },
+    ]
+  }
+  const subtitle = tab === 'new' ? (isAr ? 'تقديم طلب جديد' : 'Submit a new request')
+    : tab === 'balances' ? (isAr ? 'الأرصدة وحدّ الاستئذان' : 'Balances and permission limit')
+    : (isAr ? `${leaves.length} طلب` : `${leaves.length} requests`)
+
+  const primaryBtn = { padding: '11px 24px', borderRadius: 11, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.92rem', cursor: 'pointer', fontFamily: 'inherit' }
+  const ghostBtn = { padding: '10px 20px', borderRadius: 11, border: '1.5px solid var(--border)', background: 'var(--card)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.92rem', cursor: 'pointer', fontFamily: 'inherit' }
+  const headerActions = desk && tab !== 'new' && tab !== 'balances' ? (
+    <>
+      <button type="button" onClick={load} style={ghostBtn}>{isAr ? 'تحديث' : 'Refresh'}</button>
+      {allowCap('leaves_request') && <button type="button" onClick={() => setTab('new')} style={primaryBtn}>{isAr ? 'طلب جديد' : 'New request'}</button>}
+    </>
+  ) : (desk && tab === 'balances' ? <button type="button" onClick={loadBalances} style={ghostBtn}>{isAr ? 'تحديث' : 'Refresh'}</button> : undefined)
+
+  const savedBanner = saved && (
+    <div role="status" style={{ marginBottom: 16, padding: '12px 16px', borderRadius: desk ? 12 : 8, background: desk ? 'rgba(22,163,74,.12)' : 'var(--surface)', border: desk ? '1.5px solid #16a34a' : '1.5px solid var(--text-1)', color: desk ? '#15803d' : 'var(--text-1)', fontWeight: 700, fontSize: desk ? '0.95rem' : '0.85rem' }}>
+      {saved === 'casual' ? (isAr ? 'تم رفع الطلب بنجاح — بانتظار الموافقة' : 'Request submitted — awaiting approval') : (isAr ? 'تم رفع طلب الإجازة بنجاح — بانتظار الموافقة' : 'Leave request submitted — awaiting approval')}
+    </div>
+  )
+  const onSavedForm = t => { setSaved(t || true); setTimeout(() => setSaved(false), 4000) }
+
+  const balancesNote = isAr
+    ? 'الرصيد المستحق يُحسب تراكمياً منذ تاريخ المباشرة (21 يوم/سنة لمن أقل من 5 سنوات خدمة، 30 يوم/سنة لـ 5 سنوات فأكثر) مطروحاً منه الإجازات السنوية المعتمدة — تقديري وليس رسمياً.'
+    : 'Accrued balance is calculated cumulatively since the hire date (21 days/year under 5 years of service, 30 days/year at 5+) minus approved annual leave taken — an estimate, not an official figure.'
 
   return (
     <div style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
+      <div style={{ maxWidth: 'min(100%, 1560px)', margin: '0 auto', padding: desk ? 'clamp(16px, 2vw, 32px)' : '12px 12px 28px' }}>
 
-      {/* ترويسة الصفحة + التبويبات */}
-      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 960, margin: '0 auto', padding: '18px 20px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'الإجازات والاستئذان' : 'Leaves & Permissions'}</h1>
-              <p style={{ margin: '3px 0 0', fontSize: '0.76rem', color: 'var(--text-3)' }}>
-                {tab === 'new' ? (isAr ? 'تقديم طلب جديد' : 'Submit a new request')
-                  : tab === 'balances' ? (isAr ? 'الأرصدة وحدّ الاستئذان' : 'Balances and permission limit')
-                  : (isAr ? `${leaves.length} طلب` : `${leaves.length} requests`)}
-              </p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 4, overflowX: 'auto', marginTop: 14 }}>
-            {visibleTabs.map(t => {
-              const on = tab === t.id
-              return (
-                <button key={t.id} onClick={() => setTab(t.id)}
-                  style={{ padding: '10px 18px', border: 'none', background: on ? 'var(--surface)' : 'transparent', cursor: 'pointer', fontSize: '0.84rem', fontWeight: on ? 800 : 600, fontFamily: 'inherit',
-                    color: on ? '#1C2B4A' : 'var(--text-3)', borderRadius: '10px 10px 0 0', borderBottom: `3px solid ${on ? '#EE712D' : 'transparent'}`, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-                  {isAr ? t.ar : t.en}
-                  {on && !['new', 'balances'].includes(t.id) && leaves.length > 0 && (
-                    <span style={{ marginInlineStart: 8, fontSize: '0.66rem', fontWeight: 800, background: '#1C2B4A', color: '#fff', borderRadius: 99, padding: '1px 8px' }}>{leaves.length}</span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
+        <PageHeader
+          title={isAr ? 'الإجازات والاستئذان' : 'Leaves & Permissions'}
+          subtitle={desk ? (isAr ? 'تقديم الطلبات ومتابعة الموافقات والأرصدة في مكان واحد' : 'Requests, approvals and balances in one place') : subtitle}
+          accent="#EE712D"
+          actions={headerActions}
+          stats={headerStats} />
 
-      <div style={{ maxWidth: tab === 'new' ? 860 : tab === 'balances' ? 960 : 720, margin: '0 auto', padding: '24px 20px' }}>
+        <LeaveTabs tabs={visibleTabs} tab={tab} onChange={setTab} desk={desk} isAr={isAr}
+          countFor={id => (['new', 'balances'].includes(id) ? null : leaves.length)} />
 
         {statsFor && <EmployeeStatsModal leave={statsFor} isAr={isAr} onClose={() => setStatsFor(null)} />}
 
         {/* طلب جديد */}
-        {tab === 'new' && (
+        {tab === 'new' && (desk ? (
+          <>
+            {savedBanner}
+            <NewLeaveForm profile={profile} isAr={isAr} desk onSaved={onSavedForm} />
+          </>
+        ) : (
           <div style={{ background: 'var(--card)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
             <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-1)' }}>{isAr ? 'طلب إجازة جديد' : 'New Leave Request'}</span>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 500 }}>{profile?.full_name_ar}</span>
             </div>
             <div style={{ padding: '24px' }}>
-              {saved && (
-                <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: 'var(--surface)', border: '1.5px solid var(--text-1)', color: 'var(--text-1)', fontWeight: 700, fontSize: '0.85rem' }}>
-                  {saved === 'casual' ? (isAr ? '✓ تم رفع الطلب بنجاح — بانتظار الموافقة' : '✓ Request submitted — awaiting approval') : (isAr ? '✓ تم رفع طلب الإجازة بنجاح — بانتظار الموافقة' : '✓ Leave request submitted — awaiting approval')}
-                </div>
-              )}
-              <NewLeaveForm profile={profile} isAr={isAr} onSaved={t => { setSaved(t || true); setTimeout(() => setSaved(false), 4000) }} />
+              {savedBanner}
+              <NewLeaveForm profile={profile} isAr={isAr} onSaved={onSavedForm} />
             </div>
           </div>
-        )}
+        ))}
 
         {/* أرصدة الإجازات */}
-        {tab === 'balances' && (
+        {tab === 'balances' && (desk ? (
+          <BalancesPanel balances={balances} loading={loadingBalances} isAr={isAr} search={balanceSearch} setSearch={setBalanceSearch}
+            side={isGeneralAdmin ? <PermissionQuotaCard isAr={isAr} stacked /> : null} note={balancesNote} />
+        ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {isGeneralAdmin && <PermissionQuotaCard isAr={isAr} />}
             <input
@@ -1851,34 +1960,43 @@ export default function LeavePage() {
                 </table>
               )}
             </div>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', margin: 0 }}>
-              {isAr
-                ? 'الرصيد المستحق يُحسب تراكمياً منذ تاريخ المباشرة (21 يوم/سنة لمن أقل من 5 سنوات خدمة، 30 يوم/سنة لـ 5 سنوات فأكثر) مطروحاً منه الإجازات السنوية المعتمدة — تقديري وليس رسمياً.'
-                : 'Accrued balance is calculated cumulatively since the hire date (21 days/year under 5 years of service, 30 days/year at 5+) minus approved annual leave taken — an estimate, not an official figure.'}
-            </p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', margin: 0 }}>{balancesNote}</p>
           </div>
-        )}
+        ))}
 
         {/* قائمة الطلبات */}
         {tab !== 'new' && tab !== 'balances' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* فلتر الحالة */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {(isAr ? [['all','الكل'],['pending','قيد المراجعة'],['approved','مقبولة'],['rejected','مرفوضة']] : [['all','All'],['pending','Pending'],['approved','Approved'],['rejected','Rejected']]).map(([v, l]) => (
-                <button key={v} onClick={() => setFilterStatus(v)}
-                  style={{ padding: '5px 16px', borderRadius: 8, border: `1.5px solid ${filterStatus === v ? '#1C2B4A' : 'var(--border)'}`, background: filterStatus === v ? '#1C2B4A' : 'var(--card)', color: filterStatus === v ? '#fff' : 'var(--text-3)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {l}
-                </button>
-              ))}
-            </div>
+            <LeaveFilterBar desk={desk} isAr={isAr} status={filterStatus} setStatus={setFilterStatus} counts={counts}
+              query={query} setQuery={setQuery} type={typeFilter} setType={setTypeFilter} types={LEAVE_TYPES}
+              shown={filtered.length} showSearch={tab !== 'mine'} />
 
             {loading ? (
-              <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: 40 }}>{isAr ? 'جارٍ التحميل...' : 'Loading...'}</p>
+              <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: 40, fontSize: desk ? '1rem' : undefined }}>{isAr ? 'جارٍ التحميل...' : 'Loading...'}</p>
             ) : filtered.length === 0 ? (
-              <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: 40 }}>{isAr ? 'لا توجد طلبات' : 'No requests found'}</p>
-            ) : filtered.map(l => (
-              <LeaveCard key={l.id} leave={l} profile={profile} isAr={isAr} onAction={handleAction} onPrint={handlePrint} onStats={setStatsFor} onProofUploaded={load} onDelete={handleDelete} onEditOwn={setEditLeave} onCancelOwn={handleCancelOwn} history={historyMap[l.employee_id]} />
-            ))}
+              desk ? (
+                <div style={{ background: 'var(--card)', border: '1.5px dashed var(--border-2, var(--border))', borderRadius: 18, padding: '64px 24px', textAlign: 'center' }}>
+                  <div style={{ fontWeight: 900, fontSize: '1.2rem', color: 'var(--text-1)' }}>{isAr ? 'لا توجد طلبات' : 'No requests found'}</div>
+                  <div style={{ fontSize: '0.92rem', color: 'var(--text-3)', marginTop: 8, lineHeight: 1.8 }}>
+                    {leaves.length > 0
+                      ? (isAr ? 'لا يوجد ما يطابق التصفية الحالية — غيّر الحالة أو النوع أو البحث' : 'Nothing matches the current filters')
+                      : tab === 'pending' ? (isAr ? 'لا توجد طلبات بانتظار موافقتك حالياً' : 'Nothing is waiting for your approval')
+                      : (isAr ? 'لم يُرفع أي طلب بعد في هذا القسم' : 'No requests yet')}
+                  </div>
+                  {tab === 'mine' && allowCap('leaves_request') && leaves.length === 0 && (
+                    <button type="button" onClick={() => setTab('new')} style={{ ...primaryBtn, marginTop: 20 }}>{isAr ? 'رفع طلب جديد' : 'Submit a request'}</button>
+                  )}
+                </div>
+              ) : (
+                <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: 40 }}>{isAr ? 'لا توجد طلبات' : 'No requests found'}</p>
+              )
+            ) : (
+              <div style={desk ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 600px), 1fr))', gap: 18, alignItems: 'start' } : { display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {filtered.map(l => (
+                  <LeaveCard key={l.id} leave={l} profile={profile} isAr={isAr} onAction={handleAction} onPrint={handlePrint} onStats={setStatsFor} onProofUploaded={load} onDelete={handleDelete} onEditOwn={setEditLeave} onCancelOwn={handleCancelOwn} history={historyMap[l.employee_id]} />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1947,12 +2065,16 @@ function EditLeaveModal({ leave, profile, isAr = true, onClose, onSaved }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }} dir={isAr ? 'rtl' : 'ltr'} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 'min(480px, 100%)', maxHeight: '92vh', overflow: 'auto', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div>
-          <div style={{ fontWeight: 900, fontSize: '1.05rem', color: 'var(--text-1)' }}>{isAr ? 'تعديل الطلب' : 'Edit request'}</div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 3 }}>{typeLabel} — {isAr ? 'يمكن التعديل حتى موافقة المشرف' : 'editable until the supervisor approves'}</div>
-        </div>
+    <Sheet variant="modal" width={540} accent="#1C2B4A" isAr={isAr} onClose={onClose}
+      title={isAr ? 'تعديل الطلب' : 'Edit request'}
+      sub={`${typeLabel} — ${isAr ? 'يمكن التعديل حتى موافقة المشرف' : 'editable until the supervisor approves'}`}
+      footer={(
+        <>
+          <button type="button" onClick={onClose} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'إغلاق' : 'Close'}</button>
+          <button type="button" onClick={save} disabled={saving} style={{ padding: '10px 28px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.88rem', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>{saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ التعديل' : 'Save changes')}</button>
+        </>
+      )}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {isCasual ? (
           <>
             <div><label style={lbl}>{isAr ? 'تاريخ الاستئذان' : 'Date'}</label><DatePicker isAr={isAr} value={startDate} onChange={v => { setStartDate(v); setEndDate(v) }} style={inp} /></div>
@@ -1960,7 +2082,7 @@ function EditLeaveModal({ leave, profile, isAr = true, onClose, onSaved }) {
               <div><label style={lbl}>{isAr ? 'من' : 'From'}</label><TimePicker value={timeFrom} onChange={setTimeFrom} style={{ ...inp }} /></div>
               <div><label style={lbl}>{isAr ? 'إلى' : 'To'}</label><TimePicker value={timeTo} onChange={setTimeTo} style={{ ...inp }} /></div>
             </div>
-            {casualHours > 0 && <div style={{ fontSize: '0.74rem', color: 'var(--text-2)', fontWeight: 700 }}>{isAr ? 'المدة: ' : 'Duration: '}{formatHoursAr(casualHours)}</div>}
+            {casualHours > 0 && <div style={{ fontSize: '0.8rem', color: 'var(--text-2)', fontWeight: 700 }}>{isAr ? 'المدة: ' : 'Duration: '}{formatHoursAr(casualHours)}</div>}
           </>
         ) : (
           <>
@@ -1968,19 +2090,15 @@ function EditLeaveModal({ leave, profile, isAr = true, onClose, onSaved }) {
               <div><label style={lbl}>{isAr ? 'من تاريخ' : 'From'}</label><DatePicker isAr={isAr} value={startDate} onChange={v => { setStartDate(v); if (endDate && v > endDate) setEndDate(v) }} style={inp} /></div>
               <div><label style={lbl}>{isAr ? 'إلى تاريخ' : 'To'}</label><DatePicker isAr={isAr} value={endDate} onChange={setEndDate} style={inp} /></div>
             </div>
-            {days > 0 && <div style={{ fontSize: '0.74rem', color: 'var(--text-2)', fontWeight: 700 }}>{isAr ? `المدة: ${days} أيام` : `Duration: ${days} days`}</div>}
+            {days > 0 && <div style={{ fontSize: '0.8rem', color: 'var(--text-2)', fontWeight: 700 }}>{isAr ? `المدة: ${days} أيام` : `Duration: ${days} days`}</div>}
           </>
         )}
         <div>
           <label style={lbl}>{REASON_TYPES[type]?.label || (isAr ? 'ملاحظات' : 'Notes')}</label>
           <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder={REASON_TYPES[type]?.ph || ''} style={{ ...inp, resize: 'none' }} />
         </div>
-        {error && <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#dc2626' }}>{error}</div>}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" onClick={save} disabled={saving} style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.88rem', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>{saving ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ التعديل' : 'Save changes')}</button>
-          <button type="button" onClick={onClose} style={{ padding: '11px 18px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--text-2)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{isAr ? 'إغلاق' : 'Close'}</button>
-        </div>
+        {error && <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#dc2626' }}>{error}</div>}
       </div>
-    </div>
+    </Sheet>
   )
 }

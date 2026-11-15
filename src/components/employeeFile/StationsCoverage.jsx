@@ -6,6 +6,7 @@ import DatePicker from '../shared/DatePicker'
 import { todayStr } from '../../utils/dates'
 import { isRestStation } from '../../utils/stations'
 import { esc, docHeader, docShell, openDocWindow } from '../../utils/printDoc'
+import { f } from './ui'
 
 const MONO = 'ui-monospace, Menlo, Consolas, monospace'
 const NON_STAFF = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
@@ -33,9 +34,9 @@ async function pageAll(make) {
 function Kpi({ label, value, sub, tone }) {
   return (
     <div style={{ padding: '13px 15px', background: 'var(--card)', minWidth: 0, boxShadow: '0 0 0 .5px var(--border-2, #e0e0e0)' }}>
-      <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: MONO, lineHeight: 1.05, color: tone || 'var(--text-1)' }}>{value}</div>
-      <div style={{ fontSize: '.72rem', color: 'var(--text-2)', marginTop: 4, fontWeight: 700 }}>{label}</div>
-      {sub != null && <div style={{ fontSize: '.66rem', color: 'var(--text-3)', marginTop: 1 }}>{sub}</div>}
+      <div style={{ fontSize: f('1.5rem'), fontWeight: 800, fontFamily: MONO, lineHeight: 1.05, color: tone || 'var(--text-1)' }}>{value}</div>
+      <div style={{ fontSize: f('.72rem'), color: 'var(--text-2)', marginTop: 4, fontWeight: 700 }}>{label}</div>
+      {sub != null && <div style={{ fontSize: f('.66rem'), color: 'var(--text-3)', marginTop: 1 }}>{sub}</div>}
     </div>
   )
 }
@@ -194,7 +195,7 @@ export default function StationsCoverage({ isAr = true }) {
     setXl(false)
   }
 
-  const ctl = { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-2, #e0e0e0)', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: '.78rem' }
+  const ctl = { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-2, #e0e0e0)', background: 'var(--card)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: f('.78rem') }
   const card = { background: 'var(--card)', border: '1px solid var(--border-2, #e0e0e0)', borderRadius: 14 }
   const T = model?.T
 
@@ -204,12 +205,12 @@ export default function StationsCoverage({ isAr = true }) {
       <div style={{ ...card, padding: '16px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <p style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-1)' }}>الالتزام بالإيراد اليومي</p>
-            <p style={{ margin: '3px 0 0', fontSize: '.74rem', color: 'var(--text-3)', lineHeight: 1.7 }}>أي المحطات فيها موظفون ولا تُدخل يومية؟ وكم فتح حسابه؟ وكم نتوقع أنهم بإجازة؟</p>
+            <p style={{ margin: 0, fontSize: f('1rem'), fontWeight: 800, color: 'var(--text-1)' }}>الالتزام بالإيراد اليومي</p>
+            <p style={{ margin: '3px 0 0', fontSize: f('.74rem'), color: 'var(--text-3)', lineHeight: 1.7 }}>أي المحطات فيها موظفون ولا تُدخل يومية؟ وكم فتح حسابه؟ وكم نتوقع أنهم بإجازة؟</p>
           </div>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border-2, #e0e0e0)', borderRadius: 8, overflow: 'hidden' }}>
             {[['اليوم', today], ['أمس', addDays(today, -1)]].map(([l, d]) => (
-              <button key={l} type="button" onClick={() => setDay(d)} style={{ padding: '7px 14px', border: 'none', background: day === d ? '#1C2B4A' : 'var(--card)', color: day === d ? '#fff' : 'var(--text-2)', fontWeight: 700, fontSize: '.76rem', cursor: 'pointer', fontFamily: 'inherit' }}>{l}</button>
+              <button key={l} type="button" onClick={() => setDay(d)} style={{ padding: '7px 14px', border: 'none', background: day === d ? '#1C2B4A' : 'var(--card)', color: day === d ? '#fff' : 'var(--text-2)', fontWeight: 700, fontSize: f('.76rem'), cursor: 'pointer', fontFamily: 'inherit' }}>{l}</button>
             ))}
           </div>
           <div style={{ width: 170 }}><DatePicker value={day} onChange={v => v && setDay(v)} max={today} isAr className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white" /></div>
@@ -219,24 +220,24 @@ export default function StationsCoverage({ isAr = true }) {
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <div style={{ display: 'inline-flex', border: '1px solid var(--border-2, #e0e0e0)', borderRadius: 8, overflow: 'hidden' }} role="tablist" aria-label="طريقة حساب الإجازات">
             {[['est', 'تقدير نسبة الإجازات'], ['act', 'الإجازات المعتمدة الفعلية']].map(([k, l]) => (
-              <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => setModeSave(k)} style={{ padding: '7px 14px', border: 'none', background: mode === k ? '#0369a1' : 'var(--card)', color: mode === k ? '#fff' : 'var(--text-2)', fontWeight: 700, fontSize: '.76rem', cursor: 'pointer', fontFamily: 'inherit' }}>{l}</button>
+              <button key={k} type="button" role="tab" aria-selected={mode === k} onClick={() => setModeSave(k)} style={{ padding: '7px 14px', border: 'none', background: mode === k ? '#0369a1' : 'var(--card)', color: mode === k ? '#fff' : 'var(--text-2)', fontWeight: 700, fontSize: f('.76rem'), cursor: 'pointer', fontFamily: 'inherit' }}>{l}</button>
             ))}
           </div>
           {mode === 'est' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 240 }}>
-              <span style={{ fontSize: '.76rem', color: 'var(--text-2)', fontWeight: 700, whiteSpace: 'nowrap' }}>نسبة الموظفين المتوقع أنهم بإجازة</span>
+              <span style={{ fontSize: f('.76rem'), color: 'var(--text-2)', fontWeight: 700, whiteSpace: 'nowrap' }}>نسبة الموظفين المتوقع أنهم بإجازة</span>
               <input type="range" min={0} max={80} step={5} value={pct} onChange={e => setPctSave(Number(e.target.value))} aria-label="نسبة الإجازات التقديرية" style={{ flex: 1, accentColor: '#0369a1', minWidth: 120 }} />
-              <b style={{ fontFamily: MONO, fontSize: '1.05rem', color: '#0369a1', minWidth: 46, textAlign: 'center' }} dir="ltr">{pct}%</b>
-              {pct !== 40 && <button type="button" onClick={() => setPctSave(40)} style={{ ...ctl, fontSize: '.7rem', cursor: 'pointer' }}>الافتراضي 40%</button>}
+              <b style={{ fontFamily: MONO, fontSize: f('1.05rem'), color: '#0369a1', minWidth: 46, textAlign: 'center' }} dir="ltr">{pct}%</b>
+              {pct !== 40 && <button type="button" onClick={() => setPctSave(40)} style={{ ...ctl, fontSize: f('.7rem'), cursor: 'pointer' }}>الافتراضي 40%</button>}
             </div>
           ) : (
-            <span style={{ fontSize: '.76rem', color: 'var(--text-3)' }}>تُحسب من طلبات الإجازة المقبولة التي تشمل هذا اليوم{T ? ` (${T.leaveAct} موظف)` : ''}.</span>
+            <span style={{ fontSize: f('.76rem'), color: 'var(--text-3)' }}>تُحسب من طلبات الإجازة المقبولة التي تشمل هذا اليوم{T ? ` (${T.leaveAct} موظف)` : ''}.</span>
           )}
         </div>
       </div>
 
-      {err && <p style={{ margin: 0, fontSize: '.78rem', color: '#b91c1c' }}>{err}</p>}
-      {!model && !err && <p style={{ margin: 0, fontSize: '.82rem', color: 'var(--text-3)' }}>جارٍ التحميل...</p>}
+      {err && <p style={{ margin: 0, fontSize: f('.78rem'), color: '#b91c1c' }}>{err}</p>}
+      {!model && !err && <p style={{ margin: 0, fontSize: f('.82rem'), color: 'var(--text-3)' }}>جارٍ التحميل...</p>}
 
       {model && (
         <>
@@ -248,21 +249,21 @@ export default function StationsCoverage({ isAr = true }) {
             <Kpi label="أضافوا يومية" value={T.entered} sub={`${T.records} سجل إيراد`} tone="#15803d" />
             <Kpi label="نسبة التغطية" value={`${T.compliance}%`} sub="أضافوا ÷ المتوقع عملهم" tone={T.compliance >= 80 ? '#15803d' : T.compliance >= 50 ? '#b45309' : C.bad} />
           </div>
-          {!data.loginsExact && <p style={{ margin: 0, fontSize: '.72rem', color: '#b45309' }}>سجل الدخول التفصيلي غير متاح لهذا اليوم؛ يُحتسب «فتح حسابه» تقريباً من آخر دخول.</p>}
+          {!data.loginsExact && <p style={{ margin: 0, fontSize: f('.72rem'), color: '#b45309' }}>سجل الدخول التفصيلي غير متاح لهذا اليوم؛ يُحتسب «فتح حسابه» تقريباً من آخر دخول.</p>}
 
           {/* تنبيه: محطات فيها موظفون ولا تُدخل يومية */}
           {model.rows.some(r => r.state === 'none') && (
             <div style={{ ...card, borderColor: 'rgba(220,38,38,.4)', overflow: 'hidden' }}>
               <div style={{ padding: '12px 16px', background: 'rgba(220,38,38,.08)', borderBottom: '1px solid rgba(220,38,38,.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                <p style={{ margin: 0, fontSize: '.86rem', fontWeight: 800, color: '#b91c1c' }}>محطات فيها موظفون ولا تُدخل أي يومية ({T.none})</p>
-                <span style={{ fontSize: '.7rem', color: 'var(--text-3)' }}>{dayLabel(day)}</span>
+                <p style={{ margin: 0, fontSize: f('.86rem'), fontWeight: 800, color: '#b91c1c' }}>محطات فيها موظفون ولا تُدخل أي يومية ({T.none})</p>
+                <span style={{ fontSize: f('.7rem'), color: 'var(--text-3)' }}>{dayLabel(day)}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10, padding: 14 }}>
                 {model.rows.filter(r => r.state === 'none').sort((a, b) => b.N - a.N).map(r => (
                   <button key={r.id} type="button" onClick={() => { setFilter('none'); setOpen(s => new Set(s).add(r.id)) }}
                     style={{ textAlign: 'start', padding: '11px 13px', borderRadius: 10, border: '1px solid rgba(220,38,38,.3)', background: 'var(--card)', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-1)' }}>
-                    <div style={{ fontWeight: 800, fontSize: '.84rem' }} dir="auto">{r.name}</div>
-                    <div style={{ fontSize: '.72rem', color: 'var(--text-3)', marginTop: 3, lineHeight: 1.7 }}>
+                    <div style={{ fontWeight: 800, fontSize: f('.84rem') }} dir="auto">{r.name}</div>
+                    <div style={{ fontSize: f('.72rem'), color: 'var(--text-3)', marginTop: 3, lineHeight: 1.7 }}>
                       {r.N} موظف · {r.opened === 0 ? <b style={{ color: C.bad }}>لم يفتح أحد حسابه</b> : <><b style={{ color: '#b45309' }}>{r.opened}</b> فتحوا حساباتهم</>}<br />المتوقع عملهم {r.expected}
                     </div>
                   </button>
@@ -275,7 +276,7 @@ export default function StationsCoverage({ isAr = true }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <div style={{ display: 'inline-flex', border: '1px solid var(--border-2, #e0e0e0)', borderRadius: 8, overflow: 'hidden', background: 'var(--card)', flexWrap: 'wrap' }}>
               {[['all', 'الكل', model.rows.length], ['none', 'بلا يومية', model.rows.filter(r => r.state === 'none').length], ['low', 'ضعيفة', model.rows.filter(r => r.state === 'low').length], ['mid', 'جزئية', model.rows.filter(r => r.state === 'mid').length], ['full', 'مكتملة', model.rows.filter(r => r.state === 'full').length]].map(([k, l, n]) => (
-                <button key={k} type="button" onClick={() => setFilter(k)} style={{ padding: '7px 12px', border: 'none', borderInlineStart: '1px solid var(--border)', background: filter === k ? '#1C2B4A' : 'transparent', color: filter === k ? '#fff' : 'var(--text-2)', fontWeight: 700, fontSize: '.74rem', cursor: 'pointer', fontFamily: 'inherit' }}>{l} <span style={{ fontFamily: MONO, opacity: .75 }}>{n}</span></button>
+                <button key={k} type="button" onClick={() => setFilter(k)} style={{ padding: '7px 12px', border: 'none', borderInlineStart: '1px solid var(--border)', background: filter === k ? '#1C2B4A' : 'transparent', color: filter === k ? '#fff' : 'var(--text-2)', fontWeight: 700, fontSize: f('.74rem'), cursor: 'pointer', fontFamily: 'inherit' }}>{l} <span style={{ fontFamily: MONO, opacity: .75 }}>{n}</span></button>
               ))}
             </div>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="بحث باسم المحطة" style={{ ...ctl, minWidth: 170 }} />
@@ -287,7 +288,7 @@ export default function StationsCoverage({ isAr = true }) {
           {/* دليل الألوان */}
           <div style={{ display: 'flex', gap: '4px 16px', flexWrap: 'wrap' }}>
             {Object.keys(SEG_LABEL).map(k => (
-              <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '.7rem', color: 'var(--text-2)' }}>
+              <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: f('.7rem'), color: 'var(--text-2)' }}>
                 <i style={{ width: 11, height: 11, borderRadius: 3, background: C[k], display: 'inline-block' }} />{k === 'leave' ? leaveLabel : SEG_LABEL[k]}
               </span>
             ))}
@@ -302,15 +303,15 @@ export default function StationsCoverage({ isAr = true }) {
                 <div key={r.id} style={{ borderTop: i ? '1px solid var(--border)' : 'none' }}>
                   <button type="button" onClick={() => toggle(r.id)} aria-expanded={isOpen} className="cov-row"
                     style={{ background: isOpen ? 'var(--surface)' : 'transparent' }}>
-                    <span dir="auto" className="cov-name" style={{ fontWeight: 800, fontSize: '.84rem' }}>{r.name}</span>
+                    <span dir="auto" className="cov-name" style={{ fontWeight: 800, fontSize: f('.84rem') }}>{r.name}</span>
                     {[[r.N, 'موظف'], [r.opened, 'فتحوا'], [r.entered, 'أضافوا']].map(([v, l]) => (
-                      <span key={l} className="cov-num" style={{ fontFamily: MONO, fontWeight: 800, fontSize: '.95rem', lineHeight: 1.1 }}>{v}<span style={{ display: 'block', fontFamily: 'inherit', fontWeight: 600, fontSize: '.6rem', color: 'var(--text-3)' }}>{l}</span></span>
+                      <span key={l} className="cov-num" style={{ fontFamily: MONO, fontWeight: 800, fontSize: f('.95rem'), lineHeight: 1.1 }}>{v}<span style={{ display: 'block', fontFamily: 'inherit', fontWeight: 600, fontSize: f('.6rem'), color: 'var(--text-3)' }}>{l}</span></span>
                     ))}
                     <span className="cov-bar">
                       <SegBar seg={r.seg} total={r.N} />
-                      <span style={{ fontSize: '.64rem', color: 'var(--text-3)' }}>{leaveLabel.split(' ')[0]} {r.onLeave} · المتوقع {r.expected} · تغطية <b style={{ color: S.c }}>{r.compliance}%</b></span>
+                      <span style={{ fontSize: f('.64rem'), color: 'var(--text-3)' }}>{leaveLabel.split(' ')[0]} {r.onLeave} · المتوقع {r.expected} · تغطية <b style={{ color: S.c }}>{r.compliance}%</b></span>
                     </span>
-                    <span className="cov-state" style={{ padding: '3px 8px', borderRadius: 99, background: S.bg, color: S.c, fontWeight: 800, fontSize: '.66rem', textAlign: 'center', whiteSpace: 'nowrap' }}>{S.t}</span>
+                    <span className="cov-state" style={{ padding: '3px 8px', borderRadius: 99, background: S.bg, color: S.c, fontWeight: 800, fontSize: f('.66rem'), textAlign: 'center', whiteSpace: 'nowrap' }}>{S.t}</span>
                     <span className="cov-chev" style={{ color: 'var(--text-3)', transform: isOpen ? 'rotate(90deg)' : 'rotate(180deg)', transition: 'transform .15s', display: 'inline-block' }}>&#8250;</span>
                   </button>
                   {isOpen && (
@@ -320,8 +321,8 @@ export default function StationsCoverage({ isAr = true }) {
                           <div key={e.u.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 11px', borderRadius: 9, background: 'var(--card)', border: '1px solid var(--border)' }}>
                             <i style={{ width: 9, height: 9, borderRadius: '50%', background: C[e.st], flexShrink: 0 }} />
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div dir="auto" style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.u.full_name_ar}</div>
-                              <div style={{ fontSize: '.66rem', color: 'var(--text-3)' }}>{e.u.job_number || '—'} · {e.st === 'entered' ? 'أضاف يومية' : e.st === 'opened' ? 'دخل ولم يضف' : e.st === 'leave' ? 'إجازة معتمدة' : 'لم يدخل'}{e.leaveAct && e.st !== 'leave' ? ' · لديه إجازة معتمدة' : ''}</div>
+                              <div dir="auto" style={{ fontSize: f('.78rem'), fontWeight: 700, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.u.full_name_ar}</div>
+                              <div style={{ fontSize: f('.66rem'), color: 'var(--text-3)' }}>{e.u.job_number || '—'} · {e.st === 'entered' ? 'أضاف يومية' : e.st === 'opened' ? 'دخل ولم يضف' : e.st === 'leave' ? 'إجازة معتمدة' : 'لم يدخل'}{e.leaveAct && e.st !== 'leave' ? ' · لديه إجازة معتمدة' : ''}</div>
                             </div>
                           </div>
                         ))}
@@ -331,15 +332,15 @@ export default function StationsCoverage({ isAr = true }) {
                 </div>
               )
             })}
-            {list.length === 0 && <p style={{ margin: 0, padding: 22, textAlign: 'center', fontSize: '.8rem', color: 'var(--text-3)' }}>لا محطات تطابق الفلتر.</p>}
+            {list.length === 0 && <p style={{ margin: 0, padding: 22, textAlign: 'center', fontSize: f('.8rem'), color: 'var(--text-3)' }}>لا محطات تطابق الفلتر.</p>}
           </div>
 
           {model.noStaff.length > 0 && (
-            <p style={{ margin: 0, fontSize: '.72rem', color: 'var(--text-3)', lineHeight: 1.8 }}>
+            <p style={{ margin: 0, fontSize: f('.72rem'), color: 'var(--text-3)', lineHeight: 1.8 }}>
               <b style={{ color: 'var(--text-2)' }}>محطات بلا موظفين مسجّلين ({model.noStaff.length}):</b> {model.noStaff.map(s => s.name).join(' · ')}. لا تدخل في الحساب. المحطات المصنّفة وكلاء أو استراحة مستثناة أيضاً.
             </p>
           )}
-          <p style={{ margin: 0, fontSize: '.7rem', color: 'var(--text-3)', lineHeight: 1.8 }}>
+          <p style={{ margin: 0, fontSize: f('.7rem'), color: 'var(--text-3)', lineHeight: 1.8 }}>
             طريقة الحساب: «أضافوا» = موظفون سجّلوا إيراداً في اليوم. «فتحوا» = دخلوا إلى حسابهم في اليوم. المتوقع عملهم = الموظفون − الإجازات ({mode === 'est' ? `تقدير ${pct}% بشكل افتراضي، وهي نسبة تقريبية لا تعتمد على طلبات فعلية` : 'المعتمدة فعلياً'}). عمال النظافة ومشرفو الترحيل والمدراء غير محتسبين.
           </p>
         </>

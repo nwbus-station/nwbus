@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { SettingsCard, Segmented, Icon } from './ui'
 import DatePicker from '../shared/DatePicker'
 import { todayStr, toLocalDateStr } from '../../utils/dates'
 import { safeImport } from '../../lib/chunkReload'
@@ -42,40 +43,35 @@ export default function OperationsReportDownload({ isAr }) {
     setBusy(false)
   }
 
-  const inp = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white'
+  const presetKey = (PRESETS.find(([, a, b]) => from === a && to === b) || [])[0] ?? null
   return (
-    <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16 }}>
-      <h3 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-1)' }}>{T('تنزيل التقرير التشغيلي التحليلي', 'Download the operations analytics report')}</h3>
-      <p style={{ margin: '4px 0 14px', fontSize: '0.74rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
-        {T('حدّد الفترة وانزّل ملف Excel مباشرة: ملخص بالمغادرة والوصول وعدد الزوار (أرقام وتحليل ورسوم)، جدول المحطات، الاتجاه اليومي، الوكلاء في ورقة مستقلة، رضا العملاء والاستبيانات، الحركات غير المُدخلة، كل السجلات، وورقة لكل محطة. بدون إرسال إيميل.',
-          'Pick a period and download an Excel file directly: a summary with departures, arrivals and visitors (figures, analysis, charts), stations table, daily trend, agents on their own sheet, customer ratings & surveys, movements not entered, all records and a sheet per station. No email needed.')}
-      </p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-        {PRESETS.map(([l, a, b]) => {
-          const on = from === a && to === b
-          return (
-            <button key={l} type="button" onClick={() => { setFrom(a); setTo(b) }}
-              style={{ padding: '6px 12px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${on ? 'var(--solid-btn)' : 'var(--border)'}`, background: on ? 'var(--solid-btn)' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' }}>{l}</button>
-          )
-        })}
+    <SettingsCard icon="download"
+      title={T('تنزيل التقرير التشغيلي التحليلي', 'Download the operations analytics report')}
+      desc={T('حدّد الفترة وانزّل ملف Excel مباشرة: ملخص بالمغادرة والوصول وعدد الزوار (أرقام وتحليل ورسوم)، جدول المحطات، الاتجاه اليومي، الوكلاء في ورقة مستقلة، رضا العملاء والاستبيانات، الحركات غير المُدخلة، كل السجلات، وورقة لكل محطة. بدون إرسال إيميل.',
+        'Pick a period and download an Excel file directly: a summary with departures, arrivals and visitors (figures, analysis, charts), stations table, daily trend, agents on their own sheet, customer ratings & surveys, movements not entered, all records and a sheet per station. No email needed.')}>
+      <div className="st-lbl">{T('فترة جاهزة', 'Quick period')}</div>
+      <div style={{ marginBottom: 18 }}>
+        <Segmented variant="chips" label={T('فترة جاهزة', 'Quick period')} value={presetKey} onChange={k => { const p = PRESETS.find(x => x[0] === k); setFrom(p[1]); setTo(p[2]) }}
+          options={PRESETS.map(([l]) => [l, l])} />
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', marginInlineEnd: 4 }}>{T('المحطات:', 'Stations:')}</span>
-        {[['all', T('الكل (نورث وست + الوكلاء)', 'All (North West + agents)')], ['nwb', T('نورث وست فقط', 'North West only')], ['agent', T('الوكلاء فقط', 'Agents only')]].map(([k, l]) => (
-          <button key={k} type="button" onClick={() => setKind(k)}
-            style={{ padding: '6px 12px', borderRadius: 99, fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${kind === k ? 'var(--accent)' : 'var(--border)'}`, background: kind === k ? 'var(--accent)' : 'var(--card)', color: kind === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
-        ))}
+      <div className="st-lbl">{T('المحطات', 'Stations')}</div>
+      <div style={{ marginBottom: 18 }}>
+        <Segmented variant="track" label={T('المحطات', 'Stations')} value={kind} onChange={setKind}
+          options={[['all', T('الكل (نورث وست + الوكلاء)', 'All (North West + agents)')], ['nwb', T('نورث وست فقط', 'North West only')], ['agent', T('الوكلاء فقط', 'Agents only')]]} />
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-        <DatePicker value={from} onChange={v => { setFrom(v); if (v && to && v > to) setTo(v) }} isAr={isAr} className={inp} />
+      <div className="st-lbl">{T('أو حدّد فترة مخصصة', 'Or a custom range')}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+        <div className="st-date"><DatePicker value={from} onChange={v => { setFrom(v); if (v && to && v > to) setTo(v) }} isAr={isAr} className="st-input st-input-btn" /></div>
         <span style={{ color: 'var(--text-3)' }}>—</span>
-        <DatePicker value={to} onChange={v => { setTo(v); if (v && from && v < from) setFrom(v) }} isAr={isAr} className={inp} />
-        <button type="button" onClick={run} disabled={busy}
-          style={{ padding: '9px 22px', borderRadius: 9, border: 'none', background: 'var(--solid-btn)', color: 'var(--card)', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+        <div className="st-date"><DatePicker value={to} onChange={v => { setTo(v); if (v && from && v < from) setFrom(v) }} isAr={isAr} className="st-input st-input-btn" /></div>
+      </div>
+      <div className="st-actions">
+        <button type="button" className="st-btn pri" onClick={run} disabled={busy}>
+          <Icon name="download" size={18} />
           {busy ? T('جاري الإنشاء…', 'Building…') : T('تنزيل التقرير', 'Download report')}
         </button>
       </div>
-      {msg && <p style={{ margin: '10px 0 0', fontSize: '0.76rem', fontWeight: 600, color: msg.ok ? 'var(--text-3)' : '#B91C1C' }}>{msg.text}</p>}
-    </div>
+      {msg && <p role={msg.ok ? 'status' : 'alert'} className={`st-note ${msg.ok ? 'info' : 'err'}`} style={{ margin: '14px 0 0' }}>{msg.text}</p>}
+    </SettingsCard>
   )
 }

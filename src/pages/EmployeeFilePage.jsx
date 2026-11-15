@@ -4,8 +4,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import DatePicker from '../components/shared/DatePicker'
-import SearchSelect from '../components/shared/SearchSelect'
 import { computeFinalScore } from './EvaluationPage'
 import { yearsOfService } from '../utils/leaveBalance'
 import { todayStr, toLocalDateStr } from '../utils/dates'
@@ -15,8 +13,15 @@ import { parseShifts, shiftIdx } from '../utils/shifts'
 import { shiftsOfStation } from '../utils/stationShifts'
 import StationsPerformance from '../components/employeeFile/StationsPerformance'
 import StationsCoverage from '../components/employeeFile/StationsCoverage'
+import { MONO, f, zp, EF_CSS, card, Ring, Kpi, SecCard, Th, Td, Chip, Bar, Stars } from '../components/employeeFile/ui'
+import ProfileHero from '../components/employeeFile/ProfileHero'
+import InfoPanel from '../components/employeeFile/InfoPanel'
+import FilterBar from '../components/employeeFile/FilterBar'
+import ViewTabs from '../components/employeeFile/ViewTabs'
+import SectionNav from '../components/employeeFile/SectionNav'
+import PageHeader from '../components/shared/PageHeader'
+import { useMedia } from '../components/dispatch/Sheet'
 
-const MONO = 'ui-monospace, Menlo, Consolas, monospace'
 const LEAVE_AR = { annual: 'سنوية', casual: 'استئذان خروج', compensatory: 'تعويضية', unpaid: 'بدون راتب', emergency: 'اضطرارية', sick: 'مرضية', marriage: 'زواج', paternity: 'مولود', bereavement: 'وفاة' }
 const STATUS_AR = { approved: 'مقبولة', rejected: 'مرفوضة', pending: 'قيد المراجعة' }
 const STATUS_COL = { approved: ['#15803d', '#dcfce7'], rejected: ['#b91c1c', '#fee2e2'], pending: ['#b45309', '#fef3c7'] }
@@ -249,69 +254,20 @@ function analyze(raw, user, from, to) {
   return { L, S, E, evalAvg, R, A, O }
 }
 
-// ── عناصر الواجهة ────────────────────────────────────────────
-const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }
-function Ring({ pct, color, label, sub, size = 92 }) {
-  const p = Math.max(0, Math.min(100, pct || 0))
-  return (
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ width: size, height: size, borderRadius: '50%', background: `conic-gradient(${color} ${p * 3.6}deg, #e5e7eb 0)`, display: 'grid', placeItems: 'center', margin: '0 auto' }}>
-        <div style={{ width: size - 22, height: size - 22, borderRadius: '50%', background: 'var(--card)', display: 'grid', placeItems: 'center', fontFamily: MONO, fontWeight: 800, fontSize: size > 80 ? '1.15rem' : '0.95rem', color: 'var(--text-1)' }} dir="ltr">{label}</div>
-      </div>
-      {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', fontWeight: 700, marginTop: 6 }}>{sub}</div>}
-    </div>
-  )
-}
-function Kpi({ title, value, sub, color = '#1C2B4A' }) {
-  return (
-    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderTop: `3px solid ${color}`, borderRadius: 12, padding: '11px 14px' }}>
-      <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', fontWeight: 700 }}>{title}</div>
-      <div style={{ fontFamily: MONO, fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-1)', lineHeight: 1.25 }} dir="ltr">{value}</div>
-      {sub != null && <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontWeight: 600 }}>{sub}</div>}
-    </div>
-  )
-}
-function SecCard({ title, hint, children }) {
-  return (
-    <section style={card}>
-      <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ width: 4, height: 18, background: '#EE712D', borderRadius: 2 }} />
-        <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-1)' }}>{title}</span>
-        {hint && <span style={{ marginInlineStart: 'auto', fontSize: '0.7rem', color: 'var(--text-3)' }}>{hint}</span>}
-      </div>
-      <div style={{ padding: '14px 18px' }}>{children}</div>
-    </section>
-  )
-}
-const Th = ({ children }) => <th style={{ padding: '8px 10px', background: '#1e3a5f', color: '#fff', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{children}</th>
-const Td = ({ children, l, b, c }) => <td style={{ padding: '8px 10px', borderTop: '1px solid var(--border)', textAlign: l ? 'right' : 'center', fontSize: '0.78rem', fontWeight: b ? 800 : 500, color: c || 'var(--text-1)', fontFamily: l ? 'inherit' : MONO }}>{children}</td>
-const Chip = ({ children, c = '#334155', bg = '#e2e8f0' }) => <span style={{ background: bg, color: c, borderRadius: 99, padding: '2px 11px', fontSize: '0.7rem', fontWeight: 800 }}>{children}</span>
-const Bar = ({ pct, color = '#1C2B4A' }) => <div style={{ flex: 1, height: 9, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}><div style={{ width: `${Math.max(0, Math.min(100, pct))}%`, height: '100%', background: color, borderRadius: 99 }} /></div>
-
-function Stars({ value, size = 18, color = '#EE712D' }) {
-  const path = 'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z'
-  const row = c => <span style={{ display: 'inline-flex', gap: 2 }}>{[0, 1, 2, 3, 4].map(i => <svg key={i} width={size} height={size} viewBox="0 0 24 24" fill={c} aria-hidden="true"><path d={path} /></svg>)}</span>
-  const pct = Math.max(0, Math.min(100, ((value || 0) / 5) * 100))
-  return (
-    <span dir="ltr" role="img" aria-label={`${(value || 0).toFixed(1)} / 5`} style={{ position: 'relative', display: 'inline-flex' }}>
-      {row('#d5dbe5')}
-      <span style={{ position: 'absolute', insetBlock: 0, left: 0, width: `${pct}%`, overflow: 'hidden', whiteSpace: 'nowrap' }}>{row(color)}</span>
-    </span>
-  )
-}
+// ── عناصر الواجهة (Ring / Kpi / SecCard / Th / Td / Chip / Bar / Stars) في components/employeeFile/ui.jsx ──
 // لوحة مؤشر تشغيلي: رقم كبير + عنوان + سطرا تفاصيل (موزونة بنفس الأبعاد)
 function OpsPanel({ title, value, unit, color, lines }) {
   return (
     <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ height: 4, background: color }} />
       <div style={{ padding: '14px 18px 12px', flex: 1 }}>
-        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-3)', letterSpacing: 0.2 }}>{title}</div>
+        <div style={{ fontSize: f('0.72rem'), fontWeight: 800, color: 'var(--text-3)', letterSpacing: 0.2 }}>{title}</div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '6px 0 10px' }} dir="ltr">
-          <span style={{ fontFamily: MONO, fontSize: '2rem', fontWeight: 800, color: 'var(--text-1)', lineHeight: 1 }}>{value}</span>
-          {unit && <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-3)' }}>{unit}</span>}
+          <span style={{ fontFamily: MONO, fontSize: f('2rem'), fontWeight: 800, color: 'var(--text-1)', lineHeight: 1 }}>{value}</span>
+          {unit && <span style={{ fontSize: f('0.74rem'), fontWeight: 700, color: 'var(--text-3)' }}>{unit}</span>}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-          {lines.map(([k, v]) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem' }}><span style={{ color: 'var(--text-3)', fontWeight: 600 }}>{k}</span><span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }} dir="ltr">{v}</span></div>)}
+          {lines.map(([k, v]) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: f('0.74rem') }}><span style={{ color: 'var(--text-3)', fontWeight: 600 }}>{k}</span><span style={{ fontFamily: MONO, fontWeight: 800, color: 'var(--text-1)' }} dir="ltr">{v}</span></div>)}
         </div>
       </div>
     </div>
@@ -329,20 +285,20 @@ function OpsScaleSection({ O, isAr }) {
   const fmtKey = k => (scale === 'week' ? `${k.slice(5)} ← ${addDays(k, 6).slice(5)}` : k)
   return (
     <div style={{ marginTop: 18 }}>
-      <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{isAr ? 'الإنتاجية حسب الفترة — اختر العرض' : 'Productivity by period — pick a view'}</div>
+      <div style={{ fontSize: f('0.78rem'), fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{isAr ? 'الإنتاجية حسب الفترة — اختر العرض' : 'Productivity by period — pick a view'}</div>
       <div role="tablist" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
         {['day', 'week', 'month'].map(k => {
           const a = O.avgScale[k], on = scale === k
           return (
             <button key={k} type="button" role="tab" aria-selected={on} onClick={() => setScale(k)}
               style={{ textAlign: isAr ? 'right' : 'left', fontFamily: 'inherit', cursor: 'pointer', borderRadius: 12, padding: '12px 14px', border: `1.5px solid ${on ? '#1C2B4A' : 'var(--border)'}`, background: on ? '#1C2B4A' : 'var(--card)', color: on ? '#fff' : 'var(--text-1)', boxShadow: on ? '0 4px 14px rgba(28,43,74,0.25)' : 'none' }}>
-              <div style={{ fontSize: '0.74rem', fontWeight: 800, opacity: 0.85 }}>{names[k]}</div>
+              <div style={{ fontSize: f('0.74rem'), fontWeight: 800, opacity: 0.85 }}>{names[k]}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '4px 0 6px' }} dir="ltr">
-                <span style={{ fontFamily: MONO, fontSize: '1.6rem', fontWeight: 800, lineHeight: 1 }}>{n0(a.pax)}</span>
-                <span style={{ fontSize: '0.68rem', opacity: 0.75, fontWeight: 700 }}>{isAr ? `راكب / ${unit[k]}` : `pax / ${unit[k]}`}</span>
+                <span style={{ fontFamily: MONO, fontSize: f('1.6rem'), fontWeight: 800, lineHeight: 1 }}>{n0(a.pax)}</span>
+                <span style={{ fontSize: f('0.68rem'), opacity: 0.75, fontWeight: 700 }}>{isAr ? `راكب / ${unit[k]}` : `pax / ${unit[k]}`}</span>
               </div>
-              <div style={{ fontSize: '0.72rem', opacity: 0.85, fontWeight: 700 }} dir="ltr"><span style={{ fontFamily: MONO }}>{a.trips.toFixed(1)}</span> {isAr ? `رحلة / ${unit[k]}` : `trips / ${unit[k]}`}</div>
-              <div style={{ fontSize: '0.66rem', opacity: 0.7, marginTop: 5 }}>{isAr ? `الأعلى: ${a.peak ? `${fmtPeak(k, a.peak[0])} (${n0(a.peak[1].pax)} راكب)` : '—'} · فترات نشطة: ${a.count}` : `Peak: ${a.peak ? `${a.peak[0]} (${n0(a.peak[1].pax)})` : '—'} · active periods: ${a.count}`}</div>
+              <div style={{ fontSize: f('0.72rem'), opacity: 0.85, fontWeight: 700 }} dir="ltr"><span style={{ fontFamily: MONO }}>{a.trips.toFixed(1)}</span> {isAr ? `رحلة / ${unit[k]}` : `trips / ${unit[k]}`}</div>
+              <div style={{ fontSize: f('0.66rem'), opacity: 0.7, marginTop: 5 }}>{isAr ? `الأعلى: ${a.peak ? `${fmtPeak(k, a.peak[0])} (${n0(a.peak[1].pax)} راكب)` : '—'} · فترات نشطة: ${a.count}` : `Peak: ${a.peak ? `${a.peak[0]} (${n0(a.peak[1].pax)})` : '—'} · active periods: ${a.count}`}</div>
             </button>
           )
         })}
@@ -360,7 +316,7 @@ function OpsScaleSection({ O, isAr }) {
           </tbody>
         </table>
       </div>
-      {scale === 'day' && keys.length > 62 && <p style={{ fontSize: '0.7rem', color: 'var(--text-3)', margin: '6px 0 0' }}>{isAr ? `يعرض آخر 62 يوماً من ${keys.length}.` : `Showing the latest 62 of ${keys.length} days.`}</p>}
+      {scale === 'day' && keys.length > 62 && <p style={{ fontSize: f('0.7rem'), color: 'var(--text-3)', margin: '6px 0 0' }}>{isAr ? `يعرض آخر 62 يوماً من ${keys.length}.` : `Showing the latest 62 of ${keys.length} days.`}</p>}
     </div>
   )
 }
@@ -378,7 +334,7 @@ function OpsAnalysis({ O, isAr }) {
     <div style={{ marginTop: 22, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <span style={{ width: 4, height: 16, background: '#EE712D', borderRadius: 2 }} />
-        <span style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--text-1)' }}>{isAr ? 'تحليل الأداء — الوقت والوردية وعدد الرحلات' : 'Performance analysis — time, shift and trips'}</span>
+        <span style={{ fontWeight: 800, fontSize: f('0.88rem'), color: 'var(--text-1)' }}>{isAr ? 'تحليل الأداء — الوقت والوردية وعدد الرحلات' : 'Performance analysis — time, shift and trips'}</span>
       </div>
 
       {/* الورديات */}
@@ -388,15 +344,15 @@ function OpsAnalysis({ O, isAr }) {
           return (
             <div key={k} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--card)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontWeight: 800, fontSize: '0.84rem' }}>{SHIFT_AR[k]}</span>
-                <span style={{ fontFamily: MONO, fontSize: '0.64rem', color: 'var(--text-3)' }} dir="ltr">{SHIFT_RANGE[k]}</span>
+                <span style={{ fontWeight: 800, fontSize: f('0.84rem') }}>{SHIFT_AR[k]}</span>
+                <span style={{ fontFamily: MONO, fontSize: f('0.64rem'), color: 'var(--text-3)' }} dir="ltr">{SHIFT_RANGE[k]}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '8px 0 6px' }} dir="ltr">
-                <span style={{ fontFamily: MONO, fontSize: '1.5rem', fontWeight: 800, lineHeight: 1 }}>{v.n}</span>
-                <span style={{ fontSize: '0.68rem', color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'رحلة' : 'trips'} · <bdi dir="ltr">{Math.round(share * 100)}%</bdi></span>
+                <span style={{ fontFamily: MONO, fontSize: f('1.5rem'), fontWeight: 800, lineHeight: 1 }}>{v.n}</span>
+                <span style={{ fontSize: f('0.68rem'), color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'رحلة' : 'trips'} · <bdi dir="ltr">{Math.round(share * 100)}%</bdi></span>
               </div>
               <Bar pct={share * 100} color="#1C2B4A" />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10, fontSize: '0.72rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10, fontSize: f('0.72rem') }}>
                 {[[isAr ? 'ركاب مرحَّلون' : 'Dispatched', n0(v.pax)], [isAr ? 'نسبة التخلف' : 'Miss rate', v.pax + v.missed ? pct1(mr) : '—'], [isAr ? 'الالتزام بالموعد' : 'On-time', pr != null ? `${Math.round(pr * 100)}%` : '—'], [isAr ? 'متوسط الفرق (دقيقة)' : 'Avg delta (min)', v.delayN ? `${v.delaySum / v.delayN > 0 ? '+' : ''}${(v.delaySum / v.delayN).toFixed(1)}` : '—']].map(([a, b]) => (
                   <div key={a} style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--text-3)', fontWeight: 600 }}>{a}</span><span style={{ fontFamily: MONO, fontWeight: 800 }} dir="ltr">{b}</span></div>
                 ))}
@@ -406,15 +362,16 @@ function OpsAnalysis({ O, isAr }) {
         })}
       </div>
 
+      <div className="ef-pair" style={{ marginTop: 14 }}>
       {/* ساعات اليوم */}
       {O.hours.some(x => x) && (
-        <div style={{ marginTop: 14, border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
-          <div style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{isAr ? 'توزيع الرحلات على ساعات اليوم' : 'Trips by hour of day'}</div>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
+          <div style={{ fontSize: f('0.74rem'), fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{isAr ? 'توزيع الرحلات على ساعات اليوم' : 'Trips by hour of day'}</div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 74 }} dir="ltr">
             {O.hours.map((h, i) => (
               <div key={i} title={`${String(i).padStart(2, '0')}:00 — ${h}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
                 <div style={{ width: '100%', height: `${Math.max(h ? 3 : 1, (h / hrMax) * 52)}px`, background: i === O.peakHour ? '#EE712D' : '#1C2B4A', opacity: h ? 1 : 0.15, borderRadius: '3px 3px 0 0' }} />
-                <span style={{ fontFamily: MONO, fontSize: '0.56rem', color: 'var(--text-3)', height: 12 }}>{i % 3 === 0 ? i : ''}</span>
+                <span style={{ fontFamily: MONO, fontSize: f('0.56rem'), color: 'var(--text-3)', height: 12 }}>{i % 3 === 0 ? i : ''}</span>
               </div>
             ))}
           </div>
@@ -423,30 +380,33 @@ function OpsAnalysis({ O, isAr }) {
 
       {/* الالتزام بموعد المغادرة */}
       {O.accN > 0 && (
-        <div style={{ marginTop: 14, border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
-            <span style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)' }}>{isAr ? 'الالتزام بموعد المغادرة' : 'Departure punctuality'}</span>
-            <span style={{ fontWeight: 800, fontSize: '0.8rem' }}><bdi dir="ltr" style={{ fontFamily: MONO }}>{Math.round(O.punctRate * 100)}%</bdi> {isAr ? 'التزام' : 'on-time'}{O.avgDelay != null ? <> · <bdi dir="ltr" style={{ fontFamily: MONO }}>{O.avgDelay > 0 ? '+' : ''}{O.avgDelay.toFixed(1)} {isAr ? 'د' : 'min'}</bdi></> : ''}</span>
+            <span style={{ fontSize: f('0.74rem'), fontWeight: 800, color: 'var(--text-2)' }}>{isAr ? 'الالتزام بموعد المغادرة' : 'Departure punctuality'}</span>
+            <span style={{ fontWeight: 800, fontSize: f('0.8rem') }}><bdi dir="ltr" style={{ fontFamily: MONO }}>{Math.round(O.punctRate * 100)}%</bdi> {isAr ? 'التزام' : 'on-time'}{O.avgDelay != null ? <> · <bdi dir="ltr" style={{ fontFamily: MONO }}>{O.avgDelay > 0 ? '+' : ''}{O.avgDelay.toFixed(1)} {isAr ? 'د' : 'min'}</bdi></> : ''}</span>
           </div>
           <div style={{ display: 'flex', height: 12, borderRadius: 99, overflow: 'hidden', background: 'var(--border)' }}>
             {accDef.map(([k, , c]) => <div key={k} style={{ width: `${(O.acc[k] / O.accN) * 100}%`, background: c }} />)}
           </div>
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-2)' }}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: f('0.7rem'), fontWeight: 700, color: 'var(--text-2)' }}>
             {accDef.map(([k, l, c]) => <span key={k}><i style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: c, marginInlineEnd: 5 }} />{l} <bdi dir="ltr">{O.acc[k]} ({Math.round((O.acc[k] / O.accN) * 100)}%)</bdi></span>)}
           </div>
         </div>
       )}
+      </div>
 
       {/* الخلاصة */}
       {O.insights.length > 0 && (
-        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)' }}>{isAr ? 'خلاصة التحليل' : 'Analysis summary'}</div>
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: f('0.74rem'), fontWeight: 800, color: 'var(--text-2)', marginBottom: 6 }}>{isAr ? 'خلاصة التحليل' : 'Analysis summary'}</div>
+          <div className="ef-pair" style={{ gap: 6 }}>
           {O.insights.map((x, i) => (
-            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: toneBg[x.t], border: '1px solid var(--border)', borderInlineStart: `4px solid ${toneCol[x.t]}`, borderRadius: 10, padding: '8px 12px', fontSize: '0.8rem', lineHeight: 1.7, color: 'var(--text-1)' }}>
-              <span style={{ fontWeight: 800, color: toneCol[x.t], flexShrink: 0, fontSize: '0.7rem', paddingTop: 2 }}>{x.t === 'good' ? (isAr ? 'إيجابي' : 'Good') : x.t === 'watch' ? (isAr ? 'متابعة' : 'Watch') : (isAr ? 'ملاحظة' : 'Note')}</span>
+            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: toneBg[x.t], border: '1px solid var(--border)', borderInlineStart: `4px solid ${toneCol[x.t]}`, borderRadius: 10, padding: '8px 12px', fontSize: f('0.8rem'), lineHeight: 1.7, color: 'var(--text-1)' }}>
+              <span style={{ fontWeight: 800, color: toneCol[x.t], flexShrink: 0, fontSize: f('0.7rem'), paddingTop: 2 }}>{x.t === 'good' ? (isAr ? 'إيجابي' : 'Good') : x.t === 'watch' ? (isAr ? 'متابعة' : 'Watch') : (isAr ? 'ملاحظة' : 'Note')}</span>
               <span>{x.text}</span>
             </div>
           ))}
+          </div>
         </div>
       )}
     </div>
@@ -459,18 +419,18 @@ function OpsScorecard({ O, isAr }) {
   const g = O.score >= 85 ? [isAr ? 'ممتاز' : 'Excellent', '#16a34a'] : O.score >= 70 ? [isAr ? 'جيد' : 'Good', '#1C2B4A'] : O.score >= 55 ? [isAr ? 'مقبول' : 'Fair', '#d97706'] : [isAr ? 'يحتاج تحسين' : 'Needs work', '#dc2626']
   const parts = [[isAr ? 'الالتزام بموعد المغادرة' : 'Departure punctuality', O.scoreParts.punct, '50%'], [isAr ? 'انضباط الترحيل (قلة المتخلفين)' : 'Boarding discipline', O.scoreParts.miss, '30%'], [isAr ? 'اكتمال تسجيل الأوقات' : 'Time-entry completeness', O.scoreParts.cov, '20%']]
   return (
-    <div style={{ marginTop: 16, border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', background: 'var(--card)' }}>
+    <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', background: 'var(--card)' }}>
       <Ring pct={O.score} color={g[1]} label={String(O.score)} sub={isAr ? 'مؤشر الأداء التشغيلي' : 'Ops score'} size={96} />
       <div style={{ flex: 1, minWidth: 240 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <span style={{ background: g[1], color: '#fff', borderRadius: 99, padding: '2px 14px', fontSize: '0.74rem', fontWeight: 800 }}>{g[0]}</span>
-          <span style={{ fontSize: '0.68rem', color: 'var(--text-3)' }}>{isAr ? 'مؤشر استرشادي مبني على الأرقام المسجلة' : 'Indicative score based on recorded figures'}</span>
+          <span style={{ background: g[1], color: '#fff', borderRadius: 99, padding: '2px 14px', fontSize: f('0.74rem'), fontWeight: 800 }}>{g[0]}</span>
+          <span style={{ fontSize: f('0.68rem'), color: 'var(--text-3)' }}>{isAr ? 'مؤشر استرشادي مبني على الأرقام المسجلة' : 'Indicative score based on recorded figures'}</span>
         </div>
         {parts.map(([l, v, w]) => v != null && (
           <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <span style={{ width: 190, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-2)' }}>{l} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>({w})</span></span>
+            <span style={{ width: 190, fontSize: f('0.74rem'), fontWeight: 700, color: 'var(--text-2)' }}>{l} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>({w})</span></span>
             <Bar pct={v * 100} color={v >= 0.85 ? '#16a34a' : v >= 0.6 ? '#1C2B4A' : '#d97706'} />
-            <span style={{ width: 44, textAlign: 'left', fontFamily: MONO, fontWeight: 800, fontSize: '0.76rem' }} dir="ltr">{Math.round(v * 100)}%</span>
+            <span style={{ width: 44, textAlign: 'left', fontFamily: MONO, fontWeight: 800, fontSize: f('0.76rem') }} dir="ltr">{Math.round(v * 100)}%</span>
           </div>
         ))}
       </div>
@@ -485,7 +445,7 @@ function OpsBreakdown({ O, isAr }) {
   const routes = Object.entries(O.byRoute).sort((a, b) => b[1].pax - a[1].pax).slice(0, 12)
   const inc = Object.entries(O.incidents).sort((a, b) => b[1] - a[1])
   const box = { border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--card)' }
-  const ttl = t => <div style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{t}</div>
+  const ttl = t => <div style={{ fontSize: f('0.74rem'), fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{t}</div>
   return (
     <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
       {dows.length > 0 && (
@@ -493,9 +453,9 @@ function OpsBreakdown({ O, isAr }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {dows.map(x => (
               <div key={x.i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 62, fontSize: '0.74rem', fontWeight: 700 }}>{DOW_AR[x.i]}</span>
+                <span style={{ width: 62, fontSize: f('0.74rem'), fontWeight: 700 }}>{DOW_AR[x.i]}</span>
                 <Bar pct={(x.pax / x.d / dmx) * 100} color="#1C2B4A" />
-                <span style={{ width: 96, textAlign: 'left', fontFamily: MONO, fontSize: '0.7rem', fontWeight: 800 }} dir="ltr">{Math.round(x.pax / x.d)} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>· {(x.n / x.d).toFixed(1)}t</span></span>
+                <span style={{ width: 96, textAlign: 'left', fontFamily: MONO, fontSize: f('0.7rem'), fontWeight: 800 }} dir="ltr">{Math.round(x.pax / x.d)} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>· {(x.n / x.d).toFixed(1)}t</span></span>
               </div>
             ))}
           </div>
@@ -504,7 +464,7 @@ function OpsBreakdown({ O, isAr }) {
       {inc.length > 0 && (
         <div style={box}>{ttl(isAr ? 'الظروف التشغيلية المسجَّلة' : 'Operational conditions')}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {inc.map(([k, v]) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', borderBottom: '1px dashed var(--border)', paddingBottom: 4 }}><span style={{ fontWeight: 600 }}>{OPS_STATUS_AR[k] || k}</span><span style={{ fontFamily: MONO, fontWeight: 800 }}>{v}</span></div>)}
+            {inc.map(([k, v]) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: f('0.78rem'), borderBottom: '1px dashed var(--border)', paddingBottom: 4 }}><span style={{ fontWeight: 600 }}>{OPS_STATUS_AR[k] || k}</span><span style={{ fontFamily: MONO, fontWeight: 800 }}>{v}</span></div>)}
           </div>
         </div>
       )}
@@ -535,21 +495,21 @@ function TripLog({ O, isAr }) {
   const pages = Math.max(1, Math.ceil(rows.length / PER))
   const cur = Math.min(page, pages - 1)
   const slice = rows.slice(cur * PER, cur * PER + PER)
-  const pill = on => ({ padding: '5px 13px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', border: `1.5px solid ${on ? '#1C2B4A' : 'var(--border)'}`, background: on ? '#1C2B4A' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' })
+  const pill = on => ({ padding: '5px 13px', borderRadius: 99, fontSize: f('0.72rem'), fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', border: `1.5px solid ${on ? '#1C2B4A' : 'var(--border)'}`, background: on ? '#1C2B4A' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' })
   const accCol = a => (a === 'Early' ? ['#0369a1', '#e0f2fe', isAr ? 'مبكر' : 'Early'] : a === 'On Time' ? ['#15803d', '#dcfce7', isAr ? 'في الموعد' : 'On time'] : a === 'Not On Time' ? ['#b45309', '#fef3c7', isAr ? 'تأخر بسيط' : 'Slightly late'] : a === 'Delayed' ? ['#b91c1c', '#fee2e2', isAr ? 'متأخر' : 'Delayed'] : null)
   return (
     <div style={{ marginTop: 22, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <span style={{ width: 4, height: 16, background: '#EE712D', borderRadius: 2 }} />
-        <span style={{ fontWeight: 800, fontSize: '0.88rem' }}>{isAr ? 'سجل الرحلات التفصيلي' : 'Detailed trip log'}</span>
-        <span style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--text-3)' }}>{rows.length} / {O.list.length}</span>
+        <span style={{ fontWeight: 800, fontSize: f('0.88rem') }}>{isAr ? 'سجل الرحلات التفصيلي' : 'Detailed trip log'}</span>
+        <span style={{ fontFamily: MONO, fontSize: f('0.72rem'), color: 'var(--text-3)' }}>{rows.length} / {O.list.length}</span>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
         {[['all', isAr ? 'الكل' : 'All'], ['dep', isAr ? 'مغادرة' : 'Departures'], ['arr', isAr ? 'وصول' : 'Arrivals']].map(([v, l]) => <button key={v} type="button" style={pill(type === v)} onClick={() => { setType(v); setPage(0) }}>{l}</button>)}
         <span style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px' }} />
         {[['all', isAr ? 'كل الورديات' : 'All shifts'], ...ACTIVE_SHIFTS.map(x => [x.k, x.ar])].map(([v, l]) => <button key={v} type="button" style={pill(shift === v)} onClick={() => { setShift(v); setPage(0) }}>{l}</button>)}
         <input value={q} onChange={e => { setQ(e.target.value); setPage(0) }} placeholder={isAr ? 'بحث: رقم الرحلة / الحافلة / المحطة' : 'Search trip / bus / station'} aria-label={isAr ? 'بحث في سجل الرحلات' : 'Search trip log'}
-          style={{ flex: 1, minWidth: 190, border: '1px solid var(--border)', borderRadius: 10, padding: '7px 12px', fontSize: '0.78rem', fontFamily: 'inherit', background: 'var(--card)' }} />
+          style={{ flex: 1, minWidth: 190, border: '1px solid var(--border)', borderRadius: 10, padding: '7px 12px', fontSize: f('0.78rem'), fontFamily: 'inherit', background: 'var(--card)' }} />
       </div>
       <div style={{ overflow: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 880 }}>
@@ -558,7 +518,7 @@ function TripLog({ O, isAr }) {
             {slice.map((r, i) => { const ac = accCol(r.acc); return (
               <tr key={i}>
                 <Td>{r.date}</Td>
-                <Td l><b style={{ fontFamily: MONO }}>{r.trip}</b>{r.name ? <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontFamily: 'inherit' }}>{r.name}</div> : null}</Td>
+                <Td l><b style={{ fontFamily: MONO }}>{r.trip}</b>{r.name ? <div style={{ fontSize: f('0.64rem'), color: 'var(--text-3)', fontFamily: 'inherit' }}>{r.name}</div> : null}</Td>
                 <Td><Chip c={r.type === 'arr' ? '#0369a1' : r.type === 'extra' ? '#7c3aed' : '#1C2B4A'} bg={r.type === 'arr' ? '#e0f2fe' : r.type === 'extra' ? '#ede9fe' : '#e2e8f0'}>{r.type === 'arr' ? (isAr ? 'وصول' : 'Arr') : r.type === 'extra' ? (isAr ? 'إضافية' : 'Extra') : (isAr ? 'مغادرة' : 'Dep')}</Chip></Td>
                 <Td l>{r.station}</Td>
                 <Td>{r.sched || '—'}</Td>
@@ -568,16 +528,16 @@ function TripLog({ O, isAr }) {
                 <Td b>{r.type === 'arr' ? '—' : r.pax}</Td>
                 <Td c={r.missed ? '#dc2626' : undefined}>{r.type === 'arr' ? '—' : r.missed}</Td>
                 <Td>{r.bus || '—'}</Td>
-                <Td l>{r.status !== 'Normal' ? <span style={{ color: '#b45309', fontWeight: 700, fontSize: '0.72rem' }}>{OPS_STATUS_AR[r.status] || r.status}</span> : <span style={{ color: 'var(--text-3)', fontSize: '0.72rem' }}>{isAr ? 'عادي' : 'Normal'}</span>}</Td>
+                <Td l>{r.status !== 'Normal' ? <span style={{ color: '#b45309', fontWeight: 700, fontSize: f('0.72rem') }}>{OPS_STATUS_AR[r.status] || r.status}</span> : <span style={{ color: 'var(--text-3)', fontSize: f('0.72rem') }}>{isAr ? 'عادي' : 'Normal'}</span>}</Td>
               </tr>) })}
-            {slice.length === 0 && <tr><td colSpan={12} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8rem' }}>{isAr ? 'لا نتائج مطابقة' : 'No matching trips'}</td></tr>}
+            {slice.length === 0 && <tr><td colSpan={12} style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontSize: f('0.8rem') }}>{isAr ? 'لا نتائج مطابقة' : 'No matching trips'}</td></tr>}
           </tbody>
         </table>
       </div>
       {pages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 10 }}>
           <button type="button" disabled={cur === 0} onClick={() => setPage(cur - 1)} style={{ ...pill(false), opacity: cur === 0 ? 0.4 : 1 }}>{isAr ? 'السابق' : 'Prev'}</button>
-          <span style={{ fontFamily: MONO, fontSize: '0.74rem', fontWeight: 700 }}>{cur + 1} / {pages}</span>
+          <span style={{ fontFamily: MONO, fontSize: f('0.74rem'), fontWeight: 700 }}>{cur + 1} / {pages}</span>
           <button type="button" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)} style={{ ...pill(false), opacity: cur >= pages - 1 ? 0.4 : 1 }}>{isAr ? 'التالي' : 'Next'}</button>
         </div>
       )}
@@ -590,28 +550,28 @@ function OpsNow({ O, isAr }) {
   const items = [['day', isAr ? 'اليوم' : 'Today', O.now.dates.day, '#1C2B4A'], ['week', isAr ? 'هذا الأسبوع' : 'This week', `${isAr ? 'من' : 'from'} ${O.now.dates.week}`, '#0f766e'], ['month', isAr ? 'هذا الشهر' : 'This month', O.now.dates.month, '#7c3aed']]
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{isAr ? 'الحصيلة الحالية — بغضّ النظر عن الفترة المختارة' : 'Right now — independent of the selected period'}</div>
+      <div style={{ fontSize: f('0.74rem'), fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{isAr ? 'الحصيلة الحالية — بغضّ النظر عن الفترة المختارة' : 'Right now — independent of the selected period'}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
         {items.map(([k, label, sub, c]) => {
           const v = O.now[k]
           const cell = (val, lbl, col) => (
             <div style={{ textAlign: 'center', padding: '12px 6px' }}>
-              <div style={{ fontFamily: MONO, fontSize: '2rem', fontWeight: 800, lineHeight: 1, color: col }}>{n0(val)}</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-2)', fontWeight: 800, marginTop: 6 }}>{lbl}</div>
+              <div style={{ fontFamily: MONO, fontSize: f('2rem'), fontWeight: 800, lineHeight: 1, color: col }}>{n0(val)}</div>
+              <div style={{ fontSize: f('0.72rem'), color: 'var(--text-2)', fontWeight: 800, marginTop: 6 }}>{lbl}</div>
             </div>
           )
           return (
             <div key={k} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
               <div style={{ background: c, color: '#fff', padding: '8px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 900, fontSize: '0.86rem' }}>{label}</span>
-                <span style={{ fontFamily: MONO, fontSize: '0.66rem', opacity: 0.85 }} dir="ltr">{sub}</span>
+                <span style={{ fontWeight: 900, fontSize: f('0.86rem') }}>{label}</span>
+                <span style={{ fontFamily: MONO, fontSize: f('0.66rem'), opacity: 0.85 }} dir="ltr">{sub}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr' }}>
                 {cell(v.n, isAr ? 'رحلة مُدخلة' : 'trips entered', c)}
                 <div style={{ background: 'var(--border)' }} />
                 {cell(v.pax, isAr ? 'راكب مرحَّل' : 'dispatched', '#15803d')}
               </div>
-              <div style={{ borderTop: '1px solid var(--border)', padding: '7px 14px', display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 700, background: 'var(--surface)' }}>
+              <div style={{ borderTop: '1px solid var(--border)', padding: '7px 14px', display: 'flex', justifyContent: 'space-between', fontSize: f('0.72rem'), fontWeight: 700, background: 'var(--surface)' }}>
                 <span style={{ color: 'var(--text-3)' }}>{isAr ? 'ركاب متخلفون' : 'Missed'}</span>
                 <span style={{ fontFamily: MONO, fontWeight: 800, color: v.missed ? '#dc2626' : 'var(--text-2)' }}>{n0(v.missed)}</span>
               </div>
@@ -639,24 +599,24 @@ function OpsVerdict({ O, isAr, from, to, names }) {
   const pr = O.peer
   const mx = pr ? Math.max(...pr.top.map(x => x.pax), 1) : 1
   return (
-    <div style={{ marginTop: 16, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--card)' }}>
+    <div style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--card)' }}>
       <div style={{ background: 'linear-gradient(135deg,#1C2B4A,#2d4a7a)', color: '#fff', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ width: 4, alignSelf: 'stretch', background: '#EE712D', borderRadius: 2 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 900, fontSize: '0.98rem' }}>{isAr ? 'النتيجة النهائية للأداء التشغيلي' : 'Operations verdict'}</div>
-          <div style={{ fontSize: '0.7rem', opacity: 0.75, marginTop: 2 }}>{isAr ? 'قراءة مجمّعة للرحلات والركاب والوقت والوردية' : 'A combined reading of trips, passengers, time and shift'}</div>
+          <div style={{ fontWeight: 900, fontSize: f('0.98rem') }}>{isAr ? 'النتيجة النهائية للأداء التشغيلي' : 'Operations verdict'}</div>
+          <div style={{ fontSize: f('0.7rem'), opacity: 0.75, marginTop: 2 }}>{isAr ? 'قراءة مجمّعة للرحلات والركاب والوقت والوردية' : 'A combined reading of trips, passengers, time and shift'}</div>
         </div>
-        {g && <span style={{ background: g[1], color: '#fff', borderRadius: 99, padding: '4px 16px', fontWeight: 900, fontSize: '0.82rem' }}>{g[0]}{sc != null ? ` · ${sc}` : ''}</span>}
+        {g && <span style={{ background: g[1], color: '#fff', borderRadius: 99, padding: '4px 16px', fontWeight: 900, fontSize: f('0.82rem') }}>{g[0]}{sc != null ? ` · ${sc}` : ''}</span>}
       </div>
       <div style={{ padding: '16px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18 }}>
         <div>
-          <p style={{ margin: 0, fontSize: '0.86rem', lineHeight: 2, color: 'var(--text-1)', fontWeight: 600 }}>{narrative(O, from, to)}</p>
+          <p style={{ margin: 0, fontSize: f('0.86rem'), lineHeight: 2, color: 'var(--text-1)', fontWeight: 600 }}>{narrative(O, from, to)}</p>
           {pr && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
               {[[isAr ? 'المرتبة في الركاب' : 'Rank — passengers', pr.rankPax], [isAr ? 'المرتبة في الرحلات' : 'Rank — trips', pr.rankTrips]].map(([l, r]) => (
                 <div key={l} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '8px 14px', textAlign: 'center', minWidth: 104 }}>
-                  <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.15rem', color: r === 1 ? '#EE712D' : 'var(--text-1)' }} dir="ltr">{r}<span style={{ fontSize: '0.7rem', color: 'var(--text-3)' }}> / {pr.count}</span></div>
-                  <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontWeight: 700 }}>{l}</div>
+                  <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: f('1.15rem'), color: r === 1 ? '#EE712D' : 'var(--text-1)' }} dir="ltr">{r}<span style={{ fontSize: f('0.7rem'), color: 'var(--text-3)' }}> / {pr.count}</span></div>
+                  <div style={{ fontSize: f('0.64rem'), color: 'var(--text-3)', fontWeight: 700 }}>{l}</div>
                 </div>
               ))}
             </div>
@@ -664,18 +624,18 @@ function OpsVerdict({ O, isAr, from, to, names }) {
         </div>
         {pr && (
           <div>
-            <div style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{isAr ? 'أعلى الزملاء ترحيلاً (نفس المحطة والفترة)' : 'Top peers by passengers'}</div>
+            <div style={{ fontSize: f('0.74rem'), fontWeight: 800, color: 'var(--text-2)', marginBottom: 8 }}>{isAr ? 'أعلى الزملاء ترحيلاً (نفس المحطة والفترة)' : 'Top peers by passengers'}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {pr.top.map((x, i) => (
                 <div key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 18, fontFamily: MONO, fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-3)' }}>{i + 1}</span>
-                  <span style={{ width: 110, fontSize: '0.72rem', fontWeight: x.me ? 900 : 600, color: x.me ? '#EE712D' : 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={names[x.id] || ''}>{x.me ? (isAr ? 'هذا الموظف' : 'This employee') : (names[x.id] || '—')}</span>
+                  <span style={{ width: 18, fontFamily: MONO, fontSize: f('0.7rem'), fontWeight: 800, color: 'var(--text-3)' }}>{i + 1}</span>
+                  <span style={{ width: 110, fontSize: f('0.72rem'), fontWeight: x.me ? 900 : 600, color: x.me ? '#EE712D' : 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={names[x.id] || ''}>{x.me ? (isAr ? 'هذا الموظف' : 'This employee') : (names[x.id] || '—')}</span>
                   <Bar pct={(x.pax / mx) * 100} color={x.me ? '#EE712D' : '#1C2B4A'} />
-                  <span style={{ width: 54, textAlign: 'left', fontFamily: MONO, fontSize: '0.7rem', fontWeight: 800 }} dir="ltr">{n0(x.pax)}</span>
+                  <span style={{ width: 54, textAlign: 'left', fontFamily: MONO, fontSize: f('0.7rem'), fontWeight: 800 }} dir="ltr">{n0(x.pax)}</span>
                 </div>
               ))}
             </div>
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', marginTop: 8, lineHeight: 1.7 }} dir="ltr">
+            <div style={{ fontSize: f('0.68rem'), color: 'var(--text-3)', marginTop: 8, lineHeight: 1.7 }} dir="ltr">
               {isAr ? '' : ''}<bdi>{isAr ? `متوسط الزميل: ${n0(pr.teamAvgPaxTotal)} راكب · ${pr.teamAvgTrips.toFixed(0)} رحلة · تخلف ${pct1(pr.teamMiss)}` : `Peer average: ${n0(pr.teamAvgPaxTotal)} pax`}</bdi>
             </div>
           </div>
@@ -686,6 +646,279 @@ function OpsVerdict({ O, isAr, from, to, names }) {
 }
 
 const pct1 = x => `${(x * 100).toFixed(1)}%`
+
+// ── قسم: leaves ──
+function LeavesSection({ an, data, from, to, isAr, desk, full }) {
+  return (
+    <SecCard id="leaves" full={full} title={isAr ? 'الإجازات والاستئذان' : 'Leaves & permissions'} hint={`${from} ← ${to}`}>
+      {desk ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+          {[
+            [isAr ? 'استئذان مقدَّم' : 'Perm. req', an.L.permReq, false, '#7c3aed'],
+            [isAr ? 'استئذان مقبول' : 'Perm. OK', an.L.permOk, true, '#7c3aed'],
+            [isAr ? 'مدة الاستئذان' : 'Perm. time', an.L.permHours ? hhmm(an.L.permHours) : '—', false, '#7c3aed'],
+            [isAr ? 'إجازات مقدَّمة' : 'Leave req', an.L.leaveReq, false, '#0f766e'],
+            [isAr ? 'إجازات مقبولة' : 'Leave OK', an.L.leaveOk, true, '#0f766e'],
+            [isAr ? 'الأيام' : 'Days', an.L.leaveDays ? Number(an.L.leaveDays.toFixed(2)) : '—', false, '#0f766e'],
+            [isAr ? 'مرفوضة' : 'Rejected', an.L.rejected, true, an.L.rejected ? '#dc2626' : 'var(--text-3)'],
+            [isAr ? 'الإجمالي' : 'Total', an.L.total, true, '#1C2B4A'],
+          ].map(([l, v, b, c]) => (
+            <div key={l} style={{ border: '1px solid var(--border)', borderTop: `3px solid ${c}`, borderRadius: 12, padding: `${zp(10)} ${zp(12)}`, background: 'var(--surface)' }}>
+              <div style={{ fontSize: f('0.68rem'), color: 'var(--text-3)', fontWeight: 700 }}>{l}</div>
+              <div style={{ fontFamily: MONO, fontSize: f('1.35rem'), fontWeight: b ? 800 : 600, color: 'var(--text-1)', lineHeight: 1.3 }} dir="ltr">{v}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+      <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+          <thead><tr><Th>{isAr ? 'استئذان مقدَّم' : 'Perm. req'}</Th><Th>{isAr ? 'استئذان مقبول' : 'Perm. OK'}</Th><Th>{isAr ? 'مدة الاستئذان' : 'Perm. time'}</Th><Th>{isAr ? 'إجازات مقدَّمة' : 'Leave req'}</Th><Th>{isAr ? 'إجازات مقبولة' : 'Leave OK'}</Th><Th>{isAr ? 'الأيام' : 'Days'}</Th><Th>{isAr ? 'مرفوضة' : 'Rejected'}</Th><Th>{isAr ? 'الإجمالي' : 'Total'}</Th></tr></thead>
+          <tbody><tr><Td>{an.L.permReq}</Td><Td b>{an.L.permOk}</Td><Td>{an.L.permHours ? hhmm(an.L.permHours) : '—'}</Td><Td>{an.L.leaveReq}</Td><Td b>{an.L.leaveOk}</Td><Td>{an.L.leaveDays ? Number(an.L.leaveDays.toFixed(2)) : '—'}</Td><Td c={an.L.rejected ? '#dc2626' : undefined}>{an.L.rejected}</Td><Td b>{an.L.total}</Td></tr></tbody>
+        </table>
+      </div>
+      )}
+      {data.raw.leaves.length > 0 ? (
+        <div style={{ marginTop: desk ? 16 : 12, border: '1px solid var(--border)', borderRadius: 10, overflow: desk ? 'auto' : 'hidden', maxHeight: desk ? 360 : undefined }}>
+          {data.raw.leaves.slice(0, 40).map((r, i) => (
+            <div key={r.id} className="ef-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: `${zp(8)} 14px`, borderTop: i ? '1px solid var(--border)' : 'none', flexWrap: 'wrap' }}>
+              <Chip>{LEAVE_AR[r.leave_type] ?? r.leave_type}</Chip>
+              <span style={{ fontFamily: MONO, fontSize: f('0.8rem'), fontWeight: 700 }}>{r.start_date}{r.leave_type !== 'casual' && r.end_date !== r.start_date ? ` ← ${r.end_date}` : ''}</span>
+              <span style={{ fontFamily: MONO, fontSize: f('0.8rem'), color: 'var(--text-2)' }}>{r.leave_type === 'casual' ? hhmm((Number(r.days_count) || 0) * 24) : `${Number(r.days_count) || 0} ${isAr ? 'يوم' : 'd'}`}</span>
+              <span style={{ flex: 1 }} />
+              <Chip c={STATUS_COL[r.status]?.[0]} bg={STATUS_COL[r.status]?.[1]}>{STATUS_AR[r.status] ?? r.status}</Chip>
+            </div>
+          ))}
+        </div>
+      ) : <p style={{ color: 'var(--text-3)', fontSize: f('0.8rem'), margin: '12px 0 0' }}>{isAr ? 'لا توجد طلبات ضمن الفترة' : 'No requests in the period'}</p>}
+    </SecCard>
+  )
+}
+
+// ── قسم: sales ──
+function SalesSection({ an, from, to, isAr, desk, full }) {
+  return (
+    <SecCard id="sales" full={full} title={isAr ? 'الإيرادات' : 'Revenue'} hint={`${from} ← ${to}`}>
+      {an.S.n === 0 ? <p style={{ color: 'var(--text-3)', fontSize: f('0.8rem'), margin: 0 }}>{isAr ? 'لا توجد إيرادات مُدخلة ضمن الفترة' : 'No entries in the period'}</p> : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: desk ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 14 }}>
+            <Kpi title={isAr ? 'إجمالي المحصَّل' : 'Collected'} value={n0(an.S.collected)} sub={isAr ? 'ر.س' : 'SAR'} color="#15803d" />
+            <Kpi title={isAr ? 'إجمالي المبيعات' : 'Sales'} value={n0(an.S.expected)} sub={isAr ? 'ر.س' : 'SAR'} />
+            <Kpi title={isAr ? 'صافي الفرق' : 'Net diff'} value={`${an.S.diff > 0 ? '+' : ''}${n0(an.S.diff)}`} sub={`${an.S.deficits} ${isAr ? 'عجز' : 'def.'} · ${an.S.surpluses} ${isAr ? 'زيادة' : 'surp.'}`} color={an.S.diff < 0 ? '#dc2626' : '#1d4ed8'} />
+            <Kpi title={isAr ? 'المؤكَّد' : 'Confirmed'} value={`${an.S.confirmed}/${an.S.n}`} color="#7c3aed" />
+          </div>
+          {(() => {
+            const months = Object.keys(an.S.byMonth).sort().reverse(), mx = Math.max(...months.map(m => an.S.byMonth[m].collected), 1)
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {months.map(m => (
+                  <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ width: 66, fontFamily: MONO, fontSize: f('0.74rem'), fontWeight: 700, color: 'var(--text-2)' }}>{m}</span>
+                    <Bar pct={(an.S.byMonth[m].collected / mx) * 100} color="#15803d" />
+                    <span style={{ width: 84, textAlign: 'left', fontFamily: MONO, fontSize: f('0.76rem'), fontWeight: 800 }} dir="ltr">{n0(an.S.byMonth[m].collected)}</span>
+                    <span style={{ width: 62, textAlign: 'left', fontFamily: MONO, fontSize: f('0.72rem'), fontWeight: 700, color: an.S.byMonth[m].diff < 0 ? '#dc2626' : '#1d4ed8' }} dir="ltr">{an.S.byMonth[m].diff > 0 ? '+' : ''}{n0(an.S.byMonth[m].diff)}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+        </>
+      )}
+    </SecCard>
+  )
+}
+
+// ── قسم: eval ──
+function EvalSection({ an, isAr, full }) {
+  return (
+    <SecCard id="eval" full={full} title={isAr ? 'التقييم الوظيفي' : 'Job evaluation'} hint={an.evalAvg != null ? `${isAr ? 'المتوسط' : 'Avg'} ${(an.evalAvg / 10).toFixed(1)} / 10` : ''}>
+      {an.E.length === 0 ? <p style={{ color: 'var(--text-3)', fontSize: f('0.8rem'), margin: 0 }}>{isAr ? 'لا توجد تقييمات ضمن الفترة' : 'No evaluations in the period'}</p> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {an.E.map(x => (
+            <div key={x.key} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 14px', background: 'var(--surface)' }}>
+              <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: f('0.84rem'), minWidth: 66, whiteSpace: 'nowrap' }}>{x.key}</span>
+              <Bar pct={x.final ?? 0} color={x.final >= 85 ? '#15803d' : x.final >= 60 ? '#1C2B4A' : '#d97706'} />
+              <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: f('1rem'), width: 56, textAlign: 'left' }} dir="ltr">{x.final != null ? (x.final / 10).toFixed(1) : '—'}</span>
+              <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{x.rows.map(r => <Chip key={r.eval_source}>{SRC_AR[r.eval_source] ?? r.eval_source} {(r.total_score / 10).toFixed(1)}</Chip>)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </SecCard>
+  )
+}
+
+// ── قسم: ops ──
+function OpsSection({ an, data, from, to, isAr, nameById, full }) {
+  return (
+    <SecCard id="ops" full={full} title={isAr ? 'الأداء التشغيلي — الترحيل' : 'Operations — dispatch'} hint={`${from} ← ${to}`}>
+      <OpsNow O={an.O} isAr={isAr} />
+      {data.tripsError && <div style={{ padding: '8px 12px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: f('0.78rem'), marginBottom: 12 }}>{isAr ? 'تعذّر تحميل سجلات الرحلات: ' : 'Could not load trip records: '}{data.tripsError}</div>}
+      {(data.tripsCapped || data.peersCapped) && <div style={{ padding: '8px 12px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: f('0.76rem'), marginBottom: 12 }}>{isAr ? 'عدد السجلات كبير فتم عرض جزء منها (حتى سقف الأمان)؛ ضيّق الفترة للحصول على أرقام كاملة.' : 'Large dataset: partially loaded. Narrow the period for complete figures.'}</div>}
+      {an.O.n === 0 ? <p style={{ color: 'var(--text-3)', fontSize: f('0.8rem'), margin: 0 }}>{isAr ? `لا توجد رحلات مُدخلة من حساب هذا الموظف ضمن الفترة ${from} ← ${to}. ملاحظة: تُنسب الرحلة للحساب الذي سجّلها في صفحة الترحيل.` : 'No trips entered by this account in the period.'}</p> : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <OpsPanel title={isAr ? 'الرحلات المُدخلة' : 'Trips entered'} value={n0(an.O.n)} color="#1C2B4A" unit={isAr ? 'رحلة' : 'trips'}
+              lines={[[isAr ? 'مغادرة' : 'Departures', n0(an.O.dep)], [isAr ? 'وصول' : 'Arrivals', n0(an.O.arr)], [isAr ? 'إضافية (RF)' : 'Extra (RF)', n0(an.O.extra)]]} />
+            <OpsPanel title={isAr ? 'الركاب المرحَّلون' : 'Passengers dispatched'} value={n0(an.O.pax)} color="#15803d" unit={isAr ? 'راكب' : 'pax'}
+              lines={[[isAr ? 'متوسط الرحلة' : 'Avg per trip', an.O.avg.toFixed(1)], [isAr ? 'رحلات مغادرة' : 'Departures', n0(an.O.dep)]]} />
+            <OpsPanel title={isAr ? 'الركاب المتخلفون' : 'Passengers missed'} value={n0(an.O.missed)} color={an.O.rate > 0.05 ? '#dc2626' : '#d97706'} unit={isAr ? 'راكب' : 'pax'}
+              lines={[[isAr ? 'نسبة التخلف' : 'Miss rate', pct1(an.O.rate)], [isAr ? 'من إجمالي الحاضرين' : 'Of all present', n0(an.O.pax + an.O.missed)]]} />
+          </div>
+          {an.O.pax + an.O.missed > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', height: 12, borderRadius: 99, overflow: 'hidden', background: 'var(--border)' }} role="img" aria-label={`${pct1(1 - an.O.rate)} / ${pct1(an.O.rate)}`}>
+                <div style={{ width: `${(1 - an.O.rate) * 100}%`, background: '#15803d' }} />
+                <div style={{ width: `${an.O.rate * 100}%`, background: '#dc2626', minWidth: an.O.missed ? 3 : 0 }} />
+              </div>
+              <div style={{ display: 'flex', gap: 18, marginTop: 7, fontSize: f('0.72rem'), fontWeight: 700, color: 'var(--text-2)', flexWrap: 'wrap' }}>
+                <span><i style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#15803d', marginInlineEnd: 6 }} />{isAr ? 'تم ترحيلهم' : 'Dispatched'} <bdi dir="ltr">{pct1(1 - an.O.rate)}</bdi></span>
+                <span><i style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#dc2626', marginInlineEnd: 6 }} />{isAr ? 'متخلفون' : 'Missed'} <bdi dir="ltr">{pct1(an.O.rate)}</bdi></span>
+              </div>
+            </div>
+          )}
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <OpsVerdict O={an.O} isAr={isAr} from={from} to={to} names={nameById} />
+            <OpsScorecard O={an.O} isAr={isAr} />
+          </div>
+          <OpsScaleSection O={an.O} isAr={isAr} />
+          <OpsAnalysis O={an.O} isAr={isAr} />
+          <OpsBreakdown O={an.O} isAr={isAr} />
+          <TripLog O={an.O} isAr={isAr} />
+          {(() => {
+            const sts = Object.entries(an.O.byStation).sort((x, y) => y[1].pax - x[1].pax)
+            if (sts.length < 2) return null
+            return (
+              <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, marginTop: 16 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+                  <thead><tr>{[isAr ? 'المحطة' : 'Station', isAr ? 'الرحلات' : 'Trips', isAr ? 'المرحَّلون' : 'Dispatched', isAr ? 'المتخلفون' : 'Missed', isAr ? 'نسبة التخلف' : 'Miss rate'].map(h => <Th key={h}>{h}</Th>)}</tr></thead>
+                  <tbody>{sts.map(([n, b]) => <tr key={n}><Td l b>{n}</Td><Td>{b.n}</Td><Td b>{n0(b.pax)}</Td><Td c={b.missed ? '#dc2626' : undefined}>{n0(b.missed)}</Td><Td>{pct1(b.pax + b.missed ? b.missed / (b.pax + b.missed) : 0)}</Td></tr>)}</tbody>
+                </table>
+              </div>
+            )
+          })()}
+        </>
+      )}
+    </SecCard>
+  )
+}
+
+// ── قسم: ratings ──
+function RatingsSection({ an, isAr, full }) {
+  return (
+    <SecCard id="ratings" full={full} title={isAr ? 'تقييمات العملاء' : 'Customer ratings'} hint={`${an.R.n} ${isAr ? 'تقييم' : 'ratings'}`}>
+      {an.R.n === 0 ? <p style={{ color: 'var(--text-3)', fontSize: f('0.8rem'), margin: 0 }}>{isAr ? 'لا توجد تقييمات عملاء ضمن الفترة' : 'No ratings in the period'}</p> : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 16 }}>
+            <div style={{ background: 'linear-gradient(160deg,#1C2B4A,#2d4a7a)', color: '#fff', borderRadius: 14, padding: '20px 18px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: f('0.7rem'), fontWeight: 700, opacity: 0.75 }}>{isAr ? 'متوسط رضا العملاء' : 'Average satisfaction'}</div>
+              <div style={{ fontFamily: MONO, fontSize: f('3rem'), fontWeight: 800, lineHeight: 1 }} dir="ltr">{an.R.avg.toFixed(2)}<span style={{ fontSize: f('1rem'), opacity: 0.6 }}> / 5</span></div>
+              <Stars value={an.R.avg} size={22} color="#F5A623" />
+              <div style={{ display: 'flex', gap: 10, marginTop: 6, width: '100%' }}>
+                <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 4px' }}><div style={{ fontFamily: MONO, fontWeight: 800, fontSize: f('1.1rem') }} dir="ltr">{Math.round(an.R.sat * 100)}%</div><div style={{ fontSize: f('0.64rem'), opacity: 0.8 }}>{isAr ? 'راضون (4+)' : 'Satisfied (4+)'}</div></div>
+                <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 4px' }}><div style={{ fontFamily: MONO, fontWeight: 800, fontSize: f('1.1rem') }} dir="ltr">{an.R.n}</div><div style={{ fontSize: f('0.64rem'), opacity: 0.8 }}>{isAr ? 'تقييم' : 'ratings'}</div></div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, justifyContent: 'center' }}>
+              {[5, 4, 3, 2, 1].map(st => {
+                const c = an.R.dist[st - 1], col = st >= 4 ? '#16a34a' : st === 3 ? '#d97706' : '#dc2626'
+                return (
+                  <div key={st} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ width: 58, display: 'flex', alignItems: 'center', gap: 4, fontSize: f('0.78rem'), fontWeight: 800, color: 'var(--text-2)' }}><span dir="ltr" style={{ fontFamily: MONO }}>{st}</span><Stars value={st} size={11} color={col} /></span>
+                    <Bar pct={(c / Math.max(...an.R.dist, 1)) * 100} color={col} />
+                    <span style={{ width: 82, textAlign: 'left', fontFamily: MONO, fontSize: f('0.76rem'), fontWeight: 800 }} dir="ltr">{c} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>({Math.round((c / an.R.n) * 100)}%)</span></span>
+                  </div>
+                )
+              })}
+              {an.R.low > 0 && <div style={{ fontSize: f('0.72rem'), color: '#b91c1c', fontWeight: 700, marginTop: 2 }}>{isAr ? `${an.R.low} تقييم منخفض (نجمتان فأقل) يحتاج مراجعة` : `${an.R.low} low ratings (2 stars or fewer) need review`}</div>}
+            </div>
+          </div>
+          {(Object.keys(an.R.byShift).length > 0 || Object.keys(an.R.byMonth).length > 1) && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 14 }}>
+              {Object.keys(an.R.byShift).length > 0 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
+                  <div style={{ fontSize: f('0.74rem'), fontWeight: 800, marginBottom: 8, color: 'var(--text-2)' }}>{isAr ? 'المتوسط حسب الوردية' : 'By shift'}</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {Object.entries(an.R.byShift).sort().map(([sh, b]) => (
+                      <div key={sh} style={{ flex: 1, textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '8px 4px' }}>
+                        <div style={{ fontSize: f('0.64rem'), color: 'var(--text-3)', fontWeight: 700 }}>{SHIFT_AR[sh] ?? sh}</div>
+                        <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: f('1.2rem') }} dir="ltr">{(b.sum / b.n).toFixed(2)}</div>
+                        <div style={{ fontSize: f('0.62rem'), color: 'var(--text-3)' }}>{b.n} {isAr ? 'تقييم' : 'ratings'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Object.keys(an.R.byMonth).length > 1 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
+                  <div style={{ fontSize: f('0.74rem'), fontWeight: 800, marginBottom: 8, color: 'var(--text-2)' }}>{isAr ? 'اتجاه المتوسط الشهري' : 'Monthly trend'}</div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 70 }} dir="ltr">
+                    {Object.keys(an.R.byMonth).sort().slice(-12).map(m => { const v = an.R.byMonth[m].sum / an.R.byMonth[m].n; return (
+                      <div key={m} title={`${m}: ${v.toFixed(2)}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                        <span style={{ fontFamily: MONO, fontSize: f('0.6rem'), fontWeight: 800 }}>{v.toFixed(1)}</span>
+                        <div style={{ width: '100%', maxWidth: 26, height: `${(v / 5) * 46}px`, background: v >= 4 ? '#16a34a' : v >= 3 ? '#d97706' : '#dc2626', borderRadius: '4px 4px 0 0', minHeight: 3 }} />
+                        <span style={{ fontFamily: MONO, fontSize: f('0.56rem'), color: 'var(--text-3)' }}>{m.slice(5)}</span>
+                      </div>) })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {an.R.comments.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: f('0.74rem'), fontWeight: 800, marginBottom: 8, color: 'var(--text-2)' }}>{isAr ? 'آراء العملاء' : 'Customer comments'}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+                {an.R.comments.slice(0, 8).map((r, i) => (
+                  <figure key={i} style={{ margin: 0, border: '1px solid var(--border)', borderInlineStart: `4px solid ${r.rating >= 4 ? '#16a34a' : r.rating === 3 ? '#d97706' : '#dc2626'}`, borderRadius: 10, padding: '10px 14px', background: 'var(--surface)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}><Stars value={r.rating} size={13} /><span style={{ fontFamily: MONO, fontSize: f('0.64rem'), color: 'var(--text-3)' }}>{riyadhDay(r.created_at)}{r.shift ? ` · ${r.shift}` : ''}</span></div>
+                    <blockquote style={{ margin: 0, fontSize: f('0.8rem'), lineHeight: 1.7, color: 'var(--text-1)' }}>{r.comment}</blockquote>
+                  </figure>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </SecCard>
+  )
+}
+
+// ── قسم: activity ──
+function ActivitySection({ an, data, u, isAr, desk, full }) {
+  return (
+    <SecCard id="activity" full={full} title={isAr ? 'الدخول والنشاط' : 'Logins & activity'} hint={`${an.A.effFrom} ← ${an.A.effTo}`}>
+      <div style={{ display: 'grid', gridTemplateColumns: desk && an.A.times.length > 0 ? 'minmax(0, 1.3fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', gap: 24, alignItems: 'start' }}>
+      <div style={{ minWidth: 0 }}>
+      <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+        <Ring pct={an.A.rate * 100} color="#0369a1" label={`${Math.round(an.A.rate * 100)}%`} sub={isAr ? 'نسبة أيام الدخول' : 'Login-day rate'} />
+        <div style={{ flex: 1, minWidth: 240, display: 'grid', gridTemplateColumns: desk ? 'repeat(auto-fit, minmax(176px, 1fr))' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+          <Kpi title={isAr ? 'آخر دخول' : 'Last login'} value={u.last_login ? riyadhDay(u.last_login) : '—'} sub={u.last_login ? new Date(new Date(u.last_login).getTime() + 3 * 3600000).toISOString().slice(11, 16) : null} color="#0369a1" />
+          <Kpi title={isAr ? 'مرات الدخول' : 'Logins'} value={n0(an.A.count)} sub={isAr ? 'في الفترة' : 'in period'} />
+          <Kpi title={isAr ? 'أيام الدخول' : 'Days'} value={`${an.A.days}/${an.A.periodDays}`} />
+          <Kpi title={isAr ? 'ساعة الدخول الأكثر' : 'Peak hour'} value={an.A.peak != null ? `${String(an.A.peak).padStart(2, '0')}:00` : '—'} color="#7c3aed" />
+        </div>
+      </div>
+      {!data.loginsOk && <p style={{ fontSize: f('0.74rem'), color: '#b45309', margin: '0 0 10px' }}>{isAr ? 'سجل الدخول التفصيلي غير متاح؛ يظهر آخر دخول فقط.' : 'Detailed login history unavailable; only the last login is shown.'}</p>}
+      {an.A.periodDays <= 120 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 12 }}>
+          {Array.from({ length: an.A.periodDays }, (_, i) => addDays(an.A.effFrom, i)).map(d => (
+            <span key={d} title={d} style={{ width: 13, height: 13, borderRadius: 3, background: an.A.loginDays.has(d) ? '#0369a1' : 'var(--border)' }} />
+          ))}
+        </div>
+      )}
+      </div>
+      {an.A.times.length > 0 && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', maxHeight: desk ? 420 : 260, overflowY: 'auto' }}>
+          {an.A.times.slice(0, 40).map((t, i) => (
+            <div key={t + i} style={{ padding: '7px 14px', borderTop: i ? '1px solid var(--border)' : 'none', fontFamily: MONO, fontSize: f('0.78rem'), color: 'var(--text-2)', display: 'flex', justifyContent: 'space-between' }}>
+              <span>{fmtDT(t)}</span><span style={{ color: 'var(--text-3)' }}>{(isAr ? ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])[new Date(riyadhDay(t) + 'T00:00:00Z').getUTCDay()]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      </div>
+    </SecCard>
+  )
+}
 
 export default function EmployeeFilePage() {
   const { i18n } = useTranslation()
@@ -702,6 +935,8 @@ export default function EmployeeFilePage() {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [view, setView] = useState('employee')   // employee | stations (أداء المحطات) | coverage (الالتزام بالإيراد)
+  const desk = useMedia('(min-width: 900px)')
+  const wide = useMedia('(min-width: 1360px)')   // بطاقة الموظف جانباً
 
   useEffect(() => { try { localStorage.setItem('empfile_sections_v3', JSON.stringify([...sel])) } catch { /* بدون تخزين */ } }, [sel])
   useEffect(() => {
@@ -917,354 +1152,131 @@ export default function EmployeeFilePage() {
     openDocWindow(html)
   }
 
-  const inpCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white'
-  const pill = on => ({ padding: '7px 16px', borderRadius: 99, fontSize: '0.78rem', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', border: `1.5px solid ${on ? '#1C2B4A' : 'var(--border)'}`, background: on ? '#1C2B4A' : 'var(--card)', color: on ? '#fff' : 'var(--text-2)' })
+  // ── العرض ──────────────────────────────────────────────────────
+  // الكمبيوتر: بطاقة الموظف جانباً (عند العرض الكبير) + أقسام بشبكة أعمدة + انتقال سريع؛ الجوال: عمود واحد كما كان
+  const order = (desk ? ['leaves', 'sales', 'eval', 'ratings', 'ops', 'activity'] : ['leaves', 'sales', 'eval', 'ops', 'ratings', 'activity']).filter(show)
+  const wideOnly = ['ops', 'ratings', 'activity']   // أقسام عريضة تمتد على كل عرض الشبكة
+  const halves = order.filter(id => !wideOnly.includes(id))
+  const lastHalf = halves.length % 2 === 1 ? halves[halves.length - 1] : null
+  const isFull = id => desk && (wideOnly.includes(id) || id === lastHalf)
+  const secLabel = Object.fromEntries(SECTIONS)
+  const jump = id => { document.getElementById(`ef-sec-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+  const ready = !!(u && an && !loading)
+
+  // مؤشرات الترويسة (كمبيوتر فقط): حتى 6 مؤشرات حسب الأقسام المعروضة، وضغطها ينتقل للقسم
+  let hdrStats
+  if (desk && view === 'employee' && ready) {
+    const evN = an.E.filter(x => x.final != null).length
+    const cands = [
+      show('ops') && { pr: 1, label: isAr ? 'رحلات مُدخلة' : 'Trips entered', value: n0(an.O.n), hint: `${n0(an.O.dep)} ${isAr ? 'مغادرة' : 'dep.'} · ${an.O.extra} ${isAr ? 'إضافية' : 'extra'}`, onClick: () => jump('ops') },
+      show('ops') && { pr: 1, label: isAr ? 'ركاب مرحَّلون' : 'Dispatched', value: n0(an.O.pax), hint: `${isAr ? 'متوسط' : 'avg'} ${an.O.avg.toFixed(1)} ${isAr ? 'للرحلة' : '/ trip'}`, color: '#15803d', onClick: () => jump('ops') },
+      show('ops') && { pr: 3, label: isAr ? 'ركاب متخلفون' : 'Missed', value: n0(an.O.missed), hint: `${isAr ? 'نسبة' : 'rate'} ${pct1(an.O.rate)}`, color: an.O.rate > 0.05 ? '#dc2626' : '#d97706', onClick: () => jump('ops') },
+      show('leaves') && { pr: 3, label: isAr ? 'إجازات مقبولة' : 'Leaves', value: String(an.L.leaveOk), hint: `${Number(an.L.leaveDays.toFixed(2))} ${isAr ? 'يوم' : 'days'}`, color: '#0f766e', onClick: () => jump('leaves') },
+      show('sales') && { pr: 2, label: isAr ? 'إيرادات مُحصَّلة' : 'Collected', value: n0(an.S.collected), hint: `${an.S.n} ${isAr ? 'قيد' : 'entries'} · ${isAr ? 'فرق' : 'diff'} ${an.S.diff > 0 ? '+' : ''}${n0(an.S.diff)}`, color: an.S.diff < 0 ? '#dc2626' : '#15803d', onClick: () => jump('sales') },
+      show('eval') && { pr: 1, label: isAr ? 'التقييم الوظيفي' : 'Evaluation', value: an.evalAvg != null ? `${(an.evalAvg / 10).toFixed(1)} / 10` : '—', hint: `${evN} ${isAr ? 'شهر مقيَّم' : 'months'}`, color: '#1C2B4A', onClick: () => jump('eval') },
+      show('ratings') && { pr: 1, label: isAr ? 'تقييم العملاء' : 'Customer rating', value: an.R.avg != null ? `${an.R.avg.toFixed(2)} / 5` : '—', hint: `${an.R.n} ${isAr ? 'تقييم' : 'ratings'}`, color: '#EE712D', onClick: () => jump('ratings') },
+      show('activity') && { pr: 2, label: isAr ? 'نسبة الدخول' : 'Login rate', value: `${Math.round(an.A.rate * 100)}%`, hint: `${an.A.days} ${isAr ? 'من' : 'of'} ${an.A.periodDays} ${isAr ? 'يوماً' : 'days'}`, color: '#0369a1', onClick: () => jump('activity') },
+    ].filter(Boolean).map((c, i) => ({ ...c, i }))
+    hdrStats = cands.sort((a, b) => a.pr - b.pr || a.i - b.i).slice(0, 6).sort((a, b) => a.i - b.i)
+  }
+
+  const sectionNodes = {
+    leaves: <LeavesSection key="leaves" an={an} data={data} from={from} to={to} isAr={isAr} desk={desk} full={isFull('leaves')} />,
+    sales: <SalesSection key="sales" an={an} from={from} to={to} isAr={isAr} desk={desk} full={isFull('sales')} />,
+    eval: <EvalSection key="eval" an={an} isAr={isAr} full={isFull('eval')} />,
+    ops: <OpsSection key="ops" an={an} data={data} from={from} to={to} isAr={isAr} nameById={nameById} full={isFull('ops')} />,
+    ratings: <RatingsSection key="ratings" an={an} isAr={isAr} full={isFull('ratings')} />,
+    activity: <ActivitySection key="activity" an={an} data={data} u={u} isAr={isAr} desk={desk} full={isFull('activity')} />,
+  }
+  const hero = ready ? <ProfileHero u={u} isAr={isAr} side={wide} titleLine={[u.job_title, data.title].filter(Boolean).join(' · ') || roleName}
+    tags={[stName, u.job_number && `#${u.job_number}`, roleName, u.hire_date && `${yearsOfService(u.hire_date)} سنة خدمة`].filter(Boolean)}
+    evalAvg={an.evalAvg} loginRate={an.A.rate} showEval={show('eval')} showActivity={show('activity')} /> : null
+  const info = ready ? <InfoPanel fields={infoFields} modNames={modNames} isAr={isAr} list={wide} /> : null
+  const SEC_DESC = {
+    leaves: isAr ? 'طلبات الإجازة والاستئذان وحالتها' : 'Leave and permission requests',
+    ops: isAr ? 'الرحلات والركاب المرحَّلون والالتزام بالموعد' : 'Trips, dispatched passengers, punctuality',
+    sales: isAr ? 'القيود الإيرادية والعجز والزيادة' : 'Revenue entries, deficits and surpluses',
+    eval: isAr ? 'نتائج التقييم الشهري ومصادره' : 'Monthly evaluation results',
+    ratings: isAr ? 'رضا العملاء وآراؤهم' : 'Customer satisfaction and comments',
+    activity: isAr ? 'مرات الدخول وأيامه وساعاته' : 'Login count, days and hours',
+  }
+
+  const printBtn = view === 'employee' && (
+    <button type="button" onClick={printFile} disabled={!an} style={{ padding: desk ? '11px 26px' : '10px 24px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', fontFamily: 'inherit', opacity: an ? 1 : 0.4 }}>
+      {isAr ? 'طباعة التقرير / PDF' : 'Print report / PDF'}
+    </button>
+  )
 
   return (
-    <div dir={isAr ? 'rtl' : 'ltr'} style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)', paddingBottom: 40 }}>
-      {/* الترويسة */}
-      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'السجل الوظيفي' : 'Staff record'}</h1>
-            <p style={{ margin: '3px 0 0', fontSize: '0.76rem', color: 'var(--text-3)' }}>{isAr ? 'سجل شامل للموظف: البيانات، الإجازات، الأداء التشغيلي، الإيرادات، التقييمات، والدخول — للأدمن فقط' : 'Complete employee record: details, leaves, operations, revenue, evaluations and logins — admin only'}</p>
-          </div>
-          <div style={{ display: 'inline-flex', border: '1px solid var(--border-2)', borderRadius: 12, overflow: 'hidden' }}>
-            {[['employee', isAr ? 'ملف الموظف' : 'Employee'], ['stations', isAr ? 'أداء المحطات' : 'Stations performance'], ['coverage', isAr ? 'الالتزام بالإيراد' : 'Revenue compliance']].map(([k, l]) => (
-              <button key={k} type="button" onClick={() => setView(k)} style={{ padding: '9px 20px', border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', background: view === k ? '#1C2B4A' : 'var(--card)', color: view === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
-            ))}
-          </div>
-          {view === 'employee' && <button type="button" onClick={printFile} disabled={!an} style={{ padding: '10px 24px', borderRadius: 10, border: 'none', background: '#1C2B4A', color: '#fff', fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', fontFamily: 'inherit', opacity: an ? 1 : 0.4 }}>
-            {isAr ? 'طباعة التقرير / PDF' : 'Print report / PDF'}
-          </button>}
-        </div>
-      </div>
+    <div dir={isAr ? 'rtl' : 'ltr'} className="ef-root" style={{ minHeight: 'calc(100vh - 58px)', background: 'var(--surface)', paddingBottom: 40 }}>
+      <style>{EF_CSS}</style>
+      <div style={{ maxWidth: 'min(100%, 1560px)', margin: '0 auto', padding: 'clamp(16px, 2vw, 32px)' }}>
+        <PageHeader accent="#1C2B4A" title={isAr ? 'السجل الوظيفي' : 'Staff record'}
+          subtitle={isAr ? 'سجل شامل للموظف: البيانات، الإجازات، الأداء التشغيلي، الإيرادات، التقييمات، والدخول — للأدمن فقط' : 'Complete employee record: details, leaves, operations, revenue, evaluations and logins — admin only'}
+          actions={printBtn || undefined} stats={hdrStats} />
 
-      {view === 'coverage' && (
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '18px 20px' }}>
-          <StationsCoverage isAr={isAr} />
-        </div>
-      )}
+        <ViewTabs view={view} onChange={setView} isAr={isAr} desk={desk} />
 
-      {view === 'stations' && (
-        <div style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 20px' }}>
-          <StationsPerformance isAr={isAr} />
-        </div>
-      )}
-      <div style={{ maxWidth: 1040, margin: '0 auto', padding: '18px 20px', display: view === 'employee' ? 'flex' : 'none', flexDirection: 'column', gap: 16 }}>
-        {/* الفلاتر */}
-        <div style={{ ...card, padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div style={{ minWidth: 190 }}>
-              <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'المحطة' : 'Station'}</label>
-              <SearchSelect isAr={isAr} value={stationF} onChange={v => { setStationF(v); setEmpId('') }} className={inpCls + ' w-full'}
-                options={[{ value: '', label: isAr ? 'كل المحطات' : 'All stations' }, ...stations.map(s => ({ value: s.id, label: isAr ? s.name_ar : (s.name_en || s.name_ar) }))]} />
+        {view === 'coverage' && <StationsCoverage isAr={isAr} />}
+        {view === 'stations' && <StationsPerformance isAr={isAr} />}
+
+        <div style={{ display: view === 'employee' ? 'flex' : 'none', flexDirection: 'column', gap: desk ? 20 : 16 }}>
+          <FilterBar isAr={isAr} desk={desk} stations={stations} stationF={stationF} onStation={v => { setStationF(v); setEmpId('') }}
+            empId={empId} onEmp={setEmpId} empOptions={empOptions} from={from} to={to}
+            onFrom={v => { setFrom(v); if (v > to) setTo(v) }} onTo={v => { setTo(v); if (v < from) setFrom(v) }} onPreset={(a, b) => { setFrom(a); setTo(b) }}
+            presets={PRESETS} showAll={showAll} sel={sel} sections={SECTIONS} onAll={() => setSel(new Set())} onToggle={toggleSec} />
+
+          {!empId && (
+            <div style={{ ...card, padding: desk ? '44px 32px' : '50px 20px', textAlign: 'center' }}>
+              <div style={{ color: desk ? 'var(--text-1)' : 'var(--text-3)', fontSize: desk ? f('1.05rem') : '0.9rem', fontWeight: desk ? 800 : 400 }}>{isAr ? 'اختر موظفاً لعرض ملفه الوظيفي الكامل' : 'Pick an employee to view the file'}</div>
+              {desk && (
+                <>
+                  <p style={{ margin: '6px 0 24px', color: 'var(--text-3)', fontSize: f('0.8rem') }}>{isAr ? 'ابدأ باختيار المحطة ثم الموظف من الأعلى، وسيظهر الملف بهذه الأقسام:' : 'Choose a station and an employee above to see these sections:'}</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, textAlign: isAr ? 'right' : 'left' }}>
+                    {SECTIONS.map(([id, l]) => (
+                      <div key={id} style={{ border: '1px solid var(--border)', background: 'var(--surface)', borderRadius: 12, padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 4, height: 15, background: '#EE712D', borderRadius: 2 }} /><span style={{ fontWeight: 800, fontSize: f('0.88rem'), color: 'var(--text-1)' }}>{l}</span></div>
+                        <div style={{ marginTop: 5, fontSize: f('0.74rem'), color: 'var(--text-3)', lineHeight: 1.7 }}>{SEC_DESC[id]}</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-            <div style={{ minWidth: 260, flex: 1 }}>
-              <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'الموظف' : 'Employee'}</label>
-              <SearchSelect isAr={isAr} value={empId} onChange={setEmpId} className={inpCls + ' w-full'} placeholder={isAr ? 'اختر الموظف…' : 'Pick an employee…'} options={empOptions} />
-            </div>
-            <div><label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'من' : 'From'}</label>
-              <DatePicker value={from} onChange={v => { setFrom(v); if (v > to) setTo(v) }} isAr={isAr} className={inpCls + ' w-40'} /></div>
-            <div><label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'إلى' : 'To'}</label>
-              <DatePicker value={to} onChange={v => { setTo(v); if (v < from) setFrom(v) }} isAr={isAr} className={inpCls + ' w-40'} /></div>
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {PRESETS.map(([l, a, b]) => <button key={l} type="button" onClick={() => { setFrom(a); setTo(b) }} style={pill(from === a && to === b)}>{l}</button>)}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', marginInlineEnd: 4 }}>{isAr ? 'الأقسام المعروضة والمطبوعة:' : 'Sections:'}</span>
-            <button type="button" onClick={() => setSel(new Set())} style={pill(showAll)}>{isAr ? 'الكل' : 'All'}</button>
-            {SECTIONS.map(([id, l]) => <button key={id} type="button" onClick={() => toggleSec(id)} style={pill(!showAll && sel.has(id))}>{l}</button>)}
-          </div>
-        </div>
+          )}
+          {empId && loading && <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>}
+          {err && <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: f('0.82rem') }}>{err}</div>}
 
-        {!empId && <div style={{ ...card, padding: '50px 20px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.9rem' }}>{isAr ? 'اختر موظفاً لعرض ملفه الوظيفي الكامل' : 'Pick an employee to view the file'}</div>}
-        {empId && loading && <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'جارٍ التحميل…' : 'Loading…'}</div>}
-        {err && <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: '0.82rem' }}>{err}</div>}
-
-        {u && an && !loading && (
-          <>
-            {/* بطاقة الموظف */}
-            <div style={{ borderRadius: 16, overflow: 'hidden', background: 'linear-gradient(135deg,#1C2B4A,#264673 70%,#34588f)', color: '#fff', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-              <span style={{ width: 66, height: 66, borderRadius: '50%', background: '#EE712D', display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: '1.7rem', flexShrink: 0 }}>{String(u.full_name_ar || '?').trim().charAt(0)}</span>
-              <div style={{ flex: 1, minWidth: 220 }}>
-                <div style={{ fontWeight: 900, fontSize: '1.3rem' }}>{u.full_name_ar}</div>
-                <div style={{ opacity: 0.85, fontSize: '0.82rem', marginTop: 3 }}>{[u.job_title, data.title].filter(Boolean).join(' · ') || roleName}</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                  {[stName, u.job_number && `#${u.job_number}`, roleName, u.hire_date && `${yearsOfService(u.hire_date)} سنة خدمة`].filter(Boolean).map(t => <span key={t} style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 99, padding: '3px 12px', fontSize: '0.74rem', fontWeight: 700 }}>{t}</span>)}
-                  <span style={{ background: u.is_active === false ? '#dc2626' : '#16a34a', borderRadius: 99, padding: '3px 12px', fontSize: '0.74rem', fontWeight: 800 }}>{u.is_active === false ? 'معطّل' : 'نشط'}</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 22 }}>
-                {show('eval') && <Ring pct={(an.evalAvg ?? 0)} color="#EE712D" label={an.evalAvg != null ? (an.evalAvg / 10).toFixed(1) : '—'} sub={isAr ? 'التقييم /10' : 'Eval /10'} size={84} />}
-                {show('activity') && <Ring pct={an.A.rate * 100} color="#38bdf8" label={`${Math.round(an.A.rate * 100)}%`} sub={isAr ? 'نسبة الدخول' : 'Login rate'} size={84} />}
+          {ready && (
+            <div className="ef-layout">
+              {wide ? <aside className="ef-aside">{hero}{info}</aside> : (
+                <>
+                  {hero}
+                  {/* مؤشرات الجوال (على الكمبيوتر تظهر في الترويسة) */}
+                  {!desk && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                      {show('leaves') && <><Kpi title={isAr ? 'إجازات مقبولة' : 'Leaves'} value={`${an.L.leaveOk}`} sub={`${Number(an.L.leaveDays.toFixed(2))} ${isAr ? 'يوم' : 'days'}`} color="#0f766e" />
+                        <Kpi title={isAr ? 'استئذان مقبول' : 'Permissions'} value={hhmm(an.L.permHours)} sub={`${an.L.permOk} ${isAr ? 'مرة' : 'times'}`} color="#7c3aed" /></>}
+                      {show('ops') && <><Kpi title={isAr ? 'رحلات مُدخلة' : 'Trips entered'} value={n0(an.O.n)} sub={`${an.O.extra} ${isAr ? 'إضافية' : 'extra'}`} color="#1C2B4A" />
+                        <Kpi title={isAr ? 'ركاب مرحَّلون' : 'Dispatched'} value={n0(an.O.pax)} sub={`${isAr ? 'متوسط' : 'avg'} ${an.O.avg.toFixed(1)}`} color="#15803d" />
+                        <Kpi title={isAr ? 'ركاب متخلفون' : 'Missed'} value={n0(an.O.missed)} sub={pct1(an.O.rate)} color={an.O.rate > 0.05 ? '#dc2626' : '#d97706'} /></>}
+                      {show('sales') && <><Kpi title={isAr ? 'إيرادات مُدخلة' : 'Entries'} value={n0(an.S.n)} sub={`${n0(an.S.collected)} ${isAr ? 'ر.س' : 'SAR'}`} color="#15803d" />
+                        <Kpi title={isAr ? 'صافي الفرق' : 'Net diff'} value={`${an.S.diff > 0 ? '+' : ''}${n0(an.S.diff)}`} sub={`${an.S.deficits} ${isAr ? 'عجز' : 'deficits'}`} color={an.S.diff < 0 ? '#dc2626' : '#1d4ed8'} /></>}
+                      {show('eval') && <Kpi title={isAr ? 'التقييم الوظيفي' : 'Evaluation'} value={an.evalAvg != null ? (an.evalAvg / 10).toFixed(1) : '—'} sub={`${an.E.filter(x => x.final != null).length} ${isAr ? 'شهر مقيَّم' : 'months'}`} color="#1C2B4A" />}
+                      {show('ratings') && <Kpi title={isAr ? 'تقييم العملاء' : 'Customer rating'} value={an.R.avg != null ? an.R.avg.toFixed(2) : '—'} sub={`${an.R.n} ${isAr ? 'تقييم' : 'ratings'}`} color="#EE712D" />}
+                      {show('activity') && <Kpi title={isAr ? 'أيام الدخول' : 'Login days'} value={`${an.A.days}/${an.A.periodDays}`} sub={`${an.A.count} ${isAr ? 'دخول' : 'logins'}`} color="#0369a1" />}
+                    </div>
+                  )}
+                  {info}
+                </>
+              )}
+              <div style={{ minWidth: 0 }}>
+                {desk && <SectionNav items={order.map(id => [id, secLabel[id]])} onJump={jump} isAr={isAr} />}
+                <div className="ef-main">{order.map(id => sectionNodes[id])}</div>
               </div>
             </div>
-
-            {/* مؤشرات */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-              {show('leaves') && <><Kpi title={isAr ? 'إجازات مقبولة' : 'Leaves'} value={`${an.L.leaveOk}`} sub={`${Number(an.L.leaveDays.toFixed(2))} ${isAr ? 'يوم' : 'days'}`} color="#0f766e" />
-                <Kpi title={isAr ? 'استئذان مقبول' : 'Permissions'} value={hhmm(an.L.permHours)} sub={`${an.L.permOk} ${isAr ? 'مرة' : 'times'}`} color="#7c3aed" /></>}
-              {show('ops') && <><Kpi title={isAr ? 'رحلات مُدخلة' : 'Trips entered'} value={n0(an.O.n)} sub={`${an.O.extra} ${isAr ? 'إضافية' : 'extra'}`} color="#1C2B4A" />
-                <Kpi title={isAr ? 'ركاب مرحَّلون' : 'Dispatched'} value={n0(an.O.pax)} sub={`${isAr ? 'متوسط' : 'avg'} ${an.O.avg.toFixed(1)}`} color="#15803d" />
-                <Kpi title={isAr ? 'ركاب متخلفون' : 'Missed'} value={n0(an.O.missed)} sub={pct1(an.O.rate)} color={an.O.rate > 0.05 ? '#dc2626' : '#d97706'} /></>}
-              {show('sales') && <><Kpi title={isAr ? 'إيرادات مُدخلة' : 'Entries'} value={n0(an.S.n)} sub={`${n0(an.S.collected)} ${isAr ? 'ر.س' : 'SAR'}`} color="#15803d" />
-                <Kpi title={isAr ? 'صافي الفرق' : 'Net diff'} value={`${an.S.diff > 0 ? '+' : ''}${n0(an.S.diff)}`} sub={`${an.S.deficits} ${isAr ? 'عجز' : 'deficits'}`} color={an.S.diff < 0 ? '#dc2626' : '#1d4ed8'} /></>}
-              {show('eval') && <Kpi title={isAr ? 'التقييم الوظيفي' : 'Evaluation'} value={an.evalAvg != null ? (an.evalAvg / 10).toFixed(1) : '—'} sub={`${an.E.filter(x => x.final != null).length} ${isAr ? 'شهر مقيَّم' : 'months'}`} color="#1C2B4A" />}
-              {show('ratings') && <Kpi title={isAr ? 'تقييم العملاء' : 'Customer rating'} value={an.R.avg != null ? an.R.avg.toFixed(2) : '—'} sub={`${an.R.n} ${isAr ? 'تقييم' : 'ratings'}`} color="#EE712D" />}
-              {show('activity') && <Kpi title={isAr ? 'أيام الدخول' : 'Login days'} value={`${an.A.days}/${an.A.periodDays}`} sub={`${an.A.count} ${isAr ? 'دخول' : 'logins'}`} color="#0369a1" />}
-            </div>
-
-            {/* معلومات كاملة */}
-            <SecCard title={isAr ? 'المعلومات الكاملة' : 'Full information'}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
-                {infoFields.filter(([, v]) => v).map(([k, v]) => (
-                  <div key={k} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '8px 12px', background: 'var(--surface)' }}>
-                    <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontWeight: 700 }}>{k}</div>
-                    <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-1)', wordBreak: 'break-word' }}>{v}</div>
-                  </div>
-                ))}
-              </div>
-              {modNames.length > 0 && <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}><span style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'الأقسام المسموحة:' : 'Modules:'}</span>{modNames.map(m => <Chip key={m}>{m}</Chip>)}</div>}
-            </SecCard>
-
-            {/* الإجازات */}
-            {show('leaves') && (
-              <SecCard title={isAr ? 'الإجازات والاستئذان' : 'Leaves & permissions'} hint={`${from} ← ${to}`}>
-                <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
-                    <thead><tr><Th>{isAr ? 'استئذان مقدَّم' : 'Perm. req'}</Th><Th>{isAr ? 'استئذان مقبول' : 'Perm. OK'}</Th><Th>{isAr ? 'مدة الاستئذان' : 'Perm. time'}</Th><Th>{isAr ? 'إجازات مقدَّمة' : 'Leave req'}</Th><Th>{isAr ? 'إجازات مقبولة' : 'Leave OK'}</Th><Th>{isAr ? 'الأيام' : 'Days'}</Th><Th>{isAr ? 'مرفوضة' : 'Rejected'}</Th><Th>{isAr ? 'الإجمالي' : 'Total'}</Th></tr></thead>
-                    <tbody><tr><Td>{an.L.permReq}</Td><Td b>{an.L.permOk}</Td><Td>{an.L.permHours ? hhmm(an.L.permHours) : '—'}</Td><Td>{an.L.leaveReq}</Td><Td b>{an.L.leaveOk}</Td><Td>{an.L.leaveDays ? Number(an.L.leaveDays.toFixed(2)) : '—'}</Td><Td c={an.L.rejected ? '#dc2626' : undefined}>{an.L.rejected}</Td><Td b>{an.L.total}</Td></tr></tbody>
-                  </table>
-                </div>
-                {data.raw.leaves.length > 0 ? (
-                  <div style={{ marginTop: 12, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                    {data.raw.leaves.slice(0, 40).map((r, i) => (
-                      <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderTop: i ? '1px solid var(--border)' : 'none', flexWrap: 'wrap' }}>
-                        <Chip>{LEAVE_AR[r.leave_type] ?? r.leave_type}</Chip>
-                        <span style={{ fontFamily: MONO, fontSize: '0.8rem', fontWeight: 700 }}>{r.start_date}{r.leave_type !== 'casual' && r.end_date !== r.start_date ? ` ← ${r.end_date}` : ''}</span>
-                        <span style={{ fontFamily: MONO, fontSize: '0.8rem', color: 'var(--text-2)' }}>{r.leave_type === 'casual' ? hhmm((Number(r.days_count) || 0) * 24) : `${Number(r.days_count) || 0} ${isAr ? 'يوم' : 'd'}`}</span>
-                        <span style={{ flex: 1 }} />
-                        <Chip c={STATUS_COL[r.status]?.[0]} bg={STATUS_COL[r.status]?.[1]}>{STATUS_AR[r.status] ?? r.status}</Chip>
-                      </div>
-                    ))}
-                  </div>
-                ) : <p style={{ color: 'var(--text-3)', fontSize: '0.8rem', margin: '12px 0 0' }}>{isAr ? 'لا توجد طلبات ضمن الفترة' : 'No requests in the period'}</p>}
-              </SecCard>
-            )}
-
-            {/* الإيرادات */}
-            {show('sales') && (
-              <SecCard title={isAr ? 'الإيرادات' : 'Revenue'} hint={`${from} ← ${to}`}>
-                {an.S.n === 0 ? <p style={{ color: 'var(--text-3)', fontSize: '0.8rem', margin: 0 }}>{isAr ? 'لا توجد إيرادات مُدخلة ضمن الفترة' : 'No entries in the period'}</p> : (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 14 }}>
-                      <Kpi title={isAr ? 'إجمالي المحصَّل' : 'Collected'} value={n0(an.S.collected)} sub={isAr ? 'ر.س' : 'SAR'} color="#15803d" />
-                      <Kpi title={isAr ? 'إجمالي المبيعات' : 'Sales'} value={n0(an.S.expected)} sub={isAr ? 'ر.س' : 'SAR'} />
-                      <Kpi title={isAr ? 'صافي الفرق' : 'Net diff'} value={`${an.S.diff > 0 ? '+' : ''}${n0(an.S.diff)}`} sub={`${an.S.deficits} ${isAr ? 'عجز' : 'def.'} · ${an.S.surpluses} ${isAr ? 'زيادة' : 'surp.'}`} color={an.S.diff < 0 ? '#dc2626' : '#1d4ed8'} />
-                      <Kpi title={isAr ? 'المؤكَّد' : 'Confirmed'} value={`${an.S.confirmed}/${an.S.n}`} color="#7c3aed" />
-                    </div>
-                    {(() => {
-                      const months = Object.keys(an.S.byMonth).sort().reverse(), mx = Math.max(...months.map(m => an.S.byMonth[m].collected), 1)
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                          {months.map(m => (
-                            <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <span style={{ width: 66, fontFamily: MONO, fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-2)' }}>{m}</span>
-                              <Bar pct={(an.S.byMonth[m].collected / mx) * 100} color="#15803d" />
-                              <span style={{ width: 84, textAlign: 'left', fontFamily: MONO, fontSize: '0.76rem', fontWeight: 800 }} dir="ltr">{n0(an.S.byMonth[m].collected)}</span>
-                              <span style={{ width: 62, textAlign: 'left', fontFamily: MONO, fontSize: '0.72rem', fontWeight: 700, color: an.S.byMonth[m].diff < 0 ? '#dc2626' : '#1d4ed8' }} dir="ltr">{an.S.byMonth[m].diff > 0 ? '+' : ''}{n0(an.S.byMonth[m].diff)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    })()}
-                  </>
-                )}
-              </SecCard>
-            )}
-
-            {/* التقييم الوظيفي */}
-            {show('eval') && (
-              <SecCard title={isAr ? 'التقييم الوظيفي' : 'Job evaluation'} hint={an.evalAvg != null ? `${isAr ? 'المتوسط' : 'Avg'} ${(an.evalAvg / 10).toFixed(1)} / 10` : ''}>
-                {an.E.length === 0 ? <p style={{ color: 'var(--text-3)', fontSize: '0.8rem', margin: 0 }}>{isAr ? 'لا توجد تقييمات ضمن الفترة' : 'No evaluations in the period'}</p> : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {an.E.map(x => (
-                      <div key={x.key} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', border: '1px solid var(--border)', borderRadius: 10, padding: '9px 14px', background: 'var(--surface)' }}>
-                        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '0.84rem', width: 66 }}>{x.key}</span>
-                        <Bar pct={x.final ?? 0} color={x.final >= 85 ? '#15803d' : x.final >= 60 ? '#1C2B4A' : '#d97706'} />
-                        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1rem', width: 56, textAlign: 'left' }} dir="ltr">{x.final != null ? (x.final / 10).toFixed(1) : '—'}</span>
-                        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{x.rows.map(r => <Chip key={r.eval_source}>{SRC_AR[r.eval_source] ?? r.eval_source} {(r.total_score / 10).toFixed(1)}</Chip>)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </SecCard>
-            )}
-
-            {/* الأداء التشغيلي */}
-            {show('ops') && (
-              <SecCard title={isAr ? 'الأداء التشغيلي — الترحيل' : 'Operations — dispatch'} hint={`${from} ← ${to}`}>
-                <OpsNow O={an.O} isAr={isAr} />
-                {data.tripsError && <div style={{ padding: '8px 12px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '0.78rem', marginBottom: 12 }}>{isAr ? 'تعذّر تحميل سجلات الرحلات: ' : 'Could not load trip records: '}{data.tripsError}</div>}
-                {(data.tripsCapped || data.peersCapped) && <div style={{ padding: '8px 12px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: '0.76rem', marginBottom: 12 }}>{isAr ? 'عدد السجلات كبير فتم عرض جزء منها (حتى سقف الأمان)؛ ضيّق الفترة للحصول على أرقام كاملة.' : 'Large dataset: partially loaded. Narrow the period for complete figures.'}</div>}
-                {an.O.n === 0 ? <p style={{ color: 'var(--text-3)', fontSize: '0.8rem', margin: 0 }}>{isAr ? `لا توجد رحلات مُدخلة من حساب هذا الموظف ضمن الفترة ${from} ← ${to}. ملاحظة: تُنسب الرحلة للحساب الذي سجّلها في صفحة الترحيل.` : 'No trips entered by this account in the period.'}</p> : (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                      <OpsPanel title={isAr ? 'الرحلات المُدخلة' : 'Trips entered'} value={n0(an.O.n)} color="#1C2B4A" unit={isAr ? 'رحلة' : 'trips'}
-                        lines={[[isAr ? 'مغادرة' : 'Departures', n0(an.O.dep)], [isAr ? 'وصول' : 'Arrivals', n0(an.O.arr)], [isAr ? 'إضافية (RF)' : 'Extra (RF)', n0(an.O.extra)]]} />
-                      <OpsPanel title={isAr ? 'الركاب المرحَّلون' : 'Passengers dispatched'} value={n0(an.O.pax)} color="#15803d" unit={isAr ? 'راكب' : 'pax'}
-                        lines={[[isAr ? 'متوسط الرحلة' : 'Avg per trip', an.O.avg.toFixed(1)], [isAr ? 'رحلات مغادرة' : 'Departures', n0(an.O.dep)]]} />
-                      <OpsPanel title={isAr ? 'الركاب المتخلفون' : 'Passengers missed'} value={n0(an.O.missed)} color={an.O.rate > 0.05 ? '#dc2626' : '#d97706'} unit={isAr ? 'راكب' : 'pax'}
-                        lines={[[isAr ? 'نسبة التخلف' : 'Miss rate', pct1(an.O.rate)], [isAr ? 'من إجمالي الحاضرين' : 'Of all present', n0(an.O.pax + an.O.missed)]]} />
-                    </div>
-                    {an.O.pax + an.O.missed > 0 && (
-                      <div style={{ marginTop: 16 }}>
-                        <div style={{ display: 'flex', height: 12, borderRadius: 99, overflow: 'hidden', background: 'var(--border)' }} role="img" aria-label={`${pct1(1 - an.O.rate)} / ${pct1(an.O.rate)}`}>
-                          <div style={{ width: `${(1 - an.O.rate) * 100}%`, background: '#15803d' }} />
-                          <div style={{ width: `${an.O.rate * 100}%`, background: '#dc2626', minWidth: an.O.missed ? 3 : 0 }} />
-                        </div>
-                        <div style={{ display: 'flex', gap: 18, marginTop: 7, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', flexWrap: 'wrap' }}>
-                          <span><i style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#15803d', marginInlineEnd: 6 }} />{isAr ? 'تم ترحيلهم' : 'Dispatched'} <bdi dir="ltr">{pct1(1 - an.O.rate)}</bdi></span>
-                          <span><i style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 2, background: '#dc2626', marginInlineEnd: 6 }} />{isAr ? 'متخلفون' : 'Missed'} <bdi dir="ltr">{pct1(an.O.rate)}</bdi></span>
-                        </div>
-                      </div>
-                    )}
-                    <OpsVerdict O={an.O} isAr={isAr} from={from} to={to} names={nameById} />
-                    <OpsScorecard O={an.O} isAr={isAr} />
-                    <OpsScaleSection O={an.O} isAr={isAr} />
-                    <OpsAnalysis O={an.O} isAr={isAr} />
-                    <OpsBreakdown O={an.O} isAr={isAr} />
-                    <TripLog O={an.O} isAr={isAr} />
-                    {(() => {
-                      const sts = Object.entries(an.O.byStation).sort((x, y) => y[1].pax - x[1].pax)
-                      if (sts.length < 2) return null
-                      return (
-                        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, marginTop: 16 }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-                            <thead><tr>{[isAr ? 'المحطة' : 'Station', isAr ? 'الرحلات' : 'Trips', isAr ? 'المرحَّلون' : 'Dispatched', isAr ? 'المتخلفون' : 'Missed', isAr ? 'نسبة التخلف' : 'Miss rate'].map(h => <Th key={h}>{h}</Th>)}</tr></thead>
-                            <tbody>{sts.map(([n, b]) => <tr key={n}><Td l b>{n}</Td><Td>{b.n}</Td><Td b>{n0(b.pax)}</Td><Td c={b.missed ? '#dc2626' : undefined}>{n0(b.missed)}</Td><Td>{pct1(b.pax + b.missed ? b.missed / (b.pax + b.missed) : 0)}</Td></tr>)}</tbody>
-                          </table>
-                        </div>
-                      )
-                    })()}
-                  </>
-                )}
-              </SecCard>
-            )}
-
-            {/* تقييمات العملاء */}
-            {show('ratings') && (
-              <SecCard title={isAr ? 'تقييمات العملاء' : 'Customer ratings'} hint={`${an.R.n} ${isAr ? 'تقييم' : 'ratings'}`}>
-                {an.R.n === 0 ? <p style={{ color: 'var(--text-3)', fontSize: '0.8rem', margin: 0 }}>{isAr ? 'لا توجد تقييمات عملاء ضمن الفترة' : 'No ratings in the period'}</p> : (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 16 }}>
-                      <div style={{ background: 'linear-gradient(160deg,#1C2B4A,#2d4a7a)', color: '#fff', borderRadius: 14, padding: '20px 18px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 700, opacity: 0.75 }}>{isAr ? 'متوسط رضا العملاء' : 'Average satisfaction'}</div>
-                        <div style={{ fontFamily: MONO, fontSize: '3rem', fontWeight: 800, lineHeight: 1 }} dir="ltr">{an.R.avg.toFixed(2)}<span style={{ fontSize: '1rem', opacity: 0.6 }}> / 5</span></div>
-                        <Stars value={an.R.avg} size={22} color="#F5A623" />
-                        <div style={{ display: 'flex', gap: 10, marginTop: 6, width: '100%' }}>
-                          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 4px' }}><div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.1rem' }} dir="ltr">{Math.round(an.R.sat * 100)}%</div><div style={{ fontSize: '0.64rem', opacity: 0.8 }}>{isAr ? 'راضون (4+)' : 'Satisfied (4+)'}</div></div>
-                          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 4px' }}><div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.1rem' }} dir="ltr">{an.R.n}</div><div style={{ fontSize: '0.64rem', opacity: 0.8 }}>{isAr ? 'تقييم' : 'ratings'}</div></div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, justifyContent: 'center' }}>
-                        {[5, 4, 3, 2, 1].map(st => {
-                          const c = an.R.dist[st - 1], col = st >= 4 ? '#16a34a' : st === 3 ? '#d97706' : '#dc2626'
-                          return (
-                            <div key={st} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <span style={{ width: 58, display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-2)' }}><span dir="ltr" style={{ fontFamily: MONO }}>{st}</span><Stars value={st} size={11} color={col} /></span>
-                              <Bar pct={(c / Math.max(...an.R.dist, 1)) * 100} color={col} />
-                              <span style={{ width: 82, textAlign: 'left', fontFamily: MONO, fontSize: '0.76rem', fontWeight: 800 }} dir="ltr">{c} <span style={{ color: 'var(--text-3)', fontWeight: 600 }}>({Math.round((c / an.R.n) * 100)}%)</span></span>
-                            </div>
-                          )
-                        })}
-                        {an.R.low > 0 && <div style={{ fontSize: '0.72rem', color: '#b91c1c', fontWeight: 700, marginTop: 2 }}>{isAr ? `${an.R.low} تقييم منخفض (نجمتان فأقل) يحتاج مراجعة` : `${an.R.low} low ratings (2 stars or fewer) need review`}</div>}
-                      </div>
-                    </div>
-                    {(Object.keys(an.R.byShift).length > 0 || Object.keys(an.R.byMonth).length > 1) && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 14 }}>
-                        {Object.keys(an.R.byShift).length > 0 && (
-                          <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
-                            <div style={{ fontSize: '0.74rem', fontWeight: 800, marginBottom: 8, color: 'var(--text-2)' }}>{isAr ? 'المتوسط حسب الوردية' : 'By shift'}</div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              {Object.entries(an.R.byShift).sort().map(([sh, b]) => (
-                                <div key={sh} style={{ flex: 1, textAlign: 'center', background: 'var(--surface)', borderRadius: 10, padding: '8px 4px' }}>
-                                  <div style={{ fontSize: '0.64rem', color: 'var(--text-3)', fontWeight: 700 }}>{SHIFT_AR[sh] ?? sh}</div>
-                                  <div style={{ fontFamily: MONO, fontWeight: 800, fontSize: '1.2rem' }} dir="ltr">{(b.sum / b.n).toFixed(2)}</div>
-                                  <div style={{ fontSize: '0.62rem', color: 'var(--text-3)' }}>{b.n} {isAr ? 'تقييم' : 'ratings'}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {Object.keys(an.R.byMonth).length > 1 && (
-                          <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
-                            <div style={{ fontSize: '0.74rem', fontWeight: 800, marginBottom: 8, color: 'var(--text-2)' }}>{isAr ? 'اتجاه المتوسط الشهري' : 'Monthly trend'}</div>
-                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 70 }} dir="ltr">
-                              {Object.keys(an.R.byMonth).sort().slice(-12).map(m => { const v = an.R.byMonth[m].sum / an.R.byMonth[m].n; return (
-                                <div key={m} title={`${m}: ${v.toFixed(2)}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                                  <span style={{ fontFamily: MONO, fontSize: '0.6rem', fontWeight: 800 }}>{v.toFixed(1)}</span>
-                                  <div style={{ width: '100%', maxWidth: 26, height: `${(v / 5) * 46}px`, background: v >= 4 ? '#16a34a' : v >= 3 ? '#d97706' : '#dc2626', borderRadius: '4px 4px 0 0', minHeight: 3 }} />
-                                  <span style={{ fontFamily: MONO, fontSize: '0.56rem', color: 'var(--text-3)' }}>{m.slice(5)}</span>
-                                </div>) })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {an.R.comments.length > 0 && (
-                      <div style={{ marginTop: 14 }}>
-                        <div style={{ fontSize: '0.74rem', fontWeight: 800, marginBottom: 8, color: 'var(--text-2)' }}>{isAr ? 'آراء العملاء' : 'Customer comments'}</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
-                          {an.R.comments.slice(0, 8).map((r, i) => (
-                            <figure key={i} style={{ margin: 0, border: '1px solid var(--border)', borderInlineStart: `4px solid ${r.rating >= 4 ? '#16a34a' : r.rating === 3 ? '#d97706' : '#dc2626'}`, borderRadius: 10, padding: '10px 14px', background: 'var(--surface)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}><Stars value={r.rating} size={13} /><span style={{ fontFamily: MONO, fontSize: '0.64rem', color: 'var(--text-3)' }}>{riyadhDay(r.created_at)}{r.shift ? ` · ${r.shift}` : ''}</span></div>
-                              <blockquote style={{ margin: 0, fontSize: '0.8rem', lineHeight: 1.7, color: 'var(--text-1)' }}>{r.comment}</blockquote>
-                            </figure>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </SecCard>
-            )}
-
-            {/* الدخول والنشاط */}
-            {show('activity') && (
-              <SecCard title={isAr ? 'الدخول والنشاط' : 'Logins & activity'} hint={`${an.A.effFrom} ← ${an.A.effTo}`}>
-                <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-                  <Ring pct={an.A.rate * 100} color="#0369a1" label={`${Math.round(an.A.rate * 100)}%`} sub={isAr ? 'نسبة أيام الدخول' : 'Login-day rate'} />
-                  <div style={{ flex: 1, minWidth: 240, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
-                    <Kpi title={isAr ? 'آخر دخول' : 'Last login'} value={u.last_login ? riyadhDay(u.last_login) : '—'} sub={u.last_login ? new Date(new Date(u.last_login).getTime() + 3 * 3600000).toISOString().slice(11, 16) : null} color="#0369a1" />
-                    <Kpi title={isAr ? 'مرات الدخول' : 'Logins'} value={n0(an.A.count)} sub={isAr ? 'في الفترة' : 'in period'} />
-                    <Kpi title={isAr ? 'أيام الدخول' : 'Days'} value={`${an.A.days}/${an.A.periodDays}`} />
-                    <Kpi title={isAr ? 'ساعة الدخول الأكثر' : 'Peak hour'} value={an.A.peak != null ? `${String(an.A.peak).padStart(2, '0')}:00` : '—'} color="#7c3aed" />
-                  </div>
-                </div>
-                {!data.loginsOk && <p style={{ fontSize: '0.74rem', color: '#b45309', margin: '0 0 10px' }}>{isAr ? 'سجل الدخول التفصيلي غير متاح؛ يظهر آخر دخول فقط.' : 'Detailed login history unavailable; only the last login is shown.'}</p>}
-                {an.A.periodDays <= 120 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 12 }}>
-                    {Array.from({ length: an.A.periodDays }, (_, i) => addDays(an.A.effFrom, i)).map(d => (
-                      <span key={d} title={d} style={{ width: 13, height: 13, borderRadius: 3, background: an.A.loginDays.has(d) ? '#0369a1' : 'var(--border)' }} />
-                    ))}
-                  </div>
-                )}
-                {an.A.times.length > 0 && (
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', maxHeight: 260, overflowY: 'auto' }}>
-                    {an.A.times.slice(0, 40).map((t, i) => (
-                      <div key={t + i} style={{ padding: '7px 14px', borderTop: i ? '1px solid var(--border)' : 'none', fontFamily: MONO, fontSize: '0.78rem', color: 'var(--text-2)', display: 'flex', justifyContent: 'space-between' }}>
-                        <span>{fmtDT(t)}</span><span style={{ color: 'var(--text-3)' }}>{(isAr ? ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])[new Date(riyadhDay(t) + 'T00:00:00Z').getUTCDay()]}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </SecCard>
-            )}
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
