@@ -730,7 +730,7 @@ function ScrollToTopButton() {
   const goTop = dir === 'up'
   const label = goTop ? 'أعلى الصفحة' : 'آخر الصفحة'
   return (
-    <button className="no-print"
+    <button className="no-print scroll-top-btn"
       onClick={() => { window.scrollTo({ top: goTop ? 0 : document.documentElement.scrollHeight, behavior: 'smooth' }); setDir(null) }}
       title={label} aria-label={label}
       style={{
