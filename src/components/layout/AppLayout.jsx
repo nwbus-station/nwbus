@@ -1044,20 +1044,30 @@ export default function AppLayout() {
   useEffect(() => {
     const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone
     if (!standalone) return
-    let startY = 0, active = false
+    let startY = 0, startX = 0, active = false, dead = false
     const top = () => (document.scrollingElement?.scrollTop ?? window.scrollY) <= 0
+    // داخل أي منطقة قابلة للتمرير (قوائم الأقسام بواجهة التطبيق): السحب للأسفل = تمرير للأعلى وليس تحديثاً
+    const inScroller = el => {
+      for (let n = el; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 2) return true
+      }
+      return false
+    }
     const onStart = e => {
-      active = e.touches.length === 1 && top() && !e.target.closest?.('input, textarea, select, .leaflet-container, .fixed, [role="dialog"], [data-no-ptr]')
-      if (active) startY = e.touches[0].clientY
+      dead = false
+      active = e.touches.length === 1 && top() && !inScroller(e.target) && !e.target.closest?.('input, textarea, select, .leaflet-container, .fixed, [role="dialog"], [data-no-ptr]')
+      if (active) { startY = e.touches[0].clientY; startX = e.touches[0].clientX }
     }
     const onMove = e => {
-      if (!active) return
-      const dy = e.touches[0].clientY - startY
-      if (dy <= 0 || !top()) { pullRef.current = 0; setPull(0); return }
-      pullRef.current = Math.min(dy, 150); setPull(pullRef.current)
+      if (!active || dead) return
+      const dy = e.touches[0].clientY - startY, dx = Math.abs(e.touches[0].clientX - startX)
+      // حركة أفقية أو صعود للأعلى أو تمرير الصفحة نفسها: نلغي المحاولة حتى لا يحدث تحديث بالخطأ
+      if (dy <= 0 || !top() || dx > dy * 0.5) { dead = dx > dy * 0.5 || dead; pullRef.current = 0; setPull(0); return }
+      pullRef.current = Math.min(dy, 180); setPull(pullRef.current)
     }
     const onEnd = () => {
-      const fire = active && pullRef.current > 100
+      const fire = active && !dead && pullRef.current > 140
       active = false; pullRef.current = 0; setPull(0)
       if (fire) hardRefresh()
     }
@@ -1293,10 +1303,10 @@ export default function AppLayout() {
       )}
 
       {pull > 12 && (
-        <div aria-hidden="true" style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 8px)', insetInline: 0, display: 'flex', justifyContent: 'center', zIndex: 900, pointerEvents: 'none', transform: `translateY(${Math.min(pull, 110) - 40}px)`, transition: pull ? 'none' : 'transform .2s' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--card)', border: '1px solid var(--border-2)', color: pull > 100 ? 'var(--accent)' : 'var(--text-2)', borderRadius: 99, padding: '7px 16px', fontSize: '0.78rem', fontWeight: 800, boxShadow: 'var(--shadow-lg)' }}>
+        <div aria-hidden="true" style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top) + 8px)', insetInline: 0, display: 'flex', justifyContent: 'center', zIndex: 900, pointerEvents: 'none', transform: `translateY(${Math.min(pull, 140) - 40}px)`, transition: pull ? 'none' : 'transform .2s' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--card)', border: '1px solid var(--border-2)', color: pull > 140 ? 'var(--accent)' : 'var(--text-2)', borderRadius: 99, padding: '7px 16px', fontSize: '0.78rem', fontWeight: 800, boxShadow: 'var(--shadow-lg)' }}>
             <span style={{ display: 'inline-flex', transform: `rotate(${pull * 2.4}deg)` }}><Icon d={ICONS.refresh} size={15} /></span>
-            {pull > 100 ? (isAr ? 'أفلت للتحديث' : 'Release to refresh') : (isAr ? 'اسحب للتحديث' : 'Pull to refresh')}
+            {pull > 140 ? (isAr ? 'أفلت للتحديث' : 'Release to refresh') : (isAr ? 'اسحب للتحديث' : 'Pull to refresh')}
           </span>
         </div>
       )}
