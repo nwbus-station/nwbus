@@ -807,15 +807,30 @@ export default function LostFoundPage() {
   )
 
   const header = (
-    <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: layout === 'one' ? '10px 12px' : '14px 24px', borderBottom: '1px solid var(--border)', background: 'var(--card)', flexShrink: 0 }}>
-      {layout === 'one' && <button type="button" onClick={() => setDrawer(true)} aria-label={t('الأقسام', 'Sections')} style={{ width: 40, height: 40, borderRadius: 11, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}><LfIco n="menu" /></button>}
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <h1 style={{ margin: 0, fontSize: layout === 'one' ? '1rem' : '1.15rem', fontWeight: 900, color: 'var(--text-1)' }}>{cur?.label}</h1>
-        {layout !== 'one' && cur?.sub && <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 2 }}>{cur.sub}</div>}
+    <header style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: layout === 'one' ? '10px 12px 8px' : '14px 24px', borderBottom: '1px solid var(--border)', background: 'var(--card)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h1 style={{ margin: 0, fontSize: layout === 'one' ? '1rem' : '1.15rem', fontWeight: 900, color: 'var(--text-1)' }}>{cur?.label}</h1>
+          {layout !== 'one' && cur?.sub && <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 2 }}>{cur.sub}</div>}
+        </div>
+        {layout === 'one' && (canRegister || canReport) && (
+          <button type="button" onClick={() => (canRegister && canReport ? setPickOpen(true) : openForm(canRegister ? 'register' : 'report'))}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 11, border: 'none', background: '#d97706', color: '#fff', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer' }}><LfIco n="plus" s={16} />{t('جديد', 'New')}</button>
+        )}
       </div>
-      {layout === 'one' && (canRegister || canReport) && (
-        <button type="button" onClick={() => (canRegister && canReport ? setPickOpen(true) : openForm(canRegister ? 'register' : 'report'))}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 11, border: 'none', background: '#d97706', color: '#fff', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer' }}><LfIco n="plus" s={16} />{t('جديد', 'New')}</button>
+      {layout === 'one' && (
+        <div role="tablist" aria-label={t('الأقسام', 'Sections')} style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -12px', padding: '2px 12px 4px', scrollbarWidth: 'none' }}>
+          {NAV.map(it => {
+            const on = cur?.id === it.id
+            return (
+              <button key={it.id} type="button" role="tab" aria-selected={on} ref={el => { if (on && el) el.scrollIntoView({ inline: 'center', block: 'nearest' }) }} onClick={() => go(it.id)}
+                style={{ flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 14px', borderRadius: 99, border: `1.5px solid ${on ? 'var(--text-1)' : 'var(--border)'}`, background: on ? 'var(--text-1)' : 'var(--card)', color: on ? 'var(--card)' : 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 800, whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                {it.label}
+                {(it.hot > 0 || it.n > 0) && <span style={{ minWidth: 20, height: 20, padding: '0 6px', borderRadius: 99, background: it.hot > 0 ? it.hotColor : (on ? 'rgba(255,255,255,.22)' : 'var(--surface)'), color: it.hot > 0 ? '#fff' : (on ? 'var(--card)' : 'var(--text-3)'), fontSize: '0.68rem', fontWeight: 900, display: 'grid', placeItems: 'center', fontFamily: MONO }}>{it.hot > 0 ? it.hot : it.n}</span>}
+              </button>
+            )
+          })}
+        </div>
       )}
     </header>
   )
@@ -837,12 +852,6 @@ export default function LostFoundPage() {
     <div ref={rootRef} style={{ height: H, marginBottom: cancelPad, display: 'flex', background: 'var(--surface)', overflow: 'hidden' }} dir={isAr ? 'rtl' : 'ltr'}>
       {layout !== 'one' && sidebar(false)}
       {content}
-
-      {layout === 'one' && drawer && (
-        <div onClick={e => { if (e.target === e.currentTarget) setDrawer(false) }} style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(8,12,20,0.52)', WebkitBackdropFilter: 'blur(3px)', backdropFilter: 'blur(3px)' }}>
-          <div style={{ position: 'absolute', top: 0, bottom: 0, insetInlineStart: 0, width: 'min(322px, 88vw)', boxShadow: '0 0 40px rgba(0,0,0,0.4)' }}>{sidebar(true)}</div>
-        </div>
-      )}
 
       {pickOpen && (
         <Sheet isAr={isAr} title={t('إضافة جديدة', 'Add new')} onClose={() => setPickOpen(false)}>

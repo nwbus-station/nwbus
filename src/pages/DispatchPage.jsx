@@ -359,14 +359,30 @@ export default function DispatchPage() {
     <section aria-label={t('القائمة', 'List')} style={{ width: layout === 'three' ? 392 : '100%', flexShrink: 0, flex: layout === 'three' ? '0 0 392px' : '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', background: 'var(--card)', borderInlineEnd: layout === 'three' ? '1px solid var(--border)' : 'none', minHeight: 0 }}>
       <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {layout === 'one' && <button type="button" onClick={() => setDrawer(true)} aria-label={t('القائمة', 'Menu')} style={{ width: 40, height: 40, borderRadius: 11, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-1)', cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0, position: 'relative' }}>
-            <Ico n="menu" s={20} />
-            {(counts.late + counts.action) > 0 && <i aria-hidden="true" style={{ position: 'absolute', top: 6, insetInlineEnd: 6, width: 9, height: 9, borderRadius: '50%', background: '#dc2626', border: '2px solid var(--surface)' }} />}
-          </button>}
           <h1 style={{ margin: 0, fontSize: '1.08rem', fontWeight: 900, color: 'var(--text-1)' }}>{sectionTitle}</h1>
           <span style={{ fontFamily: MONO, fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 700 }}>{section === 'requests' ? reqRows.length : list.length}</span>
           {layout === 'one' && <button type="button" onClick={newDispatch} style={{ ...btn('primary'), marginInlineStart: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 14px' }}><Ico n="plus" s={16} />{t('جديدة', 'New')}</button>}
         </div>
+        {layout === 'one' && (
+          <div role="tablist" aria-label={t('الأقسام', 'Sections')} className="dsp-chips" style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -14px', padding: '2px 14px 4px', scrollbarWidth: 'none' }}>
+            {NAV.filter(it => it.id).map(it => {
+              const on = section === it.id
+              return (
+                <button key={it.id} type="button" role="tab" aria-selected={on} ref={el => { if (on && el) el.scrollIntoView({ inline: 'center', block: 'nearest' }) }} onClick={() => goSection(it.id)}
+                  style={{ flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', gap: 7, height: 38, padding: '0 14px', borderRadius: 99, border: `1.5px solid ${on ? 'var(--text-1)' : 'var(--border)'}`, background: on ? 'var(--text-1)' : 'var(--card)', color: on ? 'var(--card)' : 'var(--text-1)', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 800, whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                  {it.label}
+                  {(it.hot > 0 || it.n > 0) && <span style={{ minWidth: 20, height: 20, padding: '0 6px', borderRadius: 99, background: it.hot > 0 ? it.hotColor : (on ? 'rgba(255,255,255,.22)' : 'var(--surface)'), color: it.hot > 0 ? '#fff' : (on ? 'var(--card)' : 'var(--text-3)'), fontSize: '0.68rem', fontWeight: 900, display: 'grid', placeItems: 'center', fontFamily: MONO }}>{it.hot > 0 ? it.hot : it.n}</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+        {layout === 'one' && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>{stationPick()}</div>
+            <button type="button" onClick={() => setLookupOpen(true)} style={{ ...btn('ghost'), display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 40, flexShrink: 0, whiteSpace: 'nowrap' }}><Ico n="ticket" s={16} />{t('رقم التذكرة', 'Ticket no.')}</button>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
           <input value={q} onChange={e => { setQ(e.target.value); setLimit(60) }} placeholder={t('بحث…', 'Search…')} aria-label={t('بحث', 'Search')} style={{ ...fieldStyle, flex: 1, minWidth: 0 }} />
           {section !== 'requests' && (
@@ -431,13 +447,7 @@ export default function DispatchPage() {
 
   return (
     <div ref={rootRef} style={{ height: H, marginBottom: cancelPad, display: 'flex', flexDirection: 'column', background: 'var(--surface)', overflow: 'hidden' }} dir={isAr ? 'rtl' : 'ltr'}
-      onTouchStart={e => { const x = e.touches[0].clientX; const edge = isAr ? window.innerWidth - x : x; swipe.current = edge < 26 ? { x, y: e.touches[0].clientY } : null }}
-      onTouchEnd={e => {
-        const st0 = swipe.current; swipe.current = null
-        if (!st0 || layout !== 'one') return
-        const dx = e.changedTouches[0].clientX - st0.x, dy = Math.abs(e.changedTouches[0].clientY - st0.y)
-        if (dy < 60 && (isAr ? -dx : dx) > 70) setDrawer(true)
-      }}>
+      >
       <style>{css}</style>
       {msg && <div style={{ padding: '8px 12px', flexShrink: 0 }}><Banner kind={msg.kind}>{msg.text}</Banner></div>}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
@@ -445,14 +455,6 @@ export default function DispatchPage() {
         {layout === 'three' ? <>{listPane}{detailPane}</> : (hasSel ? detailPane : listPane)}
       </div>
 
-      {layout === 'one' && drawer && (
-        <div onClick={e => { if (e.target === e.currentTarget) setDrawer(false) }} style={{ position: 'fixed', inset: 0, zIndex: 9990, background: 'rgba(8,12,20,0.52)', backdropFilter: 'blur(3px)', animation: 'dspFade .16s ease-out' }}>
-          <style>{`@keyframes dspFade{from{opacity:0}to{opacity:1}}@keyframes dspMenuIn{from{transform:translateX(calc(var(--mx) * 100%))}to{transform:none}}`}</style>
-          <div style={{ '--mx': isAr ? 1 : -1, position: 'absolute', top: 0, bottom: 0, insetInlineStart: 0, width: 'min(322px, 88vw)', boxShadow: '0 0 40px rgba(0,0,0,0.4)', animation: 'dspMenuIn .24s cubic-bezier(.2,.8,.2,1)' }}>
-            {sidebarEl(true)}
-          </div>
-        </div>
-      )}
       {formOpen && (
         <DispatchForm profile={profile} isAr={isAr} isAdmin={isAdmin} stations={stations} myStations={myStations} history={rows} initial={formInit}
           onClose={() => { setFormOpen(false); setFormInit(null) }} onCreated={() => load()} onPrint={printOne} onShow={showCreated} />
