@@ -1332,3 +1332,6 @@ input.amt-input, input.amt-hero { background: transparent !important; border: 0 
 .lf-embed .lf-head { display: none !important; }
 .lf-embed .lf-body { display: flex !important; flex-direction: column; padding: 4px 0 !important; }
 .lf-embed .lf-body > * { grid-column: auto; }
+
+/* علامة NEW بالإنجليزي للأقسام الجديدة */
+.nw-new { display: inline-flex; align-items: center; margin-inline-start: 8px; padding: 1px 6px; border-radius: 3px; background: #EE712D; color: #fff; font-family: 'IBM Plex Mono', monospace; font-size: .6rem; font-weight: 800; letter-spacing: .08em; line-height: 1.55; flex-shrink: 0; text-transform: uppercase; }

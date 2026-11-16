@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useIsNew } from '../../utils/newTag'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
 import { useAppSettings } from '../../context/AppSettingsContext'
@@ -423,7 +424,7 @@ const NAV_GROUPS = [
       { to: '/',               labelAr: 'الرئيسية',      labelEn: 'Dashboard',      icon: 'home',    roles: null,                                          module: 'home' },
       { to: '/transportation', labelAr: 'الترحيل',        labelEn: 'Transportation', icon: 'bus',     roles: null,                                          module: 'transportation' },
       { to: '/lost-found',     labelAr: 'الموجودات',      labelEn: 'Lost & Found',   icon: 'bag',     roles: null,                                          module: 'lost_found' },
-      { to: '/dispatches',     labelAr: 'الإرساليات',     labelEn: 'Dispatches',     icon: 'box',     roles: null,                                          module: 'dispatches' },
+      { to: '/dispatches',     labelAr: 'الإرساليات',     labelEn: 'Dispatches',     icon: 'box',     roles: null,                                          module: 'dispatches', isNew: true },
       { to: '/sales',          labelAr: 'الإيرادات',      labelEn: 'Sales',          icon: 'sales',   roles: null,                                          module: 'sales' },
       { to: '/reports',        labelAr: 'التقارير',        labelEn: 'Reports',        icon: 'report',  roles: [...ADMIN_ROLE_VALUES,'station_admin','accountant'], module: 'reports' },
       { to: '/leaves',         labelAr: 'الإجازات',        labelEn: 'Leaves',         icon: 'leave',   roles: null, module: 'leaves' },
@@ -442,7 +443,7 @@ const NAV_GROUPS = [
       { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings', allowKey: 'customer_ratings_view' },
       { to: '/employee-file', labelAr: 'السجل الوظيفي', labelEn: 'Staff Record', icon: 'users', roles: ADMIN_ROLE_VALUES, module: 'employee_file', adminOnly: true },
       { to: '/calls', labelAr: 'نداء الركاب', labelEn: 'Passenger Calls', icon: 'call', roles: ADMIN_ROLE_VALUES, module: 'pa_calls' },
-      { to: '/signage', labelAr: 'الشاشات', labelEn: 'Screens', icon: 'screen', roles: null, module: 'signage' },
+      { to: '/signage', labelAr: 'الشاشات', labelEn: 'Screens', icon: 'screen', roles: null, module: 'signage', isNew: true },
     ]
   },
 ]
@@ -469,6 +470,13 @@ const JOB_TITLES = {
   cleaner:            { ar: 'عامل نظافة',   en: 'Cleaner' },
 }
 
+// علامة NEW بالإنجليزي (مسطّحة بلون الهوية) بجانب اسم القسم الجديد
+function NewTag({ item }) {
+  const show = useIsNew(item.to, item.isNew)
+  if (!show) return null
+  return <span className="nw-new" aria-label="new">NEW</span>
+}
+
 // ── تبويب تنقّل علوي — أيقونة + نص، والنشط بخط سفلي سميك وخلفية خفيفة ─────────
 function NavTab({ item, isAr }) {
   const ico = ICONS[item.icon]
@@ -480,7 +488,7 @@ function NavTab({ item, isAr }) {
   return (
     <NavLink to={item.to} end={item.to === '/'} className={({ isActive }) => `navtab${isActive ? ' navtab-on' : ''}`}>
       {ico && <Icon d={ico} size={15} />}
-      <span>{isAr ? item.labelAr : item.labelEn}</span>
+      <span>{isAr ? item.labelAr : item.labelEn}</span><NewTag item={item} />
     </NavLink>
   )
 }
@@ -690,6 +698,7 @@ function MobileMenu({ open, onClose, visibleGroups, isAr, profile, roleLabel, st
                     className={({ isActive }) => `mobile-menu-item${isActive ? ' active' : ''}`} style={{ '--hue': hue }}>
                     <span className="mobile-menu-item-ico"><Icon d={ICONS[item.icon]} size={18} /></span>
                     <span className="mm-label">{isAr ? item.labelAr : item.labelEn}</span>
+                    <NewTag item={item} />
                     {badgeOf(item.to) > 0 && <span className="mm-badge">{badgeOf(item.to)}</span>}
                     <span className="mm-chev"><Icon d={ICONS.chevron} size={14} /></span>
                   </NavLink>
@@ -879,7 +888,7 @@ function DeskBar({ groups, isAr, profile, roleLabel, stationName, hasStar, theme
             <p className="dk-side-t">{groupTitle(gi)}</p>
             {g.items.map(it => (
               <NavLink key={it.to} to={it.to} end={it.to === '/'} className={({ isActive }) => `dk-side-it${isActive ? ' on' : ''}`} style={hueStyle(it)}>
-                {label(it)}
+                {label(it)}<NewTag item={it} />
               </NavLink>
             ))}
           </div>
