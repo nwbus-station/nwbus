@@ -57,7 +57,7 @@ export default function DevicesTab({ isAr, isAdmin, devices, stations, plays, re
                     <div style={{ fontWeight: 900, fontSize: '0.98rem', color: 'var(--text-1)', overflowWrap: 'anywhere' }}>{d.name}</div>
                     <div style={{ fontSize: '0.76rem', color: 'var(--text-3)', marginTop: 2 }}>{d.station_id ? stName(d.station_id) : t('بدون محطة', 'No station')}</div>
                   </div>
-                  <Pill color={c} dot>{revoked ? t('موقوفة', 'Revoked') : on ? t('متصلة', 'Online') : t('منقطعة', 'Offline')}</Pill>
+                  <Pill color={d.paused ? '#6366f1' : c} dot>{revoked ? t('موقوفة', 'Revoked') : d.paused ? t('متوقفة مؤقتاً', 'Paused') : on ? t('متصلة', 'Online') : t('منقطعة', 'Offline')}</Pill>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px', fontSize: '0.74rem' }}>
                   <Meta label={t('آخر ظهور', 'Last seen')}>{ago(d.last_seen_at, isAr)}</Meta>
@@ -77,6 +77,7 @@ export default function DevicesTab({ isAr, isAdmin, devices, stations, plays, re
                 )}
                 {isAdmin && !revoked && (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button type="button" onClick={() => setAsk({ kind: d.paused ? 'resume' : 'pause', d })} style={btn(d.paused ? 'ok' : 'warn', { padding: '7px 14px' })}>{d.paused ? t('استئناف', 'Resume') : t('إيقاف مؤقت', 'Pause')}</button>
                     <button type="button" onClick={() => setPreview(d)} style={btn('primary', { background: SG_ACCENT, padding: '7px 14px' })}>{t('معاينة حيّة', 'Live preview')}</button>
                     <button type="button" onClick={() => setAsk({ kind: 'reload', d })} style={btn('ghost', { padding: '7px 14px' })}>{t('إعادة تشغيل', 'Restart')}</button>
                     <button type="button" onClick={() => setAsk({ kind: 'rotate', d })} style={btn('ghost', { padding: '7px 14px' })}>{t('تدوير المفتاح', 'Rotate key')}</button>
@@ -98,6 +99,12 @@ export default function DevicesTab({ isAr, isAdmin, devices, stations, plays, re
       {pairing && <PairSheet isAr={isAr} stations={stations} onClose={() => setPairing(false)} onDone={() => { setPairing(false); flash(t('تم ربط الشاشة. ستبدأ العرض خلال ثوانٍ', 'Screen paired. It starts within seconds'), true); reload() }} />}
       {edit && <EditSheet isAr={isAr} d={edit} stations={stations} onClose={() => setEdit(null)} onDone={() => { setEdit(null); flash(t('تم الحفظ', 'Saved'), true); reload() }} />}
       {preview && <PreviewSheet isAr={isAr} d={preview} onClose={() => setPreview(null)} />}
+      {ask?.kind === 'pause' && <ConfirmDialog danger={false} title={t('إيقاف مؤقت للشاشة', 'Pause screen')} confirmLabel={busy ? '…' : t('إيقاف مؤقت', 'Pause')}
+        message={t(`ستتحول «${ask.d.name}» إلى شاشة سوداء خلال نصف دقيقة، وتستأنفها بضغطة من نفس المكان دون إعادة ربط.`, `"${ask.d.name}" goes black until you resume it.`)} onCancel={() => setAsk(null)}
+        onConfirm={() => act(() => supabase.rpc('signage_device_pause', { p_id: ask.d.id, p_paused: true }), t('أُوقفت الشاشة مؤقتاً', 'Paused'))} />}
+      {ask?.kind === 'resume' && <ConfirmDialog danger={false} title={t('استئناف الشاشة', 'Resume screen')} confirmLabel={busy ? '…' : t('استئناف', 'Resume')}
+        message={t(`ستعود «${ask.d.name}» لعرض محتواها خلال نصف دقيقة.`, `"${ask.d.name}" resumes within ~30 seconds.`)} onCancel={() => setAsk(null)}
+        onConfirm={() => act(() => supabase.rpc('signage_device_pause', { p_id: ask.d.id, p_paused: false }), t('أُعيد تشغيل الشاشة', 'Resumed'))} />}
       {ask?.kind === 'reload' && <ConfirmDialog danger={false} title={t('إعادة تشغيل الشاشة', 'Restart screen')} confirmLabel={busy ? '…' : t('إعادة تشغيل', 'Restart')}
         message={t(`ستعيد «${ask.d.name}» تحميل المشغّل خلال نصف دقيقة وتعود للعرض تلقائياً.`, `"${ask.d.name}" reloads within ~30 seconds.`)} onCancel={() => setAsk(null)}
         onConfirm={() => act(() => supabase.rpc('signage_device_command', { p_id: ask.d.id, p_cmd: 'reload' }), t('أُرسل أمر إعادة التشغيل', 'Restart sent'))} />}

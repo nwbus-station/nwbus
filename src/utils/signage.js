@@ -77,7 +77,7 @@ export const AUDIT_LABEL = {
   'campaign.reorder': 'ترتيب الحملات', 'media.rename': 'إعادة تسمية محتوى',
   'halt.on': 'إيقاف جميع الشاشات', 'halt.off': 'تشغيل الشاشات', 'mfa.require': 'فرض التحقق بخطوتين', 'mfa.optional': 'إلغاء فرض التحقق بخطوتين',
   'device.reload': 'إعادة تشغيل شاشة', 'device.reload_all': 'إعادة تشغيل كل الشاشات', 'device.rotate': 'تدوير مفتاح شاشة', 'device.rotate_all': 'تدوير مفاتيح كل الشاشات',
-  'device.suspect': 'شاشة مشتبه بها (احتمال نسخ المفتاح)', 'device.clear_suspect': 'تأكيد سلامة شاشة',
+  'device.suspect': 'شاشة مشتبه بها (احتمال نسخ المفتاح)', 'device.pause': 'إيقاف مؤقت لشاشة', 'device.resume': 'استئناف شاشة', 'device.clear_suspect': 'تأكيد سلامة شاشة',
 }
 
 const MSG = {

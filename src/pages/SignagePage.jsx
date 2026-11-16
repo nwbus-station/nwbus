@@ -15,7 +15,8 @@ import { Empty, SG_ACCENT } from '../components/signage/common'
 import { isOnline } from '../utils/signage'
 
 const DEV_BASE = 'id,name,station_id,orientation,status,last_seen_at,app_version,now_playing,paired_at'
-const DEV_NEW = `${DEV_BASE},reload_nonce,snap_requested_at,snapshot_at,secret_rotated_at,last_ip,suspect,suspect_reason,suspect_at`
+const DEV_030 = `${DEV_BASE},reload_nonce,snap_requested_at,snapshot_at,secret_rotated_at,last_ip,suspect,suspect_reason,suspect_at`
+const DEV_NEW = `${DEV_030},paused,paused_at,paused_by_name`
 
 export default function SignagePage() {
   const { i18n } = useTranslation()
@@ -52,7 +53,9 @@ export default function SignagePage() {
       supabase.from('signage_control').select('*').eq('id', 1).maybeSingle(),
     ])
     // قبل تشغيل SQL 030 لا توجد الأعمدة الجديدة: نرجع للأعمدة الأساسية
-    const dv = dv0.error && /column/i.test(dv0.error.message || '') ? await supabase.from('signage_devices').select(DEV_BASE).order('name') : dv0
+    let dv = dv0
+    if (dv.error && /column/i.test(dv.error.message || '')) dv = await supabase.from('signage_devices').select(DEV_030).order('name')
+    if (dv.error && /column/i.test(dv.error.message || '')) dv = await supabase.from('signage_devices').select(DEV_BASE).order('name')
     setControl(ct?.data || null)
     const first = [dv, md, cp].find(x => x.error)
     if (first) { setLoadErr(/does not exist|schema cache/i.test(first.error.message) ? 'setup' : 'fail'); return }
