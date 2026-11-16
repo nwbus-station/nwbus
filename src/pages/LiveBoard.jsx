@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { NW_LOGO_PATHS, NW_LOGO_VIEWBOX } from '../utils/nwLogoPaths'
+import { NWB_LOGO_SVG } from '../utils/logo'
+
+// الشعار الرسمي مقلوب الألوان للشاشة الداكنة (يحافظ على البرتقالي الرسمي)
+const BOARD_LOGO = NWB_LOGO_SVG
+  .replace(/#1D1D1C/gi, '#FFFFFF').replace(/#264673/gi, '#6E94D1').replace(/fill="white"/g, 'fill="none"')
+  .replace(/width="180" height="90"/, 'width="170" height="85"')
 import { isRestStation } from '../utils/stations'
 
 import { todayStr } from '../utils/dates'
@@ -278,17 +283,8 @@ export default function LiveBoard() {
       {/* ── الرأس ── */}
       <header style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 24, padding: '20px 44px 18px', background: 'linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0))' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, color: th.text }}>
-          {/* الشعار الرسمي بألوانه (برتقالي/كحلي/أسود) على لوحة بيضاء ليظهر صحيحاً فوق الخلفية الداكنة */}
-          <div style={{ background: '#fff', borderRadius: 14, padding: '9px 16px', display: 'flex', alignItems: 'center', boxShadow: '0 4px 18px rgba(0,0,0,0.35)' }}>
-            <svg viewBox={NW_LOGO_VIEWBOX} width={Math.round(44 * 398 / 115)} height={44} fill="none" aria-label="North West Bus">
-              {NW_LOGO_PATHS.map((d, i) => <path key={i} d={d} fill={['#1D1D1C', '#264673', '#1D1D1C', '#264673', '#EE712D'][i] || '#1D1D1C'} />)}
-            </svg>
-          </div>
-          <div style={{ width: 1, height: 40, background: 'rgba(255,255,255,0.18)' }} />
-          <div style={{ lineHeight: 1.2 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: 0.3 }}>{isAr ? 'نورث وست باص' : 'North West Bus'}</div>
-            <div style={{ fontSize: 11, color: th.muted, letterSpacing: 4, marginTop: 3 }}>NORTH WEST BUS</div>
-          </div>
+          {/* الشعار الرسمي الكامل (العلامة + الاسم أسفلها) بنسخة مناسبة للخلفية الداكنة: الأسود أبيض والكحلي أزرق فاتح والبرتقالي كما هو */}
+          <span aria-label="North West Bus" role="img" style={{ display: 'inline-flex', lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: BOARD_LOGO }} />
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: 0.5 }}>{isAr ? 'حركة الرحلات المباشرة' : 'Live Trip Movements'}</div>
