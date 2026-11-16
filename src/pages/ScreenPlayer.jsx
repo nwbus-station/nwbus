@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NWB_LOGO_SVG } from '../utils/logo'
 import { mediaUrl, randomSecret } from '../utils/signage'
 import BoardPanel from '../components/board/BoardPanel'
+import { captureScreen, fallbackCard } from '../utils/screenSnapshot'
 
 // عميل مستقل بلا جلسة موظف: الشاشة لا تحمل أي هوية سوى مفتاح جهازها
 const sb = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, {
@@ -14,6 +15,7 @@ const sb = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_
 
 const KEY_SECRET = 'nw_screen_secret'
 const KEY_CACHE = 'nw_screen_manifest'
+const KEY_RELOAD = 'nw_screen_reload'
 const VER = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 const LOGO = NWB_LOGO_SVG.replace(/#1D1D1C/gi, '#FFFFFF').replace(/#264673/gi, '#6E94D1').replace(/fill="white"/g, 'fill="none"').replace(/width="180" height="90"/, 'width="260" height="130"')
 const MONO = "'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace"
@@ -43,6 +45,8 @@ const Full = ({ children, style }) => (
 )
 
 export default function ScreenPlayer() {
+  const rootRef = useRef(null)
+  const snapBusy = useRef(false)
   const secretRef = useRef(null)
   if (!secretRef.current) secretRef.current = getSecret()
   const [phase, setPhase] = useState('boot')           // boot | pair | run | revoked
@@ -99,11 +103,21 @@ export default function ScreenPlayer() {
           }
           throw error
         }
-        setManifest(data); setOffline(false); ls.set(KEY_CACHE, JSON.stringify({ m: data, at: Date.now() }))
+        // تدوير المفتاح: يُحفظ المفتاح الجديد فوراً ولا يدخل في نسخة القائمة المخزّنة
+        const { new_secret: ns, ...clean } = data
+        if (ns && ns.length >= 40) { ls.set(KEY_SECRET, ns); secretRef.current = ns }
+        // أمر إعادة التشغيل من الإدارة: العدّاد تغيّر عمّا خزّنّاه
+        const rl = clean.cmd?.reload
+        if (rl != null) {
+          const prev = ls.get(KEY_RELOAD)
+          ls.set(KEY_RELOAD, String(rl))
+          if (prev != null && prev !== String(rl)) { location.reload(); return }
+        }
+        setManifest(clean); setOffline(false); ls.set(KEY_CACHE, JSON.stringify({ m: clean, at: Date.now() }))
       } catch { if (!stop) setOffline(true) }
     }
     pull()
-    const t = setInterval(pull, 60000)
+    const t = setInterval(pull, 30000)
     return () => { stop = true; clearInterval(t) }
   }, [phase])
 
@@ -121,6 +135,20 @@ export default function ScreenPlayer() {
     }, 60000)
     return () => { document.removeEventListener('visibilitychange', vis); clearInterval(t); try { lock?.release() } catch { /* */ } }
   }, [])
+
+  // طلب لقطة من الإدارة: نلتقط ما على الشاشة الآن ونرفعها
+  const wantSnap = !!manifest?.cmd?.snap
+  useEffect(() => {
+    if (phase !== 'run' || !wantSnap || snapBusy.current || !rootRef.current) return
+    snapBusy.current = true
+    ;(async () => {
+      try {
+        let url
+        try { url = await captureScreen(rootRef.current) } catch { url = fallbackCard(playingRef.current) }
+        await sb.rpc('signage_device_snapshot', { p_secret: secretRef.current, p_image: url })
+      } catch { /* نحاول عند الطلب التالي */ } finally { setTimeout(() => { snapBusy.current = false }, 8000) }
+    })()
+  }, [phase, wantSnap])
 
   const fs = () => { try { document.documentElement.requestFullscreen?.() } catch { /* */ } }
   const portrait = manifest?.device?.orientation === 'portrait' && typeof window !== 'undefined' && window.innerWidth > window.innerHeight
@@ -160,8 +188,17 @@ export default function ScreenPlayer() {
     )
   }
 
+  // إيقاف جميع الشاشات من الإدارة: شاشة سوداء هادئة بلا أي محتوى
+  if (manifest?.halted) {
+    return (
+      <div ref={rootRef} style={{ ...rot, background: '#000', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', cursor: 'none', fontFamily: "'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif" }} onClick={fs}>
+        <div style={{ opacity: 0.55, fontSize: 'clamp(1rem, 2.4vw, 1.6rem)', fontWeight: 700, lineHeight: 2 }}>الشاشة متوقفة مؤقتاً{manifest.halted.reason ? <><br />{manifest.halted.reason}</> : null}</div>
+      </div>
+    )
+  }
+
   return (
-    <div style={{ ...rot, background: '#000', overflow: 'hidden', cursor: 'none' }} onClick={fs}>
+    <div ref={rootRef} style={{ ...rot, background: '#000', overflow: 'hidden', cursor: 'none' }} onClick={fs}>
       <Stage manifest={manifest} secret={secretRef.current} playingRef={playingRef} />
       {offline && <div title="لا يوجد اتصال" style={{ position: 'absolute', bottom: 8, insetInlineEnd: 8, width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', opacity: 0.7 }} />}
       {manifest?.emergency && (
@@ -237,9 +274,9 @@ function Stage({ manifest, secret, playingRef }) {
       {cur.kind === 'board'
         ? <div key={`${idx}-${cur.media_id}`} style={{ position: 'absolute', inset: 0, animation: 'sgFade .6s ease-out' }}><BoardSlide secret={secret} config={cur.config} /></div>
         : cur.kind === 'video'
-        ? <video key={`${idx}-${cur.media_id}`} src={url} autoPlay muted playsInline loop={len < 2} onEnded={next} onError={() => setTimeout(next, 1500)}
+        ? <video key={`${idx}-${cur.media_id}`} src={url} crossOrigin="anonymous" autoPlay muted playsInline loop={len < 2} onEnded={next} onError={() => setTimeout(next, 1500)}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', animation: 'sgFade .6s ease-out' }} />
-        : <img key={`${idx}-${cur.media_id}`} src={url} alt="" onError={() => setTimeout(next, 1500)}
+        : <img key={`${idx}-${cur.media_id}`} src={url} crossOrigin="anonymous" alt="" onError={() => setTimeout(next, 1500)}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', animation: 'sgFade .6s ease-out' }} />}
       {/* تحميل مسبق للعنصر التالي */}
       {nx && nx.kind !== 'board' && (nx.kind === 'video'

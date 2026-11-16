@@ -1,12 +1,12 @@
 // تبويب الشاشات: حالة الاتصال والمراقبة + ربط شاشة جديدة (رمز الربط) + تعديل/إيقاف/حذف (للأدمن)
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import Sheet, { Ic } from '../dispatch/Sheet'
 import { btn } from '../dispatch/DispatchCards'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import SelectField from '../shared/SelectField'
 import { lbl, input, Pill, Empty, Err, SG_ACCENT } from './common'
-import { isOnline, ago, sgError } from '../../utils/signage'
+import { isOnline, ago, fmtDT, sgError } from '../../utils/signage'
 
 export default function DevicesTab({ isAr, isAdmin, devices, stations, plays, reload, flash }) {
   const t = (a, e) => (isAr ? a : e)
@@ -14,6 +14,7 @@ export default function DevicesTab({ isAr, isAdmin, devices, stations, plays, re
   const [edit, setEdit] = useState(null)
   const [ask, setAsk] = useState(null)       // { kind: 'revoke'|'delete', d }
   const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState(null)
   const stName = id => stations.find(s => s.id === id)?.name_ar || stations.find(s => s.id === id)?.name_en || '—'
   const playerUrl = `${location.origin}/s`
 
@@ -37,6 +38,7 @@ export default function DevicesTab({ isAr, isAdmin, devices, stations, plays, re
             <div dir="ltr" style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: '0.86rem', fontWeight: 800, color: SG_ACCENT, marginTop: 6, overflowWrap: 'anywhere' }}>{playerUrl}</div>
           </div>
           <button type="button" onClick={() => { navigator.clipboard?.writeText(playerUrl).then(() => flash(t('تم نسخ الرابط', 'Link copied'), true), () => {}) }} style={btn('ghost')}>{t('نسخ الرابط', 'Copy link')}</button>
+          <button type="button" onClick={() => setAsk({ kind: 'reload_all' })} style={btn('ghost')}>{t('إعادة تشغيل كل الشاشات', 'Restart all')}</button>
           <button type="button" onClick={() => setPairing(true)} style={{ ...btn('primary'), background: SG_ACCENT, padding: '10px 20px', fontSize: '0.84rem' }}>{t('ربط شاشة جديدة', 'Pair a new screen')}</button>
         </div>
       )}
@@ -63,6 +65,23 @@ export default function DevicesTab({ isAr, isAdmin, devices, stations, plays, re
                   <Meta label={t('يعرض الآن', 'Now playing')}>{on && d.now_playing ? d.now_playing : '—'}</Meta>
                   <Meta label={t('الاتجاه', 'Orientation')}>{d.orientation === 'portrait' ? t('عمودي', 'Portrait') : t('أفقي', 'Landscape')}</Meta>
                 </div>
+                {d.suspect && (
+                  <div role="alert" style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(220,38,38,.1)', color: '#dc2626', fontSize: '0.74rem', fontWeight: 800, lineHeight: 1.8 }}>
+                    {t('مشتبه بها', 'Suspicious')}: {d.suspect_reason}<br />
+                    <span style={{ fontWeight: 600, color: 'var(--text-3)' }}>{fmtDT(d.suspect_at)}{d.last_ip ? ` · ${d.last_ip}` : ''}</span>
+                    {isAdmin && <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button type="button" onClick={() => setAsk({ kind: 'clear', d })} style={btn('ghost', { padding: '5px 12px' })}>{t('هي سليمة', 'It is fine')}</button>
+                      <button type="button" onClick={() => setAsk({ kind: 'revoke', d })} style={btn('danger', { padding: '5px 12px' })}>{t('إيقاف فوري', 'Revoke now')}</button>
+                    </div>}
+                  </div>
+                )}
+                {isAdmin && !revoked && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button type="button" onClick={() => setPreview(d)} style={btn('primary', { background: SG_ACCENT, padding: '7px 14px' })}>{t('معاينة حيّة', 'Live preview')}</button>
+                    <button type="button" onClick={() => setAsk({ kind: 'reload', d })} style={btn('ghost', { padding: '7px 14px' })}>{t('إعادة تشغيل', 'Restart')}</button>
+                    <button type="button" onClick={() => setAsk({ kind: 'rotate', d })} style={btn('ghost', { padding: '7px 14px' })}>{t('تدوير المفتاح', 'Rotate key')}</button>
+                  </div>
+                )}
                 {isAdmin && (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto', paddingTop: 4 }}>
                     <button type="button" onClick={() => setEdit(d)} style={btn('ghost')}>{t('تعديل', 'Edit')}</button>
@@ -78,6 +97,19 @@ export default function DevicesTab({ isAr, isAdmin, devices, stations, plays, re
 
       {pairing && <PairSheet isAr={isAr} stations={stations} onClose={() => setPairing(false)} onDone={() => { setPairing(false); flash(t('تم ربط الشاشة. ستبدأ العرض خلال ثوانٍ', 'Screen paired. It starts within seconds'), true); reload() }} />}
       {edit && <EditSheet isAr={isAr} d={edit} stations={stations} onClose={() => setEdit(null)} onDone={() => { setEdit(null); flash(t('تم الحفظ', 'Saved'), true); reload() }} />}
+      {preview && <PreviewSheet isAr={isAr} d={preview} onClose={() => setPreview(null)} />}
+      {ask?.kind === 'reload' && <ConfirmDialog danger={false} title={t('إعادة تشغيل الشاشة', 'Restart screen')} confirmLabel={busy ? '…' : t('إعادة تشغيل', 'Restart')}
+        message={t(`ستعيد «${ask.d.name}» تحميل المشغّل خلال نصف دقيقة وتعود للعرض تلقائياً.`, `"${ask.d.name}" reloads within ~30 seconds.`)} onCancel={() => setAsk(null)}
+        onConfirm={() => act(() => supabase.rpc('signage_device_command', { p_id: ask.d.id, p_cmd: 'reload' }), t('أُرسل أمر إعادة التشغيل', 'Restart sent'))} />}
+      {ask?.kind === 'reload_all' && <ConfirmDialog danger={false} title={t('إعادة تشغيل كل الشاشات', 'Restart all screens')} confirmLabel={busy ? '…' : t('إعادة تشغيل الكل', 'Restart all')}
+        message={t('ستعيد كل الشاشات المربوطة تحميل المشغّل خلال نصف دقيقة. استخدمه بعد تحديثات النظام.', 'Every paired screen reloads within ~30 seconds.')} onCancel={() => setAsk(null)}
+        onConfirm={() => act(() => supabase.rpc('signage_devices_command_all', { p_cmd: 'reload' }), t('أُرسل أمر إعادة التشغيل لكل الشاشات', 'Restart sent to all'))} />}
+      {ask?.kind === 'rotate' && <ConfirmDialog danger={false} title={t('تدوير مفتاح الشاشة', 'Rotate key')} confirmLabel={busy ? '…' : t('تدوير', 'Rotate')}
+        message={t(`ستستلم «${ask.d.name}» مفتاحاً سرياً جديداً عند اتصالها القادم ويبطل القديم. لا يتأثر العرض.`, 'The screen gets a new secret key; the old one stops working.')} onCancel={() => setAsk(null)}
+        onConfirm={() => act(() => supabase.rpc('signage_device_command', { p_id: ask.d.id, p_cmd: 'rotate' }), t('طُلب تدوير المفتاح', 'Rotation requested'))} />}
+      {ask?.kind === 'clear' && <ConfirmDialog danger={false} title={t('تأكيد سلامة الشاشة', 'Mark as safe')} confirmLabel={busy ? '…' : t('هي سليمة', 'Mark safe')}
+        message={t('هل تأكدت أن الشاشة في مكانها ولم يُنسخ مفتاحها؟ سيُزال تنبيه الاشتباه.', 'The suspicion flag will be cleared.')} onCancel={() => setAsk(null)}
+        onConfirm={() => act(() => supabase.rpc('signage_device_clear_suspect', { p_id: ask.d.id }), t('أُزيل الاشتباه', 'Cleared'))} />}
       {ask?.kind === 'revoke' && (
         <ConfirmDialog title={t('إيقاف الشاشة', 'Revoke screen')} confirmLabel={busy ? '…' : t('إيقاف الآن', 'Revoke now')}
           message={t(`ستتوقف «${ask.d.name}» عن العرض فوراً ولن تعمل بنفس المفتاح مرة أخرى. استخدمه عند سرقة الجهاز أو الاشتباه باختراقه.`, `"${ask.d.name}" stops immediately and its key can never be used again.`)}
@@ -177,6 +209,57 @@ function EditSheet({ isAr, d, stations, onClose, onDone }) {
         <div><label style={lbl}>{t('المحطة', 'Station')}</label><StationSelect value={station} onChange={setStation} stations={stations} isAr={isAr} /></div>
         <div><label style={lbl}>{t('اتجاه الشاشة', 'Orientation')}</label><Orient value={orient} onChange={setOrient} isAr={isAr} /></div>
       </form>
+    </Sheet>
+  )
+}
+
+// معاينة حيّة: نطلب لقطة من الشاشة (تصل خلال نصف دقيقة تقريباً) ونعرضها
+function PreviewSheet({ isAr, d, onClose }) {
+  const t = (a, e) => (isAr ? a : e)
+  const [snap, setSnap] = useState(null)       // { img, at, playing }
+  const [state, setState] = useState('idle')   // idle | waiting | timeout | error
+  const [err, setErr] = useState('')
+  const since = useRef(0); const timer = useRef(null); const alive = useRef(true)
+
+  async function read() {
+    const { data } = await supabase.from('signage_devices').select('snapshot, snapshot_at, now_playing').eq('id', d.id).maybeSingle()
+    return data
+  }
+  async function request() {
+    setErr(''); setState('waiting'); since.current = Date.now()
+    const { error } = await supabase.rpc('signage_device_command', { p_id: d.id, p_cmd: 'snapshot' })
+    if (error) { setState('error'); setErr(sgError(error, isAr)); return }
+    clearInterval(timer.current)
+    timer.current = setInterval(async () => {
+      const r = await read()
+      if (!alive.current) return
+      if (r?.snapshot && r.snapshot_at && new Date(r.snapshot_at).getTime() >= since.current - 2000) { setSnap({ img: r.snapshot, at: r.snapshot_at, playing: r.now_playing }); setState('idle'); clearInterval(timer.current) }
+      else if (Date.now() - since.current > 75000) { setState('timeout'); clearInterval(timer.current) }
+    }, 3000)
+  }
+  useEffect(() => {
+    alive.current = true
+    ;(async () => { const r = await read(); if (alive.current && r?.snapshot) setSnap({ img: r.snapshot, at: r.snapshot_at, playing: r.now_playing }) })()
+    request()
+    return () => { alive.current = false; clearInterval(timer.current) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <Sheet isAr={isAr} title={t(`معاينة: ${d.name}`, `Preview: ${d.name}`)} icon={Ic.box} accent={SG_ACCENT} variant="modal" width={760} onClose={onClose}
+      sub={isOnline(d) ? t('الشاشة متصلة. اللقطة تُلتقط من الشاشة نفسها.', 'Screen online. Captured from the screen itself.') : t('الشاشة منقطعة حالياً؛ ستظهر اللقطة عند عودة الاتصال.', 'Screen offline.')}
+      footer={<>
+        <button type="button" onClick={onClose} style={btn('ghost')}>{t('إغلاق', 'Close')}</button>
+        <button type="button" disabled={state === 'waiting'} onClick={request} style={{ ...btn('primary'), background: SG_ACCENT, padding: '11px 24px', fontSize: '0.86rem', opacity: state === 'waiting' ? 0.6 : 1 }}>{state === 'waiting' ? t('جارٍ الالتقاط…', 'Capturing…') : t('لقطة جديدة', 'New capture')}</button>
+      </>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Err>{err}</Err>
+        <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#0b1220', borderRadius: 12, overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
+          {snap?.img ? <img src={snap.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} /> : <span style={{ color: '#64748b', fontWeight: 800 }}>{state === 'waiting' ? t('بانتظار اللقطة من الشاشة…', 'Waiting for the screen…') : t('لا توجد لقطة بعد', 'No capture yet')}</span>}
+          {state === 'waiting' && snap?.img && <span style={{ position: 'absolute', top: 10, insetInlineStart: 10, background: 'rgba(0,0,0,.65)', color: '#fff', fontSize: '0.7rem', fontWeight: 800, padding: '3px 10px', borderRadius: 99 }}>{t('تحديث…', 'Updating…')}</span>}
+        </div>
+        {snap?.at && <div style={{ fontSize: '0.76rem', color: 'var(--text-2)', lineHeight: 1.9 }}>{t('وقت اللقطة', 'Captured')}: <b>{fmtDT(snap.at)}</b>{snap.playing ? <> · {t('يعرض', 'Playing')}: <b>{snap.playing}</b></> : null}</div>}
+        {state === 'timeout' && <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#d97706', lineHeight: 1.8 }}>{t('لم تصل اللقطة خلال المهلة. تأكد أن الشاشة متصلة وحاول مرة أخرى.', 'No capture arrived. Check the screen and retry.')}</div>}
+      </div>
     </Sheet>
   )
 }

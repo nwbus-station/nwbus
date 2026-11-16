@@ -75,6 +75,9 @@ export const AUDIT_LABEL = {
   'campaign.reject': 'رفض حملة', 'campaign.pause': 'إيقاف حملة مؤقتاً', 'campaign.delete': 'حذف حملة',
   'emergency.on': 'تفعيل رسالة الطوارئ', 'emergency.off': 'إيقاف رسالة الطوارئ',
   'campaign.reorder': 'ترتيب الحملات', 'media.rename': 'إعادة تسمية محتوى',
+  'halt.on': 'إيقاف جميع الشاشات', 'halt.off': 'تشغيل الشاشات', 'mfa.require': 'فرض التحقق بخطوتين', 'mfa.optional': 'إلغاء فرض التحقق بخطوتين',
+  'device.reload': 'إعادة تشغيل شاشة', 'device.reload_all': 'إعادة تشغيل كل الشاشات', 'device.rotate': 'تدوير مفتاح شاشة', 'device.rotate_all': 'تدوير مفاتيح كل الشاشات',
+  'device.suspect': 'شاشة مشتبه بها (احتمال نسخ المفتاح)', 'device.clear_suspect': 'تأكيد سلامة شاشة',
 }
 
 const MSG = {
@@ -88,6 +91,7 @@ const MSG = {
   'message required': ['اكتب رسالة الطوارئ', 'Enter the emergency message'], 'device limit': ['بلغ الحد الأقصى للشاشات', 'Device limit reached'],
   'bad video': ['الفيديو غير مقبول (النوع أو الحجم)', 'Video rejected (type or size)'], 'bad image': ['الصورة غير مقبولة (النوع أو الحجم)', 'Image rejected (type or size)'],
   'bad path': ['مسار الملف غير صالح', 'Invalid file path'], 'not found': ['العنصر غير موجود', 'Not found'],
+  'mfa session required': ['فعّل التحقق بخطوتين لحسابك وأكمله أولاً قبل فرضه على الجميع', 'Complete MFA for your own session first'], 'bad command': ['أمر غير معروف', 'Unknown command'],
 }
 export function sgError(error, isAr = true) {
   const m = String(error?.message || error || '')
