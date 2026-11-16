@@ -1,0 +1,78 @@
+// أجزاء شاشة العرض المشتركة بين صفحة /board (الموظف) ومشغّل الشاشات /screen (بمفتاح الجهاز)
+import { useState, useEffect, memo } from 'react'
+import { NWB_LOGO_SVG } from '../../utils/logo'
+
+// الشعار الرسمي مقلوب الألوان للشاشة الداكنة (يحافظ على البرتقالي الرسمي)
+export const BOARD_LOGO = NWB_LOGO_SVG
+  .replace(/#1D1D1C/gi, '#FFFFFF').replace(/#264673/gi, '#6E94D1').replace(/fill="white"/g, 'fill="none"')
+  .replace(/width="180" height="90"/, 'width="170" height="85"')
+export const toMin = hm => { const [h, m] = (hm || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
+
+export function Clock({ accent, muted, isAr }) {
+  const [c, setC] = useState(new Date())
+  useEffect(() => { const t = setInterval(() => setC(new Date()), 1000); return () => clearInterval(t) }, [])
+  const hm = c.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const sec = String(c.getSeconds()).padStart(2, '0')
+  return (
+    <div style={{ fontFamily: "'IBM Plex Mono', monospace" }} dir="ltr">
+      <div style={{ fontSize: 46, fontWeight: 700, color: accent, lineHeight: 1, display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: isAr ? 'flex-start' : 'flex-end' }}>
+        <span>{hm}</span><span style={{ fontSize: 22, opacity: 0.55 }}>:{sec}</span>
+      </div>
+      <div style={{ fontSize: 13, color: muted, marginTop: 6, fontFamily: "'IBM Plex Sans Arabic', sans-serif", textAlign: isAr ? 'left' : 'right' }} dir={isAr ? 'rtl' : 'ltr'}>
+        {c.toLocaleDateString(isAr ? 'ar-SA-u-ca-gregory-nu-latn' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      </div>
+    </div>
+  )
+}
+
+// قوالب الشاشة: لون الخلفية + تدرجات ناعمة بدل اللون الواحد
+const GRID = 'repeating-linear-gradient(135deg, rgba(255,255,255,0.022) 0 1px, transparent 1px 22px)'
+export const THEMES = {
+  nwb:   { name: 'هوية النظام',   bg: '#0C161F', fx: `${GRID}, radial-gradient(1100px 520px at 85% -10%, rgba(222,149,38,0.16), transparent 62%), radial-gradient(900px 480px at 0% 105%, rgba(111,177,216,0.12), transparent 58%), linear-gradient(180deg,#101C27,#091119)`, accent: '#E3A02E', arr: '#4BC98F', dep: '#6FB1D8', text: '#F2EFE8', muted: '#8493A0' },
+  navy:  { name: 'كحلي/ذهبي',    bg: '#0B1B34', fx: `${GRID}, radial-gradient(1000px 520px at 90% -10%, rgba(217,178,95,0.16), transparent 60%), radial-gradient(900px 500px at 0% 110%, rgba(90,166,255,0.14), transparent 58%), linear-gradient(180deg,#0E2142,#081528)`, accent: '#D9B25F', arr: '#3DDC97', dep: '#5AA6FF', text: '#E8EEF7', muted: '#8EA3C4' },
+  black: { name: 'أسود/كهرماني',  bg: '#0A0A0C', fx: `${GRID}, radial-gradient(1000px 520px at 85% -10%, rgba(240,169,43,0.14), transparent 60%), linear-gradient(180deg,#121216,#070709)`, accent: '#F0A92B', arr: '#37D67A', dep: '#5AA6FF', text: '#F2F2F4', muted: '#9A9AA2' },
+  teal:  { name: 'بترولي',        bg: '#07211F', fx: `${GRID}, radial-gradient(1000px 520px at 85% -10%, rgba(230,198,107,0.15), transparent 60%), radial-gradient(900px 480px at 0% 110%, rgba(79,195,217,0.14), transparent 58%), linear-gradient(180deg,#0A2B28,#051917)`, accent: '#E6C66B', arr: '#56E0B0', dep: '#4FC3D9', text: '#EAFAF6', muted: '#8FB8B2' },
+}
+
+export const nmOf = (s, isAr) => (isAr ? s?.name_ar : s?.name_en) || '—'
+
+// إزالة التكرار: نفس الرحلة بنفس الاتجاه والوقت (تُسجّل في كل محطة تمر بها)
+export const dedupeEvents = list => {
+  const seen = new Set()
+  return list.filter(e => {
+    const k = `${e.type}|${e.trip?.trip_number || ''}|${e.time}|${e.trip?.from_station?.name_en || ''}|${e.trip?.to_station?.name_en || ''}`
+    if (seen.has(k)) return false
+    seen.add(k); return true
+  })
+}
+
+// صف الحركة — مكوّن مستقل ومُحفّظ (memo) حتى لا يُعاد إنشاؤه عند كل رسم (يمنع الاهتزاز)
+export const Row = memo(function Row({ e, accent, th, isAr, nowMin }) {
+  const upcoming = e.status === 'upcoming'
+  const arr = e.type === 'arrival'
+  const mins = upcoming && nowMin != null ? toMin(e.time) - nowMin : null
+  const soon = mins != null && mins >= 0 && mins <= 20
+  return (
+    <div className="lb-row" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16, height: 88, boxSizing: 'border-box', padding: '0 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: soon ? `linear-gradient(90deg, ${accent}14, transparent)` : 'transparent', opacity: upcoming && !soon ? 0.82 : 1 }}>
+      <span style={{ position: 'absolute', insetInlineStart: 0, top: 14, bottom: 14, width: 4, borderRadius: 3, background: upcoming ? `${accent}66` : accent }} />
+      <div dir="ltr" style={{ minWidth: 104, textAlign: 'center', fontFamily: "'IBM Plex Mono', monospace", fontSize: 34, fontWeight: 800, color: th.text, letterSpacing: 1, lineHeight: 1 }}>{e.time}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div dir="ltr" style={{ fontSize: 18, fontWeight: 800, color: th.text, lineHeight: 1.22, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textAlign: isAr ? 'right' : 'left' }}>
+          {nmOf(e.trip?.from_station, isAr)} <span style={{ color: accent, fontWeight: 800, margin: '0 6px' }}>→</span> {nmOf(e.trip?.to_station, isAr)}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }} dir="ltr">
+          <span style={{ fontSize: 13, fontWeight: 700, color: th.text, background: 'rgba(255,255,255,0.08)', borderRadius: 5, padding: '2px 9px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</span>
+          {e.bus && <span style={{ fontSize: 13, fontWeight: 700, color: th.muted, border: '1px solid rgba(255,255,255,0.14)', borderRadius: 5, padding: '1px 8px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.bus}</span>}
+        </div>
+      </div>
+      <div style={{ textAlign: 'center', minWidth: 118 }}>
+        {upcoming
+          ? (soon
+            ? <span className="lb-ar" style={{ fontSize: 14, fontWeight: 800, color: '#101010', background: accent, borderRadius: 7, padding: '6px 14px', whiteSpace: 'nowrap' }}>{mins <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${mins} د` : `in ${mins} min`)}</span>
+            : <span style={{ fontSize: 13, fontWeight: 700, color: th.muted, border: `1px solid ${th.muted}55`, borderRadius: 7, padding: '5px 13px', whiteSpace: 'nowrap' }}>{mins != null && mins > 0 ? (isAr ? `بعد ${mins >= 60 ? `${Math.floor(mins / 60)}س ${mins % 60}د` : `${mins} د`}` : `in ${mins}m`) : (isAr ? 'مجدولة' : 'Scheduled')}</span>)
+          : <span style={{ fontSize: 14, fontWeight: 800, color: accent, background: `${accent}22`, border: `1px solid ${accent}55`, borderRadius: 7, padding: '5px 13px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>}
+      </div>
+    </div>
+  )
+})
+

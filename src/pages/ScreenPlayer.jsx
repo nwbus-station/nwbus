@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { NWB_LOGO_SVG } from '../utils/logo'
 import { mediaUrl, randomSecret } from '../utils/signage'
+import BoardPanel from '../components/board/BoardPanel'
 
 // عميل مستقل بلا جلسة موظف: الشاشة لا تحمل أي هوية سوى مفتاح جهازها
 const sb = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, {
@@ -219,21 +220,44 @@ function Stage({ manifest, secret, playingRef }) {
   }, [idx, curId, curKind, curDur, len, next])
 
   if (!cur) return <Idle manifest={manifest} />
-  const url = mediaUrl(cur.path)
+  const url = cur.kind === 'board' ? '' : mediaUrl(cur.path)
   const nx = len > 1 ? items[(idx + 1) % len] : null
   return (
     <>
-      {cur.kind === 'video'
+      {cur.kind === 'board'
+        ? <div key={`${idx}-${cur.media_id}`} style={{ position: 'absolute', inset: 0, animation: 'sgFade .6s ease-out' }}><BoardSlide secret={secret} config={cur.config} /></div>
+        : cur.kind === 'video'
         ? <video key={`${idx}-${cur.media_id}`} src={url} autoPlay muted playsInline loop={len < 2} onEnded={next} onError={() => setTimeout(next, 1500)}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', animation: 'sgFade .6s ease-out' }} />
         : <img key={`${idx}-${cur.media_id}`} src={url} alt="" onError={() => setTimeout(next, 1500)}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', animation: 'sgFade .6s ease-out' }} />}
       {/* تحميل مسبق للعنصر التالي */}
-      {nx && (nx.kind === 'video'
+      {nx && nx.kind !== 'board' && (nx.kind === 'video'
         ? <video key={`p-${nx.media_id}`} src={mediaUrl(nx.path)} preload="auto" muted style={{ display: 'none' }} />
         : <img key={`p-${nx.media_id}`} src={mediaUrl(nx.path)} alt="" style={{ display: 'none' }} />)}
     </>
   )
+}
+
+// شاشة العرض (حركة الرحلات): تسحب بيانات محطة الجهاز كل 15 ثانية وهي ظاهرة
+function BoardSlide({ secret, config }) {
+  const [data, setData] = useState(null)
+  const [err, setErr] = useState(false)
+  const mode = config?.mode || 'scheduled'
+  useEffect(() => {
+    let stop = false
+    const pull = async () => {
+      try {
+        const { data: d, error } = await sb.rpc('signage_board', { p_secret: secret, p_mode: mode })
+        if (error) throw error
+        if (!stop) { setData(d); setErr(false) }
+      } catch { if (!stop) setErr(true) }
+    }
+    pull()
+    const t = setInterval(pull, 15000)
+    return () => { stop = true; clearInterval(t) }
+  }, [secret, mode])
+  return <BoardPanel data={data} config={config} error={err} />
 }
 
 function Idle({ manifest }) {

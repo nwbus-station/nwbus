@@ -145,7 +145,7 @@ function CampaignForm({ isAr, role, c, media, devices, stations, onClose, onDone
     const { data: id, error } = await supabase.rpc('signage_campaign_save', {
       p_id: c?.id || null, p_title: title.trim(), p_media: mediaId, p_scope: scope, p_stations: scope === 'stations' ? stIds : [], p_devices: scope === 'devices' ? dvIds : [],
       p_starts: toRiyadhISO(sd, st), p_ends: toRiyadhISO(ed, et), p_days: days.length && days.length < 7 ? days : null,
-      p_from: allDay ? null : strToMin(from), p_to: allDay ? null : strToMin(to), p_duration: m?.kind === 'image' && dur ? Number(dur) : null, p_sort: Number(sort) || 100,
+      p_from: allDay ? null : strToMin(from), p_to: allDay ? null : strToMin(to), p_duration: m?.kind !== 'video' && dur ? Number(dur) : null, p_sort: Number(sort) || 100,
     })
     if (error) { setSaving(false); setErr(sgError(error, isAr)); return }
     if (publish) {
@@ -231,8 +231,8 @@ function CampaignForm({ isAr, role, c, media, devices, stations, onClose, onDone
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: m?.kind === 'image' ? '1fr 1fr' : '1fr', gap: 12 }}>
-          {m?.kind === 'image' && <div><label style={lbl}>{t('مدة العرض (ثانية)', 'Duration (sec)')}</label><input type="number" min="3" max="300" value={dur} onChange={e => setDur(e.target.value)} placeholder="15" style={input} /></div>}
+        <div style={{ display: 'grid', gridTemplateColumns: m && m.kind !== 'video' ? '1fr 1fr' : '1fr', gap: 12 }}>
+          {m && m.kind !== 'video' && <div><label style={lbl}>{t('مدة العرض (ثانية)', 'Duration (sec)')}</label><input type="number" min="3" max="300" value={dur} onChange={e => setDur(e.target.value)} placeholder="15" style={input} /></div>}
           <div><label style={lbl}>{t('الترتيب (الأصغر أولاً)', 'Order (lowest first)')}</label><input type="number" min="1" max="9999" value={sort} onChange={e => setSort(e.target.value)} style={input} /></div>
         </div>
       </div>

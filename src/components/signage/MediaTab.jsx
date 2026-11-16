@@ -5,6 +5,7 @@ import Sheet, { Ic } from '../dispatch/Sheet'
 import { btn } from '../dispatch/DispatchCards'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import { lbl, input, Pill, Empty, Err, Thumb, SG_ACCENT } from './common'
+import { THEMES } from '../board/boardParts'
 import { ACCEPT, SG_BUCKET, validateFile, readVideoDuration, newFileName, mediaUrl, fmtSize, fmtDur, fmtDT, sgError } from '../../utils/signage'
 
 export default function MediaTab({ isAr, role, myUserId, media, campaigns, reload, flash }) {
@@ -15,6 +16,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
   const [ask, setAsk] = useState(null)
   const [busy, setBusy] = useState(false)
   const [drag, setDrag] = useState(false)
+  const [boardForm, setBoardForm] = useState(false)
   const usedBy = id => campaigns.filter(c => c.media_id === id).length
 
   async function upload(files) {
@@ -43,7 +45,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
     setBusy(true)
     const { data: path, error } = await supabase.rpc('signage_media_delete', { p_id: m.id })
     if (error) { setBusy(false); setAsk(null); flash(sgError(error, isAr), false); return }
-    await supabase.storage.from(SG_BUCKET).remove([path])
+    if (m.kind !== 'board') await supabase.storage.from(SG_BUCKET).remove([path])
     setBusy(false); setAsk(null); flash(t('تم حذف المحتوى', 'Media deleted'), true); reload()
   }
   const canDelete = m => role === 'admin' || m.uploaded_by === myUserId
@@ -56,6 +58,10 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
         <div style={{ fontSize: '0.76rem', color: 'var(--text-3)', margin: '6px 0 14px', lineHeight: 1.8 }}>{t('فيديو MP4 أو WebM حتى 200MB، وصور JPG أو PNG أو WebP حتى 15MB. يفضَّل فيديو H.264 بدقة 1080p.', 'MP4/WebM video up to 200MB, JPG/PNG/WebP images up to 15MB. H.264 1080p recommended.')}</div>
         <button type="button" onClick={() => fileRef.current?.click()} style={{ ...btn('primary'), background: SG_ACCENT, padding: '10px 24px', fontSize: '0.86rem' }}>{t('اختيار ملفات', 'Choose files')}</button>
         <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={e => { upload(e.target.files); e.target.value = '' }} />
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed var(--border-2)' }}>
+          <button type="button" onClick={() => setBoardForm(true)} style={btn('ghost', { padding: '9px 20px', fontSize: '0.82rem' })}>{t('إضافة شاشة العرض (حركة الرحلات المباشرة)', 'Add Live Board (trip movements)')}</button>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 6 }}>{t('تعرض رحلات محطة الشاشة تلقائياً وتتحدّث وحدها.', "Shows the screen's station trips and updates automatically.")}</div>
+        </div>
       </div>
 
       {queue.length > 0 && (
@@ -80,7 +86,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
               <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
                 <div style={{ fontWeight: 800, fontSize: '0.86rem', color: 'var(--text-1)', overflowWrap: 'anywhere' }}>{m.title}</div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
-                  {m.kind === 'video' ? `${t('فيديو', 'Video')} · ${fmtDur(m.duration_sec)}` : t('صورة', 'Image')} · {fmtSize(m.size_bytes)}<br />
+                  {m.kind === 'board' ? `${t('شاشة العرض', 'Live Board')} · ${m.config?.mode === 'actual' ? t('الفعلي', 'Actual') : t('جدول اليوم', "Today's schedule")}` : <>{m.kind === 'video' ? `${t('فيديو', 'Video')} · ${fmtDur(m.duration_sec)}` : t('صورة', 'Image')} · {fmtSize(m.size_bytes)}</>}<br />
                   {m.uploaded_by_name || '—'} · {fmtDT(m.created_at)}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto', paddingTop: 6 }}>
@@ -97,16 +103,60 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
       {preview && (
         <Sheet isAr={isAr} title={preview.title} icon={Ic.box} accent={SG_ACCENT} variant="modal" width={860} onClose={() => setPreview(null)}
           footer={<button type="button" onClick={() => setPreview(null)} style={btn('ghost')}>{t('إغلاق', 'Close')}</button>}>
-          {preview.kind === 'video'
+          {preview.kind === 'board'
+            ? <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--text-2)', lineHeight: 2, fontWeight: 700 }}>{t('شاشة العرض تُرسم على الشاشة نفسها ببيانات محطتها. اربطها بحملة وستظهر هناك.', 'The Live Board renders on the screen with its station data. Attach it to a campaign.')}</div>
+            : preview.kind === 'video'
             ? <video src={mediaUrl(preview.path)} controls autoPlay muted playsInline style={{ width: '100%', maxHeight: '64vh', background: '#000', borderRadius: 10 }} />
             : <img src={mediaUrl(preview.path)} alt={preview.title} style={{ width: '100%', maxHeight: '64vh', objectFit: 'contain', background: '#000', borderRadius: 10 }} />}
         </Sheet>
       )}
+      {boardForm && <BoardSheet isAr={isAr} onClose={() => setBoardForm(false)} onDone={() => { setBoardForm(false); flash(t('أُضيفت شاشة العرض للمكتبة. أنشئ بها حملة لتظهر على الشاشة', 'Live Board added. Create a campaign to show it'), true); reload() }} />}
       {ask && (
         <ConfirmDialog title={t('حذف المحتوى', 'Delete media')} confirmLabel={busy ? '…' : t('حذف نهائي', 'Delete')}
           message={usedBy(ask.id) ? t('هذا المحتوى مستخدم في حملة؛ احذف الحملة أولاً وإلا سيرفض النظام الحذف.', 'This media is used by a campaign; delete the campaign first.') : t(`سيُحذف «${ask.title}» من المكتبة والتخزين نهائياً ولا يمكن التراجع.`, `"${ask.title}" will be deleted permanently.`)}
           onCancel={() => setAsk(null)} onConfirm={() => del(ask)} />
       )}
     </div>
+  )
+}
+
+function BoardSheet({ isAr, onClose, onDone }) {
+  const t = (a, e) => (isAr ? a : e)
+  const [title, setTitle] = useState('شاشة العرض'); const [mode, setMode] = useState('scheduled'); const [layout, setLayout] = useState('columns')
+  const [theme, setTheme] = useState('nwb'); const [dur, setDur] = useState(30)
+  const [err, setErr] = useState(''); const [saving, setSaving] = useState(false)
+  async function save() {
+    if (!title.trim()) { setErr(t('اكتب اسماً', 'Enter a name')); return }
+    setSaving(true); setErr('')
+    const { error } = await supabase.rpc('signage_board_add', { p_title: title.trim(), p_mode: mode, p_layout: layout, p_theme: theme, p_duration: Number(dur) || 30 })
+    setSaving(false)
+    if (error) { setErr(sgError(error, isAr)); return }
+    onDone()
+  }
+  const Seg = ({ value, onChange, opts }) => (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {opts.map(([v, l]) => (
+        <button key={v} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
+          style={{ flex: '1 1 120px', padding: '10px', borderRadius: 10, fontFamily: 'inherit', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', border: `2px solid ${value === v ? SG_ACCENT : 'var(--border)'}`, background: value === v ? `${SG_ACCENT}14` : 'var(--card)', color: value === v ? SG_ACCENT : 'var(--text-2)' }}>{l}</button>
+      ))}
+    </div>
+  )
+  return (
+    <Sheet isAr={isAr} title={t('إضافة شاشة العرض', 'Add Live Board')} icon={Ic.box} accent={SG_ACCENT} onClose={onClose}
+      sub={t('تعرض حركة رحلات محطة الشاشة (أو كل المحطات إن لم تُحدَّد للشاشة محطة).', "Shows the screen station's trip movements.")}
+      footer={<>
+        <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
+        <button type="button" disabled={saving} onClick={save} style={{ ...btn('primary'), background: SG_ACCENT, padding: '11px 28px', fontSize: '0.88rem', opacity: saving ? 0.6 : 1 }}>{saving ? '…' : t('إضافة', 'Add')}</button>
+      </>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Err>{err}</Err>
+        <div><label style={lbl}>{t('الاسم *', 'Name *')}</label><input value={title} maxLength={120} onChange={e => setTitle(e.target.value)} style={input} /></div>
+        <div><label style={lbl}>{t('نوع البيانات', 'Data')}</label><Seg value={mode} onChange={setMode} opts={[['scheduled', t('جدول اليوم', "Today's schedule")], ['actual', t('الفعلي المسجّل', 'Actual (recorded)')]]} /></div>
+        <div><label style={lbl}>{t('طريقة العرض', 'Layout')}</label><Seg value={layout} onChange={setLayout} opts={[['columns', t('عمودان', 'Two columns')], ['feed', t('قائمة متتالية', 'Feed')], ['auto', t('تنقّل تلقائي', 'Auto')]]} /></div>
+        <div><label style={lbl}>{t('اللون', 'Theme')}</label><Seg value={theme} onChange={setTheme} opts={Object.entries(THEMES).map(([k, v]) => [k, v.name])} /></div>
+        <div style={{ maxWidth: 200 }}><label style={lbl}>{t('مدة الظهور بالتناوب (ثانية)', 'Seconds on screen')}</label><input type="number" min="5" max="1800" value={dur} onChange={e => setDur(e.target.value)} style={input} /></div>
+        <div style={{ fontSize: '0.74rem', color: 'var(--text-3)', lineHeight: 1.9 }}>{t('لو كانت شاشة العرض هي الوحيدة في حملات الشاشة تبقى ثابتة؛ ولو معها محتوى آخر تتناوب كل (المدة) ثانية.', 'If it is the only item it stays; otherwise it rotates.')}</div>
+      </div>
+    </Sheet>
   )
 }

@@ -25,6 +25,16 @@ export const Err = ({ children }) => children ? (
 
 // صورة مصغّرة لعنصر محتوى (صورة أو أول لقطة من الفيديو)
 export function Thumb({ m, url, style }) {
+  if (m.kind === 'board') {
+    return (
+      <div style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(160deg,#101C27,#091119)', display: 'grid', placeItems: 'center', color: '#E3A02E', ...style }}>
+        <div style={{ textAlign: 'center', lineHeight: 1.5 }}>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 4h18v12H3z" /><path d="M7 9h4M7 12h6M15 9h2" /><path d="M8 20h8M12 16v4" /></svg>
+          <div style={{ fontSize: '0.7rem', fontWeight: 900, color: '#F2EFE8' }}>شاشة العرض</div>
+        </div>
+      </div>
+    )
+  }
   const base = { width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: '#0b1220' }
   return (
     <div style={{ position: 'relative', overflow: 'hidden', background: '#0b1220', ...style }}>
