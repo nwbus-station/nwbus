@@ -9,6 +9,7 @@ import DevicesTab from '../components/signage/DevicesTab'
 import MediaTab from '../components/signage/MediaTab'
 import CampaignsTab from '../components/signage/CampaignsTab'
 import SafetyTab from '../components/signage/SafetyTab'
+import ReportsTab from '../components/signage/ReportsTab'
 import { Empty, SG_ACCENT } from '../components/signage/common'
 import { isOnline } from '../utils/signage'
 
@@ -82,6 +83,7 @@ export default function SignagePage() {
     ['devices', t('الشاشات', 'Screens'), active.length],
     ['media', t('المحتوى', 'Media'), data.media.length],
     ['campaigns', t('الحملات', 'Campaigns'), pending || null],
+    ['reports', t('التقارير', 'Reports'), null],
     ...(isAdmin ? [['safety', t('الطوارئ والسجل', 'Emergency & audit'), null]] : []),
   ]
   const cur = tabs.some(x => x[0] === tab) ? tab : 'devices'
@@ -121,6 +123,7 @@ export default function SignagePage() {
         {cur === 'devices' && <DevicesTab isAr={isAr} isAdmin={isAdmin} devices={data.devices} stations={data.stations} plays={data.plays} reload={load} flash={flash} />}
         {cur === 'media' && <MediaTab isAr={isAr} role={role} myUserId={myUserId} media={data.media} campaigns={data.campaigns} reload={load} flash={flash} />}
         {cur === 'campaigns' && <CampaignsTab isAr={isAr} role={role} myUserId={myUserId} campaigns={data.campaigns} media={data.media} devices={data.devices} stations={data.stations} filter={filter} setFilter={setFilter} reload={load} flash={flash} />}
+        {cur === 'reports' && <ReportsTab isAr={isAr} devices={data.devices} stations={data.stations} campaigns={data.campaigns} media={data.media} />}
         {cur === 'safety' && isAdmin && <SafetyTab isAr={isAr} emergency={data.emergency} audit={data.audit} reload={load} flash={flash} />}
       </>}
 

@@ -17,6 +17,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
   const [busy, setBusy] = useState(false)
   const [drag, setDrag] = useState(false)
   const [boardForm, setBoardForm] = useState(false)
+  const [kindF, setKindF] = useState('all'); const [q, setQ] = useState(''); const [ren, setRen] = useState(null)
   const usedBy = id => campaigns.filter(c => c.media_id === id).length
 
   async function upload(files) {
@@ -49,6 +50,8 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
     setBusy(false); setAsk(null); flash(t('تم حذف المحتوى', 'Media deleted'), true); reload()
   }
   const canDelete = m => role === 'admin' || m.uploaded_by === myUserId
+  const shown = media.filter(m => (kindF === 'all' || m.kind === kindF) && (!q.trim() || m.title.toLowerCase().includes(q.trim().toLowerCase())))
+  const cnt = k => (k === 'all' ? media.length : media.filter(m => m.kind === k).length)
 
   return (
     <div>
@@ -76,9 +79,20 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
         </div>
       )}
 
+      {media.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+            {[['all', t('الكل', 'All')], ['image', t('صور', 'Images')], ['video', t('فيديو', 'Videos')], ['board', t('شاشة العرض', 'Live Board')]].map(([k, l]) => (
+              <button key={k} type="button" aria-pressed={kindF === k} onClick={() => setKindF(k)}
+                style={{ padding: '7px 14px', borderRadius: 99, fontFamily: 'inherit', fontWeight: 800, fontSize: '0.76rem', cursor: 'pointer', border: `1.5px solid ${kindF === k ? SG_ACCENT : 'var(--border)'}`, background: kindF === k ? `${SG_ACCENT}18` : 'var(--card)', color: kindF === k ? SG_ACCENT : 'var(--text-2)' }}>{l} <span dir="ltr" style={{ opacity: 0.7 }}>{cnt(k)}</span></button>
+            ))}
+          </div>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t('ابحث في المحتوى…', 'Search media…')} style={{ ...input, width: 220, padding: '8px 12px' }} />
+        </div>
+      )}
       {media.length === 0 ? <Empty title={t('المكتبة فارغة', 'Library is empty')} hint={t('ارفع أول صورة أو فيديو ثم أنشئ منه حملة.', 'Upload your first image or video, then create a campaign.')} /> : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}>
-          {media.map(m => (
+          {shown.map(m => (
             <article key={m.id} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <button type="button" onClick={() => setPreview(m)} aria-label={t('معاينة', 'Preview')} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer', display: 'block' }}>
                 <Thumb m={m} url={mediaUrl(m.path)} style={{ aspectRatio: '16 / 9' }} />
@@ -92,6 +106,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto', paddingTop: 6 }}>
                   <Pill color={usedBy(m.id) ? '#16a34a' : '#64748b'}>{usedBy(m.id) ? t(`في ${usedBy(m.id)} حملة`, `${usedBy(m.id)} campaign(s)`) : t('غير مستخدم', 'Unused')}</Pill>
                   <span style={{ flex: 1 }} />
+                  {canDelete(m) && <button type="button" onClick={() => setRen(m)} style={btn('ghost', { padding: '5px 12px' })}>{t('تسمية', 'Rename')}</button>}
                   {canDelete(m) && <button type="button" onClick={() => setAsk(m)} style={btn('danger', { padding: '5px 12px' })}>{t('حذف', 'Delete')}</button>}
                 </div>
               </div>
@@ -110,6 +125,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
             : <img src={mediaUrl(preview.path)} alt={preview.title} style={{ width: '100%', maxHeight: '64vh', objectFit: 'contain', background: '#000', borderRadius: 10 }} />}
         </Sheet>
       )}
+      {ren && <RenameSheet isAr={isAr} m={ren} onClose={() => setRen(null)} onDone={() => { setRen(null); flash(t('تم تغيير الاسم', 'Renamed'), true); reload() }} />}
       {boardForm && <BoardSheet isAr={isAr} onClose={() => setBoardForm(false)} onDone={() => { setBoardForm(false); flash(t('أُضيفت شاشة العرض للمكتبة. أنشئ بها حملة لتظهر على الشاشة', 'Live Board added. Create a campaign to show it'), true); reload() }} />}
       {ask && (
         <ConfirmDialog title={t('حذف المحتوى', 'Delete media')} confirmLabel={busy ? '…' : t('حذف نهائي', 'Delete')}
@@ -157,6 +173,32 @@ function BoardSheet({ isAr, onClose, onDone }) {
         <div style={{ maxWidth: 200 }}><label style={lbl}>{t('مدة الظهور بالتناوب (ثانية)', 'Seconds on screen')}</label><input type="number" min="5" max="1800" value={dur} onChange={e => setDur(e.target.value)} style={input} /></div>
         <div style={{ fontSize: '0.74rem', color: 'var(--text-3)', lineHeight: 1.9 }}>{t('لو كانت شاشة العرض هي الوحيدة في حملات الشاشة تبقى ثابتة؛ ولو معها محتوى آخر تتناوب كل (المدة) ثانية.', 'If it is the only item it stays; otherwise it rotates.')}</div>
       </div>
+    </Sheet>
+  )
+}
+
+function RenameSheet({ isAr, m, onClose, onDone }) {
+  const t = (a, e) => (isAr ? a : e)
+  const [title, setTitle] = useState(m.title); const [err, setErr] = useState(''); const [saving, setSaving] = useState(false)
+  async function save(e) {
+    e?.preventDefault()
+    if (!title.trim()) { setErr(t('اكتب اسماً', 'Enter a name')); return }
+    setSaving(true)
+    const { error } = await supabase.rpc('signage_media_rename', { p_id: m.id, p_title: title.trim() })
+    setSaving(false)
+    if (error) { setErr(sgError(error, isAr)); return }
+    onDone()
+  }
+  return (
+    <Sheet isAr={isAr} title={t('تغيير اسم المحتوى', 'Rename media')} icon={Ic.box} accent={SG_ACCENT} onClose={onClose}
+      footer={<>
+        <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
+        <button type="submit" form="sg-ren" disabled={saving} style={{ ...btn('primary'), background: SG_ACCENT, padding: '11px 28px', fontSize: '0.88rem', opacity: saving ? 0.6 : 1 }}>{saving ? '…' : t('حفظ', 'Save')}</button>
+      </>}>
+      <form id="sg-ren" onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <Err>{err}</Err>
+        <input autoFocus value={title} maxLength={120} onChange={e => setTitle(e.target.value)} style={input} />
+      </form>
     </Sheet>
   )
 }

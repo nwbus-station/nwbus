@@ -211,6 +211,16 @@ function Stage({ manifest, secret, playingRef }) {
   const curId = cur?.media_id, curKind = cur?.kind, curDur = cur?.duration, curTitle = cur?.title
   useEffect(() => { startedRef.current = Date.now(); playingRef.current = curTitle || '' }, [idx, curId, curTitle, playingRef])
 
+  // عنصر وحيد ثابت: لا انتقال، فنسجّل عرضه كل دقيقة (لإثبات التشغيل بالتقارير)
+  useEffect(() => {
+    if (!curId || len !== 1) return
+    const t = setInterval(() => {
+      const c = curRef.current
+      if (c) { plays.current.push({ c: c.campaign_id, m: c.media_id, s: 60, t: new Date(Date.now() - 60000).toISOString() }); if (plays.current.length >= 50) flush() }
+    }, 60000)
+    return () => clearInterval(t)
+  }, [curId, len, flush])
+
   // مؤقّت الانتقال: للصورة مدتها، وللفيديو مهلة أمان بعد مدته المسجّلة (لا يُعاد ضبطه عند تحديث القائمة)
   useEffect(() => {
     if (!curId || len < 2) return

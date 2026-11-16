@@ -74,6 +74,7 @@ export const AUDIT_LABEL = {
   'campaign.create': 'إنشاء حملة', 'campaign.update': 'تعديل حملة', 'campaign.submit': 'نشر/تقديم حملة', 'campaign.approve': 'موافقة على حملة',
   'campaign.reject': 'رفض حملة', 'campaign.pause': 'إيقاف حملة مؤقتاً', 'campaign.delete': 'حذف حملة',
   'emergency.on': 'تفعيل رسالة الطوارئ', 'emergency.off': 'إيقاف رسالة الطوارئ',
+  'campaign.reorder': 'ترتيب الحملات', 'media.rename': 'إعادة تسمية محتوى',
 }
 
 const MSG = {
@@ -117,4 +118,52 @@ export function scheduleLabel(c, isAr = true) {
   if (c.days?.length && c.days.length < 7) parts.push(c.days.map(d => DAYS[d][isAr ? 'ar' : 'en']).join('، '))
   if (c.from_min != null) parts.push(`\u2066${minToStr(c.from_min)}–${minToStr(c.to_min)}\u2069`)
   return parts.length ? parts.join(' · ') : (isAr ? 'دائمة' : 'Always')
+}
+
+// ── توقيت السعودية (UTC+3) ──
+export const riyadhNow = () => {
+  const d = new Date(Date.now() + 3 * 3600 * 1000)
+  return { date: d.toISOString().slice(0, 10), dow: d.getUTCDay(), min: d.getUTCHours() * 60 + d.getUTCMinutes() }
+}
+export const addDaysStr = (date, n) => { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+
+// هل الحملة تُعرض الآن؟ (نفس منطق الخادم: الحالة + الفترة + الأيام + نافذة الوقت)
+export function campaignActiveNow(c) {
+  if (c.status !== 'approved') return false
+  const now = Date.now()
+  if (c.starts_at && new Date(c.starts_at).getTime() > now) return false
+  if (c.ends_at && new Date(c.ends_at).getTime() <= now) return false
+  const r = riyadhNow()
+  if (c.days?.length && !c.days.includes(r.dow)) return false
+  if (c.from_min != null) {
+    const ok = c.from_min <= c.to_min ? (r.min >= c.from_min && r.min < c.to_min) : (r.min >= c.from_min || r.min < c.to_min)
+    if (!ok) return false
+  }
+  return true
+}
+// هل الحملة موجّهة لهذه الشاشة؟
+export const campaignTargets = (c, d) => c.scope === 'all'
+  || (c.scope === 'stations' && !!d.station_id && (c.station_ids || []).includes(d.station_id))
+  || (c.scope === 'devices' && (c.device_ids || []).includes(d.id))
+
+// ── اختصارات التوقيت ──
+export const DAY_PRESETS = [
+  { k: 'all', ar: 'كل الأيام', en: 'Every day', days: [] },
+  { k: 'work', ar: 'أيام العمل (أحد–خميس)', en: 'Work days (Sun–Thu)', days: [0, 1, 2, 3, 4] },
+  { k: 'weekend', ar: 'نهاية الأسبوع (جمعة–سبت)', en: 'Weekend (Fri–Sat)', days: [5, 6] },
+]
+export const TIME_PRESETS = [
+  { k: 'all', ar: 'طوال اليوم', en: 'All day', from: null, to: null },
+  { k: 'morning', ar: 'صباحاً 06:00–12:00', en: 'Morning 06–12', from: 360, to: 720 },
+  { k: 'noon', ar: 'ظهراً 12:00–17:00', en: 'Midday 12–17', from: 720, to: 1020 },
+  { k: 'evening', ar: 'مساءً 17:00–23:00', en: 'Evening 17–23', from: 1020, to: 1380 },
+]
+export const sameDays = (a, b) => a.length === b.length && a.every(x => b.includes(x))
+
+// ── تصدير CSV (UTF-8 مع BOM ليفتح بالعربية في Excel) ──
+export function downloadCSV(filename, rows) {
+  const esc = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
+  const blob = new Blob(['﻿' + rows.map(r => r.map(esc).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000)
 }
