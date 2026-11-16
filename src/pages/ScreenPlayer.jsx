@@ -45,6 +45,7 @@ const Full = ({ children, style }) => (
 )
 
 export default function ScreenPlayer() {
+  const manifestRef = useRef(null)
   const rootRef = useRef(null)
   const snapBusy = useRef(false)
   const secretRef = useRef(null)
@@ -53,6 +54,7 @@ export default function ScreenPlayer() {
   const [pair, setPair] = useState(null)               // { code, until }
   const [manifest, setManifest] = useState(loadCache)
   const [offline, setOffline] = useState(false)
+  manifestRef.current = manifest
   const [, setTick] = useState(0)
   const playingRef = useRef('')
 
@@ -118,7 +120,17 @@ export default function ScreenPlayer() {
     }
     pull()
     const t = setInterval(pull, 30000)
-    return () => { stop = true; clearInterval(t) }
+    // نداء خفيف كل 8 ثوانٍ: إن ظهر أمر جديد (لقطة، إعادة تشغيل، إيقاف، طوارئ) نحدّث القائمة فوراً
+    const pingT = setInterval(async () => {
+      try {
+        const { data: pg, error } = await sb.rpc('signage_ping', { p_secret: secretRef.current })
+        if (error || !pg || stop) return
+        const m = manifestRef.current
+        const rl = ls.get(KEY_RELOAD)
+        if ((pg.snap && !snapBusy.current) || (rl != null && String(pg.reload) !== rl) || !!pg.halted !== !!m?.halted || !!pg.emergency !== !!m?.emergency) pull()
+      } catch { /* نكتفي بالتحديث الدوري */ }
+    }, 8000)
+    return () => { stop = true; clearInterval(t); clearInterval(pingT) }
   }, [phase])
 
   // ── بقاء الشاشة مضاءة + إعادة تحميل يومية (تنظيف الذاكرة) ──

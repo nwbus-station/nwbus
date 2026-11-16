@@ -4,7 +4,11 @@ export async function captureScreen(root, W = 640) {
   const rect = root.getBoundingClientRect()
   const scale = W / Math.max(1, rect.width)
   // مقاطع الفيديو لا تلتقطها المكتبة: نتجاهلها ثم نرسم الإطار الحالي يدوياً في مكانها
-  const canvas = await html2canvas(root, { scale, useCORS: true, backgroundColor: '#000', logging: false, ignoreElements: el => el.tagName === 'VIDEO' })
+  const canvas = await html2canvas(root, {
+    scale, useCORS: true, backgroundColor: '#000', logging: false, ignoreElements: el => el.tagName === 'VIDEO',
+    // النسخة التي تلتقطها المكتبة تُعيد تشغيل حركات الظهور من الصفر (شفافة) فتخرج اللقطة سوداء: نوقف الحركات فيها
+    onclone: doc => { const st = doc.createElement('style'); st.textContent = '*,*::before,*::after{animation:none !important;transition:none !important}'; doc.head.appendChild(st) },
+  })
   const ctx = canvas.getContext('2d')
   root.querySelectorAll('video').forEach(v => {
     if (v.readyState < 2 || !v.videoWidth) return
