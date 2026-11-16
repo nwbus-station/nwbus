@@ -159,7 +159,7 @@ function NotificationBell({ profile }) {
             ) : notifs.map(n => {
               const s = TYPE_STYLE[n.type] ?? TYPE_STYLE.info
               return (
-                <div key={n.id} onClick={() => { markRead(n.id); if (n.ref_type === 'dispatch' && n.ref_id) { setOpen(false); navigate(`/dispatches?d=${n.ref_id}`) } }}
+                <div key={n.id} onClick={() => { markRead(n.id); if (n.ref_type === 'dispatch' && n.ref_id) { setOpen(false); navigate(`/dispatches?d=${n.ref_id}`) } else if (n.ref_type === 'signage') { setOpen(false); navigate('/signage') } }}
                   style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-start', background: n.is_read ? 'var(--card)' : 'var(--gold-dim)', cursor: 'pointer', transition: 'background 0.1s' }}>
                   <div style={{ width: 7, height: 7, borderRadius: 1, background: n.is_read ? 'var(--border-2)' : s.dot, marginTop: 6, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -406,6 +406,7 @@ const ICONS = {
   refresh: ['M21 2v6h-6','M3 22v-6h6','M3.51 9a9 9 0 0114.85-3.36L21 8','M21 16l-2.64 2.36A9 9 0 013.51 15'],
   up:      ['M12 19V5','M5 12l7-7 7 7'],
   call:    ['M11 5L6 9H2v6h4l5 4V5z','M19.07 4.93a10 10 0 010 14.14','M15.54 8.46a5 5 0 010 7.07'],
+  screen:  ['M3 4h18v12H3z','M8 20h8','M12 16v4'],
   menu:    ['M4 7h16','M4 12h16','M4 17h16'],
   x:       ['M18 6L6 18','M6 6l12 12'],
   moon:    ['M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z'],
@@ -414,7 +415,7 @@ const ICONS = {
 }
 
 // لون مميز لكل قسم بقائمة الجوال
-const NAV_HUE = { '/dispatches': '#2563eb', '/': '#6366f1', '/transportation': '#0ea5e9', '/lost-found': '#f59e0b', '/sales': '#10b981', '/reports': '#6366f1', '/leaves': '#8b5cf6', '/survey': '#f59e0b', '/evaluation': '#ec4899', '/my-rating': '#f59e0b', '/users': '#0ea5e9', '/stations': '#14b8a6', '/settings': '#64748b', '/data': '#6366f1', '/map': '#22c55e', '/customer-ratings': '#ec4899', '/employee-file': '#6366f1', '/calls': '#ef4444', '/magazine': '#ef4444' }
+const NAV_HUE = { '/dispatches': '#2563eb', '/': '#6366f1', '/transportation': '#0ea5e9', '/lost-found': '#f59e0b', '/sales': '#10b981', '/reports': '#6366f1', '/leaves': '#8b5cf6', '/survey': '#f59e0b', '/evaluation': '#ec4899', '/my-rating': '#f59e0b', '/users': '#0ea5e9', '/stations': '#14b8a6', '/settings': '#64748b', '/data': '#6366f1', '/map': '#22c55e', '/customer-ratings': '#ec4899', '/employee-file': '#6366f1', '/calls': '#ef4444', '/magazine': '#ef4444', '/signage': '#0ea5e9' }
 
 const NAV_GROUPS = [
   {
@@ -441,6 +442,7 @@ const NAV_GROUPS = [
       { to: '/customer-ratings', labelAr: 'تقييمات العملاء', labelEn: 'Customer Ratings', icon: 'report', roles: ADMIN_ROLE_VALUES, module: 'customer_ratings', allowKey: 'customer_ratings_view' },
       { to: '/employee-file', labelAr: 'السجل الوظيفي', labelEn: 'Staff Record', icon: 'users', roles: ADMIN_ROLE_VALUES, module: 'employee_file', adminOnly: true },
       { to: '/calls', labelAr: 'نداء الركاب', labelEn: 'Passenger Calls', icon: 'call', roles: ADMIN_ROLE_VALUES, module: 'pa_calls' },
+      { to: '/signage', labelAr: 'الشاشات', labelEn: 'Screens', icon: 'screen', roles: null, module: 'signage' },
     ]
   },
 ]

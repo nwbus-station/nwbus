@@ -43,6 +43,8 @@ const EmployeeFilePage = lazy(() => safeImport(() => import('./pages/EmployeeFil
 const DataHubPage = lazy(() => safeImport(() => import('./pages/DataHubPage')))
 import MagazinePage     from './pages/MagazinePage'
 import CallPage         from './pages/CallPage'
+import SignagePage      from './pages/SignagePage'
+import ScreenPlayer     from './pages/ScreenPlayer'
 import FeedbackPage     from './pages/FeedbackPage'
 import PrivacyPage      from './pages/PrivacyPage'
 
@@ -115,6 +117,9 @@ export default function App() {
         <RequireAuth><LiveBoard /></RequireAuth>
       } />
 
+      {/* مشغّل شاشة المحطة — عام: الجهاز يُربط بمفتاح خاص لا بحساب موظف */}
+      <Route path="/screen" element={<ScreenPlayer />} />
+
       {/* صفحة التقييم — عامة بدون تسجيل دخول */}
       <Route path="/survey/:city" element={<SurveyPage />} />
       <Route path="/survey"       element={<SurveyPage />} />
@@ -138,6 +143,7 @@ export default function App() {
         <Route path="transportation" element={<RequireAuth module="transportation"><TransportationPage /></RequireAuth>} />
         <Route path="lost-found"     element={<RequireAuth module="lost_found"><LostFoundPage /></RequireAuth>} />
         <Route path="dispatches"     element={<RequireAuth module="dispatches"><DispatchPage /></RequireAuth>} />
+        <Route path="signage"        element={<RequireAuth module="signage"><SignagePage /></RequireAuth>} />
         <Route path="sales"          element={<RequireAuth module="sales"><SalesPage /></RequireAuth>} />
         <Route path="reports"        element={
           <RequireAuth module="reports">

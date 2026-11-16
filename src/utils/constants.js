@@ -157,6 +157,7 @@ const MODULE_ROLE_LIMITS = {
   settings:         [],
   magazine:         [],   // نشر وإدارة Event: للأدمن أو لحساب عليه مسمى مخصص (مثل التسويق)
   pa_calls:         [],   // نداء الركاب: للأدمن فقط لحين الترتيب والتطوير — يُفتح لاحقاً من إدارة الصلاحيات
+  signage:          [],   // شاشات المحطات: للأدمن، ولغيره بإسناد القسم صراحةً (التسويق) — لا يدخل ضمن «كل الأقسام»
 }
 const ADMIN_LIKE_ROLES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
 // هل القسم متاح لهذا الدور أصلاً؟ (السقف الافتراضي)
@@ -179,6 +180,7 @@ const LEGACY_MODULES = ['transportation', 'lost_found', 'sales', 'reports', 'lea
 export function roleModuleAllowed(mod, role, rolePerms, hasTitle = false) {
   if (ADMIN_LIKE_ROLES.includes(role)) return true
   if (MODULE_LOCKED_FOR_ROLES.includes(mod)) return false
+  if (mod === 'signage') return true               // يُمنح بإسناد القسم صراحةً فقط (canSeeModule + قاعدة البيانات)
   if (mod === 'magazine') return hasTitle           // النشر عبر مسمى مخصص فقط (RLS يعتمد على قسم الحساب)
   if (hasTitle) return moduleDefaultForRole(mod, role, true)   // الحساب اللي عليه مسمى: صلاحياته من مسماه
   const acc = rolePerms?.module_access
@@ -210,7 +212,11 @@ export const MODULES = [
   { value: 'pa_calls',       ar: 'نداء الركاب',      en: 'Passenger Calls' },
   { value: 'event',          ar: 'Event (اطلاع)',      en: 'Event (view)' },
   { value: 'magazine',       ar: 'Event (نشر وإدارة)', en: 'Event (publish & manage)' },
+  { value: 'signage',        ar: 'الشاشات (رفع ونشر المحتوى)', en: 'Screens (upload & publish)' },
 ]
+// أقسام لا تدخل ضمن «كل الأقسام» (null): تُمنح بإسناد صريح فقط، لأنها تمنح صلاحية فعلية بقاعدة البيانات
+export const OPT_IN_MODULES = ['signage']
+export const DEFAULT_MODULE_VALUES = MODULES.filter(m => !OPT_IN_MODULES.includes(m.value)).map(m => m.value)
 
 // Departure accuracy thresholds (minutes)
 export const ACCURACY_THRESHOLDS = {

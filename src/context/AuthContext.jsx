@@ -290,7 +290,8 @@ export function AuthProvider({ children }) {
   // المصدر الوحيد لظهور أي قسم: قسم الحساب نفسه + سقف دوره/مسماه
   // الموجودات: مفتوحة لكل الحسابات (البحث عن غرض ضائع يُسأل عنه في أي محطة)، مهما كانت أقسام الحساب
   const titleOptIn = mod => !!customTitle && TITLE_OPT_IN_MODULES.includes(mod) && Array.isArray(profile?.allowed_modules) && profile.allowed_modules.includes(mod)   // قسم يفتحه المسمى صراحةً خارج سقف دوره
-  const canSeeModule = mod => mod === 'lost_found' || mod === 'dispatches' || ((!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod)) || titleOptIn(mod)
+  // الشاشات: للأدمن (غير المقيّد)، ولغيره فقط إن أُسند له القسم صراحةً (null = «كل الأقسام» لا يشمله) — يطابق signage_role() بقاعدة البيانات
+  const canSeeModule = mod => mod === 'signage' ? ((ADMIN_ROLE_VALUES.includes(profile?.role) && !isRestricted) || (Array.isArray(profile?.allowed_modules) && profile.allowed_modules.includes('signage'))) : mod === 'lost_found' || mod === 'dispatches' || ((!profile?.allowed_modules || profile.allowed_modules.includes(mod)) && roleAllowsModule(mod)) || titleOptIn(mod)
   const grantCap = key => permOf(key) === true
   const allowCap = key => permOf(key) !== false
   // المسميات الوظيفية اللي له عليها هذا الإجراء (view / evaluate / leaves) بحسب المجموعات الوظيفية

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getCached, setCached, clearCached } from '../lib/pageCache'
-import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, TITLE_OPT_IN_MODULES, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS, NARROWING_CAPS, openTitlePermissions } from '../utils/constants'
+import { USER_ROLES, MODULES, TITLE_CAPABILITIES, EDITABLE_ROLES, roleCapabilities, moduleDefaultForRole, roleModuleAllowed, TITLE_OPT_IN_MODULES, OPT_IN_MODULES, DEFAULT_MODULE_VALUES, MODULE_LOCKED_FOR_ROLES, GROUP_MODULE, EVAL_SOURCE_ORDER, EVAL_SOURCE_WEIGHTS, EVAL_SOURCE_LABELS, NARROWING_CAPS, openTitlePermissions } from '../utils/constants'
 import { toLatinDigits, escapeHtml, matchesSearch } from '../utils/digits'
 import { isRestStation } from '../utils/stations'
 import { useEscapeKey } from '../hooks/useEscapeKey'
@@ -650,7 +650,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   useEscapeKey(onClose)
   useBodyScrollLock()
   // صلاحية جديدة تبدأ مفتوحة بالكامل كالأدمن — أنت اللي تحدد القيود، ما يُفرض عليك شي
-  const allMods = MODULES.map(m => m.value).filter(m => roleModuleAllowed(m, 'general_admin', null, true))
+  const allMods = MODULES.map(m => m.value).filter(m => !OPT_IN_MODULES.includes(m) && roleModuleAllowed(m, 'general_admin', null, true))
   const blank = { kind: 'title', role: null, id: null, name_ar: '', name_en: '', base_role: 'general_admin', permissions: openTitlePermissions(), allowed_modules: allMods, job_title: '', can_rate_customers: false, eval_source: '' }
   const [form, setForm] = useState(blank)
   const [busy, setBusy] = useState(false)
@@ -691,7 +691,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   // التقارير يفتحها المسمى بقرار صريح حتى لو دوره الأساسي «موظف» (لا تدخل ضمن «كل الأقسام» الافتراضي)
   const titleModAllowed = m => roleModuleAllowed(m, form.base_role, null, true) || TITLE_OPT_IN_MODULES.includes(m)
   const titleMods = MODULES.filter(m => titleModAllowed(m.value))
-  const titleNoEvent = titleMods.filter(m => m.value !== 'magazine' && roleModuleAllowed(m.value, form.base_role, null, true)).map(m => m.value)
+  const titleNoEvent = titleMods.filter(m => m.value !== 'magazine' && !OPT_IN_MODULES.includes(m.value) && roleModuleAllowed(m.value, form.base_role, null, true)).map(m => m.value)
   const titleSel = form.allowed_modules ?? titleNoEvent
   const setTitleMods = list => { setSaved(false); setForm(f => ({ ...f, allowed_modules: list.length === titleNoEvent.length && titleNoEvent.every(x => list.includes(x)) && !list.includes('magazine') ? null : list })) }
   const toggleTitleMod = m => setTitleMods(titleSel.includes(m) ? titleSel.filter(x => x !== m) : [...titleSel, m])
@@ -701,7 +701,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   // بنود مرتبطة بقسم (مثل Event): قيمتها = هل القسم ضمن أقسام المسمى
   const modOn = (f, m) => Array.isArray(f.allowed_modules) && f.allowed_modules.includes(m)
   const withModule = (f, m, v) => {
-    const base = Array.isArray(f.allowed_modules) ? f.allowed_modules : MODULES.filter(x => x.value !== 'magazine' && roleModuleAllowed(x.value, f.base_role, null, true)).map(x => x.value)
+    const base = Array.isArray(f.allowed_modules) ? f.allowed_modules : MODULES.filter(x => x.value !== 'magazine' && !OPT_IN_MODULES.includes(x.value) && roleModuleAllowed(x.value, f.base_role, null, true)).map(x => x.value)
     return { ...f, allowed_modules: v ? [...new Set([...base, m])] : base.filter(x => x !== m) }
   }
   const permValue = cap => cap.module ? modOn(form, cap.module) : cap.kind === 'allow' ? form.permissions[cap.key] !== false : !!form.permissions[cap.key]
@@ -733,7 +733,7 @@ function TitlesManager({ titles, onClose, onChanged, isAr }) {
   const titleStat = t => {
     const p = t.permissions ?? {}
     const n = TITLE_CAPABILITIES.filter(c => !c.module && (c.kind === 'allow' ? p[c.key] === false : (NARROWING_CAPS.includes(c.key) && !!p[c.key]))).length
-      + (Array.isArray(t.allowed_modules) ? MODULES.filter(m => roleModuleAllowed(m.value, t.base_role, null, true) && m.value !== 'magazine' && !t.allowed_modules.includes(m.value)).length : 0)
+      + (Array.isArray(t.allowed_modules) ? MODULES.filter(m => roleModuleAllowed(m.value, t.base_role, null, true) && m.value !== 'magazine' && !OPT_IN_MODULES.includes(m.value) && !t.allowed_modules.includes(m.value)).length : 0)
     return { restr: n, holders: (holders[t.id] ?? []).length }
   }
   const openAllTitle = () => { setSaved(false); setForm(f => ({ ...f, permissions: { ...openTitlePermissions(), restricted_mode: false }, allowed_modules: allMods.filter(m => roleModuleAllowed(m, f.base_role, null, true)) })) }
@@ -1350,16 +1350,16 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
 
   function toggleModule(mod) {
     setForm(f => {
-      const current = f.allowed_modules ?? MODULES.map(m => m.value)
+      const current = f.allowed_modules ?? DEFAULT_MODULE_VALUES
       const next = current.includes(mod)
         ? current.filter(m => m !== mod)
         : [...current, mod]
-      // If all selected → null (means all)
-      return { ...f, allowed_modules: next.length === MODULES.length ? null : next }
+      // كل الأقسام العادية مختارة (بدون الشاشات) → null (يعني الكل)؛ قسم الشاشات يبقى إسناداً صريحاً
+      return { ...f, allowed_modules: next.length === DEFAULT_MODULE_VALUES.length && DEFAULT_MODULE_VALUES.every(x => next.includes(x)) && !next.includes('signage') ? null : next }
     })
   }
 
-  const selectedMods = form.allowed_modules ?? MODULES.map(m => m.value)
+  const selectedMods = form.allowed_modules ?? DEFAULT_MODULE_VALUES
 
   // سقف الأقسام حسب الدور الأساسي (أو أساس المسمى المخصص) — اللي يعدّله الأدمن من "المسميات الوظيفية"
   const [rolePermRows, setRolePermRows] = useState({})
@@ -1899,7 +1899,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
             </div>
 
             {selectedTitle && (() => {
-              const mods = selectedTitle.allowed_modules ?? MODULES.filter(m => roleModuleAllowed(m.value, selectedTitle.base_role, null, true)).map(m => m.value)
+              const mods = selectedTitle.allowed_modules ?? MODULES.filter(m => !OPT_IN_MODULES.includes(m.value) && roleModuleAllowed(m.value, selectedTitle.base_role, null, true)).map(m => m.value)
               const perms = selectedTitle.permissions ?? {}
               const short = c => (isAr ? c.ar : c.en).split('(')[0].trim()
               const chip = (txt, cls) => <span key={txt} className={`rounded-full px-2 py-0.5 ${cls}`}>{txt}</span>
@@ -2156,7 +2156,7 @@ function UserModal({ user, stations, supervisors, shiftSupervisors = [], customT
               </div>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {MODULES.map(m => {
+              {MODULES.filter(m => isGeneralAdmin || !OPT_IN_MODULES.includes(m.value)).map(m => {
                 const allowed = modAllowed(m.value)
                 const on = allowed && selectedMods.includes(m.value)
                 if (!allowed) {
@@ -2275,7 +2275,7 @@ function UsersPageFull() {
   const effectiveModules = u => {
     const t = u.custom_title_id ? customTitles.find(x => x.id === u.custom_title_id) : null
     const role = t?.base_role ?? u.role
-    const list = u.allowed_modules ?? MODULES.map(m => m.value)
+    const list = u.allowed_modules ?? DEFAULT_MODULE_VALUES
     return list.filter(m => m !== 'home' && roleModuleAllowed(m, role, t ? null : rolePermMap[role], !!t))
   }
   const [users,    setUsers]    = useState(() => getCached(usersCacheKey)?.users ?? [])
@@ -2320,7 +2320,7 @@ function UsersPageFull() {
   }
 
   // allowed_modules = null يعني «كل الأقسام»: نحوّله لقائمة صريحة عند الإزالة (وبدونها ما كانت الإزالة تؤثر عليهم)
-  const modulesOf = u => u.allowed_modules ?? MODULES.map(m => m.value)
+  const modulesOf = u => u.allowed_modules ?? DEFAULT_MODULE_VALUES
   const modName = v => { const m = MODULES.find(x => x.value === v); return m ? (isAr ? m.ar : m.en) : v }
 
   async function handleBulkAddModule() {
@@ -2974,7 +2974,7 @@ function UsersPageFull() {
             className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-nwbus-primary focus:outline-none text-gray-700"
             style={{ fontFamily: 'inherit' }}>
             <option value="">{isAr ? '— اختر قسم —' : '— Select section —'}</option>
-            {MODULES.map(m => (
+            {MODULES.filter(m => isGeneralAdmin || !OPT_IN_MODULES.includes(m.value)).map(m => (
               <option key={m.value} value={m.value}>{isAr ? m.ar : m.en}</option>
             ))}
           </SelectField>
