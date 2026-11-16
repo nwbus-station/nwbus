@@ -119,6 +119,7 @@ export default function App() {
 
       {/* مشغّل شاشة المحطة — عام: الجهاز يُربط بمفتاح خاص لا بحساب موظف */}
       <Route path="/screen" element={<ScreenPlayer />} />
+      <Route path="/s" element={<ScreenPlayer />} />
 
       {/* صفحة التقييم — عامة بدون تسجيل دخول */}
       <Route path="/survey/:city" element={<SurveyPage />} />

@@ -15,7 +15,7 @@ export default function DevicesTab({ isAr, isAdmin, devices, stations, plays, re
   const [ask, setAsk] = useState(null)       // { kind: 'revoke'|'delete', d }
   const [busy, setBusy] = useState(false)
   const stName = id => stations.find(s => s.id === id)?.name_ar || stations.find(s => s.id === id)?.name_en || '—'
-  const playerUrl = `${location.origin}/screen`
+  const playerUrl = `${location.origin}/s`
 
   async function act(fn, ok) {
     setBusy(true)
@@ -132,7 +132,7 @@ function PairSheet({ isAr, stations, onClose, onDone }) {
   }
   return (
     <Sheet isAr={isAr} title={t('ربط شاشة جديدة', 'Pair a new screen')} icon={Ic.box} accent={SG_ACCENT} onClose={onClose}
-      sub={t('افتح /screen على جهاز الشاشة ثم اكتب الرمز الظاهر عليه. صالح 10 دقائق ويُستخدم مرة واحدة.', 'Open /screen on the device and enter the code. Valid 10 minutes, single use.')}
+      sub={t('افتح /s على جهاز الشاشة ثم اكتب الرمز الظاهر عليه. صالح 10 دقائق ويُستخدم مرة واحدة.', 'Open /s on the device and enter the code. Valid 10 minutes, single use.')}
       footer={<>
         <button type="button" onClick={onClose} style={btn('ghost')}>{t('إلغاء', 'Cancel')}</button>
         <button type="submit" form="sg-pair" disabled={saving} style={{ ...btn('primary'), background: SG_ACCENT, padding: '11px 28px', fontSize: '0.88rem', opacity: saving ? 0.6 : 1 }}>{saving ? '…' : t('ربط', 'Pair')}</button>
