@@ -1,5 +1,6 @@
 // تبويب المحتوى: رفع صور وفيديو (مع التحقق من النوع والحجم) ومكتبة بمعاينة وحذف محمي
-import { useRef, useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
+import { safeImport } from '../../lib/chunkReload'
 import { supabase } from '../../lib/supabase'
 import Sheet, { Ic } from '../dispatch/Sheet'
 import { btn } from '../dispatch/DispatchCards'
@@ -8,6 +9,7 @@ import { lbl, input, Pill, Empty, Err, Thumb, SG_ACCENT } from './common'
 import { THEMES } from '../board/boardParts'
 import SceneBuilder, { LayoutDiagram } from './SceneBuilder'
 import SceneView from '../scene/SceneView'
+const AdStudio = lazy(() => safeImport(() => import('../studio/AdStudio')))
 import { ACCEPT, SG_BUCKET, validateFile, readVideoDuration, newFileName, mediaUrl, fmtSize, fmtDur, fmtDT, sgError } from '../../utils/signage'
 
 export default function MediaTab({ isAr, role, myUserId, media, campaigns, reload, flash }) {
@@ -20,6 +22,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
   const [drag, setDrag] = useState(false)
   const [boardForm, setBoardForm] = useState(false)
   const [kindF, setKindF] = useState('all'); const [q, setQ] = useState(''); const [ren, setRen] = useState(null)
+  const [studio, setStudio] = useState(null)       // null | {} (جديد) | { initial } (فتح إعلان محفوظ للتعديل كنسخة)
   const [sceneForm, setSceneForm] = useState(null)   // null | {} (جديد) | { scene } (تعديل)
   const usedBy = id => campaigns.filter(c => c.media_id === id).length
 
@@ -66,6 +69,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
         <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={e => { upload(e.target.files); e.target.value = '' }} />
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed var(--border-2)' }}>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button type="button" onClick={() => setStudio({})} style={{ ...btn('primary'), background: '#EE712D', padding: '9px 20px', fontSize: '0.82rem' }}>{t('استوديو الإعلانات (قوالب جاهزة)', 'Ad studio')}</button>
             <button type="button" onClick={() => setSceneForm({})} style={{ ...btn('primary'), background: SG_ACCENT, padding: '9px 20px', fontSize: '0.82rem' }}>{t('إنشاء مشهد (شاشة مقسّمة + شريط + عناصر جاهزة)', 'Create scene')}</button>
             <button type="button" onClick={() => setBoardForm(true)} style={btn('ghost', { padding: '9px 20px', fontSize: '0.82rem' })}>{t('إضافة شاشة العرض (حركة الرحلات المباشرة)', 'Add Live Board (trip movements)')}</button>
           </div>
@@ -112,6 +116,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto', paddingTop: 6 }}>
                   <Pill color={usedBy(m.id) ? '#16a34a' : '#64748b'}>{usedBy(m.id) ? t(`في ${usedBy(m.id)} حملة`, `${usedBy(m.id)} campaign(s)`) : t('غير مستخدم', 'Unused')}</Pill>
                   <span style={{ flex: 1 }} />
+                  {m.kind === 'image' && m.config?.studio && canDelete(m) && <button type="button" onClick={() => setStudio({ initial: m })} style={btn('ghost', { padding: '5px 12px' })}>{t('استوديو', 'Studio')}</button>}
                   {m.kind === 'scene' && canDelete(m) && <button type="button" onClick={() => setSceneForm({ scene: m })} style={btn('ghost', { padding: '5px 12px' })}>{t('تعديل', 'Edit')}</button>}
                   {canDelete(m) && <button type="button" onClick={() => setRen(m)} style={btn('ghost', { padding: '5px 12px' })}>{t('تسمية', 'Rename')}</button>}
                   {canDelete(m) && <button type="button" onClick={() => setAsk(m)} style={btn('danger', { padding: '5px 12px' })}>{t('حذف', 'Delete')}</button>}
@@ -122,6 +127,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
         </div>
       )}
 
+      {studio && <Suspense fallback={null}><AdStudio isAr={isAr} media={media} initial={studio.initial} onClose={() => setStudio(null)} onDone={msg => { setStudio(null); flash(msg, true); reload() }} /></Suspense>}
       {sceneForm && <SceneBuilder isAr={isAr} scene={sceneForm.scene} media={media} onClose={() => setSceneForm(null)} onDone={msg => { setSceneForm(null); flash(msg, true); reload() }} />}
       {preview && (
         <Sheet isAr={isAr} title={preview.title} icon={Ic.box} accent={SG_ACCENT} variant="modal" width={860} onClose={() => setPreview(null)}
