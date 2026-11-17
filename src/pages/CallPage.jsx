@@ -409,9 +409,10 @@ export default function CallPage() {
 
   useEffect(() => {
     if (mode !== 'trip' || !destStop) return
-    setText(buildAnnouncement(destStop.name, viaChosen.map(s => s.name)))
+    const sp = st => pron[st.id] || st.name   // الاسم المنطوق بالعربية (قاموس النطق) بدل الاسم الإنجليزي
+    setText(buildAnnouncement(sp(destStop), viaChosen.map(sp)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [destStop, stopOff, stops, mode])
+  }, [destStop, stopOff, stops, mode, pron])
 
   const stopRepeat = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
@@ -437,7 +438,7 @@ export default function CallPage() {
       if (screenSel.on && screenSel.ids.length) {
         const isClips = voiceURI === CLIPS_VOICE_ID && mode === 'trip' && destStop
         const screenText = isClips
-          ? `نداء على الركاب المسافرين إلى ${destStop.name}` + (viaChosen.length ? ` مروراً بـ ${viaChosen.map(x => x.name).join('، ')}` : '')
+          ? `نداء على الركاب المسافرين إلى ${pron[destStop.id] || destStop.name}` + (viaChosen.length ? ` مروراً بـ ${viaChosen.map(x => pron[x.id] || x.name).join('، ')}` : '')
           : (t || '').trim()
         const audio = isClips && screenSel.audio && phraseClips.intro && clipsIndex.has(destStop.id) && (!viaChosen.length || (phraseClips.via && viaChosen.every(x => clipsIndex.has(x.id))))
           ? [clipUrl('phrases/intro.mp3'), clipUrl(`stations/${destStop.id}.mp3`), ...(viaChosen.length ? [clipUrl('phrases/via.mp3'), ...viaChosen.map(x => clipUrl(`stations/${x.id}.mp3`))] : [])]
@@ -483,7 +484,7 @@ export default function CallPage() {
     }
     setPlaying(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chimeOn, selectedVoice, voiceURI, mode, destStop, viaChosen, clipsIndex, phraseClips, isAr, selectedTrip, screenSel])
+  }, [chimeOn, selectedVoice, voiceURI, mode, destStop, viaChosen, clipsIndex, phraseClips, isAr, selectedTrip, screenSel, pron])
 
   async function onCallClick() {
     if (playing) return
