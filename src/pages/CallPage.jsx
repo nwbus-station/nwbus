@@ -11,6 +11,8 @@ import StopsPanel from '../components/calls/StopsPanel'
 import AnnounceConsole from '../components/calls/AnnounceConsole'
 import CallHistory from '../components/calls/CallHistory'
 import ClipsLibrary from '../components/calls/ClipsLibrary'
+import { VoiceSettingsCard, PronunciationEditor } from '../components/calls/VoiceTools'
+import ScreenCallPicker, { loadScreenSel } from '../components/calls/ScreenCallPicker'
 
 // نغمة نداء المطار (دينغ-دونغ تنازلي) — مُولّدة بالكامل بالمتصفح (Web Audio)، بدون ملف صوتي خارجي
 // controller اختياري: يخزّن AudioContext الحالي عشان زر "إيقاف" يقدر يسكّته فوراً
@@ -83,7 +85,7 @@ function clipUrl(path) {
 }
 
 // توليد مقطع صوت وحفظه مباشرة بمكتبة النداء (بدل تنزيله ورفعه يدوياً) — نفس الـEdge Function بوضع الحفظ
-async function generateClip(text, savePath, isAr) {
+async function generateClip(text, savePath, isAr, extra = {}) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error(isAr ? 'لا توجد جلسة دخول' : 'No active session')
   const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/swift-responder`, {
@@ -93,7 +95,7 @@ async function generateClip(text, savePath, isAr) {
       'Authorization': `Bearer ${session.access_token}`,
       'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify({ text, savePath }),
+    body: JSON.stringify({ text, savePath, ...extra }),
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error || (isAr ? 'تعذّر توليد المقطع' : 'Failed to generate the clip'))
@@ -101,7 +103,7 @@ async function generateClip(text, savePath, isAr) {
 }
 
 // صوت بشري واقعي عبر Edge Function (ElevenLabs) — المفتاح بالخادم فقط، ما يوصل للمتصفح
-async function speakElevenLabs(text, controller, isAr) {
+async function speakElevenLabs(text, controller, isAr, extra = {}) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error(isAr ? 'لا توجد جلسة دخول' : 'No active session')
   if (controller?.stopped) return
@@ -112,7 +114,7 @@ async function speakElevenLabs(text, controller, isAr) {
       'Authorization': `Bearer ${session.access_token}`,
       'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, ...extra }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -200,6 +202,9 @@ export default function CallPage() {
   const [confirmRename, setConfirmRename] = useState(null) // { list: [{id,name}] }
   const [renaming, setRenaming] = useState('')
   const [history, setHistory] = useState([]) // سجل نداءات الجلسة (عرض فقط)
+  const [pron, setPron] = useState({})                    // { stationId: نطق مشكَّل }
+  const [screenSel, setScreenSel] = useState(loadScreenSel) // عرض النداء على شاشات المحطات
+  const spoken = st => (pron[st.id] || st.name_ar)
 
   const selectedTrip = trips.find(t => t.id === selectedTripId)
   const checkedStops = stops.filter(s => !stopOff[s.id])
@@ -219,6 +224,13 @@ export default function CallPage() {
   }, [])
 
   useEffect(() => { refreshClipsIndex() }, [refreshClipsIndex])
+
+  // قاموس النطق (قبل تشغيل SQL 035 يفشل الاستعلام بصمت ويبقى فارغاً)
+  const loadPron = useCallback(async () => {
+    const { data, error } = await supabase.from('call_pronunciations').select('station_id,spoken')
+    if (!error) setPron(Object.fromEntries((data || []).map(r => [r.station_id, r.spoken])))
+  }, [])
+  useEffect(() => { loadPron() }, [loadPron])
 
   useEffect(() => {
     if (!showClipsLibrary || allStations.length) return
@@ -260,7 +272,7 @@ export default function CallPage() {
   async function generateStationClip(station) {
     setUploadingId(station.id); setCallError('')
     try {
-      await generateClip(station.name_ar, `stations/${station.id}.mp3`, isAr)
+      await generateClip(spoken(station), `stations/${station.id}.mp3`, isAr)
       await refreshClipsIndex()
     } catch (err) { setCallError(err.message || (isAr ? 'تعذّر توليد المقطع' : 'Failed to generate the clip')) }
     setUploadingId('')
@@ -282,6 +294,36 @@ export default function CallPage() {
     setRenaming('')
   }
 
+  // إعادة توليد كل المقاطع بالصوت المحفوظ (العبارتان + كل المحطات) بعد تغيير الصوت
+  async function regenerateAll() {
+    setCallError('')
+    const list = allStations.length ? allStations : ((await supabase.from('stations').select('id,name_ar').order('name_ar')).data || [])
+    if (!allStations.length) setAllStations(list)
+    const jobs = [
+      { path: 'phrases/intro.mp3', text: 'نداء على الركاب المسافرين إلى', label: 'المقدمة' },
+      { path: 'phrases/via.mp3', text: 'مروراً بـ', label: 'مروراً بـ' },
+      ...list.map(st => ({ path: `stations/${st.id}.mp3`, text: spoken(st), label: st.name_ar })),
+    ]
+    setBulkProgress({ done: 0, total: jobs.length })
+    for (let i = 0; i < jobs.length; i++) {
+      try { await generateClip(jobs[i].text, jobs[i].path, isAr) } catch (err) { setCallError(`توقف التوليد عند "${jobs[i].label}": ${err.message}`); break }
+      setBulkProgress({ done: i + 1, total: jobs.length })
+      await new Promise(r => setTimeout(r, 350))
+    }
+    setBulkProgress(null); await refreshClipsIndex()
+  }
+
+  // حفظ نطق محطة ثم توليد مقطعها بالنطق الجديد
+  const [pronBusy, setPronBusy] = useState('')
+  async function savePron(st, spokenText) {
+    setPronBusy(st.id); setCallError('')
+    const { error } = await supabase.rpc('call_pron_set', { p_station: st.id, p_spoken: spokenText })
+    if (error) { setCallError('تعذّر حفظ النطق'); setPronBusy(''); return }
+    setPron(p => { const n = { ...p }; if (spokenText) n[st.id] = spokenText; else delete n[st.id]; return n })
+    try { await generateClip(spokenText || st.name_ar, `stations/${st.id}.mp3`, isAr); await refreshClipsIndex() } catch (err) { setCallError(err.message || 'تعذّر توليد المقطع') }
+    setPronBusy('')
+  }
+
   async function generateAllMissing() {
     const missing = allStations.filter(s => !clipsIndex.has(s.id))
     if (!missing.length) return
@@ -289,7 +331,7 @@ export default function CallPage() {
     setBulkProgress({ done: 0, total: missing.length })
     for (let i = 0; i < missing.length; i++) {
       try {
-        await generateClip(missing[i].name_ar, `stations/${missing[i].id}.mp3`, isAr)
+        await generateClip(spoken(missing[i]), `stations/${missing[i].id}.mp3`, isAr)
         setClipsIndex(prev => new Set(prev).add(missing[i].id))
       } catch (err) {
         setCallError(isAr ? `توقف التوليد عند "${missing[i].name_ar}": ${err.message}` : `Generation stopped at "${missing[i].name_ar}": ${err.message}`)
@@ -391,6 +433,20 @@ export default function CallPage() {
     setPlaying(true)
     setCallError('')
     try {
+      // عرض النداء على شاشات المحطات المختارة (لا يعطّل الصوت المحلي عند الفشل)
+      if (screenSel.on && screenSel.ids.length) {
+        const isClips = voiceURI === CLIPS_VOICE_ID && mode === 'trip' && destStop
+        const screenText = isClips
+          ? `نداء على الركاب المسافرين إلى ${destStop.name}` + (viaChosen.length ? ` مروراً بـ ${viaChosen.map(x => x.name).join('، ')}` : '')
+          : (t || '').trim()
+        const audio = isClips && screenSel.audio && phraseClips.intro && clipsIndex.has(destStop.id) && (!viaChosen.length || (phraseClips.via && viaChosen.every(x => clipsIndex.has(x.id))))
+          ? [clipUrl('phrases/intro.mp3'), clipUrl(`stations/${destStop.id}.mp3`), ...(viaChosen.length ? [clipUrl('phrases/via.mp3'), ...viaChosen.map(x => clipUrl(`stations/${x.id}.mp3`))] : [])]
+          : []
+        if (screenText) {
+          const { error: pe } = await supabase.rpc('signage_call_publish', { p_stations: screenSel.ids, p_text: screenText, p_audio: audio, p_ttl: 45 })
+          if (pe) setCallError(/rate/.test(pe.message || '') ? 'تجاوزت حد الإرسال للشاشات، انتظر قليلاً' : 'تعذّر إرسال النداء إلى الشاشات (الصوت المحلي يعمل)')
+        }
+      }
       if (chimeOn) await playChime(controller)
       if (controller.stopped) { setPlaying(false); return }
       if (voiceURI === CLIPS_VOICE_ID) {
@@ -427,7 +483,7 @@ export default function CallPage() {
     }
     setPlaying(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chimeOn, selectedVoice, voiceURI, mode, destStop, viaChosen, clipsIndex, phraseClips, isAr, selectedTrip])
+  }, [chimeOn, selectedVoice, voiceURI, mode, destStop, viaChosen, clipsIndex, phraseClips, isAr, selectedTrip, screenSel])
 
   async function onCallClick() {
     if (playing) return
@@ -480,12 +536,22 @@ export default function CallPage() {
     if (id === 'free' && voiceURI === CLIPS_VOICE_ID) setVoiceURI(ELEVENLABS_VOICE_ID)
   }
 
-  const clipsLibrary = (
+  const clipsLibraryCore = (
     <ClipsLibrary isAr={isAr} phraseClips={phraseClips} clipsIndex={clipsIndex} allStations={allStations}
       stationSearch={stationSearch} onStationSearch={setStationSearch} uploadingId={uploadingId} bulkProgress={bulkProgress} renaming={renaming}
       nameDrafts={nameDrafts} onNameDraft={(id, v) => setNameDrafts(p => ({ ...p, [id]: v }))}
       onUploadPhrase={uploadPhraseClip} onGeneratePhrase={generatePhraseClip} onUploadStation={uploadStationClip} onGenerateStation={generateStationClip}
       onGenerateAll={generateAllMissing} onAskRename={list => setConfirmRename({ list })} onPlay={path => new Audio(clipUrl(path)).play()} />
+  )
+
+  const clipsLibrary = (
+    <>
+      <VoiceSettingsCard isAr={isAr} busy={!!bulkProgress} onRegenerateAll={regenerateAll}
+        onTest={(txt, extra) => speakElevenLabs(txt, undefined, isAr, extra)} />
+      <PronunciationEditor isAr={isAr} stations={allStations} pron={pron} clipsIndex={clipsIndex} busyId={pronBusy}
+        onSave={savePron} onTest={txt => speakElevenLabs(txt, undefined, isAr)} />
+      {clipsLibraryCore}
+    </>
   )
 
   const historyCard = <CallHistory isAr={isAr} items={history} onReuse={setText} onClear={() => setHistory([])} />
@@ -567,6 +633,7 @@ export default function CallPage() {
             showTestVoice={!clipsMode} onTestVoice={onTestVoice} needsBrowserTts={needsBrowserTts} ttsSupported={BROWSER_TTS_SUPPORTED} hasDeviceVoices={voices.length > 0}
             clipsCheck={clipsCheck} onOpenLibrary={() => setShowClipsLibrary(true)}
             announceDisabled={announceDisabled} onAnnounce={onCallClick} onStop={stopRepeat} />
+          <ScreenCallPicker isAr={isAr} value={screenSel} onChange={setScreenSel} />
           {!(desk && mode === 'free') && (desk || history.length > 0) && historyCard}
         </div>
       </div>

@@ -56,6 +56,10 @@ export default function ScreenPlayer() {
   const [pair, setPair] = useState(null)               // { code, until }
   const [manifest, setManifest] = useState(loadCache)
   const [offline, setOffline] = useState(false)
+  const [call, setCall] = useState(null)                 // نداء ركاب نشط: { id, text }
+  const callSeen = useRef('')
+  const callTimer = useRef(null)
+  const callAudio = useRef(null)
   manifestRef.current = manifest
   const [, setTick] = useState(0)
   const playingRef = useRef('')
@@ -127,12 +131,35 @@ export default function ScreenPlayer() {
       try {
         const { data: pg, error } = await sb.rpc('signage_ping', { p_secret: secretRef.current })
         if (error || !pg || stop) return
+        const c = pg.call
+        if (c && c.id && c.id !== callSeen.current && !pg.halted) {
+          callSeen.current = c.id
+          clearTimeout(callTimer.current)
+          setCall({ id: c.id, text: c.text })
+          const ttl = Math.min(120, Math.max(10, Number(c.ttl) || 45))
+          callTimer.current = setTimeout(() => { setCall(x => (x && x.id === c.id ? null : x)); callAudio.current = null }, ttl * 1000)
+          // صوت اختياري: قد يمنعه المتصفح بلا تفاعل مسبق، فيبقى النص ظاهراً دائماً
+          const urls = Array.isArray(c.audio) ? c.audio.filter(u => typeof u === 'string') : []
+          if (urls.length) {
+            const token = c.id; callAudio.current = token
+            ;(async () => {
+              for (const u of urls) {
+                if (callAudio.current !== token) return
+                try {
+                  const a = new Audio(u)
+                  await new Promise((res, rej) => { a.onended = res; a.onerror = rej; a.play().catch(rej) })
+                } catch { return }
+              }
+            })()
+          }
+        }
+        if (!c && callSeen.current) { /* يبقى ظاهراً حتى انتهاء مدته المحلية */ }
         const m = manifestRef.current
         const rl = ls.get(KEY_RELOAD)
         if ((pg.snap && !snapBusy.current) || (rl != null && String(pg.reload) !== rl) || !!pg.halted !== !!m?.halted || !!pg.emergency !== !!m?.emergency) pull()
       } catch { /* نكتفي بالتحديث الدوري */ }
     }, 8000)
-    return () => { stop = true; clearInterval(t); clearInterval(pingT) }
+    return () => { stop = true; clearInterval(t); clearInterval(pingT); clearTimeout(callTimer.current) }
   }, [phase])
 
   // ── بقاء الشاشة مضاءة + إعادة تحميل يومية (تنظيف الذاكرة) ──
@@ -215,6 +242,12 @@ export default function ScreenPlayer() {
     <div ref={rootRef} style={{ ...rot, background: '#000', overflow: 'hidden', cursor: 'none' }} onClick={fs}>
       <Stage manifest={manifest} secret={secretRef.current} playingRef={playingRef} />
       {offline && <div title="لا يوجد اتصال" style={{ position: 'absolute', bottom: 8, insetInlineEnd: 8, width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', opacity: 0.7 }} />}
+      {call && !manifest?.emergency && (
+        <div role="alert" dir="rtl" style={{ position: 'absolute', inset: 0, zIndex: 9, background: 'linear-gradient(160deg, #0b1620, #12283a)', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '6%', gap: '4vh', animation: 'sgFade .5s ease both', fontFamily: "'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif" }}>
+          <div style={{ fontSize: 'clamp(1.2rem, 2.8vw, 2.4rem)', fontWeight: 800, color: '#F37021', letterSpacing: 1 }}>نداء للركاب</div>
+          <div style={{ fontSize: 'clamp(2.2rem, 6.4vw, 6rem)', fontWeight: 900, lineHeight: 1.6, whiteSpace: 'pre-wrap', paddingBottom: '0.2em' }}>{call.text}</div>
+        </div>
+      )}
       {manifest?.emergency && (
         <div role="alert" style={{ position: 'absolute', inset: 0, zIndex: 10, background: '#b91c1c', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '6%', animation: 'sgPulse 1.6s ease-in-out infinite', fontFamily: "'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif" }}>
           <div style={{ fontSize: 'clamp(2rem, 6.5vw, 6rem)', fontWeight: 900, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{manifest.emergency.message}</div>

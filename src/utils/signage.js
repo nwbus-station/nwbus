@@ -69,6 +69,7 @@ export const CAMP_STATUS = {
   paused:   { ar: 'موقوفة',         en: 'Paused',    color: '#6366f1' },
 }
 export const AUDIT_LABEL = {
+  'call.publish': 'نداء على الشاشات', 'call.voice': 'تعديل صوت النداء', 'call.pron': 'تعديل نطق محطة',
   'device.pair': 'ربط شاشة', 'device.update': 'تعديل شاشة', 'device.revoke': 'إيقاف شاشة', 'device.delete': 'حذف شاشة',
   'media.add': 'رفع محتوى', 'media.delete': 'حذف محتوى',
   'campaign.create': 'إنشاء حملة', 'campaign.update': 'تعديل حملة', 'campaign.submit': 'نشر/تقديم حملة', 'campaign.approve': 'موافقة على حملة',

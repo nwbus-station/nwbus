@@ -42,7 +42,7 @@ serve(async (req) => {
     }
     if (!allowed) return json({ error: 'Forbidden' }, 403)
 
-    const { text, savePath } = await req.json()
+    const { text, savePath, voiceId: reqVoice, modelId: reqModel, stability: reqStab, similarity: reqSim } = await req.json()
     if (!text || typeof text !== 'string' || !text.trim()) return json({ error: 'Missing text' }, 400)
     if (text.length > 500) return json({ error: 'Text too long' }, 400)
     // savePath: لتوليد مقطع ثابت وحفظه بمكتبة النداء — يُقيَّد بمجلدين محدّدين لمنع الكتابة بأي مسار آخر
@@ -52,8 +52,24 @@ serve(async (req) => {
 
     const apiKey = Deno.env.get('ELEVENLABS_API_KEY')
     if (!apiKey) return json({ error: 'TTS not configured' }, 500)
-    // Adam — صوت رجالي يدعم العربي عبر النموذج متعدد اللغات، قابل للتغيير بمتغيّر بيئة
-    const voiceId = Deno.env.get('ELEVENLABS_VOICE_ID') || 'pNInz6obpgDQGcFmaJgB'
+
+    // إعدادات الصوت من القاعدة (الصوت/النموذج/الثبات) — تُضبط من صفحة النداء بدون إعادة نشر؛ متغيرات البيئة احتياطاً
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { persistSession: false } }
+    )
+    const { data: vs } = await admin.from('call_voice_settings').select('voice_id, model_id, stability, similarity').eq('id', 1).maybeSingle()
+    const MODELS = ['eleven_multilingual_v2', 'eleven_v3', 'eleven_turbo_v2_5', 'eleven_flash_v2_5']
+    const okVoice = (v: unknown) => typeof v === 'string' && /^[A-Za-z0-9]{10,40}$/.test(v)
+    // Adam افتراضياً (صوت إنجليزي يدعم العربي بلكنة) — يُنصح باختيار صوت عربي أصيل من «إعدادات الصوت»
+    const voiceId = (okVoice(reqVoice) ? reqVoice : null) || vs?.voice_id || Deno.env.get('ELEVENLABS_VOICE_ID') || 'pNInz6obpgDQGcFmaJgB'
+    const modelId = (MODELS.includes(reqModel) ? reqModel : null) || (MODELS.includes(vs?.model_id) ? vs?.model_id : null) || 'eleven_multilingual_v2'
+    const num = (v: unknown, d: number) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : (v !== undefined && v !== null && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 1 ? Number(v) : d))
+    let stability = num(reqStab, num(vs?.stability, 0.85))
+    const similarity = num(reqSim, num(vs?.similarity, 0.85))
+    // نموذج v3 يقبل ثبات 0 / 0.5 / 1 فقط: نقرّب لأقرب قيمة
+    if (modelId === 'eleven_v3') stability = [0, 0.5, 1].reduce((best, c) => (Math.abs(c - stability) < Math.abs(best - stability) ? c : best), 0.5)
 
     const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
@@ -64,9 +80,11 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         text: text.trim(),
-        model_id: 'eleven_multilingual_v2',
+        model_id: modelId,
         // ثبات أعلى يقلل بلع/تقطيع الحروف بالعربي (أقل تعبيرية لكن نطق أوضح وأدق)
-        voice_settings: { stability: 0.85, similarity_boost: 0.85, style: 0, use_speaker_boost: true },
+        voice_settings: modelId === 'eleven_v3'
+          ? { stability, similarity_boost: similarity }
+          : { stability, similarity_boost: similarity, style: 0, use_speaker_boost: true },
       }),
     })
 
@@ -78,11 +96,6 @@ serve(async (req) => {
     const audio = await ttsRes.arrayBuffer()
 
     if (savePath) {
-      const admin = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        { auth: { persistSession: false } }
-      )
       const { error: upErr } = await admin.storage.from('audio-clips').upload(savePath, audio, {
         contentType: 'audio/mpeg', upsert: true,
       })
