@@ -207,7 +207,7 @@ export const TEMPLATES = [
       { k: 'message', label: 'الرسالة', placeholder: 'نص التنبيه', max: 140, multiline: true },
       { k: 'note', label: 'سطر ثانوي', placeholder: 'نتمنى لكم رحلة سعيدة', max: 80 },
     ],
-    defaults: { title: 'تنبيه هام', message: 'يرجى إبراز التذكرة لمشرف الرحلة قبل الصعود إلى الحافلة', note: 'نتمنى لكم رحلة سعيدة' } },
+    defaults: { title: 'تنبيه هام', message: 'يرجى إبراز التذكرة لموظف الرحلة قبل الصعود إلى الحافلة', note: 'نتمنى لكم رحلة سعيدة' } },
   { key: 'welcome', ar: 'ترحيب', desc: 'شعار كبير وتحية هادئة', bg: 'optional',
     fields: [
       { k: 'title', label: 'التحية', placeholder: 'أهلاً بكم في محطة حائل', max: 50 },
