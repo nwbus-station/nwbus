@@ -77,6 +77,7 @@ export const AUDIT_LABEL = {
   'campaign.reorder': 'ترتيب الحملات', 'media.rename': 'إعادة تسمية محتوى',
   'halt.on': 'إيقاف جميع الشاشات', 'halt.off': 'تشغيل الشاشات', 'mfa.require': 'فرض التحقق بخطوتين', 'mfa.optional': 'إلغاء فرض التحقق بخطوتين',
   'device.reload': 'إعادة تشغيل شاشة', 'device.reload_all': 'إعادة تشغيل كل الشاشات', 'device.rotate': 'تدوير مفتاح شاشة', 'device.rotate_all': 'تدوير مفاتيح كل الشاشات',
+  'scene.save': 'حفظ مشهد', 'ticker.save': 'حفظ رسالة شريط', 'ticker.approve': 'موافقة على رسالة شريط', 'ticker.reject': 'رفض رسالة شريط', 'ticker.toggle': 'إيقاف/استئناف رسالة شريط', 'ticker.delete': 'حذف رسالة شريط',
   'device.suspect': 'شاشة مشتبه بها (احتمال نسخ المفتاح)', 'device.pause': 'إيقاف مؤقت لشاشة', 'device.resume': 'استئناف شاشة', 'device.clear_suspect': 'تأكيد سلامة شاشة',
 }
 
@@ -91,6 +92,9 @@ const MSG = {
   'message required': ['اكتب رسالة الطوارئ', 'Enter the emergency message'], 'device limit': ['بلغ الحد الأقصى للشاشات', 'Device limit reached'],
   'bad video': ['الفيديو غير مقبول (النوع أو الحجم)', 'Video rejected (type or size)'], 'bad image': ['الصورة غير مقبولة (النوع أو الحجم)', 'Image rejected (type or size)'],
   'bad path': ['مسار الملف غير صالح', 'Invalid file path'], 'not found': ['العنصر غير موجود', 'Not found'],
+  'text required': ['اكتب نص الرسالة (حتى 200 حرف)', 'Enter the message text'], 'bad level': ['مستوى غير معروف', 'Bad level'],
+  'zone required': ['أكمل إعداد كل منطقة في المشهد', 'Complete every zone'], 'zone media required': ['اختر صورة أو فيديو لمنطقة الوسائط', 'Pick media for the zone'],
+  'bad widgets': ['اختر من 1 إلى 4 عناصر جاهزة', 'Pick 1-4 widgets'], 'bad scene layout': ['تخطيط غير معروف', 'Bad layout'], 'bad zone': ['إعداد منطقة غير صالح', 'Invalid zone'], 'bad scene city': ['مدينة غير صالحة', 'Bad city'],
   'mfa session required': ['فعّل التحقق بخطوتين لحسابك وأكمله أولاً قبل فرضه على الجميع', 'Complete MFA for your own session first'], 'bad command': ['أمر غير معروف', 'Unknown command'],
 }
 export function sgError(error, isAr = true) {

@@ -70,7 +70,7 @@ export default function ReportsTab({ isAr, devices, stations, campaigns, media }
       const st = isOnline(s.d) ? t('متصلة', 'Online') : t('منقطعة', 'Offline')
       if (!s.camps.length) out.push([r.name, s.d.name, st, '', '', '', '', '', '', 0, 0])
       s.camps.forEach(c => { const m = mediaById[c.media_id]; const p = s.byCamp[c.id] || { plays: 0, seconds: 0 }
-        out.push([r.name, s.d.name, st, c.title, m?.title || '', m ? (m.kind === 'video' ? t('فيديو', 'Video') : m.kind === 'board' ? t('شاشة العرض', 'Board') : t('صورة', 'Image')) : '', scopeLabel(c, stationsById, devicesById, isAr), scheduleLabel(c, isAr).replace(/[⁦⁩]/g, ''), campaignActiveNow(c) ? t('نعم', 'Yes') : t('لا', 'No'), p.plays, p.seconds]) })
+        out.push([r.name, s.d.name, st, c.title, m?.title || '', m ? (m.kind === 'video' ? t('فيديو', 'Video') : m.kind === 'board' ? t('شاشة العرض', 'Board') : m.kind === 'scene' ? t('مشهد', 'Scene') : t('صورة', 'Image')) : '', scopeLabel(c, stationsById, devicesById, isAr), scheduleLabel(c, isAr).replace(/[⁦⁩]/g, ''), campaignActiveNow(c) ? t('نعم', 'Yes') : t('لا', 'No'), p.plays, p.seconds]) })
     }))
     downloadCSV(`signage-report-${riyadhNow().date}.csv`, out)
   }

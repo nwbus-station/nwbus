@@ -19,7 +19,7 @@ export default function BoardPanel({ data, config, error }) {
   const [tick, setTick] = useState(0)
   const [nowMin, setNowMin] = useState(rtNow)
   useEffect(() => {
-    const fit = () => { const r = wrap.current?.getBoundingClientRect(); if (r?.width) setScale(Math.min(r.width / W, r.height / H)) }
+    const fit = () => { const el = wrap.current; if (el?.clientWidth) setScale(Math.min(el.clientWidth / W, el.clientHeight / H)) }   // مقاسات التخطيط (لا تتأثر بتصغير الأب)
     fit(); const ro = new ResizeObserver(fit); if (wrap.current) ro.observe(wrap.current)
     return () => ro.disconnect()
   }, [])

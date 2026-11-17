@@ -24,7 +24,19 @@ export const Err = ({ children }) => children ? (
 ) : null
 
 // صورة مصغّرة لعنصر محتوى (صورة أو أول لقطة من الفيديو)
+const MINI_LAYOUT = { full: [[0, 0, 1, 1, '#38bdf8']], side: [[0, 0, .667, 1, '#38bdf8'], [.667, 0, .333, 1, '#f59e0b']], bottom: [[0, 0, 1, .91, '#38bdf8'], [0, .91, 1, .09, '#ef4444']], side_bottom: [[0, 0, .667, .91, '#38bdf8'], [.667, 0, .333, .91, '#f59e0b'], [0, .91, 1, .09, '#ef4444']] }
 export function Thumb({ m, url, style }) {
+  if (m.kind === 'scene') {
+    const rects = MINI_LAYOUT[m.config?.layout] || MINI_LAYOUT.full
+    return (
+      <div style={{ position: 'relative', overflow: 'hidden', background: '#0b1220', display: 'grid', placeItems: 'center', ...style }}>
+        <svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid meet" style={{ width: '70%', height: '70%' }} aria-hidden="true">
+          {rects.map(([x, y, w, h, c], i) => <rect key={i} x={x * 160 + 2} y={y * 90 + 2} width={w * 160 - 4} height={h * 90 - 4} rx="3" fill={c} opacity=".85" />)}
+        </svg>
+        <span aria-hidden="true" style={{ position: 'absolute', insetInlineStart: 8, bottom: 8, background: 'rgba(0,0,0,.65)', color: '#fff', fontSize: '0.64rem', fontWeight: 800, padding: '2px 8px', borderRadius: 99 }}>مشهد</span>
+      </div>
+    )
+  }
   if (m.kind === 'board') {
     return (
       <div style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(160deg,#101C27,#091119)', display: 'grid', placeItems: 'center', color: '#E3A02E', ...style }}>

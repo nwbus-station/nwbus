@@ -15,7 +15,7 @@ import {
 
 const FILTERS = ['all', 'pending', 'approved', 'draft', 'paused', 'rejected']
 const sortFn = (a, b) => (a.sort - b.sort) || (new Date(b.created_at) - new Date(a.created_at))
-const KIND_AR = { all: 'الكل', image: 'صور', video: 'فيديو', board: 'شاشة العرض' }
+const KIND_AR = { all: 'الكل', image: 'صور', video: 'فيديو', board: 'شاشة العرض', scene: 'مشاهد' }
 
 export default function CampaignsTab({ isAr, role, myUserId, campaigns, media, devices, stations, filter, setFilter, reload, flash }) {
   const t = (a, e) => (isAr ? a : e)

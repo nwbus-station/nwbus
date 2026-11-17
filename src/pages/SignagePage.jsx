@@ -10,6 +10,7 @@ import MediaTab from '../components/signage/MediaTab'
 import CampaignsTab from '../components/signage/CampaignsTab'
 import SafetyTab, { HaltSheet } from '../components/signage/SafetyTab'
 import ReportsTab from '../components/signage/ReportsTab'
+import TickersTab from '../components/signage/TickersTab'
 import MfaGate from '../components/signage/MfaGate'
 import { Empty, SG_ACCENT } from '../components/signage/common'
 import { isOnline } from '../utils/signage'
@@ -24,7 +25,7 @@ export default function SignagePage() {
   const desk = useMedia('(min-width: 900px)')
   const [role, setRole] = useState(undefined)            // undefined = يتحمّل، null = بلا صلاحية
   const [myUserId, setMyUserId] = useState(null)
-  const [data, setData] = useState({ devices: [], media: [], campaigns: [], stations: [], emergency: null, audit: [], plays: {} })
+  const [data, setData] = useState({ devices: [], media: [], campaigns: [], stations: [], emergency: null, audit: [], plays: {}, tickers: [] })
   const [tab, setTab] = useState(() => { try { return localStorage.getItem('sg_tab') || 'devices' } catch { return 'devices' } })
   const [filter, setFilter] = useState('all')
   const [loadErr, setLoadErr] = useState('')
@@ -42,7 +43,7 @@ export default function SignagePage() {
   const load = useCallback(async (r = role) => {
     if (!r) return
     const since = new Date(Date.now() - 86400000).toISOString()
-    const [dv0, md, cp, st, em, au, pl, ct] = await Promise.all([
+    const [dv0, md, cp, st, em, au, pl, ct, tk] = await Promise.all([
       supabase.from('signage_devices').select(DEV_NEW).order('name'),
       supabase.from('signage_media').select('*').order('created_at', { ascending: false }),
       supabase.from('signage_campaigns').select('*').order('created_at', { ascending: false }),
@@ -51,6 +52,7 @@ export default function SignagePage() {
       r === 'admin' ? supabase.from('signage_audit').select('*').order('at', { ascending: false }).limit(200) : Promise.resolve({ data: [] }),
       supabase.from('signage_playlog').select('device_id').gte('played_at', since).limit(10000),
       supabase.from('signage_control').select('*').eq('id', 1).maybeSingle(),
+      supabase.from('signage_tickers').select('*').order('created_at', { ascending: false }),
     ])
     // قبل تشغيل SQL 030 لا توجد الأعمدة الجديدة: نرجع للأعمدة الأساسية
     let dv = dv0
@@ -61,7 +63,7 @@ export default function SignagePage() {
     if (first) { setLoadErr(/does not exist|schema cache/i.test(first.error.message) ? 'setup' : 'fail'); return }
     setLoadErr('')
     const plays = {}; (pl.data || []).forEach(p => { plays[p.device_id] = (plays[p.device_id] || 0) + 1 })
-    setData({ devices: dv.data || [], media: md.data || [], campaigns: cp.data || [], stations: st.data || [], emergency: em.data || null, audit: au.data || [], plays })
+    setData({ devices: dv.data || [], media: md.data || [], campaigns: cp.data || [], stations: st.data || [], emergency: em.data || null, audit: au.data || [], plays, tickers: tk?.data || [] })
   }, [role])
 
   const refreshAccess = useCallback(async () => {
@@ -97,6 +99,7 @@ export default function SignagePage() {
     ['devices', t('الشاشات', 'Screens'), active.length],
     ['media', t('المحتوى', 'Media'), data.media.length],
     ['campaigns', t('الحملات', 'Campaigns'), pending || null],
+    ['tickers', t('الشريط الإخباري', 'News ticker'), data.tickers.filter(x => x.status === 'pending').length || null],
     ['reports', t('التقارير', 'Reports'), null],
     ...(isAdmin ? [['safety', t('الطوارئ والسجل', 'Emergency & audit'), null]] : []),
   ]
@@ -146,6 +149,7 @@ export default function SignagePage() {
         {cur === 'devices' && <DevicesTab isAr={isAr} isAdmin={isAdmin} devices={data.devices} stations={data.stations} plays={data.plays} reload={load} flash={flash} />}
         {cur === 'media' && <MediaTab isAr={isAr} role={role} myUserId={myUserId} media={data.media} campaigns={data.campaigns} reload={load} flash={flash} />}
         {cur === 'campaigns' && <CampaignsTab isAr={isAr} role={role} myUserId={myUserId} campaigns={data.campaigns} media={data.media} devices={data.devices} stations={data.stations} filter={filter} setFilter={setFilter} reload={load} flash={flash} />}
+        {cur === 'tickers' && <TickersTab isAr={isAr} role={role} myUserId={myUserId} tickers={data.tickers} devices={data.devices} stations={data.stations} reload={load} flash={flash} />}
         {cur === 'reports' && <ReportsTab isAr={isAr} devices={data.devices} stations={data.stations} campaigns={data.campaigns} media={data.media} />}
         {cur === 'safety' && isAdmin && <SafetyTab isAr={isAr} emergency={data.emergency} audit={data.audit} control={control} access={access} onHalt={() => setHaltOpen(true)} reload={(a) => { if (a === true) refreshAccess(); else load() }} flash={flash} />}
       </>}

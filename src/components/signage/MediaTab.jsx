@@ -6,6 +6,8 @@ import { btn } from '../dispatch/DispatchCards'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import { lbl, input, Pill, Empty, Err, Thumb, SG_ACCENT } from './common'
 import { THEMES } from '../board/boardParts'
+import SceneBuilder, { LayoutDiagram } from './SceneBuilder'
+import SceneView from '../scene/SceneView'
 import { ACCEPT, SG_BUCKET, validateFile, readVideoDuration, newFileName, mediaUrl, fmtSize, fmtDur, fmtDT, sgError } from '../../utils/signage'
 
 export default function MediaTab({ isAr, role, myUserId, media, campaigns, reload, flash }) {
@@ -18,6 +20,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
   const [drag, setDrag] = useState(false)
   const [boardForm, setBoardForm] = useState(false)
   const [kindF, setKindF] = useState('all'); const [q, setQ] = useState(''); const [ren, setRen] = useState(null)
+  const [sceneForm, setSceneForm] = useState(null)   // null | {} (جديد) | { scene } (تعديل)
   const usedBy = id => campaigns.filter(c => c.media_id === id).length
 
   async function upload(files) {
@@ -46,7 +49,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
     setBusy(true)
     const { data: path, error } = await supabase.rpc('signage_media_delete', { p_id: m.id })
     if (error) { setBusy(false); setAsk(null); flash(sgError(error, isAr), false); return }
-    if (m.kind !== 'board') await supabase.storage.from(SG_BUCKET).remove([path])
+    if (m.kind !== 'board' && m.kind !== 'scene') await supabase.storage.from(SG_BUCKET).remove([path])
     setBusy(false); setAsk(null); flash(t('تم حذف المحتوى', 'Media deleted'), true); reload()
   }
   const canDelete = m => role === 'admin' || m.uploaded_by === myUserId
@@ -62,7 +65,10 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
         <button type="button" onClick={() => fileRef.current?.click()} style={{ ...btn('primary'), background: SG_ACCENT, padding: '10px 24px', fontSize: '0.86rem' }}>{t('اختيار ملفات', 'Choose files')}</button>
         <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={e => { upload(e.target.files); e.target.value = '' }} />
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed var(--border-2)' }}>
-          <button type="button" onClick={() => setBoardForm(true)} style={btn('ghost', { padding: '9px 20px', fontSize: '0.82rem' })}>{t('إضافة شاشة العرض (حركة الرحلات المباشرة)', 'Add Live Board (trip movements)')}</button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button type="button" onClick={() => setSceneForm({})} style={{ ...btn('primary'), background: SG_ACCENT, padding: '9px 20px', fontSize: '0.82rem' }}>{t('إنشاء مشهد (شاشة مقسّمة + شريط + عناصر جاهزة)', 'Create scene')}</button>
+            <button type="button" onClick={() => setBoardForm(true)} style={btn('ghost', { padding: '9px 20px', fontSize: '0.82rem' })}>{t('إضافة شاشة العرض (حركة الرحلات المباشرة)', 'Add Live Board (trip movements)')}</button>
+          </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 6 }}>{t('تعرض رحلات محطة الشاشة تلقائياً وتتحدّث وحدها.', "Shows the screen's station trips and updates automatically.")}</div>
         </div>
       </div>
@@ -82,7 +88,7 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
       {media.length > 0 && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
-            {[['all', t('الكل', 'All')], ['image', t('صور', 'Images')], ['video', t('فيديو', 'Videos')], ['board', t('شاشة العرض', 'Live Board')]].map(([k, l]) => (
+            {[['all', t('الكل', 'All')], ['image', t('صور', 'Images')], ['video', t('فيديو', 'Videos')], ['board', t('شاشة العرض', 'Live Board')], ['scene', t('مشاهد', 'Scenes')]].map(([k, l]) => (
               <button key={k} type="button" aria-pressed={kindF === k} onClick={() => setKindF(k)}
                 style={{ padding: '7px 14px', borderRadius: 99, fontFamily: 'inherit', fontWeight: 800, fontSize: '0.76rem', cursor: 'pointer', border: `1.5px solid ${kindF === k ? SG_ACCENT : 'var(--border)'}`, background: kindF === k ? `${SG_ACCENT}18` : 'var(--card)', color: kindF === k ? SG_ACCENT : 'var(--text-2)' }}>{l} <span dir="ltr" style={{ opacity: 0.7 }}>{cnt(k)}</span></button>
             ))}
@@ -100,12 +106,13 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
               <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
                 <div style={{ fontWeight: 800, fontSize: '0.86rem', color: 'var(--text-1)', overflowWrap: 'anywhere' }}>{m.title}</div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', lineHeight: 1.7 }}>
-                  {m.kind === 'board' ? `${t('شاشة العرض', 'Live Board')} · ${m.config?.mode === 'actual' ? t('الفعلي', 'Actual') : t('جدول اليوم', "Today's schedule")}` : <>{m.kind === 'video' ? `${t('فيديو', 'Video')} · ${fmtDur(m.duration_sec)}` : t('صورة', 'Image')} · {fmtSize(m.size_bytes)}</>}<br />
+                  {m.kind === 'scene' ? `${t('مشهد', 'Scene')} · ${({ full: 'كاملة', side: 'مع جانب', bottom: 'مع شريط', side_bottom: 'جانب + شريط' })[m.config?.layout] || ''}` : m.kind === 'board' ? `${t('شاشة العرض', 'Live Board')} · ${m.config?.mode === 'actual' ? t('الفعلي', 'Actual') : t('جدول اليوم', "Today's schedule")}` : <>{m.kind === 'video' ? `${t('فيديو', 'Video')} · ${fmtDur(m.duration_sec)}` : t('صورة', 'Image')} · {fmtSize(m.size_bytes)}</>}<br />
                   {m.uploaded_by_name || '—'} · {fmtDT(m.created_at)}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto', paddingTop: 6 }}>
                   <Pill color={usedBy(m.id) ? '#16a34a' : '#64748b'}>{usedBy(m.id) ? t(`في ${usedBy(m.id)} حملة`, `${usedBy(m.id)} campaign(s)`) : t('غير مستخدم', 'Unused')}</Pill>
                   <span style={{ flex: 1 }} />
+                  {m.kind === 'scene' && canDelete(m) && <button type="button" onClick={() => setSceneForm({ scene: m })} style={btn('ghost', { padding: '5px 12px' })}>{t('تعديل', 'Edit')}</button>}
                   {canDelete(m) && <button type="button" onClick={() => setRen(m)} style={btn('ghost', { padding: '5px 12px' })}>{t('تسمية', 'Rename')}</button>}
                   {canDelete(m) && <button type="button" onClick={() => setAsk(m)} style={btn('danger', { padding: '5px 12px' })}>{t('حذف', 'Delete')}</button>}
                 </div>
@@ -115,10 +122,13 @@ export default function MediaTab({ isAr, role, myUserId, media, campaigns, reloa
         </div>
       )}
 
+      {sceneForm && <SceneBuilder isAr={isAr} scene={sceneForm.scene} media={media} onClose={() => setSceneForm(null)} onDone={msg => { setSceneForm(null); flash(msg, true); reload() }} />}
       {preview && (
         <Sheet isAr={isAr} title={preview.title} icon={Ic.box} accent={SG_ACCENT} variant="modal" width={860} onClose={() => setPreview(null)}
           footer={<button type="button" onClick={() => setPreview(null)} style={btn('ghost')}>{t('إغلاق', 'Close')}</button>}>
-          {preview.kind === 'board'
+          {preview.kind === 'scene'
+            ? <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#000', borderRadius: 10, overflow: 'hidden' }}><SceneView config={preview.config} refs={Object.fromEntries(media.map(x => [x.id, { kind: x.kind, path: x.path }]))} tickers={[{ id: 'd', text: 'معاينة الشريط الإخباري', level: 'normal' }]} lat={24.7136} lng={46.6753} getBoard={async mode => ({ station: 'معاينة', mode, events: [] })} demo /></div>
+            : preview.kind === 'board'
             ? <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--text-2)', lineHeight: 2, fontWeight: 700 }}>{t('شاشة العرض تُرسم على الشاشة نفسها ببيانات محطتها. اربطها بحملة وستظهر هناك.', 'The Live Board renders on the screen with its station data. Attach it to a campaign.')}</div>
             : preview.kind === 'video'
             ? <video src={mediaUrl(preview.path)} controls autoPlay muted playsInline style={{ width: '100%', maxHeight: '64vh', background: '#000', borderRadius: 10 }} />

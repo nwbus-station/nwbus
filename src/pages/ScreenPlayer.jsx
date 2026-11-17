@@ -6,6 +6,8 @@ import { createClient } from '@supabase/supabase-js'
 import { NWB_LOGO_SVG } from '../utils/logo'
 import { mediaUrl, randomSecret } from '../utils/signage'
 import BoardPanel from '../components/board/BoardPanel'
+import SceneView from '../components/scene/SceneView'
+import { UrgentOverlay } from '../components/scene/Ticker'
 import { captureScreen, fallbackCard } from '../utils/screenSnapshot'
 
 // عميل مستقل بلا جلسة موظف: الشاشة لا تحمل أي هوية سوى مفتاح جهازها
@@ -246,6 +248,13 @@ function Stage({ manifest, secret, playingRef }) {
 
   const curRef = useRef(cur)
   curRef.current = cur
+  // بيانات رحلات محطة الشاشة (للمشاهد التي فيها شاشة العرض أو عدّاد الرحلة القادمة)
+  const getBoard = useCallback(async mode => {
+    const { data, error } = await sb.rpc('signage_board', { p_secret: secret, p_mode: mode })
+    if (error) throw error
+    return data
+  }, [secret])
+
   const next = useCallback(() => {
     const c = curRef.current
     if (c) {
@@ -279,11 +288,15 @@ function Stage({ manifest, secret, playingRef }) {
   }, [idx, curId, curKind, curDur, len, next])
 
   if (!cur) return <Idle manifest={manifest} />
-  const url = cur.kind === 'board' ? '' : mediaUrl(cur.path)
+  const url = cur.kind === 'board' || cur.kind === 'scene' ? '' : mediaUrl(cur.path)
+  const tickers = manifest?.tickers || []
+  const sceneHasTicker = cur.kind === 'scene' && !!cur.config?.zones?.ticker
   const nx = len > 1 ? items[(idx + 1) % len] : null
   return (
     <>
-      {cur.kind === 'board'
+      {cur.kind === 'scene'
+        ? <div key={`${idx}-${cur.media_id}`} style={{ position: 'absolute', inset: 0, animation: 'sgFade .6s ease-out' }}><SceneView config={cur.config} refs={cur.refs} tickers={tickers} lat={manifest?.device?.lat} lng={manifest?.device?.lng} getBoard={getBoard} /></div>
+        : cur.kind === 'board'
         ? <div key={`${idx}-${cur.media_id}`} style={{ position: 'absolute', inset: 0, animation: 'sgFade .6s ease-out' }}><BoardSlide secret={secret} config={cur.config} /></div>
         : cur.kind === 'video'
         ? <video key={`${idx}-${cur.media_id}`} src={url} crossOrigin="anonymous" autoPlay muted playsInline loop={len < 2} onEnded={next} onError={() => setTimeout(next, 1500)}
@@ -291,7 +304,8 @@ function Stage({ manifest, secret, playingRef }) {
         : <img key={`${idx}-${cur.media_id}`} src={url} crossOrigin="anonymous" alt="" onError={() => setTimeout(next, 1500)}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', animation: 'sgFade .6s ease-out' }} />}
       {/* تحميل مسبق للعنصر التالي */}
-      {nx && nx.kind !== 'board' && (nx.kind === 'video'
+      {!sceneHasTicker && <UrgentOverlay messages={tickers} />}
+      {nx && nx.kind !== 'board' && nx.kind !== 'scene' && (nx.kind === 'video'
         ? <video key={`p-${nx.media_id}`} src={mediaUrl(nx.path)} preload="auto" muted style={{ display: 'none' }} />
         : <img key={`p-${nx.media_id}`} src={mediaUrl(nx.path)} alt="" style={{ display: 'none' }} />)}
     </>
