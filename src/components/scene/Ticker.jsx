@@ -9,19 +9,37 @@ const KF = '@keyframes nwTicker{from{transform:translateX(0)}to{transform:transl
 export const GREETINGS = [
   { l: 'ar', t: 'نتمنى لكم رحلة آمنة وسعيدة' },
   { l: 'en', t: 'Wishing you a safe and pleasant journey' },
+  { l: 'ar', t: 'يرجى إبراز التذكرة لموظف الرحلة قبل الصعود' },
+  { l: 'en', t: 'Please present your ticket to the trip staff before boarding' },
   { l: 'ar', t: 'شكراً لاختياركم نورث وست باص' },
   { l: 'en', t: 'Thank you for choosing North West Bus' },
+  { l: 'ar', t: 'نقل آمن ومريح بين مدن المملكة' },
+  { l: 'en', t: 'Safe and comfortable travel across the Kingdom' },
 ]
-export function Greeting({ th, size = 40, every = 6 }) {
+const GKF = '@keyframes nwRoad{from{background-position:0 0}to{background-position:-112px 0}} @keyframes nwBus{from{transform:translateX(-200px)}to{transform:translateX(2150px)}} @keyframes nwLine{0%{transform:scaleX(0)}25%{transform:scaleX(1)}85%{transform:scaleX(1)}100%{transform:scaleX(0)}}'
+// h: ارتفاع الشريط (96 للشريط الإخباري، أكبر داخل شاشة العرض)
+export function Greeting({ th, size = 40, every = 7, h = 96 }) {
   const [i, setI] = useState(0)
   useEffect(() => { const id = setInterval(() => setI(x => (x + 1) % GREETINGS.length), every * 1000); return () => clearInterval(id) }, [every])
-  const g = GREETINGS[i]
+  const g = GREETINGS[i], ar = g.l === 'ar'
+  const k = h / 96
   return (
-    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 22, overflow: 'hidden' }}>
-      <style>{KF}</style>
-      <i aria-hidden="true" style={{ width: 44, height: 3, background: th.accent, display: 'inline-block', opacity: 0.8 }} />
-      <div key={i} dir={g.l === 'ar' ? 'rtl' : 'ltr'} style={{ animation: `nwGreet ${every}s ease-in-out both`, fontSize: g.l === 'ar' ? size : size * 0.9, fontWeight: g.l === 'ar' ? 700 : 500, letterSpacing: g.l === 'ar' ? 0.5 : 1.5, color: th.text, fontFamily: g.l === 'ar' ? "'IBM Plex Sans Arabic', sans-serif" : "'IBM Plex Sans', 'IBM Plex Sans Arabic', sans-serif", whiteSpace: 'nowrap', lineHeight: 1.5, paddingBottom: '0.12em' }}>{g.t}</div>
-      <i aria-hidden="true" style={{ width: 44, height: 3, background: th.accent, display: 'inline-block', opacity: 0.8 }} />
+    <div style={{ position: 'relative', height: '100%', overflow: 'hidden', background: `linear-gradient(180deg, transparent, ${th.accent}0f)` }}>
+      <style>{KF + GKF}</style>
+      {/* طريق متحرك وحافلة صغيرة تعبر الشريط ببطء */}
+      <div aria-hidden="true" style={{ position: 'absolute', insetInline: 0, bottom: 14 * k, height: 3, backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.28) 0 30px, transparent 30px 56px)', backgroundSize: '112px 3px', animation: 'nwRoad 3.2s linear infinite' }} />
+      <div aria-hidden="true" dir="ltr" style={{ position: 'absolute', left: 0, bottom: 20 * k, animation: 'nwBus 34s linear infinite', opacity: 0.42 }}>
+        <svg width={128 * k} height={44 * k} viewBox="0 0 128 44" fill="none">
+          <rect x="2" y="4" width="116" height="30" rx="8" fill={th.accent} />
+          <path d="M118 12h4a6 6 0 0 1 6 6v12a4 4 0 0 1-4 4h-6z" fill={th.accent} opacity=".8" />
+          <g fill="#0b1220" opacity=".78"><rect x="12" y="10" width="16" height="12" rx="2" /><rect x="32" y="10" width="16" height="12" rx="2" /><rect x="52" y="10" width="16" height="12" rx="2" /><rect x="72" y="10" width="16" height="12" rx="2" /><rect x="92" y="10" width="20" height="12" rx="2" /></g>
+          <circle cx="28" cy="35" r="7" fill="#0b1220" stroke={th.accent} strokeWidth="2" /><circle cx="96" cy="35" r="7" fill="#0b1220" stroke={th.accent} strokeWidth="2" />
+        </svg>
+      </div>
+      <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingBottom: 16 * k }}>
+        <div key={i} dir={ar ? 'rtl' : 'ltr'} style={{ animation: `nwGreet ${every}s ease-in-out both`, fontSize: ar ? size : size * 0.88, fontWeight: ar ? 700 : 500, letterSpacing: ar ? 0.5 : 1.2, color: th.text, fontFamily: ar ? "'IBM Plex Sans Arabic', sans-serif" : "'IBM Plex Sans', 'IBM Plex Sans Arabic', sans-serif", whiteSpace: 'nowrap', lineHeight: 1.45, paddingBottom: '0.12em', textShadow: '0 2px 14px rgba(0,0,0,0.55)' }}>{g.t}</div>
+        <i key={`l${i}`} aria-hidden="true" style={{ display: 'block', width: 180 * k, height: 3, background: th.accent, borderRadius: 2, marginTop: 4 * k, transformOrigin: 'center', animation: `nwLine ${every}s ease-in-out both` }} />
+      </div>
     </div>
   )
 }

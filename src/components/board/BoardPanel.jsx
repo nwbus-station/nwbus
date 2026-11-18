@@ -2,7 +2,7 @@
 // تُرسم على لوحة ثابتة 1920×1080 وتُصغَّر لتناسب أي شاشة (بدون قص).
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Greeting } from '../scene/Ticker'
-import { BOARD_LOGO, THEMES, Clock, Row, nmOf, dedupeEvents, toMin } from './boardParts'
+import { BOARD_LOGO, THEMES, Clock, Row, ROW_H, nmOf, dedupeEvents, toMin } from './boardParts'
 
 const W = 1920, H = 1080, BAR_H = 168
 const rtNow = () => {
@@ -56,6 +56,8 @@ export default function BoardPanel({ data, config, error }) {
   const barArr = !!barEv && barEv.type === 'arrival'
   const barNow = !!barEv && !barArr && depSoon.length > 0
   const barAc = barArr ? th.arr : th.accent
+  const routeLen = barEv ? (nmOf(barEv.trip?.from_station, isAr).length + nmOf(barEv.trip?.to_station, isAr).length) : 0
+  const routeFs = routeLen <= 26 ? 54 : routeLen <= 36 ? 46 : routeLen <= 46 ? 38 : 32     // يصغر الخط تدريجياً مع طول الأسماء بدل القص
   const hide = new Set(depSoon.map(e => e.id))
 
   return (
@@ -96,17 +98,17 @@ export default function BoardPanel({ data, config, error }) {
 
         <div style={{ display: 'flex', alignItems: 'stretch', gap: 12, padding: '14px 44px 0' }}>
           {[{ l: mode === 'scheduled' ? 'مغادرة' : 'غادرت اليوم', v: depCount, c: th.dep }, { l: mode === 'scheduled' ? 'وصول' : 'وصلت اليوم', v: arrCount, c: th.arr }].map(k => (
-            <div key={k.l} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 20px', borderRadius: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderInlineStart: `4px solid ${k.c}` }}>
-              <span style={{ fontSize: 30, fontWeight: 800, color: k.c, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1 }}>{k.v}</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: th.muted }}>{k.l}</span>
+            <div key={k.l} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 24px', borderRadius: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderInlineStart: `4px solid ${k.c}` }}>
+              <span style={{ fontSize: 40, fontWeight: 800, color: k.c, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1 }}>{k.v}</span>
+              <span style={{ fontSize: 21, fontWeight: 700, color: th.muted }}>{k.l}</span>
             </div>
           ))}
           {nextEv && (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 14, padding: '8px 20px', borderRadius: 12, background: `${th.accent}14`, border: `1px solid ${th.accent}44`, minWidth: 0 }}>
-              <span style={{ fontSize: 12, fontWeight: 800, color: th.accent, letterSpacing: 1, whiteSpace: 'nowrap' }}>التالية</span>
-              <span dir="ltr" style={{ fontSize: 24, fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace", color: th.text }}>{nextEv.time}</span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><bdi dir="ltr">{nmOf(nextEv.trip?.from_station, isAr)} → {nmOf(nextEv.trip?.to_station, isAr)}</bdi></span>
-              <span style={{ marginInlineStart: 'auto', fontSize: 14, fontWeight: 800, color: th.accent, whiteSpace: 'nowrap' }}>{nextMins != null && nextMins > 0 ? `بعد ${nextMins} د` : 'الآن'}</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: th.accent, letterSpacing: 1, whiteSpace: 'nowrap' }}>التالية</span>
+              <span dir="ltr" style={{ fontSize: 34, fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace", color: th.text }}>{nextEv.time}</span>
+              <span style={{ fontSize: 25, fontWeight: 700, color: th.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><bdi dir="ltr">{nmOf(nextEv.trip?.from_station, isAr)} → {nmOf(nextEv.trip?.to_station, isAr)}</bdi></span>
+              <span style={{ marginInlineStart: 'auto', fontSize: 22, fontWeight: 800, color: th.accent, whiteSpace: 'nowrap' }}>{nextMins != null && nextMins > 0 ? `بعد ${nextMins} د` : 'الآن'}</span>
             </div>
           )}
         </div>
@@ -125,8 +127,8 @@ export default function BoardPanel({ data, config, error }) {
                 <section key={col.type} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: 'rgba(8,14,20,0.45)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,0.35)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 22px', background: `linear-gradient(90deg, ${col.accent}26, transparent)`, borderBottom: `2px solid ${col.accent}` }}>
                     <span style={{ width: 38, height: 38, borderRadius: 12, background: `${col.accent}22`, border: `1px solid ${col.accent}66`, color: col.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800 }}>{col.icon}</span>
-                    <span style={{ fontSize: 24, fontWeight: 800, color: col.accent }}>{col.label}</span>
-                    <span style={{ marginInlineStart: 'auto', fontSize: 15, fontWeight: 800, color: th.text, background: 'rgba(255,255,255,0.1)', borderRadius: 999, padding: '3px 14px', fontFamily: "'IBM Plex Mono', monospace" }}>{items.length}{isAuto && pages > 1 ? ` · ${p + 1}/${pages}` : ''}</span>
+                    <span style={{ fontSize: 30, fontWeight: 800, color: col.accent }}>{col.label}</span>
+                    <span style={{ marginInlineStart: 'auto', fontSize: 20, fontWeight: 800, color: th.text, background: 'rgba(255,255,255,0.1)', borderRadius: 999, padding: '3px 16px', fontFamily: "'IBM Plex Mono', monospace" }}>{items.length}{isAuto && pages > 1 ? ` · ${p + 1}/${pages}` : ''}</span>
                   </div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <div style={flow ? { animation: `scrollup ${items.length * 3.5}s linear infinite` } : {}}>
@@ -134,7 +136,7 @@ export default function BoardPanel({ data, config, error }) {
                         const showLbl = mode === 'actual' && !isAuto && !flow && (i === 0 || arrAll[i - 1].status !== e.status)
                         return (
                           <div key={e.id + '_' + i}>
-                            {showLbl && <div style={{ padding: '7px 22px', fontSize: 13, fontWeight: 800, letterSpacing: 0.5, color: e.status === 'upcoming' ? th.accent : th.muted, background: 'rgba(255,255,255,0.035)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{e.status === 'upcoming' ? (col.type === 'arrival' ? 'قادمة إلى المحطة' : 'مغادرة قادمة') : (col.type === 'arrival' ? 'وصلت حديثاً' : 'غادرت حديثاً')}</div>}
+                            {showLbl && <div style={{ padding: '8px 24px', fontSize: 17, fontWeight: 800, letterSpacing: 0.5, color: e.status === 'upcoming' ? th.accent : th.muted, background: 'rgba(255,255,255,0.035)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{e.status === 'upcoming' ? (col.type === 'arrival' ? 'قادمة إلى المحطة' : 'مغادرة قادمة') : (col.type === 'arrival' ? 'وصلت حديثاً' : 'غادرت حديثاً')}</div>}
                             <Row e={e} accent={col.accent} th={th} isAr={isAr} nowMin={nowMin} />
                           </div>
                         )
@@ -175,7 +177,7 @@ export default function BoardPanel({ data, config, error }) {
                 <span dir="ltr" style={{ fontSize: 13, fontWeight: 800, letterSpacing: 4, color: th.muted, paddingInlineStart: 6 }}>{barArr ? 'ARRIVING' : barNow ? 'NOW BOARDING' : 'NEXT DEPARTURE'}</span>
               </div>
               <div className="lb-in" style={{ flex: 1, minWidth: 0 }}>
-                <div dir="ltr" style={{ fontSize: 50, fontWeight: 800, lineHeight: 1.25, color: th.text, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div dir="ltr" style={{ fontSize: routeFs, fontWeight: 800, lineHeight: 1.25, color: th.text, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {nmOf(barEv.trip?.from_station, isAr)} <span style={{ color: barAc, margin: '0 12px' }}>→</span> {nmOf(barEv.trip?.to_station, isAr)}
                 </div>
                 <div dir="ltr" style={{ marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' }}>
@@ -192,7 +194,7 @@ export default function BoardPanel({ data, config, error }) {
               </div>
             </Fragment>
           ) : (
-            <div style={{ flex: 1, height: '100%' }}><Greeting th={th} size={42} /></div>
+            <div style={{ flex: 1, height: '100%', margin: '0 -48px' }}><Greeting th={th} size={54} h={BAR_H} /></div>
           )}
         </div>
       </div>
