@@ -151,8 +151,8 @@ export default function ShortfallCard({ stationIds, isAr, navigate, compact = fa
                   {!isSales && <button type="button" onClick={() => setOpen(o => ({ ...o, [it.key]: !o[it.key] }))} aria-expanded={expanded} style={btn(false)}>{expanded ? t('إخفاء', 'Hide') : t('التفاصيل', 'Details')}</button>}
                   <button type="button" onClick={() => navigate(isSales ? '/sales' : '/transportation')} style={btn(false)}>{isSales ? t('إدخال الإيراد', 'Enter revenue') : t('فتح الترحيل', 'Open transport')}</button>
                   {a
-                    ? <span title={stamp(a.ack_at)} style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--success)', background: 'var(--success-bg)', borderRadius: 4, padding: '4px 10px' }}>{t('علم به', 'Acknowledged')}: {a.ack_by_name} · <bdi dir="ltr" style={{ fontFamily: MONO }}>{stamp(a.ack_at)}</bdi></span>
-                    : <button type="button" disabled={busy === it.key} onClick={() => doAck(it)} style={btn(true)}>{busy === it.key ? '...' : t('علمت بالتأخير', 'I am aware')}</button>}
+                    ? <span title={stamp(a.ack_at)} style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--success)', background: 'var(--success-bg)', borderRadius: 4, padding: '4px 10px' }}>{t('علم', 'Acknowledged')}: {a.ack_by_name} · <bdi dir="ltr" style={{ fontFamily: MONO }}>{stamp(a.ack_at)}</bdi></span>
+                    : <button type="button" disabled={busy === it.key} onClick={() => doAck(it)} style={btn(true)}>{busy === it.key ? '...' : t('علمت', 'Acknowledge')}</button>}
                 </div>
               </div>
               {!isSales && expanded && (
