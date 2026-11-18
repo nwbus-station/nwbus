@@ -73,6 +73,7 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
   const soon = mins != null && mins >= -10 && mins <= 20
   const dl = !upcoming ? delayInfo(e.time, e.sched, isAr, e.type) : null
   const fullLen = nmOf(e.trip?.from_station, isAr).length + nmOf(e.trip?.to_station, isAr).length + 3
+  const fromName = nmOf(e.trip?.from_station, isAr), toName = nmOf(e.trip?.to_station, isAr)
   const otherName = nmOf(arr ? e.trip?.from_station : e.trip?.to_station, isAr)
   const prog = upcoming && mins != null ? Math.max(0, Math.min(1, 1 - mins / 90)) : 0     // يمتلئ كلما اقترب الموعد (آخر 90 دقيقة)
   return (
@@ -81,6 +82,7 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
       {upcoming && prog > 0.02 && <span style={{ position: 'absolute', insetInline: 0, bottom: 0, height: 3, background: 'rgba(255,255,255,0.05)' }}><i style={{ position: 'absolute', insetInlineStart: 0, top: 0, bottom: 0, width: `${prog * 100}%`, background: accent, opacity: 0.85, display: 'block' }} /></span>}
       <div dir="ltr" style={{ minWidth: 128, textAlign: 'center', lineHeight: 1 }}>
         <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 46, fontWeight: 800, color: th.text, letterSpacing: 1 }}>{e.time}</div>
+        {!scoped && <div style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: th.muted, background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '2px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</div>}
         {e.sched && e.sched !== e.time && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 15, fontWeight: 700, color: th.muted, marginTop: 6 }}>{isAr ? 'الموعد ' : 'Sched '}{e.sched}</div>}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -90,14 +92,22 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
             <span style={{ fontSize: Math.max(21, Math.min(36, Math.floor(340 / (Math.max(1, otherName.length) * 0.56)))), fontWeight: 800, color: th.text, lineHeight: 1.25 }}>{otherName}</span>
           </div>
         ) : (
-          <div dir="ltr" style={{ fontSize: fullLen <= 34 ? 27 : fullLen <= 44 ? 23 : 20, fontWeight: 800, color: th.text, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: isAr ? 'right' : 'left' }}>
-            {nmOf(e.trip?.from_station, isAr)} <span style={{ color: accent, fontWeight: 800, margin: '0 8px' }}>→</span> {nmOf(e.trip?.to_station, isAr)}
+          // كل المحطات: سطران، لكل طرف سطره («من» ثم «إلى») فلا يُقصّ ولا يلتف أي اسم
+          <div dir="ltr" style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: isAr ? 'flex-end' : 'flex-start' }}>
+            {[[isAr ? 'من' : 'FROM', fromName], [isAr ? 'إلى' : 'TO', toName]].map(([lb, nm], i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 12, whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                <span style={{ fontSize: Math.max(20, Math.min(29, Math.floor(400 / (Math.max(1, nm.length) * 0.56)))), fontWeight: 800, color: th.text, lineHeight: 1.2 }}>{nm}</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: i === 0 ? th.muted : accent, letterSpacing: 1, minWidth: 34, textAlign: 'center' }}>{lb}</span>
+              </div>
+            ))}
           </div>
         )}
+        {scoped && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: isAr ? 'flex-end' : 'flex-start', gap: 8, marginTop: 8 }} dir="ltr">
           <span style={{ fontSize: 16, fontWeight: 700, color: th.muted, background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '2px 10px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</span>
           {scoped && <span style={{ fontSize: 18, fontWeight: 800, color: accent, letterSpacing: 1 }}>{arr ? (isAr ? 'من' : 'FROM') : (isAr ? 'إلى' : 'TO')}</span>}
         </div>
+        )}
       </div>
       {e.bus ? <BusPlate no={e.bus} accent={accent} size={34} /> : null}
       <div style={{ textAlign: 'center', minWidth: 150 }}>
