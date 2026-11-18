@@ -46,14 +46,14 @@ export const dedupeEvents = list => {
   })
 }
 
-// الالتزام بالموعد: فرق الفعلي عن المجدول (مع تجاوز منتصف الليل)
-export const delayInfo = (time, sched, isAr = true) => {
+// الالتزام بالموعد (للركاب): «وصول مبكر» أو «في موعدها» فقط. التأخر حتى نصف ساعة يُعدّ في الموعد، وما زاد عن ذلك لا يُعرض.
+export const delayInfo = (time, sched, isAr = true, type = 'arrival') => {
   if (!time || !sched) return null
   let d = toMin(time) - toMin(sched)
   if (d > 720) d -= 1440; else if (d < -720) d += 1440
-  if (d >= -5 && d <= 5) return { txt: isAr ? 'في الموعد' : 'On time', col: '#4BC98F' }
-  if (d > 5) return { txt: isAr ? `تأخر ${d} د` : `+${d} min`, col: d <= 15 ? '#E3A02E' : '#E5645B' }
-  return { txt: isAr ? `مبكر ${-d} د` : `${-d} min early`, col: '#6FB1D8' }
+  if (d > 30) return null
+  if (type === 'arrival' && d < -5) return { txt: isAr ? 'وصول مبكر' : 'Arrived early', col: '#6FB1D8' }
+  return { txt: isAr ? 'في موعدها' : 'On time', col: '#4BC98F' }
 }
 
 // لوحة رقم الحافلة: بارزة وواضحة من بعيد
@@ -70,7 +70,7 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin }) {
   const arr = e.type === 'arrival'
   const mins = upcoming && nowMin != null ? toMin(e.time) - nowMin : null
   const soon = mins != null && mins >= 0 && mins <= 20
-  const dl = !upcoming ? delayInfo(e.time, e.sched, isAr) : null
+  const dl = !upcoming ? delayInfo(e.time, e.sched, isAr, e.type) : null
   return (
     <div className="lb-row" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16, height: 88, boxSizing: 'border-box', padding: '0 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: soon ? `linear-gradient(90deg, ${accent}14, transparent)` : 'transparent', opacity: upcoming && !soon ? 0.82 : 1 }}>
       <span style={{ position: 'absolute', insetInlineStart: 0, top: 14, bottom: 14, width: 4, borderRadius: 3, background: upcoming ? `${accent}66` : accent }} />
