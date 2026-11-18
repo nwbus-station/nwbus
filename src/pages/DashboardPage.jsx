@@ -9,6 +9,7 @@ import { onPwaUpdateAvailable, isPwaUpdatePending, applyPwaUpdate } from '../lib
 import { shiftsFromEnds } from '../utils/stationShifts'
 import { shiftIdx } from '../utils/shifts'
 import MobileHome from '../components/home/MobileHome'
+import ShortfallCard from '../components/home/ShortfallCard'
 import { useMedia } from '../components/dispatch/Sheet'
 import { SurveyOverlay, detectSurveyCity, SURVEY_STATIONS } from './SurveyPage'
 import { TEMPLATES as MAGAZINE_TEMPLATES, TEMPLATE_ORDER as MAGAZINE_TEMPLATE_ORDER, bgFor as magazineBgFor, isPostLive, templateLabel as magazineTemplateLabel } from './MagazinePage'
@@ -483,6 +484,11 @@ export default function DashboardPage() {
 
   const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: 'var(--shadow-sm)' }
 
+  // نواقص المحطة (إيراد وردية / رحلات لم تُدخل) — للمشرفين فقط، على محطاتهم
+  const showShortfall = ['shift_supervisor', 'station_admin', 'area_supervisor'].includes(profile?.role)
+  const shortfallIds = [...new Set([profile?.station_id, ...(allowedStationIds || []), ...(workStations || []).map(x => x.id)].filter(Boolean))]
+  const shortfallNode = showShortfall && shortfallIds.length ? <ShortfallCard stationIds={shortfallIds} isAr={isAr} navigate={navigate} compact={isMobile} sx={{ marginBottom: isMobile ? 0 : 18 }} /> : null
+
   if (isMobile) {
     const canSeePending = isAdmin || profile?.role === 'station_admin'
     const attention = [
@@ -497,7 +503,7 @@ export default function DashboardPage() {
         {surveyOpen && surveyCity && <SurveyOverlay city={surveyCity} onClose={() => setSurveyOpen(false)} />}
         <MobileHome isAr={isAr} now={now} greeting={greet()} userName={userName} roleLabel={roleLabel} stationName={stationName} hasStar={hasStar}
           curShift={curShift} shiftPct={shiftPct} remText={remText} quickLinks={quickLinks} renderIcon={(n, s) => <Svg paths={ICONS[n]} size={s} />}
-          attention={attention} notifs={notifs} notifLoading={notifLoading} unread={unread} markRead={markRead} markAllRead={markAllRead} timeAgo={timeAgo}
+          topSlot={shortfallNode} attention={attention} notifs={notifs} notifLoading={notifLoading} unread={unread} markRead={markRead} markAllRead={markAllRead} timeAgo={timeAgo}
           onNotifOpen={n => { markRead(n.id); if (n.ref_type === 'dispatch' && n.ref_id) navigate(`/dispatches?d=${n.ref_id}`) }}
           updatePending={updatePending} onUpdate={applyPwaUpdate} version={typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'} stamp={buildStamp()} navigate={navigate}>
           <MagazineFeed posts={magazinePosts} isAr={isAr} onNavigate={p => navigate('/magazine', { state: { postId: p.id } })} />
@@ -569,6 +575,8 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {shortfallNode}
 
         {/* تنبيه إجازات معلقة */}
         {(isAdmin || profile?.role === 'station_admin') && pendingLeaves.length > 0 && (

@@ -6,8 +6,9 @@ import { supabase } from '../../lib/supabase'
 import DatePicker from '../shared/DatePicker'
 import { todayStr } from '../../utils/dates'
 import { isRestStation } from '../../utils/stations'
-import { shiftIdx, SHIFT_AR } from '../../utils/shifts'
+import { SHIFT_AR } from '../../utils/shifts'
 import { shiftsOfStation } from '../../utils/stationShifts'
+import { buildExpected, enteredKeys } from '../../utils/expectedTrips'
 import { esc, docHeader, docShell, openDocWindow } from '../../utils/printDoc'
 import { f } from './ui'
 import { usePresence } from '../../lib/presence'
@@ -143,7 +144,7 @@ export default function StationsPerformance({ isAr = true }) {
       const end = to > today ? today : to
       const fT = `${from}T00:00:00+03:00`, tT = `${end}T23:59:59.999+03:00`
       const [stations, users, userStations, stationTrips, stops, records, sales, ratings, lost] = await Promise.all([
-        pageAll(() => supabase.from('stations').select('id, name_ar, name_en, is_agent, shift_ends, city_group').eq('is_active', true).order('id')),
+        pageAll(() => supabase.from('stations').select('id, name_ar, name_en, is_agent, shift_ends, inactive_shifts, city_group').eq('is_active', true).order('id')),
         pageAll(() => supabase.from('users').select('id, full_name_ar, role, station_id, supervisor_id, is_active, can_rate_customers, last_login, job_title, job_number').eq('is_active', true).order('id')),
         pageAll(() => supabase.from('user_stations').select('user_id, station_id').order('user_id').order('station_id')),
         pageAll(() => supabase.from('station_trips').select(`trip_schedule_id, station_id, departure_time, arrival_time, dep_enabled, arr_enabled,
@@ -170,50 +171,9 @@ export default function StationsPerformance({ isAr = true }) {
     const stById = Object.fromEntries(stations.map(s => [s.id, s]))
     const days = dateList(from, end)
     const rn = new Date(Date.now() + 3 * 3600 * 1000), nowMin = rn.getUTCHours() * 60 + rn.getUTCMinutes()
-    const stopMap = {}
-    stops.forEach(s => { stopMap[`${s.trip_schedule_id}|${s.station_id}`] = s })
-    const tripInfo = {}
-    stationTrips.forEach(st => { if (st.trip) tripInfo[st.trip_schedule_id] = st.trip })
-
-    // الرحلات المتوقعة (نفس منطق صفحة الترحيل والتقارير): أطراف (رحلة|تاريخ|محطة|اتجاه) لكل محطة
-    const exp = {}   // station_id → [{ key, shift }]
-    const groupOf = x => { if (!x) return null; if (x.city_group) return x.city_group; const w = (x.name_en || '').split(/[\s-]+/)[0].toLowerCase(); return w || null }
-    stationTrips.forEach(st => {
-      const t = st.trip, stn = stById[st.station_id]
-      if (!t || !t.is_active || !stn) return
-      const isDest = t.to_station_id === st.station_id, isOrigin = t.from_station_id === st.station_id
-      const stop = stopMap[`${st.trip_schedule_id}|${st.station_id}`]
-      const arrOn = st.arr_enabled !== false, depOn = st.dep_enabled !== false
-      const curG = groupOf(stn), fromG = groupOf(t.from_station), toG = groupOf(t.to_station)
-      const sameFrom = !!(curG && fromG && curG === fromG), sameTo = !!(curG && toG && curG === toG)
-      const shifts = shiftsOfStation(stn)
-      const legs = []   // [isArr, time]
-      if (isDest) { if (arrOn) legs.push([true, st.arrival_time || t.scheduled_arrival]) }
-      else if (isOrigin) { if (depOn) legs.push([false, st.departure_time || t.scheduled_departure]) }
-      else if (stop) { if (arrOn && !sameFrom) legs.push([true, st.arrival_time || stop.arrival_time]); if (depOn && !sameTo) legs.push([false, st.departure_time || stop.departure_time]) }
-      else { if (arrOn && !sameFrom) legs.push([true, st.arrival_time]); if (depOn && !sameTo) legs.push([false, st.departure_time]) }
-      days.forEach(date => {
-        if (t.is_rf && t.rf_date !== date) return
-        if (t.start_date && date < t.start_date) return
-        if (t.end_date && date > t.end_date) return
-        if (t.days_of_week?.length && !t.days_of_week.includes(new Date(date + 'T00:00:00').getDay())) return
-        legs.forEach(([isArr, time]) => {
-          if (!time) return
-          if (date === today && toMin(time) > nowMin) return   // رحلة اليوم التي لم يحن وقتها بعد لا تُحسب
-          const k = shifts[shiftIdx(toMin(time), shifts)].k
-          ;(exp[st.station_id] ??= []).push({ key: `${st.trip_schedule_id}|${date}|${st.station_id}|${isArr ? 'a' : 'd'}`, shift: k })
-        })
-      })
-    })
-    // المُدخل فعلاً
-    const entered = new Set()
-    records.forEach(r => {
-      const t = tripInfo[r.trip_schedule_id]
-      let isArr
-      if (t && (t.to_station_id === r.station_id || t.from_station_id === r.station_id)) isArr = t.to_station_id === r.station_id
-      else isArr = r.is_arrival != null ? r.is_arrival === true : (r.actual_arrival != null && r.actual_departure == null)
-      entered.add(`${r.trip_schedule_id}|${r.record_date}|${r.station_id}|${isArr ? 'a' : 'd'}`)
-    })
+    // الرحلات المتوقعة (نفس منطق صفحة الترحيل والتقارير) والمُدخل فعلاً — الورديات المتوقفة لا تُحسب
+    const { exp, tripInfo } = buildExpected({ stationTrips, stops, stById, days, today, nowMin })
+    const entered = enteredKeys(records, tripInfo)
     // الإيرادات: تغطية الورديات (يوم × وردية فيها سجل)
     const salesSet = {}   // station → Set(date|shift)
     sales.forEach(s => { (salesSet[s.station_id] ??= new Set()).add(`${s.sale_date}|${s.shift}`) })
@@ -237,7 +197,7 @@ export default function StationsPerformance({ isAr = true }) {
       const staff = staffBy[stn.id] ?? []
       const expected = exp[stn.id] ?? []
       if (staff.length === 0) { const ea = expected.filter(e => e.key.endsWith('|a')).length; infoOnly.push({ id: stn.id, name: isAr ? stn.name_ar : (stn.name_en || stn.name_ar), expected: expected.length, arr: ea, dep: expected.length - ea, agent: !!stn.is_agent }); return }
-      const shifts = shiftsOfStation(stn)
+      const shifts = shiftsOfStation(stn).filter(sh => !sh.off)   // الورديات المتوقفة لا تدخل في النسب
       const hit = expected.filter(e => entered.has(e.key))
       const tripsPct = pct(hit.length, expected.length)
       const nShifts = shifts.length

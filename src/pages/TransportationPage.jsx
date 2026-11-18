@@ -810,13 +810,13 @@ export default function TransportationPage() {
   // جلب المحطات: الأدمن يرى الكل؛ مشرف المنطقة محطاته؛ المشرف والمحاسب محطاتهم فقط
   useEffect(() => {
     if (isGeneralAdmin && !scopedIds) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, inactive_shifts, is_agent').eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (scopedIds) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').in('id', scopedIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, inactive_shifts, is_agent').in('id', scopedIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (isAreaSupervisor && allowedStationIds?.length) {
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, inactive_shifts, is_agent').in('id', allowedStationIds).eq('is_active', true).order('name_ar')
         .then(({ data }) => { if (data?.length) setStations(data.filter(s => !isRestStation(s))) })
     } else if (workStations?.length > 1) {
       // موظف/محاسب يعمل بأكثر من محطة (محطته الأساسية أولاً ثم الإضافية التي حدّدها الأدمن) — يتنقّل بينها مثل المشرف
@@ -826,14 +826,14 @@ export default function TransportationPage() {
         .then(async ({ data }) => {
           let sts = (data ?? []).map(r => r.station).filter(Boolean).filter(s => !isRestStation(s))
           if (sts.length === 0 && profile?.station_id) {
-            const { data: st } = await supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').eq('id', profile.station_id).maybeSingle()
+            const { data: st } = await supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, inactive_shifts, is_agent').eq('id', profile.station_id).maybeSingle()
             sts = st ? [st] : (profile?.station ? [profile.station] : [])
           }
           setStations(sts)
         })
     } else if (profile?.station_id) {
       // الموظف: محطته فقط — نجيبها كاملة (بما فيها إعداد دمج الوصول والمغادرة) عشان تظهر له نفس بطاقة الأدمن
-      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, is_agent').eq('id', profile.station_id).maybeSingle()
+      supabase.from('stations').select('id, name_ar, name_en, city_group, combined_arr_dep, shift_ends, inactive_shifts, is_agent').eq('id', profile.station_id).maybeSingle()
         .then(({ data }) => { if (data) setStations([data]) })
     }
   }, [isGeneralAdmin, isAccountant, isStationAdmin, isAreaSupervisor, allowedStationIds, profile?.id, profile?.station_id, scopedIds?.join(','), workStations])
@@ -1487,11 +1487,12 @@ export default function TransportationPage() {
                 <span style={{ fontWeight: 900, fontSize: '0.92rem', color: 'var(--text-1)' }}>{isAr ? sh.ar : sh.en}</span>
                 <span dir="ltr" style={{ fontFamily: MONO, fontSize: '0.72rem', color: 'var(--text-3)' }}>{sh.range}</span>
                 {nowHere && <span style={{ background: 'var(--success-bg)', color: 'var(--success)', borderRadius: 99, padding: '1px 10px', fontSize: '0.66rem', fontWeight: 800 }}>{isAr ? 'الحالية' : 'Current'}</span>}
-                <span style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+                {sh.off && <span style={{ background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 99, padding: '1px 10px', fontSize: '0.66rem', fontWeight: 800 }}>{isAr ? 'وردية متوقفة في هذي المحطة' : 'Shift stopped at this station'}</span>}
+                {!sh.off && <span style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontFamily: MONO, fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-2)' }} dir="ltr">{done}/{list.length}</span>
                   <span style={{ width: 120, height: 6, borderRadius: 99, background: 'var(--border-2)', overflow: 'hidden' }}><i style={{ display: 'block', width: `${pct}%`, height: '100%', background: pct === 100 ? 'var(--success)' : 'var(--accent)', borderRadius: 99 }} /></span>
                   <span style={{ fontFamily: MONO, fontSize: '0.7rem', color: 'var(--text-3)' }}>{pct}%</span>
-                </span>
+                </span>}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {list.map(t => {
@@ -2180,7 +2181,7 @@ export default function TransportationPage() {
   const measured     = depRecs.filter(r => r.departure_accuracy).length
   const punctPct     = measured ? Math.round((depRecs.filter(r => r.departure_accuracy === 'On Time' || r.departure_accuracy === 'Early').length / measured) * 100) : null
   const tMin = t => { const x = t.role === 'both' ? t.schedDep : t.schedTime; return x ? Number(String(x).slice(0, 2)) * 60 + Number(String(x).slice(3, 5)) : 0 }
-  const shiftProg = SHIFTS.map((sh, shI) => {
+  const shiftProg = SHIFTS.map((sh, shI) => ({ sh, shI })).filter(({ sh }) => !sh.off).map(({ sh, shI }) => {   // الوردية المتوقفة لا تظهر في نسب التقدم
     const lbl = isAr ? sh.ar.replace('الوردية ', '') : sh.k
     const list = trips.filter(t => shiftIdx(tMin(t), SHIFTS) === shI)
     const done = list.filter(t => (t.role === 'both'

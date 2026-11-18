@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { toLatinDigits } from '../../utils/digits'
 import { syncStationTripsByNumbers } from '../../utils/importSchedule'
-import { validEnds, fmtMin, toMin } from '../../utils/shifts'
+import { validEnds, fmtMin, toMin, DEFAULT_ENDS } from '../../utils/shifts'
 import Sheet, { Ic } from '../dispatch/Sheet'
 import SelectField from '../shared/SelectField'
 import TimeInput24 from '../shared/TimeInput24'
@@ -36,6 +36,13 @@ export default function StationForm({ station, onClose, onSaved }) {
   const setCountSafe = n => { setShiftCount(n); setShiftEnds(prev => n === 4 ? (prev.length === 3 ? prev : [prev[0] ?? '08:00', prev[1] ?? '16:00', '20:00']) : prev.slice(0, 2)) }
   const draftEnds = [...shiftEnds.map(toMin), 1440]
   const shiftsValid = shiftMode !== 'custom' || (draftEnds.length === shiftCount && validEnds(draftEnds))
+  // الورديات المتوقفة (لا تعمل فعلياً في المحطة): لا تدخل في نسب الأداء ولا تنبيهات النواقص في كل الأقسام
+  const initOff = Array.isArray(station?.inactive_shifts) ? station.inactive_shifts : []
+  const [offShifts, setOffShifts] = useState(initOff)
+  const shiftKeys = ['A', 'B', 'C', 'D'].slice(0, shiftMode === 'custom' ? shiftCount : 3)
+  const shiftRangeOf = i => { const e = shiftMode === 'custom' && shiftsValid ? draftEnds : DEFAULT_ENDS; return `${fmtMin(i ? e[i - 1] : 0)} – ${fmtMin(e[i])}` }
+  const offActive = offShifts.filter(k => shiftKeys.includes(k))
+  const toggleOff = k => setOffShifts(o => (o.includes(k) ? o.filter(x => x !== k) : [...o, k]))
   const [tripNums, setTripNums] = useState(Array.isArray(station?.trip_numbers) ? station.trip_numbers : [])
   const [numInput, setNumInput] = useState('')
   const [allTrips, setAllTrips] = useState([])   // قائمة الرحلات من الجدول
@@ -65,11 +72,14 @@ export default function StationForm({ station, onClose, onSaved }) {
     setSaving(true)
     setError('')
     // الاسم العربي إن أُدخل — وإلا الإنجليزي (يُستخدم في العرض والمناداة الصوتية)
+    if (offActive.length >= shiftKeys.length) { setError(isAr ? 'لا يمكن إيقاف كل الورديات — يجب أن تبقى وردية واحدة على الأقل عاملة' : 'At least one shift must stay active'); setSaving(false); return }
     if (!shiftsValid) { setError(isAr ? 'رتّب أوقات نهاية الورديات تصاعدياً (كل وقت بعد الذي قبله وقبل 24:00)' : 'Shift end times must be ascending and before 24:00'); setSaving(false); return }
     const payload = { ...form, name_ar: (form.name_ar || '').trim() || form.name_en, trip_numbers: tripNums, created_by: profile.id }
     // العمود يُرسل فقط عند الحاجة (تخصيص، أو إلغاء تخصيص سابق) حتى تعمل الصفحة قبل تشغيل SQL
     if (shiftMode === 'custom') payload.shift_ends = draftEnds
     else if (station?.shift_ends != null) payload.shift_ends = null
+    // نفس الفكرة: العمود يُرسل فقط عند وجود تغيير (فتعمل الصفحة قبل تشغيل SQL 040)
+    if (offActive.slice().sort().join() !== initOff.slice().sort().join()) payload.inactive_shifts = offActive
     const res = station
       ? await supabase.from('stations').update(payload).eq('id', station.id).select('id').single()
       : await supabase.from('stations').insert(payload).select('id').single()
@@ -218,6 +228,24 @@ export default function StationForm({ station, onClose, onSaved }) {
                 : <p style={{ margin: 0, fontSize: '.8rem', color: 'var(--danger)', fontWeight: 700 }}>{isAr ? 'الأوقات لازم تتصاعد وتكون قبل 24:00' : 'Times must ascend and be before 24:00'}</p>}
             </div>
           )}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px dashed var(--border-2)' }}>
+            <h4 style={{ margin: '0 0 4px', fontSize: '.9rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'الورديات العاملة فعلياً' : 'Shifts actually operating'}</h4>
+            <p className="stn-sec-d" style={{ marginTop: 0 }}>{isAr ? 'لو المحطة ما تعمل فيها وردية معيّنة، اضغطها لتصير «متوقفة»: لا تُحسب في نسبة الأداء ولا تظهر كنقص إيراد أو رحلات، في جميع الأقسام.' : 'If a shift does not run at this station, mark it stopped: it is excluded from performance percentages and shortfall alerts everywhere.'}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${shiftKeys.length}, minmax(0, 1fr))`, gap: 8 }}>
+              {shiftKeys.map((k, i) => {
+                const off = offActive.includes(k)
+                return (
+                  <button key={k} type="button" onClick={() => toggleOff(k)} aria-pressed={off}
+                    style={{ textAlign: 'start', padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+                      border: `1px solid ${off ? 'var(--danger)' : 'var(--border-2)'}`, background: off ? 'var(--danger-bg)' : 'var(--card)', color: 'var(--text-1)' }}>
+                    <span style={{ display: 'block', fontSize: '.86rem', fontWeight: 900 }}>{isAr ? `الوردية ${['أ', 'ب', 'ج', 'د'][i]}` : `Shift ${k}`}</span>
+                    <span dir="ltr" style={{ display: 'block', fontFamily: MONO, fontSize: '.72rem', color: 'var(--text-3)', marginTop: 2 }}>{shiftRangeOf(i)}</span>
+                    <span style={{ display: 'block', marginTop: 6, fontSize: '.76rem', fontWeight: 800, color: off ? 'var(--danger)' : 'var(--success, #15803d)' }}>{off ? (isAr ? 'متوقفة' : 'Stopped') : (isAr ? 'تعمل' : 'Operating')}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </section>
 
         <section className="stn-sec">

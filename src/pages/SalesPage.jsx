@@ -63,7 +63,7 @@ const parseRefsArr = raw => {
 }
 
 // لوحة الورديات: ما سُجّل لهذي المحطة بهذا التاريخ ومن سجّله، وتنبيه فوري لو الموظف مكرر قبل الحفظ
-function ShiftBoard({ stationId, date, shift, onPick, saleId, employeeName, profileId, isAr }) {
+function ShiftBoard({ stationId, date, shift, onPick, saleId, employeeName, profileId, isAr, offShifts = [] }) {
   const [rows, setRows] = useState(null)
   useEffect(() => {
     if (!stationId || !date) { setRows(null); return }
@@ -84,12 +84,13 @@ function ShiftBoard({ stationId, date, shift, onPick, saleId, employeeName, prof
         {SHIFTS.map(sh => {
           const list = rows.filter(r => r.shift === sh.value)
           const active = shift === sh.value
+          const stopped = offShifts.includes(sh.value) && !list.length
           return (
             <button key={sh.value} type="button" onClick={() => onPick(sh.value)}
               className={`text-start rounded-lg border px-2.5 py-2 transition-colors ${active ? 'border-emerald-500 bg-white shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
               <div className="flex items-center justify-between gap-1">
                 <span className="text-xs font-bold text-gray-800">{isAr ? sh.ar : sh.en}</span>
-                <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${list.length ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{list.length || (isAr ? 'فارغة' : 'empty')}</span>
+                <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${list.length ? 'bg-emerald-100 text-emerald-700' : stopped ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'}`}>{list.length || (stopped ? (isAr ? 'متوقفة' : 'stopped') : (isAr ? 'فارغة' : 'empty'))}</span>
               </div>
               <p className="text-[10.5px] text-gray-500 mt-1 truncate">{list.length ? list.map(nameOf).join('، ') : sh.range}</p>
             </button>
@@ -523,6 +524,13 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
       .then(({ data, error }) => setStEnds(m => ({ ...m, [curStationId]: !error && Array.isArray(data?.shift_ends) && validEnds(data.shift_ends) ? data.shift_ends : null })))
   }, [curStationId])
   const stationEnds = stEnds[curStationId] ?? null
+  // الورديات المتوقفة للمحطة (استعلام مستقل: لا يعطّل الورديات لو العمود غير موجود بعد)
+  const [stOff, setStOff] = useState({})
+  useEffect(() => {
+    if (!curStationId || stOff[curStationId] !== undefined) return
+    supabase.from('stations').select('inactive_shifts').eq('id', curStationId).maybeSingle()
+      .then(({ data, error }) => setStOff(m => ({ ...m, [curStationId]: !error && Array.isArray(data?.inactive_shifts) ? data.inactive_shifts : [] })))
+  }, [curStationId])
   SHIFTS = salesShiftsFrom(stationEnds ? JSON.stringify({ ends: stationEnds }) : null)
   const shiftsKey = SHIFTS.map(sh => sh.value + sh.end).join()
   const suggested = useMemo(() => suggestShift(new Date(), cutoffMin), [shiftsKey, cutoffMin])
@@ -911,7 +919,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
                   </div>
                 </div>
                 <ShiftBoard stationId={proxyOn ? proxyEmp?.station_id : ((isGeneralAdmin || multi) ? form.station_id : profile.station_id)} date={form.sale_date} shift={form.shift}
-                  onPick={v => set('shift', v)} saleId={sale?.id} employeeName={form.employee_name} profileId={sale?.created_by ?? (proxyOn ? proxyEmp?.id : profile?.id)} isAr={isAr} />
+                  onPick={v => set('shift', v)} saleId={sale?.id} employeeName={form.employee_name} profileId={sale?.created_by ?? (proxyOn ? proxyEmp?.id : profile?.id)} isAr={isAr} offShifts={stOff[proxyOn ? proxyEmp?.station_id : curStationId] ?? []} />
                 {!sale && (() => {
                   const sug = SHIFTS.find(x => x.value === suggested.shift)
                   const mismatch = form.shift !== suggested.shift || form.sale_date !== suggested.date

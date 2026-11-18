@@ -9,7 +9,7 @@ const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map
 
 export default function MobileHome({
   isAr, now, greeting, userName, roleLabel, stationName, hasStar, curShift, shiftPct, remText,
-  quickLinks, renderIcon, attention, notifs, notifLoading, unread, markRead, markAllRead, timeAgo, onNotifOpen,
+  quickLinks, renderIcon, topSlot, attention, notifs, notifLoading, unread, markRead, markAllRead, timeAgo, onNotifOpen,
   updatePending, onUpdate, version, stamp, navigate, children,
 }) {
   const t = (a, e) => (isAr ? a : e)
@@ -51,6 +51,9 @@ export default function MobileHome({
           </div>
         </div>
       </section>
+
+      {/* نواقص المحطة للمشرف */}
+      {topSlot}
 
       {/* ── ما يحتاج انتباهك ── */}
       <section aria-label={t('ما يحتاج انتباهك', 'Needs your attention')}>

@@ -11,6 +11,8 @@ export const SHIFT_LETTERS_EN = ['A', 'B', 'C', 'D']
 // خلفية شفافة من لون دلالي (تعمل في الوضعين الفاتح والداكن)
 export const tint = (c, pct = 12) => `color-mix(in srgb, ${c} ${pct}%, transparent)`
 
+const KEYS4 = ['A', 'B', 'C', 'D']
+const offOf = s => (Array.isArray(s?.inactive_shifts) ? s.inactive_shifts : [])
 export function shiftInfo(s) {
   const custom = Array.isArray(s.shift_ends) && validEnds(s.shift_ends)
   return { custom, ends: custom ? s.shift_ends : DEFAULT_ENDS }
@@ -100,10 +102,11 @@ export function ShiftBar({ s, isAr }) {
       <div className="flex items-center justify-between mb-1">
         <span className="text-[11px] font-bold text-gray-700">{ends.length} {isAr ? 'ورديات' : 'shifts'}</span>
         {custom && <span className="text-[9px] font-bold text-nwbus-primary border border-nwbus-primary rounded px-1">{isAr ? 'مخصصة' : 'custom'}</span>}
+        {offOf(s).length > 0 && <span className="text-[9px] font-bold text-red-600 border border-red-300 rounded px-1">{isAr ? `${offOf(s).length} متوقفة` : `${offOf(s).length} stopped`}</span>}
       </div>
       <div className="flex h-2 rounded-sm overflow-hidden gap-px" dir="ltr" title={ends.map((e, i) => `${['A', 'B', 'C', 'D'][i]} ${fmtMin(i ? ends[i - 1] : 0)}–${fmtMin(e)}`).join('  ')}>
         {ends.map((e, i) => (
-          <i key={i} style={{ flex: e - (i ? ends[i - 1] : 0), background: 'var(--accent, #4f46e5)', opacity: [1, 0.7, 0.45, 0.25][i] }} />
+          <i key={i} style={{ flex: e - (i ? ends[i - 1] : 0), background: offOf(s).includes(KEYS4[i]) ? 'var(--border-2, #d1d5db)' : 'var(--accent, #4f46e5)', opacity: offOf(s).includes(KEYS4[i]) ? 1 : [1, 0.7, 0.45, 0.25][i] }} />
         ))}
       </div>
     </div>
@@ -122,17 +125,19 @@ export function ShiftTimeline({ s, isAr, detailed = false }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
         <span style={{ fontSize: detailed ? '.86rem' : '.84rem', fontWeight: 900, color: 'var(--text-1)' }}>{ends.length} {isAr ? 'ورديات' : 'shifts'}</span>
         {custom && <span className="stn-tag" style={{ background: tint('var(--accent)', 14), color: 'var(--accent)', fontSize: '.68rem', padding: '1px 7px' }}>{isAr ? 'مخصصة' : 'Custom'}</span>}
+        {offOf(s).length > 0 && <span className="stn-tag" style={{ background: tint('var(--danger)', 14), color: 'var(--danger)', fontSize: '.68rem', padding: '1px 7px' }}>{isAr ? `${offOf(s).length} متوقفة` : `${offOf(s).length} stopped`}</span>}
       </div>
       <div dir="ltr" title={ends.map((e, i) => `${letters[i]} ${range(i)}`).join('   ')} style={{ display: 'flex', height: detailed ? 12 : 10, gap: 2, borderRadius: 99, overflow: 'hidden' }}>
-        {ends.map((e, i) => <i key={i} style={{ flex: e - (i ? ends[i - 1] : 0), background: 'var(--accent)', opacity: OPACITY[i] }} />)}
+        {ends.map((e, i) => { const x = offOf(s).includes(KEYS4[i]); return <i key={i} style={{ flex: e - (i ? ends[i - 1] : 0), background: x ? 'var(--border-2)' : 'var(--accent)', opacity: x ? 1 : OPACITY[i] }} /> })}
       </div>
       {detailed && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 9 }}>
           {ends.map((e, i) => (
             <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '.76rem', color: 'var(--text-2)', fontWeight: 700 }}>
-              <i style={{ width: 8, height: 8, borderRadius: 3, background: 'var(--accent)', opacity: OPACITY[i], display: 'inline-block' }} />
-              <span>{letters[i]}</span>
-              <bdi dir="ltr" style={{ fontFamily: MONO, fontWeight: 600 }}>{range(i)}</bdi>
+              <i style={{ width: 8, height: 8, borderRadius: 3, background: offOf(s).includes(KEYS4[i]) ? 'var(--border-2)' : 'var(--accent)', opacity: offOf(s).includes(KEYS4[i]) ? 1 : OPACITY[i], display: 'inline-block' }} />
+              <span style={offOf(s).includes(KEYS4[i]) ? { textDecoration: 'line-through', color: 'var(--text-3)' } : undefined}>{letters[i]}</span>
+              <bdi dir="ltr" style={{ fontFamily: MONO, fontWeight: 600, ...(offOf(s).includes(KEYS4[i]) ? { textDecoration: 'line-through', color: 'var(--text-3)' } : null) }}>{range(i)}</bdi>
+              {offOf(s).includes(KEYS4[i]) && <span style={{ color: 'var(--danger)', fontWeight: 800 }}>{isAr ? 'متوقفة' : 'stopped'}</span>}
             </span>
           ))}
         </div>
