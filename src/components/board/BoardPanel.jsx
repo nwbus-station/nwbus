@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BOARD_LOGO, THEMES, Clock, Row, nmOf, dedupeEvents, toMin } from './boardParts'
 
-const W = 1920, H = 1080
+const W = 1920, H = 1080, BAR_H = 168
 const rtNow = () => {
   const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()).split(':').map(Number)
   return p[0] * 60 + p[1]
@@ -17,6 +17,7 @@ export default function BoardPanel({ data, config, error }) {
   const wrap = useRef(null)
   const [scale, setScale] = useState(1)
   const [tick, setTick] = useState(0)
+  const [bi, setBi] = useState(0)     // تدوير الرحلات في شريط «تغادر الآن»
   const [nowMin, setNowMin] = useState(rtNow)
   useEffect(() => {
     const fit = () => { const el = wrap.current; if (el?.clientWidth) setScale(Math.min(el.clientWidth / W, el.clientHeight / H)) }   // مقاسات التخطيط (لا تتأثر بتصغير الأب)
@@ -24,6 +25,7 @@ export default function BoardPanel({ data, config, error }) {
     return () => ro.disconnect()
   }, [])
   useEffect(() => { const id = setInterval(() => setNowMin(rtNow()), 15000); return () => clearInterval(id) }, [])
+  useEffect(() => { const id = setInterval(() => setBi(i => i + 1), 6000); return () => clearInterval(id) }, [])
   useEffect(() => {
     if (layout !== 'auto') return
     const id = setInterval(() => setTick(t => t + 1), 15000)
@@ -41,7 +43,14 @@ export default function BoardPanel({ data, config, error }) {
   const nextEv = [...events].filter(e => e.status === 'upcoming').sort((a, b) => toMin(a.time) - toMin(b.time))[0] || null
   const nextMins = nextEv ? toMin(nextEv.time) - nowMin : null
   const stationLabel = data?.station || 'كل المحطات'
-  const HEADER_H = 150
+  const HEADER_H = 150 + BAR_H - 56
+  // الرحلات التي يقترب موعد مغادرتها (خلال 20 دقيقة) تنتقل من القائمة إلى الشريط السفلي
+  const depSoon = events.filter(e => e.type === 'departure' && e.status === 'upcoming' && toMin(e.time) - nowMin <= 20).sort((a, b) => toMin(a.time) - toMin(b.time))
+  const nextDep = [...events].filter(e => e.type === 'departure' && e.status === 'upcoming').sort((a, b) => toMin(a.time) - toMin(b.time))[0] || null
+  const barEv = depSoon.length ? depSoon[bi % depSoon.length] : nextDep
+  const barMins = barEv ? toMin(barEv.time) - nowMin : null
+  const barNow = depSoon.length > 0
+  const hide = new Set(depSoon.map(e => e.id))
 
   return (
     <div ref={wrap} style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: th.bg }}>
@@ -50,6 +59,10 @@ export default function BoardPanel({ data, config, error }) {
           @keyframes slidein { from { opacity:0; transform: translateY(-10px) } to { opacity:1; transform:none } }
           @keyframes glow { 0%,100%{opacity:1} 50%{opacity:.55} }
           @keyframes livedot { 0%{box-shadow:0 0 0 0 rgba(75,201,143,.6)} 100%{box-shadow:0 0 0 9px rgba(75,201,143,0)} }
+          @keyframes lbsweep { from { transform: translateX(-130%) skewX(-18deg) } to { transform: translateX(130%) skewX(-18deg) } }
+          @keyframes lbpulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.55) } 100% { box-shadow: 0 0 0 14px rgba(255,255,255,0) } }
+          .lb-sweep { animation: lbsweep 5.5s ease-in-out infinite }
+          .lb-pulse { animation: lbpulse 1.5s ease-out infinite }
           @keyframes scrollup { from { transform: translateY(0) } to { transform: translateY(-50%) } }
           .lb-row { animation: slidein .45s ease both }
           .lb-ar { animation: glow 1.6s ease-in-out infinite }
@@ -95,7 +108,7 @@ export default function BoardPanel({ data, config, error }) {
         ) : view === 'columns' ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22, padding: '16px 44px 56px', height: `calc(100% - ${HEADER_H + 56}px)`, boxSizing: 'border-box' }}>
             {[{ type: 'departure', label: 'المغادرة', accent: th.dep, icon: '↑' }, { type: 'arrival', label: 'الوصول', accent: th.arr, icon: '↓' }].map(col => {
-              const items = events.filter(e => e.type === col.type)
+              const items = events.filter(e => e.type === col.type && !hide.has(e.id))
               const pages = Math.max(1, Math.ceil(items.length / COL_PER))
               const p = ((tick % pages) + pages) % pages
               const shown = isAuto ? items.slice(p * COL_PER, p * COL_PER + COL_PER) : items
@@ -140,6 +153,40 @@ export default function BoardPanel({ data, config, error }) {
             </div>
           </div>
         )}
+
+        {/* شريط «تغادر الآن» السفلي */}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: BAR_H, boxSizing: 'border-box', borderTop: `3px solid ${th.accent}`, background: `linear-gradient(90deg, ${th.accent}33, rgba(7,12,18,0.97) 42%)`, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 34, padding: '0 48px' }}>
+          <span className="lb-sweep" style={{ position: 'absolute', top: 0, bottom: 0, width: 260, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent)', pointerEvents: 'none' }} />
+          {barEv ? (
+            <>
+              <div style={{ minWidth: 250, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 30, fontWeight: 800, color: barNow ? '#101010' : th.text, background: barNow ? th.accent : 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '6px 20px 10px' }}>
+                  <i className={barNow ? 'lb-pulse' : undefined} style={{ width: 12, height: 12, borderRadius: '50%', background: barNow ? '#101010' : th.accent, display: 'inline-block' }} />
+                  {barNow ? (barMins <= 0 ? 'تغادر الآن' : 'تغادر قريباً') : 'المغادرة التالية'}
+                </span>
+                <span dir="ltr" style={{ fontSize: 13, fontWeight: 800, letterSpacing: 4, color: th.muted, paddingInlineStart: 6 }}>{barNow ? 'NOW BOARDING' : 'NEXT DEPARTURE'}</span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div dir="ltr" style={{ fontSize: 50, fontWeight: 800, lineHeight: 1.25, color: th.text, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {nmOf(barEv.trip?.from_station, isAr)} <span style={{ color: th.accent, margin: '0 12px' }}>→</span> {nmOf(barEv.trip?.to_station, isAr)}
+                </div>
+                <div dir="ltr" style={{ marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' }}>
+                  {depSoon.length > 1 && <span style={{ fontSize: 14, fontWeight: 800, color: th.muted }}>{(bi % depSoon.length) + 1} / {depSoon.length}</span>}
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 18, fontWeight: 700, color: th.text, background: 'rgba(255,255,255,0.09)', borderRadius: 6, padding: '2px 12px' }}>{barEv.trip?.trip_number || '—'}</span>
+                </div>
+              </div>
+              <div dir="ltr" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 84, fontWeight: 800, color: th.accent, lineHeight: 1, letterSpacing: 2 }}>{barEv.time}</div>
+              <div style={{ minWidth: 200, textAlign: 'center', borderInlineStart: '1px solid rgba(255,255,255,0.14)', paddingInlineStart: 30 }}>
+                <div className={barNow && barMins <= 5 ? 'lb-ar' : undefined} style={{ fontSize: barMins != null && barMins > 0 ? 64 : 52, fontWeight: 800, color: th.text, lineHeight: 1.1, fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {barMins == null || barMins <= 0 ? 'الآن' : barMins >= 60 ? `${Math.floor(barMins / 60)}:${String(barMins % 60).padStart(2, '0')}` : barMins}
+                </div>
+                {barMins != null && barMins > 0 && <div style={{ fontSize: 18, fontWeight: 700, color: th.muted, marginTop: 4 }}>{barMins >= 60 ? 'ساعة:دقيقة' : 'دقيقة'}</div>}
+              </div>
+            </>
+          ) : (
+            <div style={{ flex: 1, textAlign: 'center', fontSize: 34, fontWeight: 700, color: th.text, opacity: 0.9, letterSpacing: 1 }}>نتمنى لكم رحلة آمنة وسعيدة</div>
+          )}
+        </div>
       </div>
     </div>
   )
