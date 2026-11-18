@@ -66,12 +66,13 @@ export const BusPlate = ({ no, accent, size = 30 }) => (
 
 // صف الحركة — مكوّن مستقل ومُحفّظ (memo) حتى لا يُعاد إنشاؤه عند كل رسم (يمنع الاهتزاز). مقاسات كبيرة تُقرأ من بعيد على التلفزيون.
 export const ROW_H = 100
-export const Row = memo(function Row({ e, accent, th, isAr, nowMin }) {
+export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
   const upcoming = e.status === 'upcoming'
   const arr = e.type === 'arrival'
   const mins = upcoming && nowMin != null ? toMin(e.time) - nowMin : null
   const soon = mins != null && mins >= -10 && mins <= 20
   const dl = !upcoming ? delayInfo(e.time, e.sched, isAr, e.type) : null
+  const otherName = nmOf(arr ? e.trip?.from_station : e.trip?.to_station, isAr)
   const prog = upcoming && mins != null ? Math.max(0, Math.min(1, 1 - mins / 90)) : 0     // يمتلئ كلما اقترب الموعد (آخر 90 دقيقة)
   return (
     <div className="lb-row" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 18, height: ROW_H, boxSizing: 'border-box', padding: '0 22px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: soon ? `linear-gradient(90deg, ${accent}1f, transparent 70%)` : 'transparent', opacity: upcoming && !soon ? 0.9 : 1 }}>
@@ -82,9 +83,17 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin }) {
         {e.sched && e.sched !== e.time && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 15, fontWeight: 700, color: th.muted, marginTop: 6 }}>{isAr ? 'الموعد ' : 'Sched '}{e.sched}</div>}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div dir="ltr" style={{ fontSize: 27, fontWeight: 800, color: th.text, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textAlign: isAr ? 'right' : 'left' }}>
-          {nmOf(e.trip?.from_station, isAr)} <span style={{ color: accent, fontWeight: 800, margin: '0 8px' }}>→</span> {nmOf(e.trip?.to_station, isAr)}
-        </div>
+        {scoped ? (
+          // شاشة محطة: طرف الرحلة الآخر فقط (المحطة نفسها معروفة) في سطر واحد: الوصول «من …» والمغادرة «إلى …»
+          <div dir="ltr" style={{ display: 'flex', alignItems: 'baseline', justifyContent: isAr ? 'flex-end' : 'flex-start', gap: 14, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+            <span style={{ fontSize: 30, fontWeight: 800, color: th.text, ...(otherName.length > 30 ? { fontSize: 24 } : otherName.length > 22 ? { fontSize: 28 } : { fontSize: 34 }), overflow: 'hidden', textOverflow: 'ellipsis' }}>{otherName}</span>
+            <span style={{ fontSize: 19, fontWeight: 800, color: accent, letterSpacing: 1 }}>{arr ? (isAr ? 'من' : 'FROM') : (isAr ? 'إلى' : 'TO')}</span>
+          </div>
+        ) : (
+          <div dir="ltr" style={{ fontSize: 27, fontWeight: 800, color: th.text, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textAlign: isAr ? 'right' : 'left' }}>
+            {nmOf(e.trip?.from_station, isAr)} <span style={{ color: accent, fontWeight: 800, margin: '0 8px' }}>→</span> {nmOf(e.trip?.to_station, isAr)}
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: isAr ? 'flex-end' : 'flex-start', gap: 8, marginTop: 8 }} dir="ltr">
           <span style={{ fontSize: 16, fontWeight: 700, color: th.muted, background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '2px 10px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</span>
         </div>

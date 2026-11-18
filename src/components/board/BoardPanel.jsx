@@ -137,7 +137,7 @@ export default function BoardPanel({ data, config, error }) {
                         return (
                           <div key={e.id + '_' + i}>
                             {showLbl && <div style={{ padding: '8px 24px', fontSize: 17, fontWeight: 800, letterSpacing: 0.5, color: e.status === 'upcoming' ? th.accent : th.muted, background: 'rgba(255,255,255,0.035)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{e.status === 'upcoming' ? (col.type === 'arrival' ? 'قادمة إلى المحطة' : 'مغادرة قادمة') : (col.type === 'arrival' ? 'وصلت حديثاً' : 'غادرت حديثاً')}</div>}
-                            <Row e={e} accent={col.accent} th={th} isAr={isAr} nowMin={nowMin} />
+                            <Row e={e} accent={col.accent} th={th} isAr={isAr} nowMin={nowMin} scoped={!!data?.station} />
                           </div>
                         )
                       })}
@@ -157,7 +157,7 @@ export default function BoardPanel({ data, config, error }) {
           <div style={{ padding: '16px 44px 56px', height: `calc(100% - ${HEADER_H + 56}px)`, overflow: 'hidden', boxSizing: 'border-box' }}>
             <div style={{ background: 'rgba(8,14,20,0.45)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', height: '100%', boxShadow: '0 12px 40px rgba(0,0,0,0.35)' }}>
               <div style={feedSorted.length > 8 ? { animation: `scrollup ${feedSorted.length * 3.5}s linear infinite` } : {}}>
-                {[...feedSorted, ...(feedSorted.length > 8 ? feedSorted : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={e.type === 'arrival' ? th.arr : th.dep} th={th} isAr={isAr} nowMin={nowMin} />)}
+                {[...feedSorted, ...(feedSorted.length > 8 ? feedSorted : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={e.type === 'arrival' ? th.arr : th.dep} th={th} isAr={isAr} nowMin={nowMin} scoped={!!data?.station} />)}
                 {feedSorted.length === 0 && <div style={{ textAlign: 'center', color: th.muted, fontSize: 20, padding: '90px 0', fontWeight: 700 }}>لا حركة حالياً</div>}
               </div>
             </div>
