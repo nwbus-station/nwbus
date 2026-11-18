@@ -35,9 +35,10 @@ export default function BoardPanel({ data, config, error }) {
   const view = layout === 'feed' ? 'feed' : 'columns'
   const COL_PER = 6
   const feedSorted = [...events].sort((a, b) => toMin(a.time) - toMin(b.time))
-  const depCount = events.filter(e => e.type === 'departure').length
-  const arrCount = events.filter(e => e.type === 'arrival').length
-  const nextEv = mode === 'scheduled' ? [...events].filter(e => e.status === 'upcoming').sort((a, b) => toMin(a.time) - toMin(b.time))[0] : null
+  const counted = mode === 'scheduled' ? events : events.filter(e => e.status === 'done')   // الفعلي: نعدّ ما تم فعلاً فقط
+  const depCount = counted.filter(e => e.type === 'departure').length
+  const arrCount = counted.filter(e => e.type === 'arrival').length
+  const nextEv = [...events].filter(e => e.status === 'upcoming').sort((a, b) => toMin(a.time) - toMin(b.time))[0] || null
   const nextMins = nextEv ? toMin(nextEv.time) - nowMin : null
   const stationLabel = data?.station || 'كل المحطات'
   const HEADER_H = 150
@@ -73,7 +74,7 @@ export default function BoardPanel({ data, config, error }) {
         </header>
 
         <div style={{ display: 'flex', alignItems: 'stretch', gap: 12, padding: '14px 44px 0' }}>
-          {[{ l: 'مغادرة', v: depCount, c: th.dep }, { l: 'وصول', v: arrCount, c: th.arr }].map(k => (
+          {[{ l: mode === 'scheduled' ? 'مغادرة' : 'غادرت اليوم', v: depCount, c: th.dep }, { l: mode === 'scheduled' ? 'وصول' : 'وصلت اليوم', v: arrCount, c: th.arr }].map(k => (
             <div key={k.l} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 20px', borderRadius: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderInlineStart: `4px solid ${k.c}` }}>
               <span style={{ fontSize: 30, fontWeight: 800, color: k.c, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1 }}>{k.v}</span>
               <span style={{ fontSize: 14, fontWeight: 700, color: th.muted }}>{k.l}</span>
@@ -108,9 +109,22 @@ export default function BoardPanel({ data, config, error }) {
                   </div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <div style={flow ? { animation: `scrollup ${items.length * 3.5}s linear infinite` } : {}}>
-                      {[...shown, ...(flow ? items : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={col.accent} th={th} isAr={isAr} nowMin={nowMin} />)}
+                      {[...shown, ...(flow ? items : [])].map((e, i, arrAll) => {
+                        const showLbl = mode === 'actual' && !isAuto && !flow && (i === 0 || arrAll[i - 1].status !== e.status)
+                        return (
+                          <div key={e.id + '_' + i}>
+                            {showLbl && <div style={{ padding: '7px 22px', fontSize: 13, fontWeight: 800, letterSpacing: 0.5, color: e.status === 'upcoming' ? th.accent : th.muted, background: 'rgba(255,255,255,0.035)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{e.status === 'upcoming' ? (col.type === 'arrival' ? 'قادمة إلى المحطة' : 'مغادرة قادمة') : (col.type === 'arrival' ? 'وصلت حديثاً' : 'غادرت حديثاً')}</div>}
+                            <Row e={e} accent={col.accent} th={th} isAr={isAr} nowMin={nowMin} />
+                          </div>
+                        )
+                      })}
                     </div>
-                    {items.length === 0 && <div style={{ textAlign: 'center', color: th.muted, fontSize: 18, padding: '60px 0', fontWeight: 700 }}>لا توجد حركة</div>}
+                    {items.length === 0 && (
+                      <div style={{ textAlign: 'center', color: th.muted, padding: '56px 24px', fontWeight: 700 }}>
+                        <div style={{ fontSize: 22, color: th.text, opacity: 0.85 }}>{mode === 'actual' ? 'لا رحلات خلال الساعات القادمة' : 'لا توجد حركة'}</div>
+                        <div style={{ fontSize: 15, marginTop: 8 }}>{mode === 'actual' ? 'ستظهر هنا الرحلات القادمة وأرقام الحافلات فور وصولها أو مغادرتها' : ''}</div>
+                      </div>
+                    )}
                   </div>
                 </section>
               )

@@ -46,33 +46,57 @@ export const dedupeEvents = list => {
   })
 }
 
+// الالتزام بالموعد: فرق الفعلي عن المجدول (مع تجاوز منتصف الليل)
+export const delayInfo = (time, sched, isAr = true) => {
+  if (!time || !sched) return null
+  let d = toMin(time) - toMin(sched)
+  if (d > 720) d -= 1440; else if (d < -720) d += 1440
+  if (d >= -5 && d <= 5) return { txt: isAr ? 'في الموعد' : 'On time', col: '#4BC98F' }
+  if (d > 5) return { txt: isAr ? `تأخر ${d} د` : `+${d} min`, col: d <= 15 ? '#E3A02E' : '#E5645B' }
+  return { txt: isAr ? `مبكر ${-d} د` : `${-d} min early`, col: '#6FB1D8' }
+}
+
+// لوحة رقم الحافلة: بارزة وواضحة من بعيد
+export const BusPlate = ({ no, accent, size = 30 }) => (
+  <div dir="ltr" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `2px solid ${accent}`, background: 'rgba(0,0,0,0.38)', borderRadius: 8, padding: '3px 12px 3px 8px', boxShadow: `0 0 0 3px ${accent}18` }}>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="14" rx="2.5" /><path d="M3 11h18M7 17v3M17 17v3" /><circle cx="7.5" cy="14" r="0.6" fill={accent} /><circle cx="16.5" cy="14" r="0.6" fill={accent} /></svg>
+    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 800, fontSize: size, letterSpacing: 2, color: '#fff', lineHeight: 1.1 }}>{no}</span>
+  </div>
+)
+
 // صف الحركة — مكوّن مستقل ومُحفّظ (memo) حتى لا يُعاد إنشاؤه عند كل رسم (يمنع الاهتزاز)
 export const Row = memo(function Row({ e, accent, th, isAr, nowMin }) {
   const upcoming = e.status === 'upcoming'
   const arr = e.type === 'arrival'
   const mins = upcoming && nowMin != null ? toMin(e.time) - nowMin : null
   const soon = mins != null && mins >= 0 && mins <= 20
+  const dl = !upcoming ? delayInfo(e.time, e.sched, isAr) : null
   return (
     <div className="lb-row" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16, height: 88, boxSizing: 'border-box', padding: '0 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: soon ? `linear-gradient(90deg, ${accent}14, transparent)` : 'transparent', opacity: upcoming && !soon ? 0.82 : 1 }}>
       <span style={{ position: 'absolute', insetInlineStart: 0, top: 14, bottom: 14, width: 4, borderRadius: 3, background: upcoming ? `${accent}66` : accent }} />
-      <div dir="ltr" style={{ minWidth: 104, textAlign: 'center', fontFamily: "'IBM Plex Mono', monospace", fontSize: 34, fontWeight: 800, color: th.text, letterSpacing: 1, lineHeight: 1 }}>{e.time}</div>
+      <div dir="ltr" style={{ minWidth: 104, textAlign: 'center', lineHeight: 1 }}>
+        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 34, fontWeight: 800, color: th.text, letterSpacing: 1 }}>{e.time}</div>
+        {e.sched && e.sched !== e.time && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: 700, color: th.muted, marginTop: 5 }}>{isAr ? 'الموعد ' : 'Sched '}{e.sched}</div>}
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div dir="ltr" style={{ fontSize: 18, fontWeight: 800, color: th.text, lineHeight: 1.22, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textAlign: isAr ? 'right' : 'left' }}>
           {nmOf(e.trip?.from_station, isAr)} <span style={{ color: accent, fontWeight: 800, margin: '0 6px' }}>→</span> {nmOf(e.trip?.to_station, isAr)}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }} dir="ltr">
           <span style={{ fontSize: 13, fontWeight: 700, color: th.text, background: 'rgba(255,255,255,0.08)', borderRadius: 5, padding: '2px 9px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</span>
-          {e.bus && <span style={{ fontSize: 13, fontWeight: 700, color: th.muted, border: '1px solid rgba(255,255,255,0.14)', borderRadius: 5, padding: '1px 8px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.bus}</span>}
         </div>
       </div>
+      {e.bus ? <BusPlate no={e.bus} accent={accent} /> : null}
       <div style={{ textAlign: 'center', minWidth: 118 }}>
         {upcoming
           ? (soon
             ? <span className="lb-ar" style={{ fontSize: 14, fontWeight: 800, color: '#101010', background: accent, borderRadius: 7, padding: '6px 14px', whiteSpace: 'nowrap' }}>{mins <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${mins} د` : `in ${mins} min`)}</span>
             : <span style={{ fontSize: 13, fontWeight: 700, color: th.muted, border: `1px solid ${th.muted}55`, borderRadius: 7, padding: '5px 13px', whiteSpace: 'nowrap' }}>{mins != null && mins > 0 ? (isAr ? `بعد ${mins >= 60 ? `${Math.floor(mins / 60)}س ${mins % 60}د` : `${mins} د`}` : `in ${mins}m`) : (isAr ? 'مجدولة' : 'Scheduled')}</span>)
-          : <span style={{ fontSize: 14, fontWeight: 800, color: accent, background: `${accent}22`, border: `1px solid ${accent}55`, borderRadius: 7, padding: '5px 13px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>}
+          : <>
+              <span style={{ fontSize: 14, fontWeight: 800, color: accent, background: `${accent}22`, border: `1px solid ${accent}55`, borderRadius: 7, padding: '5px 13px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>
+              {dl && <div style={{ marginTop: 6, fontSize: 12, fontWeight: 800, color: dl.col }}>{dl.txt}</div>}
+            </>}
       </div>
     </div>
   )
 })
-

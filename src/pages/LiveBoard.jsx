@@ -10,7 +10,8 @@ import { isRestStation } from '../utils/stations'
 import { todayStr } from '../utils/dates'
 import SelectField from '../components/shared/SelectField'
 
-const hhmmFromTs = v => v ? new Date(v).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''
+// الوقت يُحفظ كما كتبه الموظف بتسمية UTC، فيُقرأ بتوقيت UTC لا بتوقيت المتصفح
+const hhmmFromTs = v => (v ? new Date(v).toISOString().slice(11, 16) : '')
 const s5 = v => v ? String(v).slice(0, 5) : ''
 
 export default function LiveBoard() {
