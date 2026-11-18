@@ -107,7 +107,7 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
   const fromName = nmOf(e.trip?.from_station, isAr), toName = nmOf(e.trip?.to_station, isAr)
   const otherName = arr ? fromName : toName
   const prog = upcoming && mins != null ? Math.max(0, Math.min(1, 1 - mins / 90)) : 0     // يمتلئ كلما اقترب الموعد (آخر 90 دقيقة)
-  const al = isAr ? 'right' : 'left'
+  const al = 'left'   // الأسماء إنجليزية: القراءة من اليسار إلى اليمين
   const lbl = (txt, c) => <span style={{ fontSize: 17, fontWeight: 800, color: c, letterSpacing: 1, minWidth: 34, textAlign: 'center', flex: '0 0 auto' }}>{txt}</span>
   // حالة الصف: تظهر كعمود جانبي في شاشة المحطة، وكشارة صغيرة في السطر السفلي عند «كل المحطات» لتوسيع مكان الأسماء
   const statusChip = upcoming
@@ -116,7 +116,7 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
       : <span style={{ fontSize: 16, fontWeight: 700, color: th.text, opacity: 0.85, border: `1px solid ${th.muted}66`, borderRadius: 6, padding: '1px 11px', whiteSpace: 'nowrap' }}>{mins != null && mins > 0 ? (isAr ? `بعد ${mins >= 60 ? `${Math.floor(mins / 60)}س ${mins % 60}د` : `${mins} د`}` : `in ${mins}m`) : (isAr ? 'مجدولة' : 'Scheduled')}</span>)
     : <span style={{ fontSize: 16, fontWeight: 800, color: accent, background: `${accent}22`, border: `1px solid ${accent}66`, borderRadius: 6, padding: '1px 11px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>
   return (
-    <div className="lb-row" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 18, height: ROW_H, boxSizing: 'border-box', padding: '0 22px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: soon ? `linear-gradient(90deg, ${accent}1f, transparent 70%)` : 'transparent', opacity: upcoming && !soon ? 0.9 : 1 }}>
+    <div className="lb-row" dir="ltr" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 18, height: ROW_H, boxSizing: 'border-box', padding: '0 22px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: soon ? `linear-gradient(90deg, ${accent}1f, transparent 70%)` : 'transparent', opacity: upcoming && !soon ? 0.9 : 1 }}>
       <span style={{ position: 'absolute', insetInlineStart: 0, top: 12, bottom: 12, width: 5, borderRadius: 3, background: upcoming ? `${accent}77` : accent }} />
       {upcoming && prog > 0.02 && <span style={{ position: 'absolute', insetInline: 0, bottom: 0, height: 3, background: 'rgba(255,255,255,0.05)' }}><i style={{ position: 'absolute', insetInlineStart: 0, top: 0, bottom: 0, width: `${prog * 100}%`, background: accent, opacity: 0.85, display: 'block' }} /></span>}
       <div dir="ltr" style={{ flex: '0 0 128px', textAlign: 'center', lineHeight: 1 }}>
@@ -127,22 +127,22 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
         {scoped ? (
           // شاشة محطة: الطرف الآخر فقط (الوصول من… والمغادرة إلى…) بخط كبير في سطر واحد
           <div dir="ltr" style={{ display: 'flex', alignItems: 'center', gap: 12, color: th.text }}>
-            <FitLine k={otherName} base={36} min={20} align={al}>{otherName}</FitLine>
             {lbl(arr ? (isAr ? 'من' : 'FROM') : (isAr ? 'إلى' : 'TO'), accent)}
+            <FitLine k={otherName} base={36} min={20} align={al}>{otherName}</FitLine>
           </div>
         ) : (
           // كل المحطات: «من … ← إلى …» في سطر واحد، والخط يتقلّص حسب الطول
           <div style={{ display: 'flex', color: th.text }}>
-            <FitLine k={fromName + '|' + toName} base={31} min={19} align={al} dir="rtl">
-              <span style={{ fontSize: '0.55em', color: th.muted, fontWeight: 800, marginInlineEnd: '0.5em' }}>{isAr ? 'من' : 'FROM'}</span>
-              <bdi dir="ltr">{fromName}</bdi>
-              <span style={{ color: accent, margin: '0 0.55em' }}>{isAr ? '←' : '→'}</span>
-              <span style={{ fontSize: '0.55em', color: accent, fontWeight: 800, marginInlineEnd: '0.5em' }}>{isAr ? 'إلى' : 'TO'}</span>
-              <bdi dir="ltr">{toName}</bdi>
+            <FitLine k={fromName + '|' + toName} base={31} min={19} align={al} dir="ltr">
+              <span dir="rtl" style={{ display: 'inline-block', fontSize: '0.55em', color: th.muted, fontWeight: 800, marginRight: '0.5em' }}>{isAr ? 'من' : 'FROM'}</span>
+              {fromName}
+              <span style={{ color: accent, margin: '0 0.55em' }}>→</span>
+              <span dir="rtl" style={{ display: 'inline-block', fontSize: '0.55em', color: accent, fontWeight: 800, marginRight: '0.5em' }}>{isAr ? 'إلى' : 'TO'}</span>
+              {toName}
             </FitLine>
           </div>
         )}
-        <div dir="rtl" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'nowrap', justifyContent: 'flex-start' }}>
+        <div dir="ltr" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'nowrap', justifyContent: 'flex-start' }}>
           {!scoped && statusChip}
           {!scoped && dl && <span style={{ fontSize: 15, fontWeight: 800, color: dl.col, whiteSpace: 'nowrap' }}>{dl.txt}</span>}
           {e.bus ? <BusChip no={e.bus} accent={accent} /> : null}
