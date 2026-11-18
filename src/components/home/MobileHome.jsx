@@ -52,7 +52,7 @@ export default function MobileHome({
         </div>
       </section>
 
-      {/* نواقص المحطة للمشرف */}
+      {/* الإدخالات المتأخرة للمشرف */}
       {topSlot}
 
       {/* ── ما يحتاج انتباهك ── */}

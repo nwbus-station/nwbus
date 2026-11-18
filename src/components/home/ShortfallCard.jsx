@@ -1,5 +1,5 @@
-// نواقص المحطة للمشرف (الرئيسية): إيراد وردية لم يُدخل، ورحلات لم تُدخل — لأمس واليوم.
-// الورديات المتوقفة في المحطة لا تُحسب. كل نقص عليه زر «علمت» يُسجَّل باسم المشرف ووقته (shortfall_acks) ويبقى ظاهراً حتى يُصلَح.
+// الإدخالات المتأخرة للمشرف (الرئيسية): إيراد وردية لم يُدخل، ورحلات لم تُدخل — لأمس واليوم.
+// الورديات المتوقفة في المحطة لا تُحسب. كل إدخال متأخر عليه زر «علمت» يُسجَّل باسم المشرف ووقته (shortfall_acks) ويبقى ظاهراً حتى يُصلَح.
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { shiftsOfStation } from '../../utils/stationShifts'
@@ -115,11 +115,11 @@ export default function ShortfallCard({ stationIds, isAr, navigate, compact = fa
   const tone = pendingAck > 0 ? 'var(--danger)' : 'var(--warning)'
 
   return (
-    <section aria-label={t('نواقص المحطة', 'Station shortfalls')} style={{ background: 'var(--card)', border: `1px solid ${tone}`, borderInlineStart: `5px solid ${tone}`, borderRadius: compact ? 14 : 8, overflow: 'hidden', boxShadow: 'var(--shadow-sm)', ...sx }}>
+    <section aria-label={t('الإدخالات المتأخرة', 'Late entries')} style={{ background: 'var(--card)', border: `1px solid ${tone}`, borderInlineStart: `5px solid ${tone}`, borderRadius: compact ? 14 : 8, overflow: 'hidden', boxShadow: 'var(--shadow-sm)', ...sx }}>
       <div style={{ padding: compact ? '12px 14px' : '14px 18px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
         <span style={{ fontFamily: MONO, fontWeight: 900, fontSize: compact ? '1.5rem' : '1.7rem', color: tone, lineHeight: 1 }}>{items.length}</span>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: compact ? '0.86rem' : '0.95rem', fontWeight: 900, color: 'var(--text-1)' }}>{t('نواقص تحتاج إدخالاً', 'Entries missing')}</div>
+          <div style={{ fontSize: compact ? '0.86rem' : '0.95rem', fontWeight: 900, color: 'var(--text-1)' }}>{t('إدخالات متأخرة', 'Late entries')}</div>
           <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', marginTop: 2 }}>
             {pendingAck > 0 ? t(`${pendingAck} منها لم تُقرّ بالعلم بها بعد`, `${pendingAck} not yet acknowledged`) : t('تم الاطلاع على الجميع — وتبقى ظاهرة حتى تُدخل', 'All acknowledged — they stay until entered')}
           </div>
@@ -152,7 +152,7 @@ export default function ShortfallCard({ stationIds, isAr, navigate, compact = fa
                   <button type="button" onClick={() => navigate(isSales ? '/sales' : '/transportation')} style={btn(false)}>{isSales ? t('إدخال الإيراد', 'Enter revenue') : t('فتح الترحيل', 'Open transport')}</button>
                   {a
                     ? <span title={stamp(a.ack_at)} style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--success)', background: 'var(--success-bg)', borderRadius: 4, padding: '4px 10px' }}>{t('علم به', 'Acknowledged')}: {a.ack_by_name} · <bdi dir="ltr" style={{ fontFamily: MONO }}>{stamp(a.ack_at)}</bdi></span>
-                    : <button type="button" disabled={busy === it.key} onClick={() => doAck(it)} style={btn(true)}>{busy === it.key ? '...' : t('علمت بالنقص', 'I am aware')}</button>}
+                    : <button type="button" disabled={busy === it.key} onClick={() => doAck(it)} style={btn(true)}>{busy === it.key ? '...' : t('علمت بالتأخير', 'I am aware')}</button>}
                 </div>
               </div>
               {!isSales && expanded && (

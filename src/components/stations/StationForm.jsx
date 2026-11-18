@@ -36,7 +36,7 @@ export default function StationForm({ station, onClose, onSaved }) {
   const setCountSafe = n => { setShiftCount(n); setShiftEnds(prev => n === 4 ? (prev.length === 3 ? prev : [prev[0] ?? '08:00', prev[1] ?? '16:00', '20:00']) : prev.slice(0, 2)) }
   const draftEnds = [...shiftEnds.map(toMin), 1440]
   const shiftsValid = shiftMode !== 'custom' || (draftEnds.length === shiftCount && validEnds(draftEnds))
-  // الورديات المتوقفة (لا تعمل فعلياً في المحطة): لا تدخل في نسب الأداء ولا تنبيهات النواقص في كل الأقسام
+  // الورديات المتوقفة (لا تعمل فعلياً في المحطة): لا تدخل في نسب الأداء ولا تنبيهات الإدخالات المتأخرة في كل الأقسام
   const initOff = Array.isArray(station?.inactive_shifts) ? station.inactive_shifts : []
   const [offShifts, setOffShifts] = useState(initOff)
   const shiftKeys = ['A', 'B', 'C', 'D'].slice(0, shiftMode === 'custom' ? shiftCount : 3)
@@ -230,7 +230,7 @@ export default function StationForm({ station, onClose, onSaved }) {
           )}
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px dashed var(--border-2)' }}>
             <h4 style={{ margin: '0 0 4px', fontSize: '.9rem', fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'الورديات العاملة فعلياً' : 'Shifts actually operating'}</h4>
-            <p className="stn-sec-d" style={{ marginTop: 0 }}>{isAr ? 'لو المحطة ما تعمل فيها وردية معيّنة، اضغطها لتصير «متوقفة»: لا تُحسب في نسبة الأداء ولا تظهر كنقص إيراد أو رحلات، في جميع الأقسام.' : 'If a shift does not run at this station, mark it stopped: it is excluded from performance percentages and shortfall alerts everywhere.'}</p>
+            <p className="stn-sec-d" style={{ marginTop: 0 }}>{isAr ? 'لو المحطة ما تعمل فيها وردية معيّنة، اضغطها لتصير «متوقفة»: لا تُحسب في نسبة الأداء ولا تظهر كإيراد أو رحلات متأخرة، في جميع الأقسام.' : 'If a shift does not run at this station, mark it stopped: it is excluded from performance percentages and shortfall alerts everywhere.'}</p>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${shiftKeys.length}, minmax(0, 1fr))`, gap: 8 }}>
               {shiftKeys.map((k, i) => {
                 const off = offActive.includes(k)

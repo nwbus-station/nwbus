@@ -484,7 +484,7 @@ export default function DashboardPage() {
 
   const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: 'var(--shadow-sm)' }
 
-  // نواقص المحطة (إيراد وردية / رحلات لم تُدخل) — للمشرفين فقط، على محطاتهم
+  // الإدخالات المتأخرة (إيراد وردية / رحلات لم تُدخل) — للمشرفين فقط، على محطاتهم
   const showShortfall = ['shift_supervisor', 'station_admin', 'area_supervisor'].includes(profile?.role)
   const shortfallIds = [...new Set([profile?.station_id, ...(allowedStationIds || []), ...(workStations || []).map(x => x.id)].filter(Boolean))]
   const shortfallNode = showShortfall && shortfallIds.length ? <ShortfallCard stationIds={shortfallIds} isAr={isAr} navigate={navigate} compact={isMobile} sx={{ marginBottom: isMobile ? 0 : 18 }} /> : null
