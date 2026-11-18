@@ -1,6 +1,7 @@
 // شاشة العرض كعنصر للمشغّل: تعرض بيانات الجهاز (من signage_board) بنفس تصميم /board.
 // تُرسم على لوحة ثابتة 1920×1080 وتُصغَّر لتناسب أي شاشة (بدون قص).
 import { useEffect, useRef, useState } from 'react'
+import { Greeting } from '../scene/Ticker'
 import { BOARD_LOGO, THEMES, Clock, Row, nmOf, dedupeEvents, toMin } from './boardParts'
 
 const W = 1920, H = 1080, BAR_H = 168
@@ -189,7 +190,7 @@ export default function BoardPanel({ data, config, error }) {
               </div>
             </>
           ) : (
-            <div style={{ flex: 1, textAlign: 'center', fontSize: 34, fontWeight: 700, color: th.text, opacity: 0.9, letterSpacing: 1 }}>نتمنى لكم رحلة آمنة وسعيدة</div>
+            <div style={{ flex: 1, height: '100%' }}><Greeting th={th} size={42} /></div>
           )}
         </div>
       </div>
