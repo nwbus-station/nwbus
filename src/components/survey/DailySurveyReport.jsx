@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import DatePicker from '../shared/DatePicker'
-import { ADMIN_ROLE_VALUES } from '../../utils/constants'
+import { SURVEY_EXEMPT_ROLES } from '../../utils/constants'
 import { riyadhDay } from '../../utils/dates'
 import { docShell, docHeader, openDocWindow, esc } from '../../utils/printDoc'
 
@@ -94,7 +94,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
     setData(null); setErr('')
     ;(async () => {
       const [u, p, e] = await Promise.all([
-        fetchAll(() => supabase.from('users').select('id, full_name_ar, job_number, station:station_id(id, name_ar, name_en)').eq('is_active', true).not('role', 'in', `(${ADMIN_ROLE_VALUES.join(',')})`).order('full_name_ar')),
+        fetchAll(() => supabase.from('users').select('id, full_name_ar, job_number, station:station_id(id, name_ar, name_en)').eq('is_active', true).not('role', 'in', `(${SURVEY_EXEMPT_ROLES.join(',')})`).order('full_name_ar')),
         fetchAll(() => supabase.from('user_daily_survey').select('user_id, day, done').gte('day', from).lte('day', days[days.length - 1] ?? to).order('day')),
         fetchAll(() => supabase.from('user_survey_events').select('user_id, day, rating, created_at').gte('day', from).lte('day', days[days.length - 1] ?? to).order('created_at')),
       ])

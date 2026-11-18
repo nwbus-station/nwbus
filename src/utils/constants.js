@@ -191,6 +191,8 @@ export function roleModuleAllowed(mod, role, rolePerms, hasTitle = false) {
 
 // أدوار لها صلاحيات الأدمن العام بالكامل — نفس الشيء بالضبط، فقط مسمى وظيفي مختلف
 export const ADMIN_ROLE_VALUES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
+// حسابات مستثناة من التقييم اليومي الإلزامي: الإدارة العليا + المحاسب
+export const SURVEY_EXEMPT_ROLES = [...ADMIN_ROLE_VALUES, 'accountant']
 
 // Modules (sections of the system)
 export const MODULES = [

@@ -6,7 +6,7 @@ import { fetchSurveyCities, detectSurveyCity, BASE, surveyFrameUrl } from '../..
 import { riyadhDay } from '../../utils/dates'
 
 
-// التقييم اليومي الإلزامي: عند أول فتح في اليوم يُعرض استبيان تجربة الراكب (الوجوه) على كل حساب عدا الأدمن العام،
+// التقييم اليومي الإلزامي: عند أول فتح في اليوم يُعرض استبيان تجربة الراكب (الوجوه) على كل حساب عدا الأدمن العام والمحاسب،
 // ويبقى حتى يُكمل العدد المطلوب (الافتراضي 5، يحدده الأدمن). كل تقييم يُتحقق من وصوله فعلاً قبل احتسابه، ثم لا يظهر حتى اليوم التالي.
 export default function DailySurveyGate() {
   const { profile, isGeneralAdmin } = useAuth()
@@ -47,7 +47,8 @@ export default function DailySurveyGate() {
     return () => window.removeEventListener('daily-survey-preview', on)
   }, [])
   const targeted = target === 'all' || selectedIds.includes(profile?.id)
-  const active = (enabled && !!profile?.id && !isGeneralAdmin && targeted) || (preview && isGeneralAdmin)
+  const exemptRole = profile?.role === 'accountant'      // المحاسب مستثنى مثل الأدمن
+  const active = (enabled && !!profile?.id && !isGeneralAdmin && !exemptRole && targeted) || (preview && isGeneralAdmin)
 
   // التقدّم الحالي لليوم + رابط استبيان مدينة محطة الموظف
   useEffect(() => {

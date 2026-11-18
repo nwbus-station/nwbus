@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import ConfirmDialog from '../shared/ConfirmDialog'
 import { supabase } from '../../lib/supabase'
 import { useAppSettings } from '../../context/AppSettingsContext'
-import { ADMIN_ROLE_VALUES } from '../../utils/constants'
+import { ADMIN_ROLE_VALUES, SURVEY_EXEMPT_ROLES } from '../../utils/constants'
 import { riyadhDay } from '../../utils/dates'
 import DailySurveyReport from './DailySurveyReport'
 
@@ -26,10 +26,13 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
   const [confirmOff, setConfirmOff] = useState(false)
   // آخر تغيير على مفتاح التفعيل: من ومتى (من سجل الإعدادات، إن كان الجدول مُنشأً)
   const [lastChange, setLastChange] = useState(null)
+  const [history, setHistory] = useState([])          // آخر 12 تغييراً على مفتاح التفعيل
+  const [logMissing, setLogMissing] = useState(false) // سجل التغييرات غير مُنشأ بعد
+  const [showHist, setShowHist] = useState(false)
   const loadLast = useCallback(() => {
     supabase.from('app_settings_log').select('new_value, changed_by_name, changed_at').eq('key', 'daily_survey_enabled')
-      .order('changed_at', { ascending: false }).limit(1).maybeSingle()
-      .then(({ data, error }) => { if (!error) setLastChange(data ?? null) }, () => {})
+      .order('changed_at', { ascending: false }).limit(12)
+      .then(({ data, error }) => { if (error) { setLogMissing(true); return } setLogMissing(false); setHistory(data ?? []); setLastChange((data ?? [])[0] ?? null) }, () => {})
   }, [])
   useEffect(() => { loadLast() }, [loadLast])
   const toggleEnabled = () => { if (enabled) setConfirmOff(true); else { saveSetting('daily_survey_enabled', 'true'); setTimeout(loadLast, 1200) } }
@@ -56,6 +59,7 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
     const isAdminRole = ADMIN_ROLE_VALUES.includes(usr?.role)
     if (!enabled) reasons.push('التقييم اليومي معطّل (فعّل المفتاح أعلاه).')
     if (isAdminRole) reasons.push('الحساب أدمن، والأدمن مستثنى من التقييم.')
+    if (usr?.role === 'accountant') reasons.push('الحساب محاسب، والمحاسب مستثنى من التقييم.')
     if (target === 'selected' && !selectedIds.includes(u.id)) reasons.push('الفئة «حسابات محددة» وهذا الحساب ليس ضمنها.')
     const key = detectCity(usr?.station)
     const city = cities.find(c => c.city === key && c.is_active !== false)
@@ -77,7 +81,7 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
     if (term.length < 2) { setResults([]); return }
     const t = setTimeout(async () => {
       const { data } = await supabase.from('users').select('id, full_name_ar, job_number, station:station_id(name_ar)').eq('is_active', true)
-        .not('role', 'in', `(${ADMIN_ROLE_VALUES.join(',')})`).or(`full_name_ar.ilike.%${term}%,job_number.ilike.%${term}%,username.ilike.%${term}%`).limit(12)
+        .not('role', 'in', `(${SURVEY_EXEMPT_ROLES.join(',')})`).or(`full_name_ar.ilike.%${term}%,job_number.ilike.%${term}%,username.ilike.%${term}%`).limit(12)
       setResults((data ?? []).filter(u => !selectedIds.includes(u.id)))
     }, 250)
     return () => clearTimeout(t)
@@ -117,7 +121,19 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
             ? `يعمل كل يوم تلقائياً ويستمر حتى توقفه أنت: عند أول فتح في اليوم (وعند منتصف الليل للشاشات المفتوحة) يطلب من كل حساب ${count} تقييمات من الركاب.`
             : 'معطّل حالياً. عند التفعيل يستمر يوماً بعد يوم حتى توقفه.'}</p>
           {lastChange && (
-            <p style={{ ...hint, marginTop: 2 }}>آخر تغيير: <b style={{ color: 'var(--text-2)' }}>{lastChange.new_value === 'true' ? 'تفعيل' : 'إيقاف'}</b> بواسطة <b style={{ color: 'var(--text-2)' }}>{lastChange.changed_by_name || 'غير معروف'}</b> · {new Date(lastChange.changed_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' })}</p>
+            <p style={{ ...hint, marginTop: 2 }}>آخر تغيير: <b style={{ color: 'var(--text-2)' }}>{lastChange.new_value === 'true' ? 'تفعيل' : 'إيقاف'}</b> بواسطة <b style={{ color: 'var(--text-2)' }}>{lastChange.changed_by_name || 'غير معروف'}</b> · {new Date(lastChange.changed_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' })}
+              {history.length > 1 && <button type="button" onClick={() => setShowHist(v => !v)} style={{ marginInlineStart: 10, background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 800, fontSize: '.72rem', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>{showHist ? 'إخفاء السجل' : 'سجل التفعيل والإيقاف'}</button>}</p>
+          )}
+          {!lastChange && !logMissing && <p style={{ ...hint, marginTop: 2 }}>لا يوجد سجل تغيير بعد. أي إيقاف أو تفعيل قادم سيُسجَّل باسم من قام به ووقته.</p>}
+          {logMissing && <p style={{ ...hint, marginTop: 2, color: '#b45309' }}>سجل «من أوقفه ومتى» غير مُفعّل بعد: شغّل ملف SQL الخاص بسجل الإعدادات (جدول app_settings_log) ليظهر هنا.</p>}
+          {showHist && history.length > 0 && (
+            <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 3 }}>
+              {history.map((h, i) => (
+                <li key={i} style={{ fontSize: '.72rem', color: 'var(--text-2)' }}>
+                  <b style={{ color: h.new_value === 'true' ? '#059669' : '#dc2626' }}>{h.new_value === 'true' ? 'تفعيل' : 'إيقاف'}</b> · {h.changed_by_name || 'غير معروف'} · {new Date(h.changed_at).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' })}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '.8rem', fontWeight: 700, color: 'var(--text-2)' }}>
@@ -148,7 +164,7 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
               <input type="number" min={1} max={50} value={countDraft} onChange={e => setCountDraft(e.target.value)}
                 onBlur={() => { const n = Math.min(50, Math.max(1, Number(countDraft) || 5)); setCountDraft(String(n)); if (n !== count) saveSetting('daily_survey_count', String(n)) }}
                 style={{ ...input, width: 90, fontFamily: 'monospace', textAlign: 'center' }} />
-              <p style={hint}>يُحفظ تلقائياً. الأدمن العام مستثنى دائماً.</p>
+              <p style={hint}>يُحفظ تلقائياً. الأدمن العام والمحاسب مستثنيان دائماً.</p>
             </div>
             <div>
               <p style={lbl}>الأزرار اليدوية للموظف</p>
@@ -165,7 +181,7 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
             <div>
               <p style={lbl}>من يشمله التقييم؟</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {[{ id: 'all', t: 'كل الحسابات (عدا الأدمن العام)' }, { id: 'selected', t: 'حسابات محددة' }].map(o => (
+                {[{ id: 'all', t: 'كل الحسابات (عدا الأدمن العام والمحاسب)' }, { id: 'selected', t: 'حسابات محددة' }].map(o => (
                   <button key={o.id} type="button" onClick={() => saveSetting('daily_survey_target', o.id)}
                     style={{ padding: '8px 16px', borderRadius: 8, border: `1.5px solid ${target === o.id ? '#059669' : 'var(--border-2, #e0e0e0)'}`, background: target === o.id ? 'rgba(5,150,105,.1)' : 'var(--card)', color: target === o.id ? '#059669' : 'var(--text-2)', fontWeight: 700, fontSize: '.78rem', cursor: 'pointer', fontFamily: 'inherit' }}>{o.t}</button>
                 ))}
