@@ -72,6 +72,7 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
   const mins = upcoming && nowMin != null ? toMin(e.time) - nowMin : null
   const soon = mins != null && mins >= -10 && mins <= 20
   const dl = !upcoming ? delayInfo(e.time, e.sched, isAr, e.type) : null
+  const fullLen = nmOf(e.trip?.from_station, isAr).length + nmOf(e.trip?.to_station, isAr).length + 3
   const otherName = nmOf(arr ? e.trip?.from_station : e.trip?.to_station, isAr)
   const prog = upcoming && mins != null ? Math.max(0, Math.min(1, 1 - mins / 90)) : 0     // يمتلئ كلما اقترب الموعد (آخر 90 دقيقة)
   return (
@@ -90,7 +91,7 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
             <span style={{ fontSize: 19, fontWeight: 800, color: accent, letterSpacing: 1 }}>{arr ? (isAr ? 'من' : 'FROM') : (isAr ? 'إلى' : 'TO')}</span>
           </div>
         ) : (
-          <div dir="ltr" style={{ fontSize: 27, fontWeight: 800, color: th.text, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textAlign: isAr ? 'right' : 'left' }}>
+          <div dir="ltr" style={{ fontSize: fullLen <= 34 ? 27 : fullLen <= 44 ? 23 : 20, fontWeight: 800, color: th.text, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: isAr ? 'right' : 'left' }}>
             {nmOf(e.trip?.from_station, isAr)} <span style={{ color: accent, fontWeight: 800, margin: '0 8px' }}>→</span> {nmOf(e.trip?.to_station, isAr)}
           </div>
         )}

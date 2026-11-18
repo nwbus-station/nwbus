@@ -279,7 +279,7 @@ export default function LiveBoard() {
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={flow ? { animation: `scrollup ${items.length * 3.5}s linear infinite` } : {}}>
-                    {[...shown, ...(flow ? items : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={col.accent} th={th} isAr={isAr} nowMin={nowMin} />)}
+                    {[...shown, ...(flow ? items : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={col.accent} th={th} isAr={isAr} nowMin={nowMin} scoped={!!scoped} />)}
                   </div>
                   {items.length === 0 && <div style={{ textAlign: 'center', color: th.muted, fontSize: 18, padding: '60px 0', fontWeight: 700 }}>{isAr ? 'لا توجد حركة' : 'No movements'}</div>}
                 </div>
@@ -291,7 +291,7 @@ export default function LiveBoard() {
         <div style={{ padding: '16px 44px 56px', height: `calc(100% - ${HEADER_H + 56}px)`, overflow: 'hidden', boxSizing: 'border-box' }}>
           <div style={{ background: 'rgba(8,14,20,0.45)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', height: '100%', boxShadow: '0 12px 40px rgba(0,0,0,0.35)' }}>
             <div style={feedSorted.length > 8 ? { animation: `scrollup ${feedSorted.length * 3.5}s linear infinite` } : {}}>
-              {[...feedSorted, ...(feedSorted.length > 8 ? feedSorted : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={e.type === 'arrival' ? th.arr : th.dep} th={th} isAr={isAr} nowMin={nowMin} />)}
+              {[...feedSorted, ...(feedSorted.length > 8 ? feedSorted : [])].map((e, i) => <Row key={e.id + '_' + i} e={e} accent={e.type === 'arrival' ? th.arr : th.dep} th={th} isAr={isAr} nowMin={nowMin} scoped={!!scoped} />)}
               {feedSorted.length === 0 && <div style={{ textAlign: 'center', color: th.muted, fontSize: 20, padding: '90px 0', fontWeight: 700 }}>{isAr ? 'لا حركة حالياً' : 'No movements'}</div>}
             </div>
           </div>
