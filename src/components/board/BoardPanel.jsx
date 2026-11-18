@@ -47,9 +47,14 @@ export default function BoardPanel({ data, config, error }) {
   // الرحلات التي يقترب موعد مغادرتها (خلال 20 دقيقة) تنتقل من القائمة إلى الشريط السفلي
   const depSoon = events.filter(e => e.type === 'departure' && e.status === 'upcoming' && toMin(e.time) - nowMin <= 20).sort((a, b) => toMin(a.time) - toMin(b.time))
   const nextDep = [...events].filter(e => e.type === 'departure' && e.status === 'upcoming').sort((a, b) => toMin(a.time) - toMin(b.time))[0] || null
-  const barEv = depSoon.length ? depSoon[bi % depSoon.length] : nextDep
+  // الوصول يُعلن في الشريط قبل ساعتين من موعده (يفيد المحطات التي بين رحلاتها فجوات)
+  const arrSoon = events.filter(e => e.type === 'arrival' && e.status === 'upcoming' && toMin(e.time) - nowMin <= 120).sort((a, b) => toMin(a.time) - toMin(b.time))
+  const barList = [...depSoon, ...arrSoon]
+  const barEv = barList.length ? barList[bi % barList.length] : nextDep
   const barMins = barEv ? toMin(barEv.time) - nowMin : null
-  const barNow = depSoon.length > 0
+  const barArr = !!barEv && barEv.type === 'arrival'
+  const barNow = !!barEv && !barArr && depSoon.length > 0
+  const barAc = barArr ? th.arr : th.accent
   const hide = new Set(depSoon.map(e => e.id))
 
   return (
@@ -155,29 +160,29 @@ export default function BoardPanel({ data, config, error }) {
         )}
 
         {/* شريط «تغادر الآن» السفلي */}
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: BAR_H, boxSizing: 'border-box', borderTop: `3px solid ${th.accent}`, background: `linear-gradient(90deg, ${th.accent}33, rgba(7,12,18,0.97) 42%)`, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 34, padding: '0 48px' }}>
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: BAR_H, boxSizing: 'border-box', borderTop: `3px solid ${barAc}`, background: `linear-gradient(90deg, ${barAc}33, rgba(7,12,18,0.97) 42%)`, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 34, padding: '0 48px' }}>
           <span className="lb-sweep" style={{ position: 'absolute', top: 0, bottom: 0, width: 260, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent)', pointerEvents: 'none' }} />
           {barEv ? (
             <>
               <div style={{ minWidth: 250, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 30, fontWeight: 800, color: barNow ? '#101010' : th.text, background: barNow ? th.accent : 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '6px 20px 10px' }}>
-                  <i className={barNow ? 'lb-pulse' : undefined} style={{ width: 12, height: 12, borderRadius: '50%', background: barNow ? '#101010' : th.accent, display: 'inline-block' }} />
-                  {barNow ? (barMins <= 0 ? 'تغادر الآن' : 'تغادر قريباً') : 'المغادرة التالية'}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 30, fontWeight: 800, color: (barNow || barArr) ? '#101010' : th.text, background: (barNow || barArr) ? barAc : 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '6px 20px 10px' }}>
+                  <i className={(barNow || barArr) ? 'lb-pulse' : undefined} style={{ width: 12, height: 12, borderRadius: '50%', background: (barNow || barArr) ? '#101010' : barAc, display: 'inline-block' }} />
+                  {barArr ? (barMins <= 0 ? 'تصل الآن' : 'تصل قريباً') : barNow ? (barMins <= 0 ? 'تغادر الآن' : 'تغادر قريباً') : 'المغادرة التالية'}
                 </span>
-                <span dir="ltr" style={{ fontSize: 13, fontWeight: 800, letterSpacing: 4, color: th.muted, paddingInlineStart: 6 }}>{barNow ? 'NOW BOARDING' : 'NEXT DEPARTURE'}</span>
+                <span dir="ltr" style={{ fontSize: 13, fontWeight: 800, letterSpacing: 4, color: th.muted, paddingInlineStart: 6 }}>{barArr ? 'ARRIVING' : barNow ? 'NOW BOARDING' : 'NEXT DEPARTURE'}</span>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div dir="ltr" style={{ fontSize: 50, fontWeight: 800, lineHeight: 1.25, color: th.text, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {nmOf(barEv.trip?.from_station, isAr)} <span style={{ color: th.accent, margin: '0 12px' }}>→</span> {nmOf(barEv.trip?.to_station, isAr)}
+                  {nmOf(barEv.trip?.from_station, isAr)} <span style={{ color: barAc, margin: '0 12px' }}>→</span> {nmOf(barEv.trip?.to_station, isAr)}
                 </div>
                 <div dir="ltr" style={{ marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' }}>
-                  {depSoon.length > 1 && <span style={{ fontSize: 14, fontWeight: 800, color: th.muted }}>{(bi % depSoon.length) + 1} / {depSoon.length}</span>}
+                  {barList.length > 1 && <span style={{ fontSize: 14, fontWeight: 800, color: th.muted }}>{(bi % barList.length) + 1} / {barList.length}</span>}
                   <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 18, fontWeight: 700, color: th.text, background: 'rgba(255,255,255,0.09)', borderRadius: 6, padding: '2px 12px' }}>{barEv.trip?.trip_number || '—'}</span>
                 </div>
               </div>
-              <div dir="ltr" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 84, fontWeight: 800, color: th.accent, lineHeight: 1, letterSpacing: 2 }}>{barEv.time}</div>
+              <div dir="ltr" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 84, fontWeight: 800, color: barAc, lineHeight: 1, letterSpacing: 2 }}>{barEv.time}</div>
               <div style={{ minWidth: 200, textAlign: 'center', borderInlineStart: '1px solid rgba(255,255,255,0.14)', paddingInlineStart: 30 }}>
-                <div className={barNow && barMins <= 5 ? 'lb-ar' : undefined} style={{ fontSize: barMins != null && barMins > 0 ? 64 : 52, fontWeight: 800, color: th.text, lineHeight: 1.1, fontFamily: "'IBM Plex Mono', monospace" }}>
+                <div className={(barNow || barArr) && barMins <= 5 ? 'lb-ar' : undefined} style={{ fontSize: barMins != null && barMins > 0 ? 64 : 52, fontWeight: 800, color: th.text, lineHeight: 1.1, fontFamily: "'IBM Plex Mono', monospace" }}>
                   {barMins == null || barMins <= 0 ? 'الآن' : barMins >= 60 ? `${Math.floor(barMins / 60)}:${String(barMins % 60).padStart(2, '0')}` : barMins}
                 </div>
                 {barMins != null && barMins > 0 && <div style={{ fontSize: 18, fontWeight: 700, color: th.muted, marginTop: 4 }}>{barMins >= 60 ? 'ساعة:دقيقة' : 'دقيقة'}</div>}
