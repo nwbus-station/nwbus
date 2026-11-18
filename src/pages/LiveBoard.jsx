@@ -161,8 +161,18 @@ export default function LiveBoard() {
     setEventsIfChanged(dedupeEvents(win).slice(0, 40))
   }, [scoped, boardStation])
 
+  // المصدر الموحّد: دالة الخادم board_live (نفس قواعد جدول «الترحيل» تماماً). إن لم تكن موجودة بعد (SQL 039) نرجع للطريقة القديمة.
+  const rpcOk = useRef(true)
+  const loadRpc = useCallback(async () => {
+    if (!rpcOk.current) return false
+    const { data, error } = await supabase.rpc('board_live', { p_station: scoped ? boardStation : null, p_mode: mode })
+    if (error || !data?.events) { if (error && /does not exist|could not find|not found/i.test(error.message || '')) rpcOk.current = false; return false }
+    setEventsIfChanged(dedupeEvents(data.events).slice(0, 40))
+    return true
+  }, [scoped, boardStation, mode])
+
   useEffect(() => {
-    const run = () => (mode === 'scheduled' ? loadScheduled() : loadActual())
+    const run = async () => { if (await loadRpc()) return; return mode === 'scheduled' ? loadScheduled() : loadActual() }
     run()
     const t = setInterval(run, 10000)   // مؤقّت احتياطي
     // تحديث مباشر (Realtime): أي إدخال/تعديل يظهر فوراً على الشاشة
@@ -172,7 +182,7 @@ export default function LiveBoard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_schedule' }, run)
       .subscribe()
     return () => { clearInterval(t); supabase.removeChannel(ch) }
-  }, [mode, loadActual, loadScheduled])
+  }, [mode, loadActual, loadScheduled, loadRpc])
 
   const hintTimer = useRef(null)
   useEffect(() => {
