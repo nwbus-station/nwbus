@@ -122,7 +122,7 @@ export default function BoardPanel({ data, config, error }) {
               const pages = Math.max(1, Math.ceil(items.length / COL_PER))
               const p = ((tick % pages) + pages) % pages
               const shown = isAuto ? items.slice(p * COL_PER, p * COL_PER + COL_PER) : items
-              const flow = !isAuto && items.length > 6
+              const flow = !isAuto && items.length > ((data?.station) ? 6 : 5)
               return (
                 <section key={col.type} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: 'rgba(8,14,20,0.45)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,0.35)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 22px', background: `linear-gradient(90deg, ${col.accent}26, transparent)`, borderBottom: `2px solid ${col.accent}` }}>

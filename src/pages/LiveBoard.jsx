@@ -97,8 +97,8 @@ export default function LiveBoard() {
     const list = []
     ;(data ?? []).forEach(r => {
       // في شاشة المحطة: الوصول "... → المحطة" والمغادرة "المحطة → ..." (مثل صفحة الترحيل)
-      const arrTrip = scoped ? { ...r.trip, to_station: r.station } : r.trip
-      const depTrip = scoped ? { ...r.trip, from_station: r.station } : r.trip
+      const arrTrip = { ...r.trip, to_station: r.station }
+      const depTrip = { ...r.trip, from_station: r.station }
       if (r.actual_arrival) list.push({ id: r.id + '-a', type: 'arrival', time: hhmmFromTs(r.actual_arrival), sort: r.actual_arrival, station: r.station, trip: arrTrip, bus: r.bus_number, status: 'done' })
       if (r.actual_departure) list.push({ id: r.id + '-d', type: 'departure', time: hhmmFromTs(r.actual_departure), sort: r.actual_departure, station: r.station, trip: depTrip, bus: r.bus_number, status: 'done' })
     })
@@ -269,7 +269,7 @@ export default function LiveBoard() {
             const pages = Math.max(1, Math.ceil(items.length / COL_PER))
             const p = ((tick % pages) + pages) % pages
             const shown = isAuto ? items.slice(p * COL_PER, p * COL_PER + COL_PER) : items
-            const flow = !isAuto && items.length > 6
+            const flow = !isAuto && items.length > ((scoped) ? 6 : 5)
             return (
               <section key={col.type} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: 'rgba(8,14,20,0.45)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', backdropFilter: 'blur(6px)', boxShadow: '0 12px 40px rgba(0,0,0,0.35)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 22px', background: `linear-gradient(90deg, ${col.accent}26, transparent)`, borderBottom: `2px solid ${col.accent}` }}>

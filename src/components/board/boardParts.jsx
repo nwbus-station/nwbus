@@ -1,5 +1,5 @@
 // أجزاء شاشة العرض المشتركة بين صفحة /board (الموظف) ومشغّل الشاشات /screen (بمفتاح الجهاز)
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, memo } from 'react'
 import { NWB_LOGO_SVG } from '../../utils/logo'
 
 // الشعار الرسمي مقلوب الألوان للشاشة الداكنة (يحافظ على البرتقالي الرسمي)
@@ -64,59 +64,86 @@ export const BusPlate = ({ no, accent, size = 30 }) => (
   </div>
 )
 
+// سطر نصي يتقلّص خطه ليُرى كاملاً داخل عرض الحاوية (لا قص ولا تداخل مع ما حوله)
+function FitLine({ text, base, min = 17, align }) {
+  const box = useRef(null), el = useRef(null)
+  const [fs, setFs] = useState(base)
+  useLayoutEffect(() => {
+    const fit = () => {
+      const b = box.current, t = el.current
+      if (!b || !t) return
+      const prev = t.style.fontSize
+      t.style.fontSize = base + 'px'
+      const need = t.scrollWidth, have = b.clientWidth
+      t.style.fontSize = prev                       // نعيد ما يتحكم به React حتى لا يبقى القياس المؤقت
+      setFs(need > have && have > 0 ? Math.max(min, Math.floor(base * (have / need) * 0.97)) : base)
+    }
+    fit()
+    document.fonts?.ready?.then(fit)
+  }, [text, base, min])
+  return (
+    <div ref={box} style={{ flex: 1, minWidth: 0, overflow: 'hidden', textAlign: align }}>
+      <span ref={el} style={{ display: 'inline-block', whiteSpace: 'nowrap', fontSize: fs, fontWeight: 800, lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'bottom' }}>{text}</span>
+    </div>
+  )
+}
+
+// رقم الحافلة الصغير تحت الاسم
+const BusChip = ({ no, accent }) => (
+  <span dir="ltr" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: `1px solid ${accent}88`, background: 'rgba(0,0,0,0.3)', borderRadius: 6, padding: '1px 10px 1px 7px' }}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="14" rx="2.5" /><path d="M3 11h18M7 17v3M17 17v3" /></svg>
+    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 800, fontSize: 19, color: '#fff', letterSpacing: 1 }}>{no}</span>
+  </span>
+)
+
 // صف الحركة — مكوّن مستقل ومُحفّظ (memo) حتى لا يُعاد إنشاؤه عند كل رسم (يمنع الاهتزاز). مقاسات كبيرة تُقرأ من بعيد على التلفزيون.
-export const ROW_H = 100
+export const ROW_H = 100        // شاشة محطة (اسم واحد)
+export const ROW_H2 = 116       // كل المحطات (سطر لكل طرف + سطر صغير)
 export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
   const upcoming = e.status === 'upcoming'
   const arr = e.type === 'arrival'
   const mins = upcoming && nowMin != null ? toMin(e.time) - nowMin : null
   const soon = mins != null && mins >= -10 && mins <= 20
   const dl = !upcoming ? delayInfo(e.time, e.sched, isAr, e.type) : null
-  const fullLen = nmOf(e.trip?.from_station, isAr).length + nmOf(e.trip?.to_station, isAr).length + 3
   const fromName = nmOf(e.trip?.from_station, isAr), toName = nmOf(e.trip?.to_station, isAr)
-  const otherName = nmOf(arr ? e.trip?.from_station : e.trip?.to_station, isAr)
+  const otherName = arr ? fromName : toName
   const prog = upcoming && mins != null ? Math.max(0, Math.min(1, 1 - mins / 90)) : 0     // يمتلئ كلما اقترب الموعد (آخر 90 دقيقة)
+  const al = isAr ? 'right' : 'left'
+  const lbl = (txt, c) => <span style={{ fontSize: 17, fontWeight: 800, color: c, letterSpacing: 1, minWidth: 34, textAlign: 'center', flex: '0 0 auto' }}>{txt}</span>
   return (
-    <div className="lb-row" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 18, height: ROW_H, boxSizing: 'border-box', padding: '0 22px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: soon ? `linear-gradient(90deg, ${accent}1f, transparent 70%)` : 'transparent', opacity: upcoming && !soon ? 0.9 : 1 }}>
+    <div className="lb-row" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 18, height: scoped ? ROW_H : ROW_H2, boxSizing: 'border-box', padding: '0 22px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: soon ? `linear-gradient(90deg, ${accent}1f, transparent 70%)` : 'transparent', opacity: upcoming && !soon ? 0.9 : 1 }}>
       <span style={{ position: 'absolute', insetInlineStart: 0, top: 12, bottom: 12, width: 5, borderRadius: 3, background: upcoming ? `${accent}77` : accent }} />
       {upcoming && prog > 0.02 && <span style={{ position: 'absolute', insetInline: 0, bottom: 0, height: 3, background: 'rgba(255,255,255,0.05)' }}><i style={{ position: 'absolute', insetInlineStart: 0, top: 0, bottom: 0, width: `${prog * 100}%`, background: accent, opacity: 0.85, display: 'block' }} /></span>}
-      <div dir="ltr" style={{ minWidth: 128, textAlign: 'center', lineHeight: 1 }}>
+      <div dir="ltr" style={{ flex: '0 0 128px', textAlign: 'center', lineHeight: 1 }}>
         <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 46, fontWeight: 800, color: th.text, letterSpacing: 1 }}>{e.time}</div>
-        {!scoped && <div style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: th.muted, background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '2px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</div>}
         {e.sched && e.sched !== e.time && <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 15, fontWeight: 700, color: th.muted, marginTop: 6 }}>{isAr ? 'الموعد ' : 'Sched '}{e.sched}</div>}
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
         {scoped ? (
-          // شاشة محطة: طرف الرحلة الآخر فقط في سطر واحد؛ حجم الخط يتكيّف مع طول الاسم حتى لا يُقصّ
-          <div dir="ltr" style={{ display: 'flex', justifyContent: isAr ? 'flex-end' : 'flex-start', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-            <span style={{ fontSize: Math.max(21, Math.min(36, Math.floor(340 / (Math.max(1, otherName.length) * 0.56)))), fontWeight: 800, color: th.text, lineHeight: 1.25 }}>{otherName}</span>
+          // شاشة محطة: الطرف الآخر فقط (الوصول من… والمغادرة إلى…) بخط كبير في سطر واحد
+          <div dir="ltr" style={{ display: 'flex', alignItems: 'center', gap: 12, color: th.text }}>
+            <FitLine text={otherName} base={36} min={20} align={al} />
+            {lbl(arr ? (isAr ? 'من' : 'FROM') : (isAr ? 'إلى' : 'TO'), accent)}
           </div>
         ) : (
-          // كل المحطات: سطران، لكل طرف سطره («من» ثم «إلى») فلا يُقصّ ولا يلتف أي اسم
-          <div dir="ltr" style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: isAr ? 'flex-end' : 'flex-start' }}>
-            {[[isAr ? 'من' : 'FROM', fromName], [isAr ? 'إلى' : 'TO', toName]].map(([lb, nm], i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 12, whiteSpace: 'nowrap', maxWidth: '100%' }}>
-                <span style={{ fontSize: Math.max(20, Math.min(29, Math.floor(400 / (Math.max(1, nm.length) * 0.56)))), fontWeight: 800, color: th.text, lineHeight: 1.2 }}>{nm}</span>
-                <span style={{ fontSize: 16, fontWeight: 800, color: i === 0 ? th.muted : accent, letterSpacing: 1, minWidth: 34, textAlign: 'center' }}>{lb}</span>
-              </div>
-            ))}
+          // كل المحطات: سطر لكل طرف (من / إلى)؛ طرف الحدث هو محطة التسجيل نفسها
+          <div dir="ltr" style={{ display: 'flex', flexDirection: 'column', gap: 3, color: th.text }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><FitLine text={fromName} base={28} min={18} align={al} />{lbl(isAr ? 'من' : 'FROM', th.muted)}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><FitLine text={toName} base={28} min={18} align={al} />{lbl(isAr ? 'إلى' : 'TO', accent)}</div>
           </div>
         )}
-        {scoped && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: isAr ? 'flex-end' : 'flex-start', gap: 8, marginTop: 8 }} dir="ltr">
-          <span style={{ fontSize: 16, fontWeight: 700, color: th.muted, background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '2px 10px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</span>
-          {scoped && <span style={{ fontSize: 18, fontWeight: 800, color: accent, letterSpacing: 1 }}>{arr ? (isAr ? 'من' : 'FROM') : (isAr ? 'إلى' : 'TO')}</span>}
+        <div dir="ltr" style={{ display: 'flex', alignItems: 'center', justifyContent: isAr ? 'flex-end' : 'flex-start', gap: 8, marginTop: 7 }}>
+          {e.bus ? <BusChip no={e.bus} accent={accent} /> : null}
+          <span style={{ fontSize: 15, fontWeight: 700, color: th.muted, background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '1px 9px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</span>
         </div>
-        )}
       </div>
-      {e.bus ? <BusPlate no={e.bus} accent={accent} size={34} /> : null}
-      <div style={{ textAlign: 'center', minWidth: 150 }}>
+      <div style={{ flex: '0 0 148px', textAlign: 'center' }}>
         {upcoming
           ? (soon
             ? <span className="lb-ar" style={{ fontSize: 20, fontWeight: 800, color: '#101010', background: accent, borderRadius: 8, padding: '7px 18px', whiteSpace: 'nowrap' }}>{mins <= 0 ? (isAr ? 'الآن' : 'Now') : (isAr ? `بعد ${mins} د` : `in ${mins} min`)}</span>
-            : <span style={{ fontSize: 19, fontWeight: 700, color: th.text, opacity: 0.85, border: `1px solid ${th.muted}66`, borderRadius: 8, padding: '6px 16px', whiteSpace: 'nowrap' }}>{mins != null && mins > 0 ? (isAr ? `بعد ${mins >= 60 ? `${Math.floor(mins / 60)}س ${mins % 60}د` : `${mins} د`}` : `in ${mins}m`) : (isAr ? 'مجدولة' : 'Scheduled')}</span>)
+            : <span style={{ fontSize: 19, fontWeight: 700, color: th.text, opacity: 0.85, border: `1px solid ${th.muted}66`, borderRadius: 8, padding: '6px 14px', whiteSpace: 'nowrap' }}>{mins != null && mins > 0 ? (isAr ? `بعد ${mins >= 60 ? `${Math.floor(mins / 60)}س ${mins % 60}د` : `${mins} د`}` : `in ${mins}m`) : (isAr ? 'مجدولة' : 'Scheduled')}</span>)
           : <>
-              <span style={{ fontSize: 20, fontWeight: 800, color: accent, background: `${accent}22`, border: `1px solid ${accent}66`, borderRadius: 8, padding: '6px 16px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>
+              <span style={{ fontSize: 19, fontWeight: 800, color: accent, background: `${accent}22`, border: `1px solid ${accent}66`, borderRadius: 8, padding: '6px 12px', whiteSpace: 'nowrap' }}>{arr ? (isAr ? '✓ تم الوصول' : '✓ Arrived') : (isAr ? '✓ تمت المغادرة' : '✓ Departed')}</span>
               {dl && <div style={{ marginTop: 7, fontSize: 16, fontWeight: 800, color: dl.col }}>{dl.txt}</div>}
             </>}
       </div>
