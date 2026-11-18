@@ -85,10 +85,9 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {scoped ? (
-          // شاشة محطة: طرف الرحلة الآخر فقط (المحطة نفسها معروفة) في سطر واحد: الوصول «من …» والمغادرة «إلى …»
-          <div dir="ltr" style={{ display: 'flex', alignItems: 'baseline', justifyContent: isAr ? 'flex-end' : 'flex-start', gap: 14, whiteSpace: 'nowrap', overflow: 'hidden' }}>
-            <span style={{ fontSize: 30, fontWeight: 800, color: th.text, ...(otherName.length > 30 ? { fontSize: 24 } : otherName.length > 22 ? { fontSize: 28 } : { fontSize: 34 }), overflow: 'hidden', textOverflow: 'ellipsis' }}>{otherName}</span>
-            <span style={{ fontSize: 19, fontWeight: 800, color: accent, letterSpacing: 1 }}>{arr ? (isAr ? 'من' : 'FROM') : (isAr ? 'إلى' : 'TO')}</span>
+          // شاشة محطة: طرف الرحلة الآخر فقط في سطر واحد؛ حجم الخط يتكيّف مع طول الاسم حتى لا يُقصّ
+          <div dir="ltr" style={{ display: 'flex', justifyContent: isAr ? 'flex-end' : 'flex-start', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+            <span style={{ fontSize: Math.max(21, Math.min(36, Math.floor(340 / (Math.max(1, otherName.length) * 0.56)))), fontWeight: 800, color: th.text, lineHeight: 1.25 }}>{otherName}</span>
           </div>
         ) : (
           <div dir="ltr" style={{ fontSize: fullLen <= 34 ? 27 : fullLen <= 44 ? 23 : 20, fontWeight: 800, color: th.text, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: isAr ? 'right' : 'left' }}>
@@ -97,6 +96,7 @@ export const Row = memo(function Row({ e, accent, th, isAr, nowMin, scoped }) {
         )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: isAr ? 'flex-end' : 'flex-start', gap: 8, marginTop: 8 }} dir="ltr">
           <span style={{ fontSize: 16, fontWeight: 700, color: th.muted, background: 'rgba(255,255,255,0.07)', borderRadius: 5, padding: '2px 10px', fontFamily: "'IBM Plex Mono', monospace" }}>{e.trip?.trip_number || '—'}</span>
+          {scoped && <span style={{ fontSize: 18, fontWeight: 800, color: accent, letterSpacing: 1 }}>{arr ? (isAr ? 'من' : 'FROM') : (isAr ? 'إلى' : 'TO')}</span>}
         </div>
       </div>
       {e.bus ? <BusPlate no={e.bus} accent={accent} size={34} /> : null}
