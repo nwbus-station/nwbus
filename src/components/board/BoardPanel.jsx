@@ -1,6 +1,6 @@
 // شاشة العرض كعنصر للمشغّل: تعرض بيانات الجهاز (من signage_board) بنفس تصميم /board.
 // تُرسم على لوحة ثابتة 1920×1080 وتُصغَّر لتناسب أي شاشة (بدون قص).
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Greeting } from '../scene/Ticker'
 import { BOARD_LOGO, THEMES, Clock, Row, nmOf, dedupeEvents, toMin } from './boardParts'
 
@@ -67,6 +67,8 @@ export default function BoardPanel({ data, config, error }) {
           @keyframes livedot { 0%{box-shadow:0 0 0 0 rgba(75,201,143,.6)} 100%{box-shadow:0 0 0 9px rgba(75,201,143,0)} }
           @keyframes lbsweep { from { transform: translateX(-130%) skewX(-18deg) } to { transform: translateX(130%) skewX(-18deg) } }
           @keyframes lbpulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.55) } 100% { box-shadow: 0 0 0 14px rgba(255,255,255,0) } }
+          @keyframes lbin { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+          .lb-in { animation: lbin .55s ease both }
           .lb-sweep { animation: lbsweep 5.5s ease-in-out infinite }
           .lb-pulse { animation: lbpulse 1.5s ease-out infinite }
           @keyframes scrollup { from { transform: translateY(0) } to { transform: translateY(-50%) } }
@@ -164,15 +166,15 @@ export default function BoardPanel({ data, config, error }) {
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: BAR_H, boxSizing: 'border-box', borderTop: `3px solid ${barAc}`, background: `linear-gradient(90deg, ${barAc}33, rgba(7,12,18,0.97) 42%)`, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 34, padding: '0 48px' }}>
           <span className="lb-sweep" style={{ position: 'absolute', top: 0, bottom: 0, width: 260, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent)', pointerEvents: 'none' }} />
           {barEv ? (
-            <>
-              <div style={{ minWidth: 250, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+            <Fragment key={barEv.id}>
+              <div className="lb-in" style={{ minWidth: 250, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 30, fontWeight: 800, color: (barNow || barArr) ? '#101010' : th.text, background: (barNow || barArr) ? barAc : 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '6px 20px 10px' }}>
                   <i className={(barNow || barArr) ? 'lb-pulse' : undefined} style={{ width: 12, height: 12, borderRadius: '50%', background: (barNow || barArr) ? '#101010' : barAc, display: 'inline-block' }} />
                   {barArr ? (barMins <= 0 ? 'تصل الآن' : 'تصل قريباً') : barNow ? (barMins <= 0 ? 'تغادر الآن' : 'تغادر قريباً') : 'المغادرة التالية'}
                 </span>
                 <span dir="ltr" style={{ fontSize: 13, fontWeight: 800, letterSpacing: 4, color: th.muted, paddingInlineStart: 6 }}>{barArr ? 'ARRIVING' : barNow ? 'NOW BOARDING' : 'NEXT DEPARTURE'}</span>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="lb-in" style={{ flex: 1, minWidth: 0 }}>
                 <div dir="ltr" style={{ fontSize: 50, fontWeight: 800, lineHeight: 1.25, color: th.text, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {nmOf(barEv.trip?.from_station, isAr)} <span style={{ color: barAc, margin: '0 12px' }}>→</span> {nmOf(barEv.trip?.to_station, isAr)}
                 </div>
@@ -181,14 +183,14 @@ export default function BoardPanel({ data, config, error }) {
                   <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 18, fontWeight: 700, color: th.text, background: 'rgba(255,255,255,0.09)', borderRadius: 6, padding: '2px 12px' }}>{barEv.trip?.trip_number || '—'}</span>
                 </div>
               </div>
-              <div dir="ltr" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 84, fontWeight: 800, color: barAc, lineHeight: 1, letterSpacing: 2 }}>{barEv.time}</div>
-              <div style={{ minWidth: 200, textAlign: 'center', borderInlineStart: '1px solid rgba(255,255,255,0.14)', paddingInlineStart: 30 }}>
+              <div dir="ltr" className="lb-in" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 84, fontWeight: 800, color: barAc, lineHeight: 1, letterSpacing: 2 }}>{barEv.time}</div>
+              <div className="lb-in" style={{ minWidth: 200, textAlign: 'center', borderInlineStart: '1px solid rgba(255,255,255,0.14)', paddingInlineStart: 30 }}>
                 <div className={(barNow || barArr) && barMins <= 5 ? 'lb-ar' : undefined} style={{ fontSize: barMins != null && barMins > 0 ? 64 : 52, fontWeight: 800, color: th.text, lineHeight: 1.1, fontFamily: "'IBM Plex Mono', monospace" }}>
                   {barMins == null || barMins <= 0 ? 'الآن' : barMins >= 60 ? `${Math.floor(barMins / 60)}:${String(barMins % 60).padStart(2, '0')}` : barMins}
                 </div>
                 {barMins != null && barMins > 0 && <div style={{ fontSize: 18, fontWeight: 700, color: th.muted, marginTop: 4 }}>{barMins >= 60 ? 'ساعة:دقيقة' : 'دقيقة'}</div>}
               </div>
-            </>
+            </Fragment>
           ) : (
             <div style={{ flex: 1, height: '100%' }}><Greeting th={th} size={42} /></div>
           )}
