@@ -10,8 +10,8 @@ returns table (station_id uuid, trip_id uuid, trip_number text, role text, tm te
 language sql stable security definer set search_path = public as $$
   with b as (
     select st.station_id as sid, t.id as tid, t.trip_number as tn, t.from_station_id as fs, t.to_station_id as ts,
-      t.scheduled_departure as sd, t.scheduled_arrival as sa, st.arrival_time as at_, st.departure_time as dt_,
-      st.arr_enabled, st.dep_enabled, sp.arrival_time as sarr, sp.departure_time as sdep, (sp.trip_schedule_id is not null) as has_stop,
+      nullif(t.scheduled_departure::text, '') as sd, nullif(t.scheduled_arrival::text, '') as sa, nullif(st.arrival_time::text, '') as at_, nullif(st.departure_time::text, '') as dt_,
+      st.arr_enabled, st.dep_enabled, nullif(sp.arrival_time::text, '') as sarr, nullif(sp.departure_time::text, '') as sdep, (sp.trip_schedule_id is not null) as has_stop,
       coalesce(nullif(cs.city_group, ''), nullif(lower((regexp_split_to_array(coalesce(cs.name_en, ''), '[\s-]+'))[1]), '')) as cg,
       coalesce(nullif(fsx.city_group, ''), nullif(lower((regexp_split_to_array(coalesce(fsx.name_en, ''), '[\s-]+'))[1]), '')) as fg,
       coalesce(nullif(tsx.city_group, ''), nullif(lower((regexp_split_to_array(coalesce(tsx.name_en, ''), '[\s-]+'))[1]), '')) as tg
@@ -43,9 +43,9 @@ language sql stable security definer set search_path = public as $$
            else (case when same_to then null else dt_ end) end as t_dep
     from x
   )
-  select sid, tid, tn, 'arrival', left(t_arr::text, 5), fs, sid from y where t_arr is not null and arr_enabled is not false
+  select sid, tid, tn, 'arrival', left(t_arr, 5), fs, sid from y where t_arr is not null and arr_enabled is not false
   union all
-  select sid, tid, tn, 'departure', left(t_dep::text, 5), sid, ts from y where t_dep is not null and dep_enabled is not false
+  select sid, tid, tn, 'departure', left(t_dep, 5), sid, ts from y where t_dep is not null and dep_enabled is not false
 $$;
 revoke all on function public.board_legs(uuid) from public, anon, authenticated;
 
