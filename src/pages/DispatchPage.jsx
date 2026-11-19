@@ -43,7 +43,7 @@ export default function DispatchPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
   const t = (a, e) => (isAr ? a : e)
-  const { profile, isGeneralAdmin, workStations } = useAuth()
+  const { profile, isGeneralAdmin, workStations, allowedStationIds } = useAuth()
   const isAdmin = !!isGeneralAdmin
   const isGeneral = profile?.role === 'general_admin'
   // الرفض للمشرفين (محطة/وردية/منطقة) والأدمن فقط — الموظف العادي يستلم ولا يرفض (والخادم يتحقق أيضاً)
@@ -102,7 +102,8 @@ export default function DispatchPage() {
   })
 
   const names = useMemo(() => Object.fromEntries(stations.map(s => [s.id, s.name_ar || s.name_en])), [stations])
-  const myIds = useMemo(() => new Set([profile?.station_id, ...(workStations || []).map(s => s.id)].filter(Boolean)), [profile?.station_id, workStations])
+  // محطات الحساب: الأساسية + محطات العمل + المحطات المخصصة لمشرف المحطة/المنطقة (نفس ما يطبّقه الخادم على القراءة)
+  const myIds = useMemo(() => new Set([profile?.station_id, ...(workStations || []).map(s => s.id), ...(allowedStationIds || [])].filter(Boolean)), [profile?.station_id, workStations, allowedStationIds])
   const myStations = useMemo(() => stations.filter(s => myIds.has(s.id)), [stations, myIds])
   const canAct = id => isAdmin || myIds.has(id)
   const flash = (kind, text) => { setMsg({ kind, text }); setTimeout(() => setMsg(null), 6000) }
