@@ -25,6 +25,7 @@ import { todayStr } from '../utils/dates'
 import RouteText from '../components/shared/RouteText'
 import { isRestStation } from '../utils/stations'
 import SelectField from '../components/shared/SelectField'
+import StationShiftsNote from '../components/shared/StationShiftsNote'
 import { shiftIdx, SHIFT_AR, SHIFT_EN } from '../utils/shifts'
 import { shiftsOfStation } from '../utils/stationShifts'
 
@@ -2338,6 +2339,7 @@ const MONO = "'IBM Plex Mono', ui-monospace, monospace"
           <p className="text-sm text-gray-400 mt-0.5">
             {profile?.station ? (isAr ? profile.station.name_ar : profile.station.name_en) : selectedStationName}
           </p>
+          {(() => { const st = stations.find(x => x.id === stationId); return st ? <div className="mt-2"><StationShiftsNote station={st} isAr={isAr} /></div> : null })()}
         </div>
 
         {/* شريط المحطات المثبّتة — فوق صف الأزرار لمنع التحريك */}

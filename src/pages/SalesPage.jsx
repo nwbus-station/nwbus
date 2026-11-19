@@ -27,6 +27,7 @@ import { saveSalePdf } from '../utils/salePdf'
 import { deficitAck } from '../utils/deficit'
 import DailyExcelModal from '../components/sales/DailyExcelModal'
 import EmployeeLookup from '../components/sales/EmployeeLookup'
+import StationShiftsNote from '../components/shared/StationShiftsNote'
 
 // الورديات تتبع إعداد الأدمن (3 أو 4) من الإعدادات؛ تُحدَّث عند كل عرض من app_settings
 const salesShiftsFrom = raw => parseShifts(raw).map(s => ({ value: s.k, ar: s.ar, en: s.en, range: s.range, end: s.to / 60 }))
@@ -63,7 +64,7 @@ const parseRefsArr = raw => {
 }
 
 // لوحة الورديات: ما سُجّل لهذي المحطة بهذا التاريخ ومن سجّله، وتنبيه فوري لو الموظف مكرر قبل الحفظ
-function ShiftBoard({ stationId, date, shift, onPick, saleId, employeeName, profileId, isAr, offShifts = [] }) {
+function ShiftBoard({ stationId, date, shift, onPick, saleId, employeeName, profileId, isAr, offShifts = [], stationInfo = null }) {
   const [rows, setRows] = useState(null)
   useEffect(() => {
     if (!stationId || !date) { setRows(null); return }
@@ -80,6 +81,7 @@ function ShiftBoard({ stationId, date, shift, onPick, saleId, employeeName, prof
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
       <p className="text-[11px] font-bold text-gray-500 mb-2">{isAr ? `يوميات هذي المحطة بتاريخ ${date}` : `Records for this station on ${date}`}</p>
+      {stationInfo && <div className="mb-2"><StationShiftsNote station={stationInfo} isAr={isAr} /></div>}
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${SHIFTS.length}, minmax(0, 1fr))` }}>
         {SHIFTS.map(sh => {
           const list = rows.filter(r => r.shift === sh.value)
@@ -919,7 +921,7 @@ export function SalesModal({ sale, stations, onClose, onSaved, onOpenExisting })
                   </div>
                 </div>
                 <ShiftBoard stationId={proxyOn ? proxyEmp?.station_id : ((isGeneralAdmin || multi) ? form.station_id : profile.station_id)} date={form.sale_date} shift={form.shift}
-                  onPick={v => set('shift', v)} saleId={sale?.id} employeeName={form.employee_name} profileId={sale?.created_by ?? (proxyOn ? proxyEmp?.id : profile?.id)} isAr={isAr} offShifts={stOff[proxyOn ? proxyEmp?.station_id : curStationId] ?? []} />
+                  onPick={v => set('shift', v)} saleId={sale?.id} employeeName={form.employee_name} profileId={sale?.created_by ?? (proxyOn ? proxyEmp?.id : profile?.id)} isAr={isAr} offShifts={stOff[proxyOn ? proxyEmp?.station_id : curStationId] ?? []} stationInfo={(proxyOn ? proxyEmp?.station_id : curStationId) === curStationId ? { shift_ends: stationEnds, inactive_shifts: stOff[curStationId] ?? [] } : null} />
                 {!sale && (() => {
                   const sug = SHIFTS.find(x => x.value === suggested.shift)
                   const mismatch = form.shift !== suggested.shift || form.sale_date !== suggested.date
@@ -1282,6 +1284,8 @@ export default function SalesPage() {
 
   const [records,     setRecords]     = useState(() => getCached(initialSalesCacheKey) ?? [])
   const [stations,    setStations]    = useState([])
+  // ورديات كل محطة معروضة (للتنويه بطريقة عملها: عدد الورديات والمتوقفة)
+  const [shiftMap, setShiftMap] = useState({})
   const [loading,     setLoading]     = useState(() => !getCached(initialSalesCacheKey))
   const [modal,       setModal]       = useState(null)
   const [audit,       setAudit]       = useState(null)
@@ -1329,6 +1333,16 @@ export default function SalesPage() {
       loadAgentIds().then(ag => setStations(workStations.filter(s => !isRestStation(s) && !ag.has(s.id)).map(s => ({ id: s.id, name_ar: s.name_ar, name_en: s.name_en }))))
     }
   }, [isGeneralAdmin, isAreaSupervisor, isStationAdmin, allowedStationIds, isAccountant, viewStation, workStations])
+
+  useEffect(() => {
+    let q = supabase.from('stations').select('id, shift_ends, inactive_shifts')
+    if (!isGeneralAdmin) {
+      const ids = [...new Set([profile?.station_id, ...stations.map(x => x.id), ...(workStations || []).map(x => x.id), ...(allowedStationIds || [])].filter(Boolean))]
+      if (!ids.length) return
+      q = q.in('id', ids)
+    }
+    q.then(({ data, error }) => { if (!error) setShiftMap(Object.fromEntries((data ?? []).map(x => [x.id, x]))) })
+  }, [isGeneralAdmin, profile?.station_id, stations, workStations, allowedStationIds])
 
   async function handleDelete(id) {
     setConfirmDel(id)
@@ -1532,6 +1546,7 @@ export default function SalesPage() {
               : isStationAdmin || isAccountant || viewStation ? (isAr ? 'محطتك فقط' : 'Your station only')
               : (isAr ? 'مبيعاتك الخاصة' : 'Your own entries')}
           </p>
+          {(() => { const sid = filterStation || (!isGeneralAdmin && stations.length <= 1 ? profile?.station_id : ''); const st = sid ? shiftMap[sid] : null; return st ? <div className="mt-2"><StationShiftsNote station={st} isAr={isAr} /></div> : null })()}
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
         {isGeneralAdmin && (
@@ -1711,6 +1726,7 @@ export default function SalesPage() {
                                       <span className="w-1 h-4 rounded bg-nwbus-primary" />
                                       <span className="text-[13px] font-extrabold text-gray-900">{stName(r)}</span>
                                       <span className="text-[11px] text-gray-500">{grp.length} {isAr ? 'سجل' : 'records'}</span>
+                                      {shiftMap[r.station_id] && <StationShiftsNote station={shiftMap[r.station_id]} isAr={isAr} compact />}
                                       <span className="ms-auto font-mono text-xs font-bold text-green-700" dir="ltr">{fmt(gAct)} {isAr ? 'ر.س' : 'SAR'}</span>
                                       <span className={`font-mono text-xs font-bold ${gDiff === 0 ? 'text-gray-400' : gDiff > 0 ? 'text-blue-600' : 'text-red-600'}`} dir="ltr">{gDiff > 0 ? '+' : ''}{fmt(gDiff)}</span>
                                     </div>
