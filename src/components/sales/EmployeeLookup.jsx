@@ -10,7 +10,7 @@ const RANGES = [[30, '30 يوماً', '30 days'], [90, '90 يوماً', '90 days
 const PAGE = 40
 const fmt = n => Number(n ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
 const actualOf = r => Number(r.cash_amount ?? 0) + Number(r.mada_amount ?? 0) + Number(r.visa_amount ?? 0) + Number(r.mastercard_amount ?? 0) + Number(r.other_amount ?? 0)
-const SHIFT_AR = { A: 'أ', B: 'ب', C: 'ج', D: 'د' }
+const SHIFT_AR = { A: 'A', B: 'B', C: 'C', D: 'D' }
 
 const Ico = ({ d, size = 16 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{[].concat(d).map((p, i) => <path key={i} d={p} />)}</svg>
 const SEARCH = ['M11 19a8 8 0 100-16 8 8 0 000 16z', 'M21 21l-4.3-4.3']

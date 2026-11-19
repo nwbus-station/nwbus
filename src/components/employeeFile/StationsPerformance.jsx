@@ -603,7 +603,7 @@ export default function StationsPerformance({ isAr = true }) {
               ? <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', fontSize: f('0.8rem'), color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'لا إقرارات في هذي الفترة — المشرف يضغط «علمت» على البطاقة في رئيسيته عند اطّلاعه.' : 'No acknowledgements in this period.'}</div>
               : (() => {
                   const nm = Object.fromEntries((raw?.stations ?? []).map(x => [x.id, isAr ? x.name_ar : (x.name_en || x.name_ar)]))
-                  const sh = { A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج', D: 'الوردية د' }
+                  const sh = { A: 'الوردية A', B: 'الوردية B', C: 'الوردية C', D: 'الوردية D' }
                   const at = iso => { const r = new Date(new Date(iso).getTime() + 3 * 3600 * 1000); return `${r.toISOString().slice(5, 10).replace('-', '/')} ${r.toISOString().slice(11, 16)}` }
                   return (
                     <div style={{ overflowX: 'auto', borderTop: '1px solid var(--border)' }}>

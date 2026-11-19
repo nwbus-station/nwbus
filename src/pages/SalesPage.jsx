@@ -149,7 +149,7 @@ function buildSaleRecordHtml({ sale, isAr, profile, docUrl, docPages }) {
     const diff = totalActualVal - Number(sale?.total_expected??0)
     const hasDeficit = diff < 0
     const deficitAcknowledged = deficitAck(sale?.accountant_notes) === 'yes'
-    const shiftLabel = { A: isAr ? 'الوردية أ' : 'Shift A', B: isAr ? 'الوردية ب' : 'Shift B', C: isAr ? 'الوردية ج' : 'Shift C', D: isAr ? 'الوردية د' : 'Shift D' }[sale?.shift] ?? sale?.shift ?? '—'
+    const shiftLabel = { A: isAr ? 'الوردية A' : 'Shift A', B: isAr ? 'الوردية B' : 'Shift B', C: isAr ? 'الوردية C' : 'Shift C', D: isAr ? 'الوردية D' : 'Shift D' }[sale?.shift] ?? sale?.shift ?? '—'
 
     const shareText = [
       `${isAr ? 'كشف الإيرادات اليومية' : 'Daily Revenue Report'} — ${stationName}`,
@@ -361,7 +361,7 @@ export async function saveSaleRecordPdf({ sale, isAr, profile }) {
   const jobNumber = ((!sale?.employee_name || sale.employee_name === sale.created_by_name) ? sale?.created_by_user?.job_number : null) ?? '—'
   const actual = Number(sale?.cash_amount ?? 0) + Number(sale?.mada_amount ?? 0) + Number(sale?.visa_amount ?? 0) + Number(sale?.mastercard_amount ?? 0) + Number(sale?.other_amount ?? 0)
   const diff = actual - Number(sale?.total_expected ?? 0)
-  const shiftLabel = { A: isAr ? 'الوردية أ' : 'Shift A', B: isAr ? 'الوردية ب' : 'Shift B', C: isAr ? 'الوردية ج' : 'Shift C', D: isAr ? 'الوردية د' : 'Shift D' }[sale?.shift] ?? sale?.shift ?? '—'
+  const shiftLabel = { A: isAr ? 'الوردية A' : 'Shift A', B: isAr ? 'الوردية B' : 'Shift B', C: isAr ? 'الوردية C' : 'Shift C', D: isAr ? 'الوردية D' : 'Shift D' }[sale?.shift] ?? sale?.shift ?? '—'
   const accountantName = sale?.confirmed_by_name ?? '—'
   const ack = deficitAck(sale?.accountant_notes) === 'yes'
   const T = (ar, en) => (isAr ? ar : en)
@@ -405,7 +405,7 @@ export async function printBalanceSheet({ sale, isAr, profile }) {
   {
     const [{ url, pages }] = await awaitBalanceDocs([sale.balance_doc_path], isAr ? 'جارٍ تجهيز ورقة الموازنة...' : 'Preparing the balance sheet...')
     const st = sale?.station?.name_ar ?? sale?.station?.name_en ?? '—'
-    const shift = { A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج', D: 'الوردية د' }[sale?.shift] ?? sale?.shift ?? '—'
+    const shift = { A: 'الوردية A', B: 'الوردية B', C: 'الوردية C', D: 'الوردية D' }[sale?.shift] ?? sale?.shift ?? '—'
     const emp = sale?.employee_name || sale?.created_by_name || '—'
     const html = docShell({
       title: `موازنة_${st}_${sale?.sale_date ?? ''}_${shift}`.replace(/\s+/g, '_'),
@@ -1444,7 +1444,7 @@ export default function SalesPage() {
     const sName = r => (isAr ? (r.station?.name_ar || r.station?.name_en) : (r.station?.name_en || r.station?.name_ar)) || '—'
     const oth = r => Number(r.visa_amount ?? 0) + Number(r.mastercard_amount ?? 0) + Number(r.other_amount ?? 0)
     const sum = (list, f) => list.reduce((a, r) => a + Number(f(r) ?? 0), 0)
-    const shiftLbl = v => SHIFTS.find(x => x.value === v)?.ar ?? ({ A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج', D: 'الوردية د' }[v] ?? v)
+    const shiftLbl = v => SHIFTS.find(x => x.value === v)?.ar ?? ({ A: 'الوردية A', B: 'الوردية B', C: 'الوردية C', D: 'الوردية D' }[v] ?? v)
     const sgn = n => (n > 0 ? '+' : '') + fmt(n)
     const stIds = [...new Set(records.map(r => r.station_id))]
     const groups = stIds.map(id => ({ name: sName(records.find(r => r.station_id === id)), list: records.filter(r => r.station_id === id).sort((a, b) => String(a.shift).localeCompare(String(b.shift))) }))

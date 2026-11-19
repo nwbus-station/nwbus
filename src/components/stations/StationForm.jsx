@@ -214,12 +214,12 @@ export default function StationForm({ station, onClose, onSaved }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
                 {shiftEnds.map((v, i) => (
                   <div key={i}>
-                    <label className="stn-lbl">{isAr ? `نهاية ${['أ', 'ب', 'ج'][i]}` : `End of ${['A', 'B', 'C'][i]}`}</label>
+                    <label className="stn-lbl">{isAr ? `نهاية ${['A', 'B', 'C'][i]}` : `End of ${['A', 'B', 'C'][i]}`}</label>
                     <TimeInput24 value={v} onChange={x => setShiftEnds(prev => prev.map((p, j) => (j === i ? x : p)))} />
                   </div>
                 ))}
                 <div>
-                  <label className="stn-lbl">{isAr ? `نهاية ${['أ', 'ب', 'ج', 'د'][shiftCount - 1]}` : `End of ${['A', 'B', 'C', 'D'][shiftCount - 1]}`}</label>
+                  <label className="stn-lbl">{isAr ? `نهاية ${['A', 'B', 'C', 'D'][shiftCount - 1]}` : `End of ${['A', 'B', 'C', 'D'][shiftCount - 1]}`}</label>
                   <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text-3)', fontFamily: MONO, fontWeight: 700, fontSize: '1.1rem', textAlign: 'center', letterSpacing: '.12em' }}>24:00</div>
                 </div>
               </div>
@@ -238,7 +238,7 @@ export default function StationForm({ station, onClose, onSaved }) {
                   <button key={k} type="button" onClick={() => toggleOff(k)} aria-pressed={off}
                     style={{ textAlign: 'start', padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
                       border: `1px solid ${off ? 'var(--danger)' : 'var(--border-2)'}`, background: off ? 'var(--danger-bg)' : 'var(--card)', color: 'var(--text-1)' }}>
-                    <span style={{ display: 'block', fontSize: '.86rem', fontWeight: 900 }}>{isAr ? `الوردية ${['أ', 'ب', 'ج', 'د'][i]}` : `Shift ${k}`}</span>
+                    <span style={{ display: 'block', fontSize: '.86rem', fontWeight: 900 }}>{isAr ? `الوردية ${['A', 'B', 'C', 'D'][i]}` : `Shift ${k}`}</span>
                     <span dir="ltr" style={{ display: 'block', fontFamily: MONO, fontSize: '.72rem', color: 'var(--text-3)', marginTop: 2 }}>{shiftRangeOf(i)}</span>
                     <span style={{ display: 'block', marginTop: 6, fontSize: '.76rem', fontWeight: 800, color: off ? 'var(--danger)' : 'var(--success, #15803d)' }}>{off ? (isAr ? 'متوقفة' : 'Stopped') : (isAr ? 'تعمل' : 'Operating')}</span>
                   </button>

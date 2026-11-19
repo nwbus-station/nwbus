@@ -3,7 +3,7 @@
 // المعروض أرقام ثابتة (00:00 – 08:00 / 08:00 – 16:00 ...) بدون إضافة دقيقة.
 export const SHIFT_SETTING_KEY = 'transport_shifts'
 const KEYS = ['A', 'B', 'C', 'D']
-export const SHIFT_AR = { A: 'الوردية أ', B: 'الوردية ب', C: 'الوردية ج', D: 'الوردية د' }
+export const SHIFT_AR = { A: 'الوردية A', B: 'الوردية B', C: 'الوردية C', D: 'الوردية D' }
 export const SHIFT_EN = { A: 'Shift A', B: 'Shift B', C: 'Shift C', D: 'Shift D' }
 export const DEFAULT_ENDS = [480, 960, 1440]
 

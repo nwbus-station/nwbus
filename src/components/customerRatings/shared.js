@@ -1,9 +1,9 @@
 // ثوابت ودوال مشتركة لصفحة تقييمات العملاء (الكمبيوتر والجوال)
 
 export const SHIFTS = [
-  { value: 'A', ar: 'الوردية أ', en: 'Shift A' },
-  { value: 'B', ar: 'الوردية ب', en: 'Shift B' },
-  { value: 'C', ar: 'الوردية ج', en: 'Shift C' },
+  { value: 'A', ar: 'الوردية A', en: 'Shift A' },
+  { value: 'B', ar: 'الوردية B', en: 'Shift B' },
+  { value: 'C', ar: 'الوردية C', en: 'Shift C' },
 ]
 
 export const JOB_TITLE_AR = { customer_service: 'خدمة عملاء', dispatcher: 'مرحّل' }

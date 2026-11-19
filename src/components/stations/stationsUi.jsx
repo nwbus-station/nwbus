@@ -5,7 +5,7 @@ export const MONO = "'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace"
 export const TYPE_COLOR = { main: '#2563eb', transit: '#7c3aed' }
 export const AGENT_COLOR = '#db2777'
 export const SKY = '#0284c7'
-export const SHIFT_LETTERS_AR = ['أ', 'ب', 'ج', 'د']
+export const SHIFT_LETTERS_AR = ['A', 'B', 'C', 'D']
 export const SHIFT_LETTERS_EN = ['A', 'B', 'C', 'D']
 
 // خلفية شفافة من لون دلالي (تعمل في الوضعين الفاتح والداكن)
