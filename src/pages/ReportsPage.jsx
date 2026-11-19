@@ -11,6 +11,8 @@ import SearchSelect from '../components/shared/SearchSelect'
 import StatStrip from '../components/shared/StatStrip'
 import { toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
+import { shiftsOfStation } from '../utils/stationShifts'
+import { shiftIdx } from '../utils/shifts'
 import { USER_ROLES, ADMIN_ROLE_VALUES, SALES_VIEW_CAPS } from '../utils/constants'
 import SelectField from '../components/shared/SelectField'
 import { brandHeader } from '../utils/printDoc'
@@ -427,6 +429,9 @@ export default function ReportsPage() {
   // فلتر قائمة المحطات الرئيسية: فقط المحطات التي فيها يوزرات
   const [onlyStaffed, _setOnlyStaffed] = useState(() => localStorage.getItem('rpt_only_staffed') === '1')
   const setOnlyStaffed = v => { localStorage.setItem('rpt_only_staffed', v ? '1' : '0'); _setOnlyStaffed(v) }
+  // «حساب الورديات الفعلية فقط»: الورديات المتوقفة في المحطة (stations.inactive_shifts) لا تدخل في أي رقم بالتقرير
+  const [activeOnly, _setActiveOnly] = useState(() => localStorage.getItem('rpt_active_shifts') !== '0')
+  const setActiveOnly = v => { localStorage.setItem('rpt_active_shifts', v ? '1' : '0'); _setActiveOnly(v) }
   // عدد الموظفين النشطين لكل محطة (لقوائم الطباعة المتعددة)
   const [staffByStation, setStaffByStation] = useState({})
   const [staffReady, setStaffReady] = useState(false)
@@ -570,7 +575,7 @@ export default function ReportsPage() {
     if (staffedOnly && !staffReady) return   // ننتظر وصول أعداد المستخدمين
     const staffedIds = staffedOnly ? Object.keys(staffByStation).filter(id => staffByStation[id] > 0) : null
     const NONE = '00000000-0000-0000-0000-000000000000'
-    const cacheKey = `reports2_${dateFrom}_${dateTo}_${station}${staffedOnly ? '_staffed' : ''}`
+    const cacheKey = `reports2_${dateFrom}_${dateTo}_${station}${staffedOnly ? '_staffed' : ''}${activeOnly ? '_act' : ''}`
     // غير الأدمن: ما نجيب أي بيانات قبل ما تتحدد محطاته (وإلا يطلع الاستعلام بدون تقييد نطاق)
     if (!seesAll && !scopedIds && !myStationIds.length) return
     const cached = getCached(cacheKey)
@@ -600,7 +605,7 @@ export default function ReportsPage() {
       }
       return { data: out, error }
     }
-    const [tripsRes, salesRes, lostRes, stationTripsRes, stopsRes] = await Promise.all([
+    const [tripsRes, salesRes, lostRes, stationTripsRes, stopsRes, stShiftRes] = await Promise.all([
       pageAll(() => scope(supabase.from('trip_records').select(`
         id, trip_schedule_id, record_date, station_id, departure_accuracy, operational_status,
         passenger_count, missed_count, missed_tickets, is_cancelled, is_extra_trip,
@@ -635,10 +640,11 @@ export default function ReportsPage() {
         return q.order('trip_schedule_id').order('station_id')
       }),
       pageAll(() => supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time').order('trip_schedule_id').order('station_id')),
+      supabase.from('stations').select('id, shift_ends, inactive_shifts'),
     ])
 
-    const trips = tripsRes.data ?? []
-    const sales = salesRes.data ?? []
+    const tripsAll = tripsRes.data ?? []
+    const salesAll = salesRes.data ?? []
     const lost  = lostRes.data  ?? []
 
     // خريطة أوقات المحطة المخصصة: trip_schedule_id|station_id → {dep, arr}
@@ -651,6 +657,30 @@ export default function ReportsPage() {
     ;(stopsRes.data ?? []).forEach(s => {
       stopMap[`${s.trip_schedule_id}|${s.station_id}`] = s
     })
+
+    // الورديات المتوقفة: تُستبعد الرحلات (المُدخلة وغير المُدخلة) والإيرادات التي تقع في وردية متوقفة بالمحطة
+    const shiftSt = Object.fromEntries((stShiftRes?.data ?? []).map(x => [x.id, x]))
+    const shiftCount = Object.fromEntries(Object.values(shiftSt).map(st => { const sh = shiftsOfStation(st); return [st.id, { n: sh.length, act: sh.filter(x => !x.off).length }] }))
+    const offAt = (sid, hhmm) => {
+      if (!activeOnly || !hhmm || hhmm === '—') return false
+      const st = shiftSt[sid]
+      if (!st || !(st.inactive_shifts || []).length) return false
+      const sh = shiftsOfStation(st)
+      const [h, m] = String(hhmm).slice(0, 5).split(':').map(Number)
+      return !!sh[shiftIdx((h || 0) * 60 + (m || 0), sh)]?.off
+    }
+    const offRec = t => {
+      if (!activeOnly) return false
+      const isDest = t.trip?.to_station?.id === t.station_id || t.trip?.to_station_id === t.station_id
+      const isOrig = t.trip?.from_station?.id === t.station_id || t.trip?.from_station_id === t.station_id
+      const isArr = (isDest || isOrig) ? isDest : (t.is_arrival != null ? t.is_arrival === true : (t.actual_arrival != null && t.actual_departure == null))
+      const se = stationTripMap[`${t.trip_schedule_id}|${t.station_id}`], sp = stopMap[`${t.trip_schedule_id}|${t.station_id}`]
+      const sched = isArr ? (se?.arrival_time || sp?.arrival_time || t.trip?.scheduled_arrival) : (se?.departure_time || sp?.departure_time || t.trip?.scheduled_departure)
+      const act = isArr ? (t.actual_arrival ?? t.actual_departure) : (t.actual_departure ?? t.actual_arrival)
+      return offAt(t.station_id, sched ? String(sched).slice(0, 5) : (act ? new Date(act).toISOString().slice(11, 16) : null))
+    }
+    const trips = activeOnly ? tripsAll.filter(t => !offRec(t)) : tripsAll
+    const sales = activeOnly ? salesAll.filter(r => !((shiftSt[r.station_id]?.inactive_shifts) || []).includes(r.shift)) : salesAll
 
     // قائمة المتخلفين (مسطّحة) من كل الرحلات في النطاق
     const missed = []
@@ -824,7 +854,7 @@ export default function ReportsPage() {
         if (trip.end_date && date > trip.end_date) return
         if (trip.days_of_week?.length && !trip.days_of_week.includes(new Date(date + 'T00:00:00').getDay())) return
         const key = `${st.trip_schedule_id}|${date}|${st.station_id}`
-        const add = (isArr, time) => { if (!time || enteredKeys.has(`${key}|${isArr ? 'a' : 'd'}`)) return; unenteredCount++; movements.push(makeUnentered(date, isArr, time)) }
+        const add = (isArr, time) => { if (!time || enteredKeys.has(`${key}|${isArr ? 'a' : 'd'}`) || offAt(st.station_id, String(time).slice(0, 5))) return; unenteredCount++; movements.push(makeUnentered(date, isArr, time)) }
         if (isDest) {
           if (arrOn) add(true, st.arrival_time || trip.scheduled_arrival)
         } else if (isOrigin) {
@@ -849,6 +879,7 @@ export default function ReportsPage() {
       missed,
       facilities,
       movements,
+      shiftCount,
       moveTotals: { dep: depCount, arr: arrCount, missed: missedTotal, pax: paxTotal, depPax, arrPax, unentered: unenteredCount, depOnTimeRate: depWithSched ? Math.round(depOnTime / depWithSched * 100) : null, arrOnTimeRate: arrWithSched ? Math.round(arrOnTime / arrWithSched * 100) : null },
       trips: {
         total:     trips.length,
@@ -878,7 +909,7 @@ export default function ReportsPage() {
     setCached(cacheKey, reportResult)
     setData(reportResult)
     setLoading(false)
-  }, [dateFrom, dateTo, station, seesAll, stations, onlyStaffed, staffByStation, staffReady])
+  }, [dateFrom, dateTo, station, seesAll, stations, onlyStaffed, staffByStation, staffReady, activeOnly])
 
   // تشغيل تلقائي عند تغيّر التاريخ/المحطة
   useEffect(() => { runReport() }, [runReport])
@@ -1371,13 +1402,14 @@ export default function ReportsPage() {
     if (want('facilities')) kp.push({ val: data.facilities.length, label: isAr ? 'تجهيزات معطّلة' : 'Faulty facilities', color: '#c2410c' })
     if (want('lost')) kp.push({ val: data.lost.total, label: isAr ? 'الموجودات' : 'Lost & found', color: '#ca8a04' })
 
-    const head = [isAr ? 'المحطة' : 'Station']
+    const head = [isAr ? 'المحطة' : 'Station', isAr ? 'الورديات الفعلية' : 'Active shifts']
     if (trips) head.push(isAr ? 'وصول' : 'Arr.', isAr ? 'ركاب الوصول' : 'Arr. pax', isAr ? 'التزام الوصول' : 'Arr. on-time', isAr ? 'مغادرة' : 'Dep.', isAr ? 'ركاب المغادرة' : 'Dep. pax', isAr ? 'التزام المغادرة' : 'Dep. on-time', isAr ? 'نسبة الإدخال' : 'Entered')
     if (want('missed')) head.push(isAr ? 'المتخلفون' : 'Missed')
     if (want('facilities')) head.push(isAr ? 'تجهيزات معطّلة' : 'Faulty')
     if (want('sales')) head.push(isAr ? 'الإيراد' : 'Revenue', isAr ? 'الفرق' : 'Diff')
     const body = list.map(o => {
-      const c = [`<b>${escapeHtml(o.name)}</b>`]
+      const sc = (data.shiftCount || {})[o.id]
+      const c = [`<b>${escapeHtml(o.name)}</b>`, sc ? (sc.act < sc.n ? `<b style="color:#dc2626">${sc.act} ${isAr ? 'من' : 'of'} ${sc.n}</b>` : String(sc.n)) : '—']
       if (trips) c.push(ent(o.arr).length, fmtN(sumPax(o.arr)), pctCell(complianceStats(o.arr).rate), ent(o.dep).length, fmtN(sumPax(o.dep)), pctCell(complianceStats(o.dep).rate), pctCell(entryPct(o.arr, o.dep)))
       if (want('missed')) c.push(missBy[o.id] || 0)
       if (want('facilities')) c.push(facBy[o.name] || 0)
@@ -1385,8 +1417,8 @@ export default function ReportsPage() {
       return c
     })
     const note = `<div style="margin-top:10px;font-size:11.5px;color:#64748b;line-height:1.8">${isAr
-      ? `الوصول والمغادرة منفصلان في الركاب والالتزام. «نسبة الإدخال» = الرحلات المُدخلة من المجدولة. ${onlyStaffed && station === 'all' ? 'المحطات المعروضة هي التي فيها حسابات نشطة فقط.' : ''}`
-      : `Arrivals and departures are kept separate. "Entered" = trips entered out of scheduled. ${onlyStaffed && station === 'all' ? 'Only stations with active accounts.' : ''}`}</div>`
+      ? `الوصول والمغادرة منفصلان في الركاب والالتزام. «نسبة الإدخال» = الرحلات المُدخلة من المجدولة. ${activeOnly ? 'الورديات المتوقفة في المحطات غير محسوبة. ' : ''}${onlyStaffed && station === 'all' ? 'المحطات المعروضة هي التي فيها حسابات نشطة فقط.' : ''}`
+      : `Arrivals and departures are kept separate. "Entered" = trips entered out of scheduled. ${activeOnly ? 'Stopped shifts are not counted. ' : ''}${onlyStaffed && station === 'all' ? 'Only stations with active accounts.' : ''}`}</div>`
     return `${kpiStrip(kp)}${banner(isAr ? 'ملخص المحطات' : 'Stations summary', '#1C2B36', list.length)}${tableHtml(head, body)}${note}`
   }
 
@@ -1583,6 +1615,10 @@ export default function ReportsPage() {
             <label className="rp-staffed">
               <input type="checkbox" checked={onlyStaffed} onChange={e => setOnlyStaffed(e.target.checked)} />
               <span>{isAr ? 'فقط المحطات اللي فيها يوزر' : 'Only stations with users'}</span>
+            </label>
+            <label className="rp-staffed">
+              <input type="checkbox" checked={activeOnly} onChange={e => setActiveOnly(e.target.checked)} />
+              <span>{isAr ? 'حساب الورديات الفعلية فقط' : 'Count operating shifts only'}</span>
             </label>
           </div>
         )}
