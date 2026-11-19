@@ -3,7 +3,6 @@
 import { shiftsOfStation } from '../../utils/stationShifts'
 
 const MONO = "'IBM Plex Mono', ui-monospace, monospace"
-const L_AR = { A: 'أ', B: 'ب', C: 'ج', D: 'د' }
 
 export default function StationShiftsNote({ station, isAr = true, compact = false, style }) {
   if (!station) return null
@@ -19,7 +18,7 @@ export default function StationShiftsNote({ station, isAr = true, compact = fals
       <b style={{ color: stopped ? 'var(--danger, #b91c1c)' : 'var(--text-1)', fontWeight: 900 }}>{head}</b>
       {shifts.map(s => (
         <span key={s.k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: s.off ? 'var(--text-3)' : 'var(--text-2)', textDecoration: s.off ? 'line-through' : 'none' }}>
-          <span style={{ fontWeight: 900 }}>{isAr ? L_AR[s.k] : s.k}</span>
+          <span style={{ fontWeight: 900 }}>{s.k}</span>
           {!compact && <bdi dir="ltr" style={{ fontFamily: MONO, fontWeight: 600, fontSize: '0.92em' }}>{s.range.replace(/ – /g, '–')}</bdi>}
           {s.off && !compact && <span style={{ textDecoration: 'none', color: 'var(--danger, #b91c1c)', fontWeight: 800 }}>{isAr ? 'متوقفة' : 'stopped'}</span>}
         </span>
