@@ -12,6 +12,9 @@ import StatStrip from '../components/shared/StatStrip'
 import { toLocalDateStr } from '../utils/dates'
 import { isRestStation } from '../utils/stations'
 import { shiftsOfStation } from '../utils/stationShifts'
+import { complianceStats } from '../utils/reportStats'
+import { DEFAULT_METRICS, rateTone } from '../utils/reportSummary'
+import SummaryPanel from '../components/reports/SummaryPanel'
 import { shiftIdx } from '../utils/shifts'
 import { USER_ROLES, ADMIN_ROLE_VALUES, SALES_VIEW_CAPS } from '../utils/constants'
 import SelectField from '../components/shared/SelectField'
@@ -232,21 +235,6 @@ function auditTableMeta(name) {
   return AUDIT_TABLE_META[name] ?? { label: name, color: '#64748B' }
 }
 
-// إحصائيات الالتزام لمجموعة حركات (وصول أو مغادرة)
-function complianceStats(list) {
-  const measured = list.filter(m => !m.unentered && m.delay !== null)
-  const c = k => measured.filter(m => m.acc?.key === k).length
-  const onTime = c('ontime') + c('early')
-  return {
-    total: list.length,
-    measured: measured.length,
-    early: c('early'), ontime: c('ontime'), noton: c('noton'), delayed: c('delayed'),
-    rate: measured.length ? Math.round(onTime / measured.length * 100) : null,
-    avgDelay: measured.length ? Math.round(measured.reduce((s, m) => s + m.delay, 0) / measured.length) : null,
-    maxDelay: measured.length ? Math.max(...measured.map(m => m.delay)) : null,
-  }
-}
-
 // قسم قابل للطي بشريط عنوان — نفس نمط جداول المغادرة/الوصول
 function CollapseSection({ label, sub, color, storageKey, children }) {
   const [open, setOpen] = useState(() => {
@@ -366,26 +354,6 @@ function MoveTableComp({ list, color, label, isAr, storageKey }) {
 }
 
 // قائمة اختيار محطات الطباعة المتعددة: بحث، اختصارات (الكل / لا شيء / التي فيها موظفون نشطون)، عدد الموظفين لكل محطة، وزر الطباعة بالأعلى
-// حلقة نسبة الالتزام: اللون + كلمة الحالة (لا يعتمد على اللون وحده)
-function RateRing({ value, isAr }) {
-  const has = value != null
-  const tone = !has ? { c: '#94a3b8', w: isAr ? 'لا بيانات' : 'No data' }
-    : value >= 80 ? { c: '#16a34a', w: isAr ? 'جيد' : 'Good' }
-    : value >= 60 ? { c: '#d97706', w: isAr ? 'مقبول' : 'Fair' }
-    : { c: '#dc2626', w: isAr ? 'ضعيف' : 'Weak' }
-  const R = 40, C = 2 * Math.PI * R
-  return (
-    <div className="rp-ring" role="img" aria-label={has ? `${value}%` : '—'}>
-      <svg viewBox="0 0 100 100" width="104" height="104">
-        <circle cx="50" cy="50" r={R} fill="none" stroke="var(--border)" strokeWidth="9" />
-        {has && <circle cx="50" cy="50" r={R} fill="none" stroke={tone.c} strokeWidth="9" strokeLinecap="round"
-          strokeDasharray={`${(C * Math.min(value, 100)) / 100} ${C}`} transform="rotate(-90 50 50)" style={{ transition: 'stroke-dasharray .5s ease' }} />}
-      </svg>
-      <div className="rp-ring-c"><b>{has ? `${value}%` : '—'}</b><i style={{ color: tone.c }}>{tone.w}</i></div>
-    </div>
-  )
-}
-
 export default function ReportsPage() {
   const { i18n } = useTranslation()
   const isAr = i18n.language === 'ar'
@@ -405,15 +373,16 @@ export default function ReportsPage() {
   const [tab, _setTab] = useState(() => localStorage.getItem('rpt_tab') || 'overview')
   const setTab = v => { localStorage.setItem('rpt_tab', v); _setTab(v); try { window.scrollTo({ top: 0 }) } catch { /* بدون تمرير */ } }
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [perfDir, setPerfDir] = useState('arrival')   // ترتيب المحطات: الوصول والمغادرة منفصلان دائماً
   // أقسام الطباعة: اختيار متعدد (يُحفظ بالمتصفح) — الافتراضي كل الأقسام
   const PRINTABLE = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost']
   const [printTypes, _setPrintTypes] = useState(() => { try { const v = JSON.parse(localStorage.getItem('rpt_print_types') ?? 'null'); return Array.isArray(v) ? v : PRINTABLE } catch { return PRINTABLE } })
   const setPrintTypes = v => { const next = typeof v === 'function' ? v(printTypes) : v; localStorage.setItem('rpt_print_types', JSON.stringify(next)); _setPrintTypes(next) }
   const [showPrintPicker, setShowPrintPicker] = useState(false)
-  // التقرير المبسّط (الافتراضي): جدول واحد بسطر لكل محطة بلا تفاصيل الرحلات؛ إلغاؤه يعيد التقرير المفصّل
-  const [printSimple, _setPrintSimple] = useState(() => localStorage.getItem('rpt_print_simple') !== '0')
-  const setPrintSimple = v => { localStorage.setItem('rpt_print_simple', v ? '1' : '0'); _setPrintSimple(v) }
+  // ملخص المحطات: المقاييس المختارة وطريقة عرض النسب (تُحفظ بالمتصفح وتُطبَّق على الصفحة والطباعة وExcel)
+  const [metrics, _setMetrics] = useState(() => { try { const v = JSON.parse(localStorage.getItem('rpt_metrics_v2') ?? 'null'); return Array.isArray(v) ? v : DEFAULT_METRICS } catch { return DEFAULT_METRICS } })
+  const setMetrics = v => { localStorage.setItem('rpt_metrics_v2', JSON.stringify(v)); _setMetrics(v) }
+  const [pctStyle, _setPctStyle] = useState(() => localStorage.getItem('rpt_pct_style') || 'bar')
+  const setPctStyle = v => { localStorage.setItem('rpt_pct_style', v); _setPctStyle(v) }
   const [stations, setStations]     = useState([])
   const myStationIds = stations.map(s => s.id)   // محطاته المخصصة (لو غير أدمن) — منقولة هنا عشان fetchAudit يستخدمها
   const [station,  _setStation]      = useState(() => localStorage.getItem('rpt_station') || 'all')
@@ -897,7 +866,7 @@ export default function ReportsPage() {
         totalSurplus:  sales.reduce((s, r) => s + Number(r.surplus_deficit ?? 0), 0),
         confirmed:     sales.filter(r => r.is_confirmed).length,
         total:         sales.length,
-        byStation:     sales.reduce((m, r) => { const o = (m[r.station_id] ??= { revenue: 0, diff: 0, n: 0, name: r.station?.name_ar || r.station?.name_en || '—' }); o.revenue += Number(r.total_actual ?? 0); o.diff += Number(r.surplus_deficit ?? 0); o.n++; return m }, {}),
+        byStation:     sales.reduce((m, r) => { const o = (m[r.station_id] ??= { revenue: 0, diff: 0, n: 0, name: r.station?.name_ar || r.station?.name_en || '—' }); o.revenue += Number(r.total_actual ?? 0); o.diff += Number(r.surplus_deficit ?? 0); o.n++; if (r.is_confirmed) o.conf = (o.conf || 0) + 1; return m }, {}),
       },
       lost: {
         total:     lost.length,
@@ -1368,56 +1337,54 @@ export default function ReportsPage() {
     return savePdfFolder(built.files, { ...opts, css: built.css, folderName: `${isAr ? 'تقارير المحطات' : 'Stations reports'} ${periodForName()}` })
   }
 
-  // التقرير المبسّط: صفحة واحدة — أرقام عامة + جدول واحد (سطر لكل محطة) بدون جداول الرحلات التفصيلية.
-  // الوصول والمغادرة منفصلان دائماً (لا إجمالي يجمعهما في الركاب أو الالتزام).
-  function simpleReportBody(types) {
-    const want = k => types.includes(k)
-    const trips = want('movements') || want('compliance') || want('transport')
-    const rateColor = r => r == null ? '#9ca3af' : r >= 80 ? '#16a34a' : r >= 60 ? '#d97706' : '#dc2626'
-    const pctCell = r => (r == null ? '—' : `<b style="color:${rateColor(r)}">${r}%</b>`)
-    const rows = new Map()
-    const row = (id, name) => { if (!rows.has(id)) rows.set(id, { id, name, arr: [], dep: [] }); return rows.get(id) }
-    data.movements.forEach(m => { const o = row(m.station_id, m.station); (m.type === 'arrival' ? o.arr : o.dep).push(m) })
-    const sBy = data.sales.byStation || {}
-    if (want('sales')) Object.entries(sBy).forEach(([id, v]) => row(id, v.name))
-    const facBy = {}; data.facilities.forEach(f => { facBy[f.station] = (facBy[f.station] || 0) + 1 })
-    const missBy = {}; data.movements.forEach(m => { if (m.missed) missBy[m.station_id] = (missBy[m.station_id] || 0) + m.missed })
-    const list = [...rows.values()].sort((a, b) => a.name.localeCompare(b.name, isAr ? 'ar' : 'en'))
-    const ent = l => l.filter(m => !m.unentered)
-    const sumPax = l => ent(l).reduce((a, m) => a + (m.pax || 0), 0)
-    const entryPct = (a, d) => { const t = a.length + d.length; return t ? Math.round((ent(a).length + ent(d).length) / t * 100) : null }
-    const allArr = data.movements.filter(m => m.type === 'arrival'), allDep = data.movements.filter(m => m.type === 'departure')
-    const stCount = list.filter(o => o.arr.length || o.dep.length || sBy[o.id]).length
-    const kp = []
-    kp.push({ val: stCount, label: isAr ? 'محطات' : 'Stations', color: '#1C2B36' })
-    if (trips) {
-      kp.push({ val: pctCell(entryPct(allArr, allDep)).replace(/<[^>]+>/g, '') || '—', label: isAr ? 'نسبة إدخال الرحلات' : 'Trips entered', color: '#5B5BD6' })
-      kp.push({ val: `${ent(allArr).length} · ${fmtN(sumPax(allArr))}`, label: isAr ? 'وصول: رحلات · ركاب' : 'Arrivals: trips · pax', color: '#23695A' })
-      kp.push({ val: `${ent(allDep).length} · ${fmtN(sumPax(allDep))}`, label: isAr ? 'مغادرة: رحلات · ركاب' : 'Departures: trips · pax', color: '#1C2B36' })
+  // طباعة ملخص المحطات بالأعمدة المختارة (model من buildSummary) — جدول واحد بسطر لكل محطة بلا تفاصيل الرحلات
+  function printSummary(model) {
+    const rc = rateTone
+    const cell = (m, v) => {
+      if (m.kind === 'pct') return v[m.id] == null ? '—' : `<b style="color:${rc(v[m.id])}">${v[m.id]}%</b>`
+      if (m.id === 'diff' && v.diff != null) return `<b style="color:${v.diff >= 0 ? '#16a34a' : '#dc2626'}">${fmtN(Math.round(v.diff))}</b>`
+      if (m.kind === 'money') return v[m.id] == null ? '—' : fmtN(Math.round(v[m.id]))
+      if (m.kind === 'text') return v.shifts ? (v.shifts.act < v.shifts.n ? `<b style="color:#dc2626">${v.shifts.act} ${isAr ? 'من' : 'of'} ${v.shifts.n}</b>` : String(v.shifts.n)) : '—'
+      return fmtN(v[m.id])
     }
-    if (want('missed')) kp.push({ val: data.trips.totalMissed, label: isAr ? 'المتخلفون' : 'Missed', color: '#ef4444' })
-    if (want('sales')) { kp.push({ val: fmt(data.sales.totalRevenue), label: isAr ? 'الإيرادات (ر.س)' : 'Revenue', color: '#16a34a' }); kp.push({ val: fmt(data.sales.totalSurplus), label: isAr ? 'الفرق (ر.س)' : 'Diff', color: data.sales.totalSurplus >= 0 ? '#16a34a' : '#c0392b' }) }
-    if (want('facilities')) kp.push({ val: data.facilities.length, label: isAr ? 'تجهيزات معطّلة' : 'Faulty facilities', color: '#c2410c' })
-    if (want('lost')) kp.push({ val: data.lost.total, label: isAr ? 'الموجودات' : 'Lost & found', color: '#ca8a04' })
-
-    const head = [isAr ? 'المحطة' : 'Station', isAr ? 'الورديات الفعلية' : 'Active shifts']
-    if (trips) head.push(isAr ? 'وصول' : 'Arr.', isAr ? 'ركاب الوصول' : 'Arr. pax', isAr ? 'مغادرة' : 'Dep.', isAr ? 'ركاب المغادرة' : 'Dep. pax', isAr ? 'نسبة الإدخال' : 'Entered')
-    if (want('missed')) head.push(isAr ? 'المتخلفون' : 'Missed')
-    if (want('facilities')) head.push(isAr ? 'تجهيزات معطّلة' : 'Faulty')
-    if (want('sales')) head.push(isAr ? 'الإيراد' : 'Revenue', isAr ? 'الفرق' : 'Diff')
-    const body = list.map(o => {
-      const sc = (data.shiftCount || {})[o.id]
-      const c = [`<b>${escapeHtml(o.name)}</b>`, sc ? (sc.act < sc.n ? `<b style="color:#dc2626">${sc.act} ${isAr ? 'من' : 'of'} ${sc.n}</b>` : String(sc.n)) : '—']
-      if (trips) c.push(ent(o.arr).length, fmtN(sumPax(o.arr)), ent(o.dep).length, fmtN(sumPax(o.dep)), pctCell(entryPct(o.arr, o.dep)))
-      if (want('missed')) c.push(missBy[o.id] || 0)
-      if (want('facilities')) c.push(facBy[o.name] || 0)
-      if (want('sales')) { const v = sBy[o.id]; c.push(v ? fmt(v.revenue) : '—', v ? `<b style="color:${v.diff >= 0 ? '#16a34a' : '#dc2626'}">${fmt(v.diff)}</b>` : '—') }
-      return c
+    const T = model.totals
+    const kp = model.cols.filter(m => m.kind !== 'text').slice(0, 8).map(m => ({ val: m.kind === 'pct' ? (T[m.id] == null ? '—' : T[m.id] + '%') : m.kind === 'money' ? fmtN(Math.round(T[m.id] ?? 0)) : fmtN(T[m.id]), label: isAr ? m.ar : m.en, color: m.kind === 'pct' ? rc(T[m.id]) : '#1C2B36' }))
+    const head = [isAr ? 'المحطة' : 'Station', ...model.cols.map(m => (isAr ? m.ar : m.en))]
+    const body = model.rows.map(r => [`<b>${escapeHtml(r.name)}</b>`, ...model.cols.map(m => cell(m, r.v))])
+    body.push([`<b>${isAr ? 'الإجمالي' : 'Total'} (${model.rows.length})</b>`, ...model.cols.map(m => (m.id === 'shifts' ? '—' : `<b>${cell(m, T)}</b>`))])
+    const note = isAr
+      ? `الوصول والمغادرة منفصلان في الرحلات والركاب والنسب. «نسبة الإدخال» = الرحلات المُدخلة من المجدولة. ${activeOnly ? 'الورديات المتوقفة غير محسوبة. ' : ''}${onlyStaffed && station === 'all' ? 'المحطات المعروضة هي التي فيها حسابات نشطة فقط.' : ''}`
+      : `Arrivals and departures are kept separate. Entry % = entered out of scheduled. ${activeOnly ? 'Stopped shifts are not counted. ' : ''}${onlyStaffed && station === 'all' ? 'Only stations with active accounts.' : ''}`
+    const printHeader = brandHeader({
+      title: isAr ? 'ملخص المحطات' : 'Stations summary', subtitle: `${isAr ? 'المحطة' : 'Station'}: ${stationLabel}`,
+      lines: [`${isAr ? 'الفترة' : 'Period'}: <b>${dateFrom}</b> → <b>${dateTo}</b>`, `${isAr ? 'أعدّه' : 'By'}: ${escapeHtml(profile?.full_name_ar ?? '—')}`],
+      dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px',
     })
-    const note = `<div style="margin-top:10px;font-size:11.5px;color:#64748b;line-height:1.8">${isAr
-      ? `الوصول والمغادرة منفصلان في الرحلات والركاب. «نسبة الإدخال» = الرحلات المُدخلة من المجدولة. ${activeOnly ? 'الورديات المتوقفة في المحطات غير محسوبة. ' : ''}${onlyStaffed && station === 'all' ? 'المحطات المعروضة هي التي فيها حسابات نشطة فقط.' : ''}`
-      : `Arrivals and departures are kept separate (trips and passengers). "Entered" = trips entered out of scheduled. ${activeOnly ? 'Stopped shifts are not counted. ' : ''}${onlyStaffed && station === 'all' ? 'Only stations with active accounts.' : ''}`}</div>`
-    return `${kpiStrip(kp)}${banner(isAr ? 'ملخص المحطات' : 'Stations summary', '#1C2B36', list.length)}${tableHtml(head, body)}${note}`
+    const html = `
+      <div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">
+        ${printHeader}
+        <div style="padding:0 4px">${kpiStrip(kp)}${banner(isAr ? 'ملخص المحطات' : 'Stations summary', '#1C2B36', model.rows.length)}${tableHtml(head, body)}
+          <div style="margin-top:10px;font-size:11.5px;color:#64748b;line-height:1.8">${note}</div></div>
+        <div style="margin-top:14px;padding:8px 14px;border-top:2px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b">
+          <span>${escapeHtml(profile?.full_name_ar) ?? '—'} · ${new Date().toLocaleString('en-GB')}</span>
+          <span class="pill-dark" style="background:#1C2B36;color:#fff;font-size:10px;font-weight:800;padding:3px 12px;border-radius:999px;letter-spacing:.6px">NORTH WEST BUS</span>
+        </div>
+      </div>`
+    openPrintPreview(html, SHEET_CSS, true, `${isAr ? 'ملخص المحطات' : 'Stations summary'} — ${periodForName()}${station !== 'all' ? ` — ${stationLabel}` : ''}`)
+  }
+
+  function exportSummary(model) {
+    const T = model.totals
+    const val = (m, v) => (m.kind === 'text' ? (v.shifts ? (v.shifts.act < v.shifts.n ? `${v.shifts.act}/${v.shifts.n}` : String(v.shifts.n)) : '') : (v[m.id] == null ? '' : v[m.id]))
+    return exportTableXlsx({
+      isAr, filename: `${isAr ? 'ملخص-المحطات' : 'stations-summary'}_${dateFrom}_${dateTo}`,
+      sheetName: isAr ? 'ملخص المحطات' : 'Stations summary',
+      title: isAr ? 'ملخص المحطات' : 'Stations summary',
+      subtitle: `${isAr ? 'الفترة' : 'Period'}: ${dateFrom} → ${dateTo} · ${stationLabel}`,
+      columns: [{ header: isAr ? 'المحطة' : 'Station', w: 26 }, ...model.cols.map(m => ({ header: isAr ? m.ar : m.en, w: 16, fmt: m.kind === 'pct' ? '0"%"' : m.kind === 'money' ? '#,##0' : m.kind === 'num' ? '#,##0' : undefined }))],
+      rows: [...model.rows.map(r => [r.name, ...model.cols.map(m => val(m, r.v))]), [isAr ? 'الإجمالي' : 'Total', ...model.cols.map(m => (m.id === 'shifts' ? '' : val(m, T)))]],
+      landscape: true,
+    })
   }
 
   function printReport() {
@@ -1427,13 +1394,13 @@ export default function ReportsPage() {
     if (!types.length) return
     // header احترافي موحّد لجميع الأقسام
     const printHeader = brandHeader({
-      title: printSimple ? (isAr ? 'التقرير المبسّط' : 'Summary report') : types.length === ALL_TYPES.length ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', '),
+      title: types.length === ALL_TYPES.length ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', '),
       subtitle: `${isAr ? 'المحطة' : 'Station'}: ${stationLabel}`,
       lines: [`${isAr ? 'الفترة' : 'Period'}: <b>${dateFrom}</b> → <b>${dateTo}</b>`, `${isAr ? 'أعدّه' : 'By'}: ${escapeHtml(profile?.full_name_ar ?? '—')}`],
       dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px',
     })
 
-    const sections = printSimple ? simpleReportBody(types) : types.map(tp => `
+    const sections = types.map(tp => `
       <div style="display:flex;align-items:center;gap:10px;margin:22px 0 6px;font-size:18px;font-weight:900;color:#0f172a;page-break-after:avoid">
         <span style="width:5px;height:22px;background:#EE712D;border-radius:2px"></span>${REPORT_LABEL[tp]}
       </div>${reportBody(tp)}`).join('')
@@ -1450,7 +1417,7 @@ export default function ReportsPage() {
 
     const kind = reportKindName()
     const scopeName = station !== 'all' ? ` — ${stationLabel}` : ''
-    const docTitle = printSimple ? `${isAr ? 'التقرير المبسّط' : 'Summary report'} — ${periodForName()}${scopeName}` : types.length === ALL_TYPES.length
+    const docTitle = types.length === ALL_TYPES.length
       ? `${kind} — ${periodForName()}${scopeName}`
       : types.length === 1
         ? `${REPORT_LABEL[types[0]]} — ${kind.replace(isAr ? 'التقرير ' : ' Report', '') } — ${periodForName()}${scopeName}`
@@ -1507,7 +1474,7 @@ export default function ReportsPage() {
   const RpIcon = ({ id, size = 15 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{(RP_ICONS[id] || []).map((d, i) => <path key={i} d={d} />)}</svg>
   const canSales = isGeneralAdmin || isAccountant || isStationAdmin || SALES_VIEW_CAPS.some(grantCap)
   const TAB_DEFS = [
-    { id: 'overview', ar: 'نظرة عامة', en: 'Overview', desc_ar: 'ملخص الفترة وما يحتاج انتباهك', desc_en: 'Period summary & attention items' },
+    { id: 'overview', ar: 'ملخص المحطات', en: 'Stations summary', desc_ar: 'جدول واحد بالمقاييس والنسب التي تختارها', desc_en: 'One table with the metrics you pick' },
     ...[
       { id: 'movements', ar: 'الوصول والمغادرة', en: 'Arrivals & Departures', desc_ar: 'جداول رحلات المغادرة والوصول التفصيلية', desc_en: 'Detailed departure & arrival tables', n: data ? null : null },
       { id: 'compliance', ar: 'الالتزام بالمواعيد', en: 'Punctuality', desc_ar: 'الالتزام بمواعيد الوصول لكل محطة', desc_en: 'Arrival punctuality per station' },
@@ -1560,13 +1527,6 @@ export default function ReportsPage() {
                         <button type="button" onClick={() => setPrintTypes([])} className="text-red-600 hover:underline">{isAr ? 'لا شيء' : 'None'}</button>
                       </div>
                     </div>
-                    <label className={`flex items-start gap-2.5 px-2 py-2 mb-2 rounded-lg cursor-pointer text-sm border ${printSimple ? 'border-nwbus-primary bg-gray-50' : 'border-gray-200'}`}>
-                      <input type="checkbox" className="accent-nwbus-primary w-4 h-4 mt-0.5" checked={printSimple} onChange={e => setPrintSimple(e.target.checked)} />
-                      <span className="flex-1">
-                        <b className="block text-gray-900">{isAr ? 'تقرير مبسّط' : 'Simple report'}</b>
-                        <span className="text-[11px] text-gray-500 leading-snug">{isAr ? 'جدول واحد بسطر لكل محطة وأرقام عامة، بدون جداول الرحلات التفصيلية' : 'One table, a row per station, no per-trip tables'}</span>
-                      </span>
-                    </label>
                     <div className="max-h-72 overflow-y-auto">
                       {TAB_DEFS.filter(t => PRINTABLE.includes(t.id)).map(t => {
                         const on = printTypes.includes(t.id)
@@ -1682,209 +1642,15 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* ═ نظرة عامة ═ */}
+      {/* ═ ملخص المحطات (الصفحة الرئيسية) ═ */}
       {activeTab === 'overview' && (!data ? (
         <div className="space-y-3">{[0, 1, 2].map(i => <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />)}</div>
-      ) : (() => {
-        const M = data.moveTotals
-        const days = Math.max(1, Math.round((new Date(dateTo + 'T12:00:00Z') - new Date(dateFrom + 'T12:00:00Z')) / 86400000) + 1)
-        const sar = n => `${fmtN(Math.round(n))} ${isAr ? 'ر.س' : 'SAR'}`
-
-        // أداء كل محطة — الوصول والمغادرة منفصلان دائماً
-        const byStation = {}
-        data.movements.forEach(m => {
-          const o = byStation[m.station_id] ??= { id: m.station_id, name: m.station, arr: { rated: 0, ok: 0, n: 0, un: 0 }, dep: { rated: 0, ok: 0, n: 0, un: 0 }, missed: 0 }
-          const d = m.type === 'arrival' ? o.arr : o.dep
-          if (m.unentered) { d.un++; return }
-          d.n++; o.missed += m.missed || 0
-          if (m.acc.key !== 'none') { d.rated++; if (m.acc.key === 'ontime' || m.acc.key === 'early') d.ok++ }
-        })
-        const rateOf = d => (d.rated >= 1 ? Math.round(d.ok / d.rated * 100) : null)
-        const dirKey = perfDir === 'arrival' ? 'arr' : 'dep'
-        const ranked = Object.values(byStation).filter(o => o[dirKey].rated > 0)
-          .map(o => ({ ...o, rate: rateOf(o[dirKey]), d: o[dirKey] }))
-          .sort((x, y) => x.rate - y.rate || y.d.n - x.d.n)
-        const withUn = Object.values(byStation).map(o => ({ name: o.name, un: o.arr.un + o.dep.un })).filter(o => o.un > 0).sort((x, y) => y.un - x.un)
-        const topMissed = Object.values(byStation).filter(o => o.missed > 0).sort((x, y) => y.missed - x.missed)[0]
-
-        // ملخص بلغة بسيطة — جمل تلقائية من الأرقام
-        const insights = []
-        const pushDir = (key, arLabel, enLabel) => {
-          const list = Object.values(byStation).filter(o => o[key].rated >= 3).map(o => ({ name: o.name, rate: rateOf(o[key]) })).sort((x, y) => y.rate - x.rate)
-          if (list.length >= 2) {
-            const best = list[0], worst = list[list.length - 1]
-            if (best.rate !== worst.rate) insights.push({ t: 'ok', ar: `الالتزام ${arLabel}: الأعلى ${best.name} (${best.rate}%) والأدنى ${worst.name} (${worst.rate}%)`, en: `${enLabel} punctuality: highest ${best.name} (${best.rate}%), lowest ${worst.name} (${worst.rate}%)` })
-          }
-        }
-        pushDir('arr', 'بالوصول', 'Arrival'); pushDir('dep', 'بالمغادرة', 'Departure')
-        if (withUn.length) insights.push({ t: 'warn', ar: `${fmtN(M.unentered)} رحلة غير مدخلة، أكثرها في ${withUn[0].name} (${fmtN(withUn[0].un)})`, en: `${fmtN(M.unentered)} trips not entered, most at ${withUn[0].name} (${fmtN(withUn[0].un)})` })
-        if (topMissed && data.trips.totalMissed > 0) insights.push({ t: 'bad', ar: `${fmtN(data.trips.totalMissed)} راكب متخلف، أعلى محطة ${topMissed.name} (${fmtN(topMissed.missed)})`, en: `${fmtN(data.trips.totalMissed)} missed passengers, highest at ${topMissed.name} (${fmtN(topMissed.missed)})` })
-        if (typeAllowed('sales') && canSales && data.sales.total > 0 && data.sales.totalSurplus < 0)
-          insights.push({ t: 'bad', ar: `عجز في المبيعات بمقدار ${sar(Math.abs(data.sales.totalSurplus))} خلال الفترة`, en: `Sales deficit of ${sar(Math.abs(data.sales.totalSurplus))} for the period` })
-        if (typeAllowed('sales') && canSales && data.sales.total > 0 && data.sales.confirmed < data.sales.total)
-          insights.push({ t: 'warn', ar: `${fmtN(data.sales.total - data.sales.confirmed)} يومية مبيعات لم تُؤكَّد بعد`, en: `${fmtN(data.sales.total - data.sales.confirmed)} sales records not confirmed yet` })
-
-        const dirPanel = (key) => {
-          const isA = key === 'arr'
-          const rate = isA ? M.arrOnTimeRate : M.depOnTimeRate
-          const unA = Object.values(byStation).reduce((n, o) => n + o[key].un, 0)
-          return (
-            <button type="button" onClick={() => typeAllowed('movements') && setTab('movements')} className="rp-dir" style={{ '--hue': isA ? '#10b981' : '#0ea5e9' }}>
-              <RateRing value={rate} isAr={isAr} />
-              <span className="rp-dir-b">
-                <span className="rp-dir-t">{isA ? (isAr ? 'الوصول' : 'Arrivals') : (isAr ? 'المغادرة' : 'Departures')}</span>
-                <span className="rp-dir-s"><b>{fmtN(isA ? M.arr : M.dep)}</b> {isAr ? 'رحلة' : 'trips'}</span>
-                <span className="rp-dir-s"><b>{fmtN(isA ? M.arrPax : M.depPax)}</b> {isAr ? 'راكب' : 'passengers'}</span>
-                {unA > 0 && <span className="rp-dir-w">{fmtN(unA)} {isAr ? 'غير مدخلة' : 'not entered'}</span>}
-              </span>
-            </button>
-          )
-        }
-
-        const kpis = [
-          { id: 'missed', label: isAr ? 'المتخلفون' : 'Missed', val: fmtN(data.trips.totalMissed), sub: isAr ? 'راكب' : 'passengers', hue: '#ef4444' },
-          { id: 'movements', label: isAr ? 'رحلات غير مدخلة' : 'Not entered', val: fmtN(M.unentered), sub: isAr ? 'تحتاج إدخال' : 'need entry', hue: '#f59e0b' },
-          { id: 'facilities', label: isAr ? 'أعطال التجهيزات' : 'Facility faults', val: fmtN(data.facilities.length), sub: isAr ? 'عطل مسجّل' : 'recorded', hue: '#f97316' },
-          { id: 'lost', label: isAr ? 'موجودات غير مستلمة' : 'Unclaimed items', val: fmtN(data.lost.unclaimed), sub: isAr ? `من ${fmtN(data.lost.total)} غرض` : `of ${fmtN(data.lost.total)}`, hue: '#8b5cf6' },
-          ...(canSales && typeAllowed('sales') ? [{ id: 'sales', label: isAr ? 'إيراد الفترة' : 'Period revenue', val: fmtN(Math.round(data.sales.totalRevenue)), sub: isAr ? 'ريال' : 'SAR', hue: '#0d9488' }] : []),
-        ].filter(k => typeAllowed(k.id))
-
-        const attention = [
-          { n: M.unentered, ar: 'رحلة غير مدخلة', en: 'trips not entered', id: 'movements', c: '#f59e0b' },
-          { n: data.missed.length, ar: 'سجل متخلفين عن الرحلات', en: 'missed-passenger records', id: 'missed', c: '#ef4444' },
-          { n: data.facilities.length, ar: 'عطل في تجهيزات الحافلات', en: 'facility faults', id: 'facilities', c: '#f97316' },
-          { n: data.lost.unclaimed, ar: 'غرض غير مستلم', en: 'unclaimed items', id: 'lost', c: '#8b5cf6' },
-        ].filter(x => x.n > 0 && typeAllowed(x.id))
-
-        const GROUPS = [
-          { ar: 'التشغيل', en: 'Operations', ids: ['movements', 'compliance', 'transport', 'missed', 'facilities'] },
-          { ar: 'المالية', en: 'Finance', ids: ['sales'] },
-          { ar: 'السجلات', en: 'Records', ids: ['lost', 'audit'] },
-        ]
-        const cardStat = id => ({
-          movements: `${fmtN(M.arr)} ${isAr ? 'وصول' : 'arr'} · ${fmtN(M.dep)} ${isAr ? 'مغادرة' : 'dep'}`,
-          compliance: `${isAr ? 'وصول' : 'Arr'} ${M.arrOnTimeRate ?? '—'}${M.arrOnTimeRate != null ? '%' : ''} · ${isAr ? 'مغادرة' : 'Dep'} ${M.depOnTimeRate ?? '—'}${M.depOnTimeRate != null ? '%' : ''}`,
-          missed: `${fmtN(data.trips.totalMissed)} ${isAr ? 'راكب' : 'pax'}`,
-          facilities: `${fmtN(data.facilities.length)} ${isAr ? 'عطل' : 'faults'}`,
-          sales: canSales ? sar(data.sales.totalRevenue) : '',
-          lost: `${fmtN(data.lost.unclaimed)} ${isAr ? 'غير مستلم' : 'unclaimed'}`,
-        }[id] || '')
-
-        return (
-        <div className="space-y-7">
-          {/* الشريط العلوي: الفترة + الحلقتان (الوصول والمغادرة منفصلان) */}
-          <section className="rp-hero">
-            <div className="rp-hero-head">
-              <div>
-                <h2 className="rp-hero-t">{isAr ? 'ملخص الفترة' : 'Period summary'}</h2>
-                <p className="rp-hero-s"><span dir="ltr">{periodText}</span> · {fmtN(days)} {isAr ? (days === 1 ? 'يوم' : 'أيام') : (days === 1 ? 'day' : 'days')} · {stationLabel}</p>
-              </div>
-            </div>
-            <div className="rp-hero-grid">{dirPanel('arr')}{dirPanel('dep')}</div>
-          </section>
-
-          {kpis.length > 0 && (
-            <div className="grid gap-3 grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(170px,1fr))]">
-              {kpis.map(k => (
-                <button key={k.id} type="button" onClick={() => setTab(k.id)} className="rp-kpi" style={{ '--hue': k.hue }}>
-                  <span className="rp-kpi-l">{k.label}</span>
-                  <span className="rp-kpi-v">{k.val}</span>
-                  <span className="rp-kpi-s">{k.sub}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* ما يستحق الانتباه — جمل جاهزة */}
-          <section>
-            <h2 className="rp-h2">{isAr ? 'أبرز ما في الفترة' : 'Highlights'}</h2>
-            {insights.length === 0 ? (
-              <div className="rp-note rp-note-ok">{isAr ? 'لا توجد ملاحظات بارزة في هذه الفترة' : 'Nothing notable for this period'}</div>
-            ) : (
-              <ul className="rp-insights">
-                {insights.map((x, i) => (
-                  <li key={i} className={`rp-ins rp-ins-${x.t}`}>
-                    <span className="rp-ins-dot" aria-hidden="true" />
-                    <span>{isAr ? x.ar : x.en}</span>
-                    <b className="rp-ins-tag">{x.t === 'ok' ? (isAr ? 'إيجابي' : 'Good') : x.t === 'warn' ? (isAr ? 'تنبيه' : 'Notice') : (isAr ? 'يحتاج متابعة' : 'Follow up')}</b>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {/* ترتيب المحطات */}
-          {typeAllowed('compliance') && Object.keys(byStation).length > 1 && (
-            <section>
-              <div className="rp-sec-head">
-                <h2 className="rp-h2" style={{ margin: 0 }}>{isAr ? 'أداء المحطات' : 'Station performance'}</h2>
-                <div className="rp-seg" role="tablist" aria-label={isAr ? 'الاتجاه' : 'Direction'}>
-                  {[['arrival', isAr ? 'الوصول' : 'Arrivals'], ['departure', isAr ? 'المغادرة' : 'Departures']].map(([v, l]) => (
-                    <button key={v} type="button" role="tab" aria-selected={perfDir === v} className={perfDir === v ? 'on' : ''} onClick={() => setPerfDir(v)}>{l}</button>
-                  ))}
-                </div>
-              </div>
-              <p className="rp-hint">{isAr ? 'الأضعف التزاماً أولاً — اضغط على محطة لعرضها وحدها' : 'Weakest first — tap a station to focus on it'}</p>
-              {ranked.length === 0 ? (
-                <div className="rp-note">{isAr ? 'لا توجد رحلات مُدخلة بوقت فعلي في هذا الاتجاه' : 'No entered trips with actual times in this direction'}</div>
-              ) : (
-                <div className="rp-rank">
-                  {ranked.map(o => {
-                    const c = o.rate >= 80 ? '#16a34a' : o.rate >= 60 ? '#d97706' : '#dc2626'
-                    return (
-                      <button key={o.id} type="button" className="rp-rank-row" onClick={() => { setStation(o.id); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
-                        <span className="rp-rank-n">{o.name}</span>
-                        <span className="rp-rank-bar"><i style={{ width: `${o.rate}%`, background: c }} /></span>
-                        <span className="rp-rank-v" style={{ color: c }}>{o.rate}%</span>
-                        <span className="rp-rank-m">{fmtN(o.d.n)} {isAr ? 'رحلة' : 'trips'}{o.d.un > 0 ? ` · ${fmtN(o.d.un)} ${isAr ? 'غير مدخلة' : 'not entered'}` : ''}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </section>
-          )}
-
-          {attention.length > 0 && (
-            <section>
-              <h2 className="rp-h2">{isAr ? 'تحتاج انتباهك' : 'Needs attention'}</h2>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {attention.map(x => (
-                  <button key={x.id + x.ar} type="button" onClick={() => setTab(x.id)} className="rp-alert" style={{ '--hue': x.c }}>
-                    <b>{fmtN(x.n)}</b><span>{isAr ? x.ar : x.en}</span>
-                    <i>{isAr ? 'عرض' : 'View'}</i>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* كل التقارير — مجمّعة */}
-          {GROUPS.map(g => {
-            const list = TAB_DEFS.filter(t => g.ids.includes(t.id))
-            if (!list.length) return null
-            return (
-              <section key={g.ar}>
-                <h2 className="rp-h2">{isAr ? g.ar : g.en}</h2>
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {list.map(t => (
-                    <button key={t.id} type="button" onClick={() => setTab(t.id)} className="rp-card">
-                      <span className="rp-card-top">
-                        <span className="rp-card-ico"><RpIcon id={t.id} size={18} /></span>
-                        {t.n > 0 && <b className="rp-tab-n">{fmtN(t.n)}</b>}
-                      </span>
-                      <span className="rp-card-t">{isAr ? t.ar : t.en}</span>
-                      <span className="rp-card-d">{isAr ? t.desc_ar : t.desc_en}</span>
-                      {cardStat(t.id) && <span className="rp-card-s">{cardStat(t.id)}</span>}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )
-          })}
-        </div>
-        )
-      })())}
+      ) : (
+        <SummaryPanel data={data} isAr={isAr} allowed={typeAllowed} metrics={metrics} setMetrics={setMetrics} pctStyle={pctStyle} setPctStyle={setPctStyle}
+          flags={{ onlyStaffed: onlyStaffed && station === 'all', activeOnly }}
+          canPrint={allowCap('reports_print')} folderCount={folder.length} onOpenFolder={() => setShowFolder(true)}
+          onPrintSummary={printSummary} onPrintDetailed={() => setShowPrintPicker(true)} onExport={exportSummary} />
+      ))}
 
       {data && (
         <div className="space-y-6">
