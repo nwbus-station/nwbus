@@ -409,6 +409,9 @@ export default function ReportsPage() {
   const [printTypes, _setPrintTypes] = useState(() => { try { const v = JSON.parse(localStorage.getItem('rpt_print_types') ?? 'null'); return Array.isArray(v) ? v : PRINTABLE } catch { return PRINTABLE } })
   const setPrintTypes = v => { const next = typeof v === 'function' ? v(printTypes) : v; localStorage.setItem('rpt_print_types', JSON.stringify(next)); _setPrintTypes(next) }
   const [showPrintPicker, setShowPrintPicker] = useState(false)
+  // التقرير المبسّط (الافتراضي): جدول واحد بسطر لكل محطة بلا تفاصيل الرحلات؛ إلغاؤه يعيد التقرير المفصّل
+  const [printSimple, _setPrintSimple] = useState(() => localStorage.getItem('rpt_print_simple') !== '0')
+  const setPrintSimple = v => { localStorage.setItem('rpt_print_simple', v ? '1' : '0'); _setPrintSimple(v) }
   const [stations, setStations]     = useState([])
   const myStationIds = stations.map(s => s.id)   // محطاته المخصصة (لو غير أدمن) — منقولة هنا عشان fetchAudit يستخدمها
   const [station,  _setStation]      = useState(() => localStorage.getItem('rpt_station') || 'all')
@@ -428,8 +431,16 @@ export default function ReportsPage() {
   const [staffByStation, setStaffByStation] = useState({})
   const [staffReady, setStaffReady] = useState(false)
   useEffect(() => {
-    supabase.from('users').select('station_id').eq('is_active', true).not('station_id', 'is', null).limit(5000)
-      .then(({ data }) => { const m = {}; for (const u of data ?? []) m[u.station_id] = (m[u.station_id] || 0) + 1; setStaffByStation(m); setStaffReady(true) })
+    // «فيها يوزر» = حسابات نشطة فعلية: بدون الإدارة العليا ولا عمال النظافة ولا مشرفي المرحّلين (نفس قاعدة أداء المحطات)
+    supabase.from('users').select('station_id, role, job_title').eq('is_active', true).not('station_id', 'is', null).limit(5000)
+      .then(({ data }) => {
+        const m = {}
+        for (const u of data ?? []) {
+          if (ADMIN_ROLE_VALUES.includes(u.role) || /cleaner|dispatcher_supervisor|نظاف|مشرف\s*مرحّ|مشرف\s*مرح/i.test(u.job_title || '')) continue
+          m[u.station_id] = (m[u.station_id] || 0) + 1
+        }
+        setStaffByStation(m); setStaffReady(true)
+      })
   }, [])
   const [showUnenteredWarn, setShowUnenteredWarn] = useState(false)
 
@@ -559,7 +570,7 @@ export default function ReportsPage() {
     if (staffedOnly && !staffReady) return   // ننتظر وصول أعداد المستخدمين
     const staffedIds = staffedOnly ? Object.keys(staffByStation).filter(id => staffByStation[id] > 0) : null
     const NONE = '00000000-0000-0000-0000-000000000000'
-    const cacheKey = `reports_${dateFrom}_${dateTo}_${station}${staffedOnly ? '_staffed' : ''}`
+    const cacheKey = `reports2_${dateFrom}_${dateTo}_${station}${staffedOnly ? '_staffed' : ''}`
     // غير الأدمن: ما نجيب أي بيانات قبل ما تتحدد محطاته (وإلا يطلع الاستعلام بدون تقييد نطاق)
     if (!seesAll && !scopedIds && !myStationIds.length) return
     const cached = getCached(cacheKey)
@@ -600,7 +611,7 @@ export default function ReportsPage() {
       `).gte('record_date', dateFrom).lte('record_date', dateTo)).order('id')),
 
       pageAll(() => scope(supabase.from('sales_records').select(`
-        id, sale_date, shift, total_actual, total_expected,
+        id, sale_date, shift, station_id, total_actual, total_expected,
         surplus_deficit, is_confirmed, station:station_id(name_ar, name_en)
       `).gte('sale_date', dateFrom).lte('sale_date', dateTo)).order('id')),
 
@@ -855,6 +866,7 @@ export default function ReportsPage() {
         totalSurplus:  sales.reduce((s, r) => s + Number(r.surplus_deficit ?? 0), 0),
         confirmed:     sales.filter(r => r.is_confirmed).length,
         total:         sales.length,
+        byStation:     sales.reduce((m, r) => { const o = (m[r.station_id] ??= { revenue: 0, diff: 0, n: 0, name: r.station?.name_ar || r.station?.name_en || '—' }); o.revenue += Number(r.total_actual ?? 0); o.diff += Number(r.surplus_deficit ?? 0); o.n++; return m }, {}),
       },
       lost: {
         total:     lost.length,
@@ -1325,6 +1337,59 @@ export default function ReportsPage() {
     return savePdfFolder(built.files, { ...opts, css: built.css, folderName: `${isAr ? 'تقارير المحطات' : 'Stations reports'} ${periodForName()}` })
   }
 
+  // التقرير المبسّط: صفحة واحدة — أرقام عامة + جدول واحد (سطر لكل محطة) بدون جداول الرحلات التفصيلية.
+  // الوصول والمغادرة منفصلان دائماً (لا إجمالي يجمعهما في الركاب أو الالتزام).
+  function simpleReportBody(types) {
+    const want = k => types.includes(k)
+    const trips = want('movements') || want('compliance') || want('transport')
+    const rateColor = r => r == null ? '#9ca3af' : r >= 80 ? '#16a34a' : r >= 60 ? '#d97706' : '#dc2626'
+    const pctCell = r => (r == null ? '—' : `<b style="color:${rateColor(r)}">${r}%</b>`)
+    const rows = new Map()
+    const row = (id, name) => { if (!rows.has(id)) rows.set(id, { id, name, arr: [], dep: [] }); return rows.get(id) }
+    data.movements.forEach(m => { const o = row(m.station_id, m.station); (m.type === 'arrival' ? o.arr : o.dep).push(m) })
+    const sBy = data.sales.byStation || {}
+    if (want('sales')) Object.entries(sBy).forEach(([id, v]) => row(id, v.name))
+    const facBy = {}; data.facilities.forEach(f => { facBy[f.station] = (facBy[f.station] || 0) + 1 })
+    const missBy = {}; data.movements.forEach(m => { if (m.missed) missBy[m.station_id] = (missBy[m.station_id] || 0) + m.missed })
+    const list = [...rows.values()].sort((a, b) => a.name.localeCompare(b.name, isAr ? 'ar' : 'en'))
+    const ent = l => l.filter(m => !m.unentered)
+    const sumPax = l => ent(l).reduce((a, m) => a + (m.pax || 0), 0)
+    const entryPct = (a, d) => { const t = a.length + d.length; return t ? Math.round((ent(a).length + ent(d).length) / t * 100) : null }
+    const allArr = data.movements.filter(m => m.type === 'arrival'), allDep = data.movements.filter(m => m.type === 'departure')
+    const stCount = list.filter(o => o.arr.length || o.dep.length || sBy[o.id]).length
+    const kp = []
+    kp.push({ val: stCount, label: isAr ? 'محطات' : 'Stations', color: '#1C2B36' })
+    if (trips) {
+      kp.push({ val: pctCell(entryPct(allArr, allDep)).replace(/<[^>]+>/g, '') || '—', label: isAr ? 'نسبة إدخال الرحلات' : 'Trips entered', color: '#5B5BD6' })
+      kp.push({ val: `${ent(allArr).length} · ${fmtN(sumPax(allArr))}`, label: isAr ? 'وصول: رحلات · ركاب' : 'Arrivals: trips · pax', color: '#23695A' })
+      kp.push({ val: complianceStats(allArr).rate == null ? '—' : complianceStats(allArr).rate + '%', label: isAr ? 'التزام الوصول' : 'Arrival on-time', color: rateColor(complianceStats(allArr).rate) })
+      kp.push({ val: `${ent(allDep).length} · ${fmtN(sumPax(allDep))}`, label: isAr ? 'مغادرة: رحلات · ركاب' : 'Departures: trips · pax', color: '#1C2B36' })
+      kp.push({ val: complianceStats(allDep).rate == null ? '—' : complianceStats(allDep).rate + '%', label: isAr ? 'التزام المغادرة' : 'Departure on-time', color: rateColor(complianceStats(allDep).rate) })
+    }
+    if (want('missed')) kp.push({ val: data.trips.totalMissed, label: isAr ? 'المتخلفون' : 'Missed', color: '#ef4444' })
+    if (want('sales')) { kp.push({ val: fmt(data.sales.totalRevenue), label: isAr ? 'الإيرادات (ر.س)' : 'Revenue', color: '#16a34a' }); kp.push({ val: fmt(data.sales.totalSurplus), label: isAr ? 'الفرق (ر.س)' : 'Diff', color: data.sales.totalSurplus >= 0 ? '#16a34a' : '#c0392b' }) }
+    if (want('facilities')) kp.push({ val: data.facilities.length, label: isAr ? 'تجهيزات معطّلة' : 'Faulty facilities', color: '#c2410c' })
+    if (want('lost')) kp.push({ val: data.lost.total, label: isAr ? 'الموجودات' : 'Lost & found', color: '#ca8a04' })
+
+    const head = [isAr ? 'المحطة' : 'Station']
+    if (trips) head.push(isAr ? 'وصول' : 'Arr.', isAr ? 'ركاب الوصول' : 'Arr. pax', isAr ? 'التزام الوصول' : 'Arr. on-time', isAr ? 'مغادرة' : 'Dep.', isAr ? 'ركاب المغادرة' : 'Dep. pax', isAr ? 'التزام المغادرة' : 'Dep. on-time', isAr ? 'نسبة الإدخال' : 'Entered')
+    if (want('missed')) head.push(isAr ? 'المتخلفون' : 'Missed')
+    if (want('facilities')) head.push(isAr ? 'تجهيزات معطّلة' : 'Faulty')
+    if (want('sales')) head.push(isAr ? 'الإيراد' : 'Revenue', isAr ? 'الفرق' : 'Diff')
+    const body = list.map(o => {
+      const c = [`<b>${escapeHtml(o.name)}</b>`]
+      if (trips) c.push(ent(o.arr).length, fmtN(sumPax(o.arr)), pctCell(complianceStats(o.arr).rate), ent(o.dep).length, fmtN(sumPax(o.dep)), pctCell(complianceStats(o.dep).rate), pctCell(entryPct(o.arr, o.dep)))
+      if (want('missed')) c.push(missBy[o.id] || 0)
+      if (want('facilities')) c.push(facBy[o.name] || 0)
+      if (want('sales')) { const v = sBy[o.id]; c.push(v ? fmt(v.revenue) : '—', v ? `<b style="color:${v.diff >= 0 ? '#16a34a' : '#dc2626'}">${fmt(v.diff)}</b>` : '—') }
+      return c
+    })
+    const note = `<div style="margin-top:10px;font-size:11.5px;color:#64748b;line-height:1.8">${isAr
+      ? `الوصول والمغادرة منفصلان في الركاب والالتزام. «نسبة الإدخال» = الرحلات المُدخلة من المجدولة. ${onlyStaffed && station === 'all' ? 'المحطات المعروضة هي التي فيها حسابات نشطة فقط.' : ''}`
+      : `Arrivals and departures are kept separate. "Entered" = trips entered out of scheduled. ${onlyStaffed && station === 'all' ? 'Only stations with active accounts.' : ''}`}</div>`
+    return `${kpiStrip(kp)}${banner(isAr ? 'ملخص المحطات' : 'Stations summary', '#1C2B36', list.length)}${tableHtml(head, body)}${note}`
+  }
+
   function printReport() {
     const ALL_TYPES = ['movements', 'compliance', 'transport', 'missed', 'facilities', 'sales', 'lost'].filter(typeAllowed)
     // الأقسام المحددة من نافذة الطباعة (اختيار متعدد)
@@ -1332,13 +1397,13 @@ export default function ReportsPage() {
     if (!types.length) return
     // header احترافي موحّد لجميع الأقسام
     const printHeader = brandHeader({
-      title: types.length === ALL_TYPES.length ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', '),
+      title: printSimple ? (isAr ? 'التقرير المبسّط' : 'Summary report') : types.length === ALL_TYPES.length ? (isAr ? 'التقرير الشامل' : 'Full Report') : types.map(t => REPORT_LABEL[t]).join(isAr ? '، ' : ', '),
       subtitle: `${isAr ? 'المحطة' : 'Station'}: ${stationLabel}`,
       lines: [`${isAr ? 'الفترة' : 'Period'}: <b>${dateFrom}</b> → <b>${dateTo}</b>`, `${isAr ? 'أعدّه' : 'By'}: ${escapeHtml(profile?.full_name_ar ?? '—')}`],
       dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px',
     })
 
-    const sections = types.map(tp => `
+    const sections = printSimple ? simpleReportBody(types) : types.map(tp => `
       <div style="display:flex;align-items:center;gap:10px;margin:22px 0 6px;font-size:18px;font-weight:900;color:#0f172a;page-break-after:avoid">
         <span style="width:5px;height:22px;background:#EE712D;border-radius:2px"></span>${REPORT_LABEL[tp]}
       </div>${reportBody(tp)}`).join('')
@@ -1355,7 +1420,7 @@ export default function ReportsPage() {
 
     const kind = reportKindName()
     const scopeName = station !== 'all' ? ` — ${stationLabel}` : ''
-    const docTitle = types.length === ALL_TYPES.length
+    const docTitle = printSimple ? `${isAr ? 'التقرير المبسّط' : 'Summary report'} — ${periodForName()}${scopeName}` : types.length === ALL_TYPES.length
       ? `${kind} — ${periodForName()}${scopeName}`
       : types.length === 1
         ? `${REPORT_LABEL[types[0]]} — ${kind.replace(isAr ? 'التقرير ' : ' Report', '') } — ${periodForName()}${scopeName}`
@@ -1465,6 +1530,13 @@ export default function ReportsPage() {
                         <button type="button" onClick={() => setPrintTypes([])} className="text-red-600 hover:underline">{isAr ? 'لا شيء' : 'None'}</button>
                       </div>
                     </div>
+                    <label className={`flex items-start gap-2.5 px-2 py-2 mb-2 rounded-lg cursor-pointer text-sm border ${printSimple ? 'border-nwbus-primary bg-gray-50' : 'border-gray-200'}`}>
+                      <input type="checkbox" className="accent-nwbus-primary w-4 h-4 mt-0.5" checked={printSimple} onChange={e => setPrintSimple(e.target.checked)} />
+                      <span className="flex-1">
+                        <b className="block text-gray-900">{isAr ? 'تقرير مبسّط' : 'Simple report'}</b>
+                        <span className="text-[11px] text-gray-500 leading-snug">{isAr ? 'جدول واحد بسطر لكل محطة وأرقام عامة، بدون جداول الرحلات التفصيلية' : 'One table, a row per station, no per-trip tables'}</span>
+                      </span>
+                    </label>
                     <div className="max-h-72 overflow-y-auto">
                       {TAB_DEFS.filter(t => PRINTABLE.includes(t.id)).map(t => {
                         const on = printTypes.includes(t.id)
