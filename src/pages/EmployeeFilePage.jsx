@@ -935,7 +935,7 @@ export default function EmployeeFilePage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
-  const [view, setView] = useState('employee')   // employee | stations (أداء المحطات) | late (الإدخالات المتأخرة) | coverage (الالتزام بالإيراد)
+  const [view, setView] = useState(() => { try { const v = new URLSearchParams(window.location.search).get('view'); return ['employee', 'stations', 'late', 'coverage'].includes(v) ? v : 'employee' } catch { return 'employee' } })   // employee | stations (أداء المحطات) | late (الإدخالات المتأخرة) | coverage (الالتزام بالإيراد)
   const desk = useMedia('(min-width: 900px)')
   const wide = useMedia('(min-width: 1360px)')   // بطاقة الموظف جانباً
 

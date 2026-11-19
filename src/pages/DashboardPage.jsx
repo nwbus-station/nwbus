@@ -10,6 +10,7 @@ import { shiftsFromEnds } from '../utils/stationShifts'
 import { shiftIdx } from '../utils/shifts'
 import MobileHome from '../components/home/MobileHome'
 import ShortfallCard from '../components/home/ShortfallCard'
+import AdminLateCard from '../components/home/AdminLateCard'
 import { useMedia } from '../components/dispatch/Sheet'
 import { SurveyOverlay, detectSurveyCity, SURVEY_STATIONS } from './SurveyPage'
 import { TEMPLATES as MAGAZINE_TEMPLATES, TEMPLATE_ORDER as MAGAZINE_TEMPLATE_ORDER, bgFor as magazineBgFor, isPostLive, templateLabel as magazineTemplateLabel } from './MagazinePage'
@@ -487,7 +488,8 @@ export default function DashboardPage() {
   // الإدخالات المتأخرة (إيراد وردية / رحلات لم تُدخل) — للمشرفين فقط، على محطاتهم
   const showShortfall = ['shift_supervisor', 'station_admin', 'area_supervisor'].includes(profile?.role)
   const shortfallIds = [...new Set([profile?.station_id, ...(allowedStationIds || []), ...(workStations || []).map(x => x.id)].filter(Boolean))]
-  const shortfallNode = showShortfall && shortfallIds.length ? <ShortfallCard stationIds={shortfallIds} isAr={isAr} navigate={navigate} compact={isMobile} sx={{ marginBottom: isMobile ? 0 : 18 }} /> : null
+  const shortfallNode = isGeneralAdmin ? <AdminLateCard isAr={isAr} navigate={navigate} compact={isMobile} sx={{ marginBottom: isMobile ? 0 : 18 }} />
+    : showShortfall && shortfallIds.length ? <ShortfallCard stationIds={shortfallIds} isAr={isAr} navigate={navigate} compact={isMobile} sx={{ marginBottom: isMobile ? 0 : 18 }} /> : null
 
   if (isMobile) {
     const canSeePending = isAdmin || profile?.role === 'station_admin'

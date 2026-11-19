@@ -10,6 +10,8 @@ const MONO = "'IBM Plex Mono', ui-monospace, monospace"
 const SALES_LAG = 60    // مهلة (دقائق) بعد نهاية الوردية قبل أن يُعدّ إيرادها ناقصاً
 const TRIP_LAG = 60     // مهلة بعد موعد رحلة اليوم قبل أن تُعدّ غير مُدخلة
 const SALES_ACTIVITY_DAYS = 30
+const CACHE_MS = 5 * 60 * 1000
+const CACHE = new Map()   // نتيجة آخر جلب لكل نطاق محطات: الرجوع للرئيسية خلال 5 دقائق لا يعيد الجلب الثقيل
 
 async function pageAll(make) {
   const out = []
@@ -41,6 +43,8 @@ export function useShortfalls(stationIds, enabled, ackDays = 1) {
     const ids = ALL ? null : idsKey.split(',')
     const flt = (q, col) => (ids ? q.in(col, ids) : q)
     const { today } = riyadh(), y = addDays(today, -1), act = addDays(today, -SALES_ACTIVITY_DAYS), ackFrom = addDays(today, -Math.max(1, ackDays))
+    const ck = `${idsKey}|${ackDays}`, hit = CACHE.get(ck)
+    if (tick === 0 && hit && Date.now() - hit.t < CACHE_MS) { setRaw(hit.raw); setAcks(hit.acks); setAckList(hit.ackList); return }
     setLoading(true)
     ;(async () => {
       try {
@@ -57,6 +61,7 @@ export function useShortfalls(stationIds, enabled, ackDays = 1) {
         const m = {}
         ;(ackRes.data ?? []).forEach(a => { m[`${a.station_id}|${a.kind}|${a.day}|${a.shift || ''}`] = a })
         setAcks(m); setAckList(ackRes.data ?? [])
+        CACHE.set(ck, { t: Date.now(), raw: { stations, stationTrips, stops, records, sales, today, y }, acks: m, ackList: ackRes.data ?? [] })
       } catch { if (!off) setRaw(null) }
       if (!off) setLoading(false)
     })()
