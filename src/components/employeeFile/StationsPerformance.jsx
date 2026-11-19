@@ -124,7 +124,7 @@ const CARD_CSS = `
 const verdictOf = (score, stopped) => stopped ? VERDICTS[0] : score < 50 ? VERDICTS[1] : score < 75 ? VERDICTS[2] : score < 90 ? VERDICTS[3] : VERDICTS[4]
 const heat = p => (p == null ? ['#e5e7eb', '#6b7280'] : p >= 90 ? ['#16a34a', '#fff'] : p >= 75 ? ['#65a30d', '#fff'] : p >= 50 ? ['#f59e0b', '#1f1300'] : p >= 25 ? ['#f97316', '#fff'] : ['#dc2626', '#fff'])
 
-export default function StationsPerformance({ isAr = true }) {
+export default function StationsPerformance({ isAr = true, mode = 'stations' }) {
   const today = todayStr()
   const [from, setFrom] = useState(addDays(today, -6))
   const [to, setTo] = useState(today)
@@ -133,7 +133,7 @@ export default function StationsPerformance({ isAr = true }) {
   const [raw, setRaw] = useState(null)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
-  const [tab, setTab] = useState('stations')   // محطات | حسابات
+  const tab = mode   // محطات | حسابات — يحدده التبويب العلوي في السجل الوظيفي
   const [aSt, setASt] = useState('all'), [aRole, setARole] = useState('all'), [aStatus, setAStatus] = useState('all'), [aQ, setAQ] = useState(''), [aSort, setASort] = useState('low'), [aMore, setAMore] = useState(100)
   const [openStaff, setOpenStaff] = useState({})   // محطة → عرض أسماء موظفيها
   const presence = usePresence()
@@ -512,6 +512,7 @@ export default function StationsPerformance({ isAr = true }) {
             <DatePicker value={from} onChange={v => { setFrom(v); if (v > to) setTo(v) }} isAr={isAr} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-40" /></div>
           <div><label style={{ display: 'block', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'إلى' : 'To'}</label>
             <DatePicker value={to} onChange={v => { setTo(v); if (v < from) setFrom(v) }} max={today} isAr={isAr} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-40" /></div>
+          {tab === 'stations' && (<>
           <div style={{ flex: 1, minWidth: 200 }}>
             <label style={{ display: 'block', fontSize: f('0.68rem'), fontWeight: 700, color: 'var(--text-3)', marginBottom: 4 }}>{isAr ? 'بحث بالمحطة أو المدير' : 'Search station or manager'}</label>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder={isAr ? 'اسم محطة أو مدير…' : 'Station or manager…'} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white w-full" />
@@ -524,6 +525,7 @@ export default function StationsPerformance({ isAr = true }) {
             style={{ padding: '10px 22px', borderRadius: 10, border: '1.5px solid #1C2B4A', background: 'var(--card)', color: '#1C2B4A', fontWeight: 800, fontSize: f('0.82rem'), fontFamily: 'inherit', cursor: result && !loading && visible.length ? 'pointer' : 'not-allowed', opacity: result && !loading && visible.length ? 1 : 0.5 }}>
             {isAr ? `صفحة لكل محطة (${visible.length})` : `Page per station (${visible.length})`}
           </button>
+          </>)}
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {PRESETS.map(([l, a, b]) => { const f = addDays(today, a), t = addDays(today, b); return <button key={l} type="button" onClick={() => { setFrom(f); setTo(t) }} style={pill(from === f && to === t)}>{l}</button> })}
@@ -533,13 +535,6 @@ export default function StationsPerformance({ isAr = true }) {
         </p>
       </div>
 
-      {result && (
-        <div style={{ display: 'inline-flex', alignSelf: 'flex-start', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--card)' }}>
-          {[['stations', isAr ? 'أداء المحطات' : 'Stations'], ['accounts', isAr ? 'أداء الحسابات' : 'Accounts']].map(([k, l]) => (
-            <button key={k} type="button" onClick={() => setTab(k)} style={{ padding: '9px 20px', border: 'none', fontFamily: 'inherit', fontWeight: 800, fontSize: f('0.82rem'), cursor: 'pointer', background: tab === k ? '#1C2B4A' : 'transparent', color: tab === k ? '#fff' : 'var(--text-2)' }}>{l}</button>
-          ))}
-        </div>
-      )}
       {err && <div style={{ padding: '10px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: f('0.82rem') }}>{err}</div>}
       {loading && !result && <div style={{ ...card, padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>{isAr ? 'جارٍ تحليل المحطات…' : 'Analysing stations…'}</div>}
 

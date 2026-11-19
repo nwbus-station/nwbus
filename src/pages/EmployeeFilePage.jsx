@@ -935,7 +935,7 @@ export default function EmployeeFilePage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
-  const [view, setView] = useState(() => { try { const v = new URLSearchParams(window.location.search).get('view'); return ['employee', 'stations', 'late', 'coverage'].includes(v) ? v : 'employee' } catch { return 'employee' } })   // employee | stations (أداء المحطات) | late (الإدخالات المتأخرة) | coverage (الالتزام بالإيراد)
+  const [view, setView] = useState(() => { try { const v = new URLSearchParams(window.location.search).get('view'); return ['employee', 'stations', 'accounts', 'late', 'coverage'].includes(v) ? v : 'employee' } catch { return 'employee' } })   // employee | stations (أداء المحطات) | accounts (أداء الحسابات) | late (الإدخالات المتأخرة) | coverage (الالتزام بالإيراد)
   const desk = useMedia('(min-width: 900px)')
   const wide = useMedia('(min-width: 1360px)')   // بطاقة الموظف جانباً
 
@@ -1213,13 +1213,13 @@ export default function EmployeeFilePage() {
       <style>{EF_CSS}</style>
       <div style={{ maxWidth: 'min(100%, 1560px)', margin: '0 auto', padding: 'clamp(16px, 2vw, 32px)' }}>
         <PageHeader accent="#1C2B4A" title={isAr ? 'السجل الوظيفي' : 'Staff record'}
-          subtitle={isAr ? 'سجل شامل للموظف: البيانات، الإجازات، الأداء التشغيلي، الإيرادات، التقييمات، والدخول — للأدمن فقط' : 'Complete employee record: details, leaves, operations, revenue, evaluations and logins — admin only'}
+          subtitle={isAr ? 'ملف الموظف، أداء المحطات والحسابات، الإدخالات المتأخرة، والالتزام بالإيراد — للأدمن فقط' : 'Employee file, stations and accounts performance, late entries and revenue compliance — admin only'}
           actions={printBtn || undefined} stats={hdrStats} />
 
         <ViewTabs view={view} onChange={setView} isAr={isAr} desk={desk} />
 
         {view === 'coverage' && <StationsCoverage isAr={isAr} />}
-        {view === 'stations' && <StationsPerformance isAr={isAr} />}
+        {(view === 'stations' || view === 'accounts') && <StationsPerformance isAr={isAr} mode={view} />}
         {view === 'late' && <LateEntriesAdmin isAr={isAr} />}
 
         <div style={{ display: view === 'employee' ? 'flex' : 'none', flexDirection: 'column', gap: desk ? 20 : 16 }}>
