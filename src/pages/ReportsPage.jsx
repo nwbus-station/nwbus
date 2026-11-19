@@ -1393,9 +1393,7 @@ export default function ReportsPage() {
     if (trips) {
       kp.push({ val: pctCell(entryPct(allArr, allDep)).replace(/<[^>]+>/g, '') || '—', label: isAr ? 'نسبة إدخال الرحلات' : 'Trips entered', color: '#5B5BD6' })
       kp.push({ val: `${ent(allArr).length} · ${fmtN(sumPax(allArr))}`, label: isAr ? 'وصول: رحلات · ركاب' : 'Arrivals: trips · pax', color: '#23695A' })
-      kp.push({ val: complianceStats(allArr).rate == null ? '—' : complianceStats(allArr).rate + '%', label: isAr ? 'التزام الوصول' : 'Arrival on-time', color: rateColor(complianceStats(allArr).rate) })
       kp.push({ val: `${ent(allDep).length} · ${fmtN(sumPax(allDep))}`, label: isAr ? 'مغادرة: رحلات · ركاب' : 'Departures: trips · pax', color: '#1C2B36' })
-      kp.push({ val: complianceStats(allDep).rate == null ? '—' : complianceStats(allDep).rate + '%', label: isAr ? 'التزام المغادرة' : 'Departure on-time', color: rateColor(complianceStats(allDep).rate) })
     }
     if (want('missed')) kp.push({ val: data.trips.totalMissed, label: isAr ? 'المتخلفون' : 'Missed', color: '#ef4444' })
     if (want('sales')) { kp.push({ val: fmt(data.sales.totalRevenue), label: isAr ? 'الإيرادات (ر.س)' : 'Revenue', color: '#16a34a' }); kp.push({ val: fmt(data.sales.totalSurplus), label: isAr ? 'الفرق (ر.س)' : 'Diff', color: data.sales.totalSurplus >= 0 ? '#16a34a' : '#c0392b' }) }
@@ -1403,22 +1401,22 @@ export default function ReportsPage() {
     if (want('lost')) kp.push({ val: data.lost.total, label: isAr ? 'الموجودات' : 'Lost & found', color: '#ca8a04' })
 
     const head = [isAr ? 'المحطة' : 'Station', isAr ? 'الورديات الفعلية' : 'Active shifts']
-    if (trips) head.push(isAr ? 'وصول' : 'Arr.', isAr ? 'ركاب الوصول' : 'Arr. pax', isAr ? 'التزام الوصول' : 'Arr. on-time', isAr ? 'مغادرة' : 'Dep.', isAr ? 'ركاب المغادرة' : 'Dep. pax', isAr ? 'التزام المغادرة' : 'Dep. on-time', isAr ? 'نسبة الإدخال' : 'Entered')
+    if (trips) head.push(isAr ? 'وصول' : 'Arr.', isAr ? 'ركاب الوصول' : 'Arr. pax', isAr ? 'مغادرة' : 'Dep.', isAr ? 'ركاب المغادرة' : 'Dep. pax', isAr ? 'نسبة الإدخال' : 'Entered')
     if (want('missed')) head.push(isAr ? 'المتخلفون' : 'Missed')
     if (want('facilities')) head.push(isAr ? 'تجهيزات معطّلة' : 'Faulty')
     if (want('sales')) head.push(isAr ? 'الإيراد' : 'Revenue', isAr ? 'الفرق' : 'Diff')
     const body = list.map(o => {
       const sc = (data.shiftCount || {})[o.id]
       const c = [`<b>${escapeHtml(o.name)}</b>`, sc ? (sc.act < sc.n ? `<b style="color:#dc2626">${sc.act} ${isAr ? 'من' : 'of'} ${sc.n}</b>` : String(sc.n)) : '—']
-      if (trips) c.push(ent(o.arr).length, fmtN(sumPax(o.arr)), pctCell(complianceStats(o.arr).rate), ent(o.dep).length, fmtN(sumPax(o.dep)), pctCell(complianceStats(o.dep).rate), pctCell(entryPct(o.arr, o.dep)))
+      if (trips) c.push(ent(o.arr).length, fmtN(sumPax(o.arr)), ent(o.dep).length, fmtN(sumPax(o.dep)), pctCell(entryPct(o.arr, o.dep)))
       if (want('missed')) c.push(missBy[o.id] || 0)
       if (want('facilities')) c.push(facBy[o.name] || 0)
       if (want('sales')) { const v = sBy[o.id]; c.push(v ? fmt(v.revenue) : '—', v ? `<b style="color:${v.diff >= 0 ? '#16a34a' : '#dc2626'}">${fmt(v.diff)}</b>` : '—') }
       return c
     })
     const note = `<div style="margin-top:10px;font-size:11.5px;color:#64748b;line-height:1.8">${isAr
-      ? `الوصول والمغادرة منفصلان في الركاب والالتزام. «نسبة الإدخال» = الرحلات المُدخلة من المجدولة. ${activeOnly ? 'الورديات المتوقفة في المحطات غير محسوبة. ' : ''}${onlyStaffed && station === 'all' ? 'المحطات المعروضة هي التي فيها حسابات نشطة فقط.' : ''}`
-      : `Arrivals and departures are kept separate. "Entered" = trips entered out of scheduled. ${activeOnly ? 'Stopped shifts are not counted. ' : ''}${onlyStaffed && station === 'all' ? 'Only stations with active accounts.' : ''}`}</div>`
+      ? `الوصول والمغادرة منفصلان في الرحلات والركاب. «نسبة الإدخال» = الرحلات المُدخلة من المجدولة. ${activeOnly ? 'الورديات المتوقفة في المحطات غير محسوبة. ' : ''}${onlyStaffed && station === 'all' ? 'المحطات المعروضة هي التي فيها حسابات نشطة فقط.' : ''}`
+      : `Arrivals and departures are kept separate (trips and passengers). "Entered" = trips entered out of scheduled. ${activeOnly ? 'Stopped shifts are not counted. ' : ''}${onlyStaffed && station === 'all' ? 'Only stations with active accounts.' : ''}`}</div>`
     return `${kpiStrip(kp)}${banner(isAr ? 'ملخص المحطات' : 'Stations summary', '#1C2B36', list.length)}${tableHtml(head, body)}${note}`
   }
 
