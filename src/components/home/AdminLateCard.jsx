@@ -34,6 +34,11 @@ export default function AdminLateCard({ isAr, navigate, compact = false, sx }) {
         </div>
         {rows.length > 0 && (
           <div style={{ display: 'flex', gap: 14, marginInlineStart: 'auto', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* أزرار الطي والتفاصيل في الأعلى: لا تنزل مع طول القائمة */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+              {rows.length > ROWS && <button type="button" onClick={() => setShowAll(v => !v)} aria-expanded={showAll} style={btnTop}>{showAll ? t('طي القائمة', 'Collapse') : t(`عرض الكل (${rows.length})`, `Show all (${rows.length})`)}</button>}
+              <button type="button" onClick={go} style={btnTop}>{t('التفاصيل والسجل', 'Details and log')}</button>
+            </div>
             {[[pending, t('لم يقرّ', 'Not ack.'), pending ? 'var(--danger)' : 'var(--text-1)'], [acked, t('أقرّ', 'Ack.'), 'var(--success)'], [pendingSt, t('محطات', 'Stations'), 'var(--text-1)']].map(([n, l, c]) => (
               <div key={l} style={{ textAlign: 'center' }}>
                 <div style={{ fontFamily: MONO, fontWeight: 900, fontSize: '1.25rem', color: c, lineHeight: 1 }}>{n}</div>
@@ -55,13 +60,7 @@ export default function AdminLateCard({ isAr, navigate, compact = false, sx }) {
             : <span style={{ fontSize: '0.7rem', fontWeight: 900, color: 'var(--danger)' }}>{t('لم يقرّ', 'Not acknowledged')}</span>}
         </div>
       ))}
-      {rows.length > 0 && (
-        <div style={{ display: 'flex', gap: 10, padding: '10px 18px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexWrap: 'wrap' }}>
-          {rows.length > ROWS && <button type="button" onClick={() => setShowAll(v => !v)} style={lnk}>{showAll ? t('عرض أقل', 'Show less') : t(`عرض الكل (${rows.length})`, `Show all (${rows.length})`)}</button>}
-          <button type="button" onClick={go} style={{ ...lnk, marginInlineStart: 'auto' }}>{t('التفاصيل الكاملة والسجل', 'Full details and log')}</button>
-        </div>
-      )}
     </section>
   )
 }
-const lnk = { border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 800, fontSize: '0.74rem', fontFamily: 'inherit', cursor: 'pointer', padding: 0 }
+const btnTop = { border: '1px solid var(--border-2)', background: 'var(--card)', color: 'var(--accent)', fontWeight: 800, fontSize: '0.72rem', fontFamily: 'inherit', cursor: 'pointer', padding: '5px 12px', borderRadius: 6, whiteSpace: 'nowrap' }

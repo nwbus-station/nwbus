@@ -11,6 +11,8 @@ const SALES_LAG = 60    // مهلة (دقائق) بعد نهاية الوردي�
 const TRIP_LAG = 60     // مهلة بعد موعد رحلة اليوم قبل أن تُعدّ غير مُدخلة
 const SALES_ACTIVITY_DAYS = 30
 const CACHE_MS = 5 * 60 * 1000
+const ADMIN_ROLES = ['general_admin', 'stations_executive_director', 'assistant_stations_executive_director']
+const EXCLUDED_JOB = /cleaner|dispatcher_supervisor|نظاف|مشرف\s*مرحّ|مشرف\s*مرح/i
 const CACHE = new Map()   // نتيجة آخر جلب لكل نطاق محطات: الرجوع للرئيسية خلال 5 دقائق لا يعيد الجلب الثقيل
 
 async function pageAll(make) {
@@ -48,20 +50,23 @@ export function useShortfalls(stationIds, enabled, ackDays = 1) {
     setLoading(true)
     ;(async () => {
       try {
-        const [stations, stationTrips, stops, records, sales, ackRes] = await Promise.all([
+        const [stations, stationTrips, stops, records, sales, ackRes, users] = await Promise.all([
           flt(supabase.from('stations').select('id, name_ar, name_en, is_agent, shift_ends, inactive_shifts, city_group, type'), 'id').eq('is_active', true).then(r => { if (r.error) throw r.error; return r.data ?? [] }),
           pageAll(() => flt(supabase.from('station_trips').select(TRIP_SELECT), 'station_id').order('trip_schedule_id').order('station_id')),
           pageAll(() => flt(supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time'), 'station_id').order('trip_schedule_id').order('station_id')),
           pageAll(() => flt(supabase.from('trip_records').select('id, trip_schedule_id, record_date, station_id, is_arrival, actual_arrival, actual_departure'), 'station_id').gte('record_date', y).lte('record_date', today).order('id')),
           pageAll(() => flt(supabase.from('sales_records').select('id, sale_date, shift, station_id'), 'station_id').gte('sale_date', act).lte('sale_date', today).order('id')),
           supabase.rpc('shortfall_acks_list', { p_stations: ids, p_from: ackFrom }),
+          // الأدمن: نقتصر على المحطات التي فيها حسابات نشطة (غير الإدارة العليا وعمال النظافة ومشرفي المرحّلين)
+          ALL ? pageAll(() => supabase.from('users').select('id, station_id, role, job_title').eq('is_active', true).order('id')) : Promise.resolve(null),
         ])
         if (off) return
-        setRaw({ stations, stationTrips, stops, records, sales, today, y })
+        const staffSt = users ? [...new Set(users.filter(u => u.station_id && !ADMIN_ROLES.includes(u.role) && !EXCLUDED_JOB.test(u.job_title || '')).map(u => u.station_id))] : null
+        setRaw({ stations, stationTrips, stops, records, sales, today, y, staffSt })
         const m = {}
         ;(ackRes.data ?? []).forEach(a => { m[`${a.station_id}|${a.kind}|${a.day}|${a.shift || ''}`] = a })
         setAcks(m); setAckList(ackRes.data ?? [])
-        CACHE.set(ck, { t: Date.now(), raw: { stations, stationTrips, stops, records, sales, today, y }, acks: m, ackList: ackRes.data ?? [] })
+        CACHE.set(ck, { t: Date.now(), raw: { stations, stationTrips, stops, records, sales, today, y, staffSt }, acks: m, ackList: ackRes.data ?? [] })
       } catch { if (!off) setRaw(null) }
       if (!off) setLoading(false)
     })()
@@ -74,7 +79,8 @@ export function useShortfalls(stationIds, enabled, ackDays = 1) {
     if (!raw) return null
     const { stations: all, stationTrips, stops, records, sales, today, y } = raw
     const { nowMin } = riyadh()
-    const stations = all.filter(s => !isRestStation(s) && !s.is_agent)
+    const staffSet = raw.staffSt ? new Set(raw.staffSt) : null   // null = بلا فلترة (المشرف على محطاته)
+    const stations = all.filter(s => !isRestStation(s) && !s.is_agent && (!staffSet || staffSet.has(s.id)))
     const stById = Object.fromEntries(stations.map(s => [s.id, s]))
     const days = [y, today]
     const out = []

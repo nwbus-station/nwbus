@@ -62,7 +62,7 @@ export default function LateEntriesAdmin({ isAr = true }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ ...card, padding: '12px 16px', fontSize: f('0.78rem'), color: 'var(--text-2)', lineHeight: 1.8, fontWeight: 600 }}>
-        {t('إيراد ورديات ورحلات لم تُدخل في أمس واليوم (الورديات المتوقفة لا تُحسب). «لم يقرّ» تعني أن المشرف لم يضغط «علمت» على بطاقته في الرئيسية بعد.', 'Revenue shifts and trips not entered yesterday/today. "Not acknowledged" means the supervisor has not pressed acknowledge yet.')}
+        {t('إيراد ورديات ورحلات لم تُدخل في أمس واليوم، للمحطات التي فيها حسابات نشطة فقط (الورديات المتوقفة لا تُحسب). «لم يقرّ» تعني أن المشرف لم يضغط «علمت» على بطاقته في الرئيسية بعد.', 'Revenue shifts and trips not entered yesterday/today. "Not acknowledged" means the supervisor has not pressed acknowledge yet.')}
       </div>
 
       {loading && !items ? (
@@ -86,6 +86,33 @@ export default function LateEntriesAdmin({ isAr = true }) {
             ))}
             <input value={q} onChange={e => setQ(e.target.value)} placeholder={t('بحث بالمحطة…', 'Search station…')}
               style={{ marginInlineStart: 'auto', minWidth: 180, border: '1px solid var(--border-2)', background: 'var(--card)', color: 'var(--text-1)', borderRadius: 10, padding: '7px 12px', fontSize: f('0.78rem'), fontFamily: 'inherit', outline: 'none' }} />
+          </div>
+
+          {/* سجل الإقرارات (آخر 7 أيام) — يشمل ما صُحّح بعد الإقرار */}
+          <div style={{ ...card, overflow: 'hidden' }}>
+            <button type="button" onClick={() => setLog(v => !v)} aria-expanded={log} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
+              <span style={{ fontSize: f('0.88rem'), fontWeight: 900, color: 'var(--text-1)' }}>{t('سجل الإقرارات — آخر 7 أيام', 'Acknowledgement log — last 7 days')}</span>
+              <span style={{ fontFamily: MONO, fontSize: f('0.72rem'), fontWeight: 800, background: 'var(--surface-2)', borderRadius: 99, padding: '1px 10px', color: 'var(--text-2)' }}>{ackList.length}</span>
+              <span style={{ marginInlineStart: 'auto', fontSize: f('0.72rem'), fontWeight: 800, color: 'var(--accent)' }}>{log ? t('إخفاء', 'Hide') : t('عرض', 'Show')}</span>
+            </button>
+            {log && (ackList.length === 0
+              ? <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', color: 'var(--text-3)', fontWeight: 700, fontSize: f('0.8rem') }}>{t('لا إقرارات بعد', 'No acknowledgements yet')}</div>
+              : <div style={{ overflowX: 'auto', borderTop: '1px solid var(--border)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: f('0.78rem') }}>
+                    <thead><tr style={{ background: 'var(--surface)', color: 'var(--text-3)' }}>
+                      {[t('المحطة', 'Station'), t('النوع', 'Type'), t('عن يوم', 'For day'), t('اطّلع عليه', 'By'), t('الوقت', 'At')].map(h => <th key={h} style={{ padding: '8px 14px', fontWeight: 800, textAlign: 'start', whiteSpace: 'nowrap' }}>{h}</th>)}
+                    </tr></thead>
+                    <tbody>{ackList.slice(0, 300).map((a, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                        <td style={{ padding: '8px 14px', fontWeight: 800, color: 'var(--text-1)' }}>{nm[a.station_id] || '—'}</td>
+                        <td style={{ padding: '8px 14px', color: 'var(--text-2)' }}>{a.kind === 'sales' ? `${t('إيراد', 'Revenue')}${a.shift ? ` ${a.shift}` : ''}` : t('رحلات', 'Trips')}</td>
+                        <td style={{ padding: '8px 14px', fontFamily: MONO, color: 'var(--text-2)' }} dir="ltr">{a.day}</td>
+                        <td style={{ padding: '8px 14px', fontWeight: 800, color: 'var(--text-1)' }}>{a.ack_by_name || '—'}</td>
+                        <td style={{ padding: '8px 14px', fontFamily: MONO, color: 'var(--text-2)' }} dir="ltr">{stamp(a.ack_at)}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>)}
           </div>
 
           {visible.length === 0 ? (
@@ -124,33 +151,6 @@ export default function LateEntriesAdmin({ isAr = true }) {
               </div>
             </div>
           )}
-
-          {/* سجل الإقرارات (آخر 7 أيام) — يشمل ما صُحّح بعد الإقرار */}
-          <div style={{ ...card, overflow: 'hidden' }}>
-            <button type="button" onClick={() => setLog(v => !v)} aria-expanded={log} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
-              <span style={{ fontSize: f('0.88rem'), fontWeight: 900, color: 'var(--text-1)' }}>{t('سجل الإقرارات — آخر 7 أيام', 'Acknowledgement log — last 7 days')}</span>
-              <span style={{ fontFamily: MONO, fontSize: f('0.72rem'), fontWeight: 800, background: 'var(--surface-2)', borderRadius: 99, padding: '1px 10px', color: 'var(--text-2)' }}>{ackList.length}</span>
-              <span style={{ marginInlineStart: 'auto', fontSize: f('0.72rem'), fontWeight: 800, color: 'var(--accent)' }}>{log ? t('إخفاء', 'Hide') : t('عرض', 'Show')}</span>
-            </button>
-            {log && (ackList.length === 0
-              ? <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', color: 'var(--text-3)', fontWeight: 700, fontSize: f('0.8rem') }}>{t('لا إقرارات بعد', 'No acknowledgements yet')}</div>
-              : <div style={{ overflowX: 'auto', borderTop: '1px solid var(--border)' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: f('0.78rem') }}>
-                    <thead><tr style={{ background: 'var(--surface)', color: 'var(--text-3)' }}>
-                      {[t('المحطة', 'Station'), t('النوع', 'Type'), t('عن يوم', 'For day'), t('اطّلع عليه', 'By'), t('الوقت', 'At')].map(h => <th key={h} style={{ padding: '8px 14px', fontWeight: 800, textAlign: 'start', whiteSpace: 'nowrap' }}>{h}</th>)}
-                    </tr></thead>
-                    <tbody>{ackList.slice(0, 300).map((a, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                        <td style={{ padding: '8px 14px', fontWeight: 800, color: 'var(--text-1)' }}>{nm[a.station_id] || '—'}</td>
-                        <td style={{ padding: '8px 14px', color: 'var(--text-2)' }}>{a.kind === 'sales' ? `${t('إيراد', 'Revenue')}${a.shift ? ` ${a.shift}` : ''}` : t('رحلات', 'Trips')}</td>
-                        <td style={{ padding: '8px 14px', fontFamily: MONO, color: 'var(--text-2)' }} dir="ltr">{a.day}</td>
-                        <td style={{ padding: '8px 14px', fontWeight: 800, color: 'var(--text-1)' }}>{a.ack_by_name || '—'}</td>
-                        <td style={{ padding: '8px 14px', fontFamily: MONO, color: 'var(--text-2)' }} dir="ltr">{stamp(a.ack_at)}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>)}
-          </div>
         </>
       )}
     </div>
