@@ -131,8 +131,6 @@ export default function StationsPerformance({ isAr = true }) {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [raw, setRaw] = useState(null)
-  const [acks, setAcks] = useState([])        // إقرارات المشرفين بالإدخالات المتأخرة (shortfall_acks)
-  const [showAcks, setShowAcks] = useState(true)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const [tab, setTab] = useState('stations')   // محطات | حسابات
@@ -159,7 +157,6 @@ export default function StationsPerformance({ isAr = true }) {
         pageAll(() => supabase.from('lost_found_items').select('id, station_id').gte('found_date', from).lte('found_date', end).order('id')),
       ])
       setRaw({ stations, users, userStations, stationTrips, stops, records, sales, ratings, lost, end })
-      try { const r = await supabase.rpc('shortfall_acks_list', { p_stations: null, p_from: from }); setAcks(Array.isArray(r.data) ? r.data : []) } catch { setAcks([]) }
     } catch (e) { setErr(e?.message || String(e)); setRaw(null) }
     setLoading(false)
   }, [from, to, today])
@@ -590,40 +587,6 @@ export default function StationsPerformance({ isAr = true }) {
             {[...VERDICTS].map(v => result.counts[v.key] > 0 && (
               <button key={v.key} type="button" onClick={() => setFilter(filter === v.key ? 'all' : v.key)} style={pill(filter === v.key)}>{v.ar} <span style={{ fontFamily: MONO, opacity: 0.8 }}>{result.counts[v.key]}</span></button>
             ))}
-          </div>
-
-          {/* إقرارات المشرفين: من اطّلع على الإدخالات المتأخرة ومتى */}
-          <div style={{ ...card, overflow: 'hidden' }}>
-            <button type="button" onClick={() => setShowAcks(v => !v)} aria-expanded={showAcks} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
-              <span style={{ fontSize: f('0.92rem'), fontWeight: 900, color: 'var(--text-1)' }}>{isAr ? 'إقرارات المشرفين بالإدخالات المتأخرة' : 'Supervisor acknowledgements of late entries'}</span>
-              <span style={{ fontFamily: MONO, fontSize: f('0.72rem'), fontWeight: 800, background: 'var(--surface-2)', borderRadius: 99, padding: '1px 10px', color: 'var(--text-2)' }}>{acks.length}</span>
-              <span style={{ marginInlineStart: 'auto', fontSize: f('0.72rem'), fontWeight: 800, color: 'var(--accent)' }}>{showAcks ? (isAr ? 'إخفاء' : 'Hide') : (isAr ? 'عرض' : 'Show')}</span>
-            </button>
-            {showAcks && (acks.length === 0
-              ? <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', fontSize: f('0.8rem'), color: 'var(--text-3)', fontWeight: 700 }}>{isAr ? 'لا إقرارات في هذي الفترة — المشرف يضغط «علمت» على البطاقة في رئيسيته عند اطّلاعه.' : 'No acknowledgements in this period.'}</div>
-              : (() => {
-                  const nm = Object.fromEntries((raw?.stations ?? []).map(x => [x.id, isAr ? x.name_ar : (x.name_en || x.name_ar)]))
-                  const sh = { A: 'الوردية A', B: 'الوردية B', C: 'الوردية C', D: 'الوردية D' }
-                  const at = iso => { const r = new Date(new Date(iso).getTime() + 3 * 3600 * 1000); return `${r.toISOString().slice(5, 10).replace('-', '/')} ${r.toISOString().slice(11, 16)}` }
-                  return (
-                    <div style={{ overflowX: 'auto', borderTop: '1px solid var(--border)' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: f('0.78rem') }}>
-                        <thead><tr style={{ background: 'var(--surface)', color: 'var(--text-3)', textAlign: 'start' }}>
-                          {[isAr ? 'المحطة' : 'Station', isAr ? 'النوع' : 'Type', isAr ? 'عن يوم' : 'For day', isAr ? 'اطّلع عليه' : 'Acknowledged by', isAr ? 'وقت الاطلاع' : 'At'].map(h => <th key={h} style={{ padding: '8px 14px', fontWeight: 800, textAlign: 'start', whiteSpace: 'nowrap' }}>{h}</th>)}
-                        </tr></thead>
-                        <tbody>{acks.slice(0, 200).map((a, i) => (
-                          <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                            <td style={{ padding: '8px 14px', fontWeight: 800, color: 'var(--text-1)' }}>{nm[a.station_id] || '—'}</td>
-                            <td style={{ padding: '8px 14px', color: 'var(--text-2)' }}>{a.kind === 'sales' ? `${isAr ? 'إيراد' : 'Revenue'} ${sh[a.shift] || ''}` : (isAr ? 'رحلات' : 'Trips')}</td>
-                            <td style={{ padding: '8px 14px', fontFamily: MONO, color: 'var(--text-2)' }} dir="ltr">{a.day}</td>
-                            <td style={{ padding: '8px 14px', fontWeight: 800, color: 'var(--text-1)' }}>{a.ack_by_name || '—'}</td>
-                            <td style={{ padding: '8px 14px', fontFamily: MONO, color: 'var(--text-2)' }} dir="ltr">{at(a.ack_at)}</td>
-                          </tr>
-                        ))}</tbody>
-                      </table>
-                    </div>
-                  )
-                })())}
           </div>
 
           {/* المحطات */}

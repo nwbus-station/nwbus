@@ -13,6 +13,7 @@ import { parseShifts, shiftIdx } from '../utils/shifts'
 import { shiftsOfStation } from '../utils/stationShifts'
 import StationsPerformance from '../components/employeeFile/StationsPerformance'
 import StationsCoverage from '../components/employeeFile/StationsCoverage'
+import LateEntriesAdmin from '../components/employeeFile/LateEntriesAdmin'
 import { MONO, f, zp, EF_CSS, card, Ring, Kpi, SecCard, Th, Td, Chip, Bar, Stars } from '../components/employeeFile/ui'
 import ProfileHero from '../components/employeeFile/ProfileHero'
 import InfoPanel from '../components/employeeFile/InfoPanel'
@@ -934,7 +935,7 @@ export default function EmployeeFilePage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
-  const [view, setView] = useState('employee')   // employee | stations (أداء المحطات) | coverage (الالتزام بالإيراد)
+  const [view, setView] = useState('employee')   // employee | stations (أداء المحطات) | late (الإدخالات المتأخرة) | coverage (الالتزام بالإيراد)
   const desk = useMedia('(min-width: 900px)')
   const wide = useMedia('(min-width: 1360px)')   // بطاقة الموظف جانباً
 
@@ -1219,6 +1220,7 @@ export default function EmployeeFilePage() {
 
         {view === 'coverage' && <StationsCoverage isAr={isAr} />}
         {view === 'stations' && <StationsPerformance isAr={isAr} />}
+        {view === 'late' && <LateEntriesAdmin isAr={isAr} />}
 
         <div style={{ display: view === 'employee' ? 'flex' : 'none', flexDirection: 'column', gap: desk ? 20 : 16 }}>
           <FilterBar isAr={isAr} desk={desk} stations={stations} stationF={stationF} onStation={v => { setStationF(v); setEmpId('') }}

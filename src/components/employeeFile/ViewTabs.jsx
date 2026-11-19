@@ -5,10 +5,11 @@ export default function ViewTabs({ view, onChange, isAr, desk }) {
   const tabs = [
     ['employee', isAr ? 'ملف الموظف' : 'Employee', isAr ? 'سجل شامل لموظف واحد: الإجازات والأداء والإيرادات والتقييم' : 'Full record of one employee'],
     ['stations', isAr ? 'أداء المحطات' : 'Stations performance', isAr ? 'مقارنة أداء المحطات وترتيبها وتحديد المقصّر منها' : 'Compare and rank stations'],
+    ['late', isAr ? 'الإدخالات المتأخرة' : 'Late entries', isAr ? 'إيراد ورحلات لم تُدخل، ومن أقرّ من المشرفين بعلمه ومن لم يقرّ' : 'Missing revenue/trips and who acknowledged'],
     ['coverage', isAr ? 'الالتزام بالإيراد' : 'Revenue compliance', isAr ? 'أي المحطات لا تُدخل يومية الإيراد، وكم موظفاً فتح حسابه' : 'Which stations skip the daily revenue entry'],
   ]
   return (
-    <div role="tablist" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: desk ? 12 : 6, marginBottom: desk ? 20 : 12 }}>
+    <div role="tablist" style={{ display: 'grid', gridTemplateColumns: desk ? 'repeat(4, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))', gap: desk ? 12 : 6, marginBottom: desk ? 20 : 12 }}>
       {tabs.map(([k, l, d]) => {
         const on = view === k
         return (

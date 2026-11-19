@@ -25,36 +25,43 @@ const riyadh = () => { const r = new Date(Date.now() + 3 * 3600 * 1000); return 
 const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
 const stamp = iso => { const r = new Date(new Date(iso).getTime() + 3 * 3600 * 1000); return `${r.toISOString().slice(5, 10).replace('-', '/')} ${r.toISOString().slice(11, 16)}` }
 
-export function useShortfalls(stationIds, enabled) {
-  const idsKey = (stationIds || []).filter(Boolean).slice().sort().join(',')
+// stationIds: مصفوفة، أو 'all' للأدمن (كل المحطات النشطة بلا فلترة). ackDays: كم يوماً للخلف تُجلب الإقرارات
+export function useShortfalls(stationIds, enabled, ackDays = 1) {
+  const ALL = stationIds === 'all'
+  const idsKey = ALL ? 'all' : (stationIds || []).filter(Boolean).slice().sort().join(',')
   const [raw, setRaw] = useState(null)
   const [acks, setAcks] = useState({})
+  const [ackList, setAckList] = useState([])
+  const [loading, setLoading] = useState(false)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     if (!enabled || !idsKey) { setRaw(null); return }
     let off = false
-    const ids = idsKey.split(',')
-    const { today } = riyadh(), y = addDays(today, -1), act = addDays(today, -SALES_ACTIVITY_DAYS)
+    const ids = ALL ? null : idsKey.split(',')
+    const flt = (q, col) => (ids ? q.in(col, ids) : q)
+    const { today } = riyadh(), y = addDays(today, -1), act = addDays(today, -SALES_ACTIVITY_DAYS), ackFrom = addDays(today, -Math.max(1, ackDays))
+    setLoading(true)
     ;(async () => {
       try {
         const [stations, stationTrips, stops, records, sales, ackRes] = await Promise.all([
-          supabase.from('stations').select('id, name_ar, name_en, is_agent, shift_ends, inactive_shifts, city_group, type').in('id', ids).eq('is_active', true).then(r => { if (r.error) throw r.error; return r.data ?? [] }),
-          pageAll(() => supabase.from('station_trips').select(TRIP_SELECT).in('station_id', ids).order('trip_schedule_id').order('station_id')),
-          pageAll(() => supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time').in('station_id', ids).order('trip_schedule_id').order('station_id')),
-          pageAll(() => supabase.from('trip_records').select('id, trip_schedule_id, record_date, station_id, is_arrival, actual_arrival, actual_departure').in('station_id', ids).gte('record_date', y).lte('record_date', today).order('id')),
-          pageAll(() => supabase.from('sales_records').select('id, sale_date, shift, station_id').in('station_id', ids).gte('sale_date', act).lte('sale_date', today).order('id')),
-          supabase.rpc('shortfall_acks_list', { p_stations: ids, p_from: y }),
+          flt(supabase.from('stations').select('id, name_ar, name_en, is_agent, shift_ends, inactive_shifts, city_group, type'), 'id').eq('is_active', true).then(r => { if (r.error) throw r.error; return r.data ?? [] }),
+          pageAll(() => flt(supabase.from('station_trips').select(TRIP_SELECT), 'station_id').order('trip_schedule_id').order('station_id')),
+          pageAll(() => flt(supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time'), 'station_id').order('trip_schedule_id').order('station_id')),
+          pageAll(() => flt(supabase.from('trip_records').select('id, trip_schedule_id, record_date, station_id, is_arrival, actual_arrival, actual_departure'), 'station_id').gte('record_date', y).lte('record_date', today).order('id')),
+          pageAll(() => flt(supabase.from('sales_records').select('id, sale_date, shift, station_id'), 'station_id').gte('sale_date', act).lte('sale_date', today).order('id')),
+          supabase.rpc('shortfall_acks_list', { p_stations: ids, p_from: ackFrom }),
         ])
         if (off) return
         setRaw({ stations, stationTrips, stops, records, sales, today, y })
         const m = {}
         ;(ackRes.data ?? []).forEach(a => { m[`${a.station_id}|${a.kind}|${a.day}|${a.shift || ''}`] = a })
-        setAcks(m)
+        setAcks(m); setAckList(ackRes.data ?? [])
       } catch { if (!off) setRaw(null) }
+      if (!off) setLoading(false)
     })()
     return () => { off = true }
-  }, [idsKey, enabled, tick])
+  }, [idsKey, enabled, tick, ackDays]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (!enabled) return; const t = setInterval(() => setTick(x => x + 1), 5 * 60 * 1000); return () => clearInterval(t) }, [enabled])
 
@@ -95,11 +102,11 @@ export function useShortfalls(stationIds, enabled) {
 
   const ack = useCallback(async it => {
     const { data, error } = await supabase.rpc('shortfall_ack', { p_station: it.station.id, p_kind: it.kind, p_day: it.day, p_shift: it.shift || '' })
-    if (!error && data) setAcks(m => ({ ...m, [it.key]: data }))
+    if (!error && data) { setAcks(m => ({ ...m, [it.key]: data })); setAckList(l => [data, ...l]) }
     return !error
   }, [])
 
-  return { items, acks, ack, today: raw?.today, y: raw?.y, multi: new Set((items || []).map(i => i.station.id)).size > 1 || (stationIds || []).length > 1 }
+  return { items, acks, ackList, loading, stations: raw?.stations ?? [], ack, today: raw?.today, y: raw?.y, multi: new Set((items || []).map(i => i.station.id)).size > 1 || (stationIds || []).length > 1 }
 }
 
 export default function ShortfallCard({ stationIds, isAr, navigate, compact = false, sx }) {
