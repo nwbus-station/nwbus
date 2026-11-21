@@ -46,6 +46,11 @@ export default function DailySurveyGate() {
     window.addEventListener('daily-survey-preview', on)
     return () => window.removeEventListener('daily-survey-preview', on)
   }, [])
+  // إعادة طلب التقييم من الأدمن (بدون حذف): التقدّم يُحسب من لحظة الإعادة، والإجمالي المحفوظ للتقرير يبقى ويزيد
+  let reset = null
+  try { reset = JSON.parse(settings?.daily_survey_reset || 'null') } catch { reset = null }
+  const resetAt = reset && reset.day === day && (!reset.ids || reset.ids.includes(profile?.id)) ? reset.at : null
+  const totalRef = useRef(0)   // إجمالي تقييمات اليوم المحفوظ (لا ينقص أبداً)
   const targeted = target === 'all' || selectedIds.includes(profile?.id)
   const exemptRole = profile?.role === 'accountant'      // المحاسب مستثنى مثل الأدمن
   const active = (enabled && !!profile?.id && !isGeneralAdmin && !exemptRole && targeted) || (preview && isGeneralAdmin)
@@ -59,10 +64,11 @@ export default function DailySurveyGate() {
     let timer = null
     // لا نفتح النظام بدون تقييم عند خطأ عابر (شبكة الجهاز لم تتصل بعد عند الصحوة أو بداية اليوم): نعيد المحاولة حتى ينجح الجلب
     const load = async () => {
-      const [{ data: row, error: pe }, stRes, cities] = await Promise.all([
+      const [{ data: row, error: pe }, stRes, cities, evRes] = await Promise.all([
         supabase.from('user_daily_survey').select('done').eq('user_id', profile.id).eq('day', day).maybeSingle(),
         profile.station_id ? supabase.from('stations').select('name_ar, name_en, survey_city').eq('id', profile.station_id).maybeSingle() : Promise.resolve({ data: null }),
         fetchSurveyCities(),
+        resetAt ? supabase.from('user_survey_events').select('id', { count: 'exact', head: true }).eq('user_id', profile.id).eq('day', day).gte('created_at', resetAt) : Promise.resolve({ count: null }),
       ])
       if (off) return
       const missingTable = pe && (pe.code === '42P01' || pe.code === 'PGRST205')
@@ -74,12 +80,14 @@ export default function DailySurveyGate() {
       if (!city) { setDone(need); return }   // محطة بلا استبيان معرّف: غير مشمولة
       setUrl(surveyFrameUrl(city.url || `${BASE}${city.city}`))
       setReady(true)
-      setDone(preview ? 0 : (row?.done ?? 0))
+      totalRef.current = row?.done ?? 0
+      const prog = resetAt ? (evRes?.error ? 0 : (evRes?.count ?? 0)) : totalRef.current
+      setDone(preview ? 0 : prog)
       sinceRef.current = new Date(Date.now() - 3000).toISOString()
     }
     load().catch(() => { if (!off) timer = setTimeout(() => { if (!off) load() }, 10000) })
     return () => { off = true; clearTimeout(timer) }
-  }, [active, profile?.id, day, preview]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, profile?.id, day, preview, resetAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const next = useCallback(async (manual = false) => {
     setBusy(true); setMsg({ kind: '', text: '' })
@@ -93,11 +101,13 @@ export default function DailySurveyGate() {
       }
       const nd = (done ?? 0) + 1
       if (preview) { setDone(nd); setFails(0); if (nd >= need) { setFinished(true); setTimeout(() => { setFinished(false); setPreview(false) }, 1800) } else { sinceRef.current = new Date(Date.now() - 3000).toISOString(); setFrameKey(k => k + 1) }; setBusy(false); return }
-      const { error: ue } = await supabase.from('user_daily_survey').upsert({ user_id: profile.id, day, done: nd, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day' })
+      const total = totalRef.current + 1
+      const { error: ue } = await supabase.from('user_daily_survey').upsert({ user_id: profile.id, day, done: total, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day' })
       if (ue) { setMsg({ kind: 'err', text: 'تعذّر حفظ التقدّم: ' + ue.message }); setBusy(false); return }
+      totalRef.current = total
       // سجل تفصيلي لكل تقييم (من قيّم، أي محطة، النتيجة، الوقت) للتقرير — لا يمنع الاحتساب إن فشل
       const rt = Number(lastRatingRef.current); lastRatingRef.current = null
-      supabase.from('user_survey_events').insert({ user_id: profile.id, day, station_id: profile.station_id || null, rating: rt >= 1 && rt <= 5 ? rt : null }).then(() => {}, () => {})
+      await supabase.from('user_survey_events').insert({ user_id: profile.id, day, station_id: profile.station_id || null, rating: rt >= 1 && rt <= 5 ? rt : null }).then(() => {}, () => {})
       setDone(nd); setFails(0)
       if (nd >= need) { setFinished(true); setTimeout(() => setFinished(false), 2500) }
       else { sinceRef.current = new Date(Date.now() - 3000).toISOString(); setFrameKey(k => k + 1); setMsg({ kind: 'ok', text: 'تم احتساب التقييم. سلّم الجهاز للراكب التالي.' }) }

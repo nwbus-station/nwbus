@@ -67,7 +67,7 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
     else if (!city) reasons.push(`محطته (${usr?.station?.name_ar || '—'}) لا ترتبط بمدينة استبيان نشطة، فلا يوجد رابط يُعرض له. اربط المحطة بمدينة من «تعديل روابط المدن».`)
     if (pe) reasons.push('جدول المتابعة غير مُنشأ أو لا يُقرأ: ' + pe.message)
     const done = prog?.done ?? 0
-    if (!pe && done >= count) reasons.push(`أكمل اليوم (${done} / ${count}) فلن يظهر حتى الغد. استخدم «تصفير تقدّم اليوم».`)
+    if (!pe && done >= count) reasons.push(`أكمل اليوم (${done} / ${count}) فلن يظهر حتى الغد. استخدم «إعادة طلب التقييم اليوم».`)
     setDiag({ name: u.full_name_ar, ok: reasons.length === 0, reasons, station: usr?.station?.name_ar, city: city ? `${city.ar} (${city.city})` : '—', done })
   }
   useEffect(() => setCountDraft(String(count)), [count])
@@ -87,18 +87,15 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
     return () => clearTimeout(t)
   }, [q, selectedIds.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
   const saveUsers = ids => saveSetting('daily_survey_users', JSON.stringify([...new Set(ids)]))
+  // التصفير لا يحذف أي بيانات: يسجّل لحظة التصفير فقط، فيُطلب التقييم من جديد ويُحتسب التقدّم من بعدها،
+  // وتبقى إحصائيات اليوم والتقرير كما هي
   async function resetToday() {
     setConfirmReset(false)
-    const day = riyadhDay()
-    let del = supabase.from('user_daily_survey').delete().eq('day', day)
-    if (target === 'selected') del = del.in('user_id', selectedIds.length ? selectedIds : ['00000000-0000-0000-0000-000000000000'])
-    const { error } = await del
-    // سجل التفاصيل لنفس اليوم/الحسابات يُحذف أيضاً حتى يتطابق التقرير مع التصفير
-    let delEv = supabase.from('user_survey_events').delete().eq('day', day)
-    if (target === 'selected') delEv = delEv.in('user_id', selectedIds.length ? selectedIds : ['00000000-0000-0000-0000-000000000000'])
-    await delEv
-    setResetMsg(error ? 'تعذّر التصفير: ' + error.message : 'تم تصفير تقدّم اليوم. سيظهر الاستبيان من جديد لمن شملهم.')
-    setReportKey(k => k + 1)
+    const val = JSON.stringify({ at: new Date().toISOString(), day: riyadhDay(), ids: target === 'selected' ? selectedIds : null })
+    try {
+      await saveSetting('daily_survey_reset', val)
+      setResetMsg('تمت إعادة طلب التقييم لليوم. سيظهر الاستبيان من جديد لمن شملهم، والإحصائيات السابقة محفوظة كما هي.')
+    } catch (e) { setResetMsg('تعذّرت إعادة الطلب: ' + (e.message || '')) }
   }
 
   const card = { background: 'var(--card)', border: '1px solid var(--border-2, #e0e0e0)', borderRadius: 12 }
@@ -238,17 +235,17 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
               <p style={lbl}>تجربة</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('daily-survey-preview'))} style={ghost}>معاينة كما يراه الموظف</button>
-                <button type="button" onClick={() => setConfirmReset(true)} style={{ ...ghost, borderColor: '#fecaca', color: '#dc2626' }}>تصفير تقدّم اليوم (للتجربة)</button>
+                <button type="button" onClick={() => setConfirmReset(true)} style={{ ...ghost, borderColor: '#fecaca', color: '#dc2626' }}>إعادة طلب التقييم اليوم</button>
               </div>
               {resetMsg && <p style={{ ...hint, color: '#059669' }}>{resetMsg}</p>}
-              <p style={hint}>المعاينة لا تُحتسب ولا تُحفظ. التصفير يحذف تقدّم اليوم وسجل تفاصيله للحسابات الشاملة فيظهر لها الاستبيان من جديد.</p>
+              <p style={hint}>المعاينة لا تُحتسب ولا تُحفظ. إعادة الطلب تُظهر الاستبيان من جديد للحسابات الشاملة دون حذف أي تقييم سابق، فتبقى الإحصائيات ثابتة.</p>
             </div>
           </div>
         )}
       </div>
       {confirmOff && <ConfirmDialog danger message="إيقاف التقييم اليومي الإلزامي لكل الموظفين؟ سيتوقف ظهوره لهم حتى تفعّله مرة أخرى." confirmLabel="إيقاف" cancelLabel="إلغاء"
         onConfirm={() => { setConfirmOff(false); saveSetting('daily_survey_enabled', 'false'); setTimeout(loadLast, 1200) }} onCancel={() => setConfirmOff(false)} />}
-      {confirmReset && <ConfirmDialog danger message={target === 'selected' ? 'تصفير تقدّم اليوم للحسابات المحددة؟ سيظهر لهم الاستبيان من جديد، ويُحذف سجل تقييمات اليوم لهم.' : 'تصفير تقدّم اليوم لكل الحسابات؟ سيظهر الاستبيان لهم من جديد، ويُحذف سجل تقييمات اليوم.'} confirmLabel="تصفير" cancelLabel="إلغاء" onConfirm={resetToday} onCancel={() => setConfirmReset(false)} />}
+      {confirmReset && <ConfirmDialog danger message={target === 'selected' ? 'إعادة طلب التقييم اليوم للحسابات المحددة؟ سيظهر لهم الاستبيان من جديد، وتبقى تقييماتهم السابقة محفوظة.' : 'إعادة طلب التقييم اليوم لكل الحسابات؟ سيظهر الاستبيان لهم من جديد، وتبقى تقييمات اليوم السابقة محفوظة.'} confirmLabel="إعادة الطلب" cancelLabel="إلغاء" onConfirm={resetToday} onCancel={() => setConfirmReset(false)} />}
     </div>
   )
 }
