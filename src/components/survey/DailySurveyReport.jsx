@@ -19,7 +19,7 @@ export const STATES = {
   noshow:   { t: 'دخل دون تقييم',            short: 'دخل دون تقييم', c: '#9333ea', bg: '#f3e8ff', order: 2 },
   progress: { t: 'يقيّم الآن',               short: 'جارٍ',         c: '#0284c7', bg: '#e0f2fe', order: 3 },
   done:     { t: 'أكمل التقييم',             short: 'أكمل',         c: '#059669', bg: '#d1fae5', order: 4 },
-  restored: { t: 'أكمل (قبل التصفير)',       short: 'أكمل',         c: '#059669', bg: '#d1fae5', order: 4.5 },
+  restored: { t: 'أكمل التقييم',             short: 'أكمل',         c: '#059669', bg: '#d1fae5', order: 4.5 },
   nocity:   { t: 'محطته بلا استبيان',        short: 'محطة بلا استبيان', c: '#0d9488', bg: '#ccfbf1', order: 5 },
   leave:    { t: 'في إجازة',                 short: 'إجازة',        c: '#64748b', bg: '#e2e8f0', order: 6 },
   off:      { t: 'لم يسجّل دخول',            short: 'لم يسجّل دخول', c: '#9ca3af', bg: '#f3f4f6', order: 7 },
@@ -27,9 +27,10 @@ export const STATES = {
 const STATE_KEYS = Object.keys(STATES).sort((a, b) => STATES[a].order - STATES[b].order)
 const EVADE = new Set(['evaded', 'skipped'])
 const PRESENT = new Set(['evaded', 'skipped', 'noshow', 'progress', 'done', 'restored'])
-// 21/11/2026: التصفير القديم حذف تقييمات اليوم نهائياً، ومن قيّم قبله يظهر «دخل دون تقييم».
-// بقرار الأدمن يُحتسب هؤلاء في ذلك اليوم فقط كمن أكمل (لا يُضاف أي تقييم ولا نتيجة رضا)
-const RESET_LOSS_DAYS = new Set(['2026-11-21'])
+// بقرار الأدمن (21/11/2026): كل «دخل دون تقييم» حضوره قبل هذه اللحظة يُحتسب «أكمل» — تقييمات اليوم حُذفت بالتصفير القديم،
+// والسابق كان بسبب خلل ظهور صفحة التقييم بعد الدخول. بعدها تُحسب الحالات طبيعياً. لا يُضاف أي تقييم ولا نتيجة رضا
+const LEGACY_CUTOFF = '2026-11-21T16:54:00+03:00'
+const LEGACY_CUTOFF_MS = new Date(LEGACY_CUTOFF).getTime()
 
 const addDays = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10) }
 const eachDay = (from, to) => { const out = []; for (let d = from; d <= to && out.length < MAX_DAYS; d = addDays(d, 1)) out.push(d); return out }
@@ -59,7 +60,7 @@ function dayText(d, need) {
   if (d.st === 'evaded') return `قيّم ${d.done} من ${need} وأغلق`
   if (d.st === 'progress') return d.done ? `يقيّم الآن (${d.done} من ${need})` : 'ظهر له التقييم الآن'
   if (d.st === 'done') return `أكمل ${d.done} من ${need}`
-  if (d.st === 'restored') return 'أكمل (قبل التصفير)'
+  if (d.st === 'restored') return 'أكمل التقييم'
   return STATES[d.st].t
 }
 
@@ -238,7 +239,10 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
         else if (lg || a || online) st = 'noshow'
         else if (onLeave) st = 'leave'
         else st = 'off'
-        if (st === 'noshow' && RESET_LOSS_DAYS.has(d)) st = 'restored'
+        if (st === 'noshow') {
+          const firstSeen = [lg, a?.first].filter(Boolean).map(x => new Date(x).getTime())
+          if (firstSeen.length && Math.min(...firstSeen) < LEGACY_CUTOFF_MS) st = 'restored'
+        }
         return { day: d, st, done, evs: ev, login: lg || null, act: a || null, online }
       })
       const counts = {}
