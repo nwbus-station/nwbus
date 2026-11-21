@@ -83,6 +83,8 @@ export default function DailySurveyGate() {
       totalRef.current = row?.done ?? 0
       const prog = resetAt ? (evRes?.error ? 0 : (evRes?.count ?? 0)) : totalRef.current
       setDone(preview ? 0 : prog)
+      // تسجيل ظهور صفحة التقييم اليوم (صف بعدد 0) حتى يميّز التقرير «فتح التقييم وأغلق» عن «لم يسجّل دخول» — لا يلمس صفاً موجوداً
+      if (!preview && !row && prog < need) supabase.from('user_daily_survey').upsert({ user_id: profile.id, day, done: 0, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day', ignoreDuplicates: true }).then(() => {}, () => {})
       sinceRef.current = new Date(Date.now() - 3000).toISOString()
     }
     load().catch(() => { if (!off) timer = setTimeout(() => { if (!off) load() }, 10000) })
