@@ -53,7 +53,10 @@ export default function DailySurveyGate() {
   const totalRef = useRef(0)   // إجمالي تقييمات اليوم المحفوظ (لا ينقص أبداً)
   const targeted = target === 'all' || selectedIds.includes(profile?.id)
   const exemptRole = profile?.role === 'accountant'      // المحاسب مستثنى مثل الأدمن
-  const active = (enabled && !!profile?.id && !isGeneralAdmin && !exemptRole && targeted) || (preview && isGeneralAdmin)
+  let excusedDays = []
+  try { excusedDays = JSON.parse(settings?.daily_survey_excused || '[]') } catch { excusedDays = [] }
+  const excusedToday = excusedDays.includes(day)   // يوم معفى من الأدمن (خلل تقني): لا تُطلب صفحة التقييم
+  const active = (enabled && !!profile?.id && !isGeneralAdmin && !exemptRole && targeted && !excusedToday) || (preview && isGeneralAdmin)
 
   // التقدّم الحالي لليوم + رابط استبيان مدينة محطة الموظف
   useEffect(() => {

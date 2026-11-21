@@ -4,6 +4,7 @@ import DatePicker from '../shared/DatePicker'
 import { SURVEY_EXEMPT_ROLES } from '../../utils/constants'
 import { riyadhDay } from '../../utils/dates'
 import { usePresence } from '../../lib/presence'
+import { useAppSettings } from '../../context/AppSettingsContext'
 import { fetchSurveyCities, detectSurveyCity } from '../../pages/SurveyPage'
 import { docShell, docHeader, openDocWindow, esc } from '../../utils/printDoc'
 
@@ -19,13 +20,15 @@ export const STATES = {
   noshow:   { t: 'دخل دون تقييم',            short: 'دخل دون تقييم', c: '#9333ea', bg: '#f3e8ff', order: 2 },
   progress: { t: 'يقيّم الآن',               short: 'جارٍ',         c: '#0284c7', bg: '#e0f2fe', order: 3 },
   done:     { t: 'أكمل التقييم',             short: 'أكمل',         c: '#059669', bg: '#d1fae5', order: 4 },
+  excused:  { t: 'مكتمل (إعفاء)',            short: 'إعفاء',        c: '#16a34a', bg: '#dcfce7', order: 4.5 },
   nocity:   { t: 'محطته بلا استبيان',        short: 'محطة بلا استبيان', c: '#0d9488', bg: '#ccfbf1', order: 5 },
   leave:    { t: 'في إجازة',                 short: 'إجازة',        c: '#64748b', bg: '#e2e8f0', order: 6 },
   off:      { t: 'لم يسجّل دخول',            short: 'لم يسجّل دخول', c: '#9ca3af', bg: '#f3f4f6', order: 7 },
 }
 const STATE_KEYS = Object.keys(STATES).sort((a, b) => STATES[a].order - STATES[b].order)
 const EVADE = new Set(['evaded', 'skipped'])
-const PRESENT = new Set(['evaded', 'skipped', 'noshow', 'progress', 'done'])
+const PRESENT = new Set(['evaded', 'skipped', 'noshow', 'progress', 'done', 'excused'])
+const COMPLETE = new Set(['done', 'excused'])
 
 const addDays = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10) }
 const eachDay = (from, to) => { const out = []; for (let d = from; d <= to && out.length < MAX_DAYS; d = addDays(d, 1)) out.push(d); return out }
@@ -55,6 +58,7 @@ function dayText(d, need) {
   if (d.st === 'evaded') return `قيّم ${d.done} من ${need} وأغلق`
   if (d.st === 'progress') return d.done ? `يقيّم الآن (${d.done} من ${need})` : 'ظهر له التقييم الآن'
   if (d.st === 'done') return `أكمل ${d.done} من ${need}`
+  if (d.st === 'excused') return d.done ? `مكتمل (إعفاء) · قيّم ${d.done}` : 'مكتمل (إعفاء)'
   return STATES[d.st].t
 }
 
@@ -110,6 +114,10 @@ function Dots({ done, need }) {
 export default function DailySurveyReport({ need, target, selectedIds }) {
   const today = riyadhDay()
   const presence = usePresence()
+  const { settings } = useAppSettings()
+  let excusedList = []
+  try { excusedList = JSON.parse(settings?.daily_survey_excused || '[]') } catch { excusedList = [] }
+  const excusedKey = excusedList.join(',')
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(today)
   const [data, setData] = useState(null)
@@ -212,6 +220,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
     const leaveOf = {}
     for (const l of data.leaves) (leaveOf[l.employee_id] ||= []).push(l)
     const nowMs = Date.now()
+    const excused = new Set(excusedKey ? excusedKey.split(',') : [])
     // المحطات غير المربوطة بمدينة استبيان نشطة: لا تظهر لموظفيها صفحة التقييم أصلاً (ليس تهرّباً منهم)
     const activeCities = data.cities ? new Set(data.cities.filter(c => c.is_active !== false).map(c => c.city)) : null
     const covered = u => !activeCities || (!!u.station && activeCities.has(detectSurveyCity(u.station)))
@@ -233,12 +242,14 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
         else if (lg || a || online) st = 'noshow'
         else if (onLeave) st = 'leave'
         else st = 'off'
+        // يوم معفى من الأدمن: من حضر ولم يُكمل يُعتبر مكتملاً (لا يُضاف أي تقييم)
+        if (excused.has(d) && PRESENT.has(st) && st !== 'done') st = 'excused'
         return { day: d, st, done, evs: ev, login: lg || null, act: a || null, online }
       })
       const counts = {}
       for (const x of perDay) counts[x.st] = (counts[x.st] || 0) + 1
       const present = perDay.filter(x => PRESENT.has(x.st)).length   // «محطته بلا استبيان» لا تدخل في الالتزام
-      const doneDays = counts.done || 0
+      const doneDays = (counts.done || 0) + (counts.excused || 0)
       const evaded = (counts.evaded || 0) + (counts.skipped || 0)
       const allEvs = perDay.flatMap(x => x.evs)
       const ratings = allEvs.map(e => e.rating).filter(r => r >= 1 && r <= 5)
@@ -248,7 +259,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
       return { u, hasCity, perDay, counts, present, doneDays, evaded, ratings, avg: avgOf(ratings), total, st, compliance: present ? pct(doneDays, present) : null,
         station: u.station?.name_ar || u.station?.name_en || 'بدون محطة' }
     })
-  }, [data, days, need, presence, single, today])
+  }, [data, days, need, presence, single, today, excusedKey])
 
   const stations = useMemo(() => [...new Set(base.map(r => r.station))].sort((a, b) => a.localeCompare(b, 'ar')), [base])
   const matchSt = (r, s) => (single ? r.st === s : !!r.counts[s])
@@ -283,6 +294,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
   const unitTotal = rows.length * N
   const present = rows.reduce((a, r) => a + r.present, 0)
   const doneDays = rows.reduce((a, r) => a + r.doneDays, 0)
+  const dayExcused = days.some(d => excusedList.includes(d))
   const compliance = present ? pct(doneDays, present) : 0
   const totalRatings = rows.reduce((a, r) => a + r.total, 0)
   const allRatings = rows.flatMap(r => r.ratings)
@@ -321,8 +333,8 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
           <td>${single ? actTxt(r.perDay[0]) : '—'}</td></tr>`).join('')}</tbody></table></div>` : ''}
       <div class="sec"><h3>ملخص المحطات</h3>
         <table class="t"><thead><tr><th>المحطة</th><th>الحسابات</th><th>الحاضرون</th><th>أكمل</th><th>تهرّب</th><th>دخل دون تقييم</th><th>بلا استبيان</th><th>لم يسجّل دخول</th><th>الالتزام</th><th>الرضا</th></tr></thead><tbody>
-        ${groups.map(g => `<tr><td class="l"><b>${esc(g.name)}</b>${g.noCity ? ' <span class="chip" style="background:#ccfbf1;color:#0d9488">غير مربوطة بالاستبيان</span>' : ''}</td><td>${g.list.length}</td><td>${g.present}</td><td>${g.counts.done || 0}</td><td style="color:#b91c1c"><b>${g.evaded || ''}</b></td><td>${g.counts.noshow || ''}</td><td>${g.counts.nocity || ''}</td><td class="muted">${g.counts.off || ''}</td><td><b style="color:${toneOf(g.compliance ?? 0)}">${g.compliance == null ? '—' : g.compliance + '%'}</b></td><td>${fmtAvg(g.avg)}</td></tr>`).join('')}
-        <tr class="tot"><td class="l">الإجمالي</td><td>${rows.length}</td><td>${present}</td><td>${counts.done || 0}</td><td>${(counts.evaded || 0) + (counts.skipped || 0)}</td><td>${counts.noshow || 0}</td><td>${counts.nocity || 0}</td><td>${counts.off || 0}</td><td>${compliance}%</td><td>${fmtAvg(avgOf(allRatings))}</td></tr></tbody></table></div>
+        ${groups.map(g => `<tr><td class="l"><b>${esc(g.name)}</b>${g.noCity ? ' <span class="chip" style="background:#ccfbf1;color:#0d9488">غير مربوطة بالاستبيان</span>' : ''}</td><td>${g.list.length}</td><td>${g.present}</td><td>${(g.counts.done || 0) + (g.counts.excused || 0)}</td><td style="color:#b91c1c"><b>${g.evaded || ''}</b></td><td>${g.counts.noshow || ''}</td><td>${g.counts.nocity || ''}</td><td class="muted">${g.counts.off || ''}</td><td><b style="color:${toneOf(g.compliance ?? 0)}">${g.compliance == null ? '—' : g.compliance + '%'}</b></td><td>${fmtAvg(g.avg)}</td></tr>`).join('')}
+        <tr class="tot"><td class="l">الإجمالي</td><td>${rows.length}</td><td>${present}</td><td>${(counts.done || 0) + (counts.excused || 0)}</td><td>${(counts.evaded || 0) + (counts.skipped || 0)}</td><td>${counts.noshow || 0}</td><td>${counts.nocity || 0}</td><td>${counts.off || 0}</td><td>${compliance}%</td><td>${fmtAvg(avgOf(allRatings))}</td></tr></tbody></table></div>
       ${groups.map(g => `<div class="sec"><h3>${esc(g.name)} <span class="muted">(${g.list.length} حساب · التزام ${g.compliance == null ? '—' : g.compliance + '%'} · رضا ${fmtAvg(g.avg)})</span></h3>
         <table class="t"><thead><tr><th>الموظف</th><th>الرقم</th><th>${single ? 'الحالة' : 'الأيام'}</th><th>${single ? 'الدخول والنشاط' : 'الملخص'}</th><th>نتائج الركاب</th></tr></thead><tbody>
         ${g.list.map(r => `<tr><td class="l"><b>${esc(r.u.full_name_ar ?? '—')}</b></td><td>${esc(r.u.job_number ?? '—')}</td>
@@ -378,6 +390,9 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
       </p>
 
       {err && <p style={{ margin: '0 0 10px', fontSize: '.84rem', color: '#b91c1c' }}>{err}</p>}
+      {dayExcused && <p style={{ margin: '0 0 12px', padding: '10px 14px', borderRadius: 10, background: STATES.excused.bg, color: '#166534', fontSize: '.84rem', fontWeight: 700 }}>
+        {single ? 'هذا اليوم معفى' : `في الفترة أيام معفاة (${days.filter(d => excusedList.includes(d)).join('، ')})`}: من حضر ولم يُكمل التقييم يُحتسب «مكتمل (إعفاء)». يمكن إلغاء الإعفاء من تبويب «الفحص والتجربة».
+      </p>}
       {!data ? <p style={{ margin: 0, fontSize: '.9rem', color: 'var(--text-3)' }}>جارٍ تحميل البيانات والتحقق من الدخول والنشاط...</p> : (
         <>
           {/* البطاقة الرئيسية: الالتزام + توزيع الحالات */}
