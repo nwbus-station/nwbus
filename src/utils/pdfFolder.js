@@ -29,11 +29,16 @@ async function htmlToPdfBlob(bodyHtml, css, { fit = false } = {}) {
     const top0 = body.getBoundingClientRect().top
     const totalH = Math.ceil(body.scrollHeight)
     // نقاط القص المسموحة: بداية صف في الجدول (غير الأول) أو بداية عنوان قسم
-    const cuts = [...doc.querySelectorAll('tbody tr:nth-child(n+3), .sec-head')]
+    const cuts = [...doc.querySelectorAll('tbody tr:nth-child(n+3), .sec-head, .box, .card, .stn')]
       .map(el => Math.round(el.getBoundingClientRect().top - top0)).filter(y => y > 0).sort((a, b) => a - b)
+    // فواصل إجبارية: كل .pg (صفحة في التقرير التنفيذي) تبدأ صفحة PDF جديدة
+    const forced = [...doc.querySelectorAll('.pg')].map(el => Math.round(el.getBoundingClientRect().top - top0)).filter(y => y > 4).sort((a, b) => a - b)
     const breaks = [0]
-    while (totalH - breaks[breaks.length - 1] > PAGE_H) {
+    for (;;) {
       const start = breaks[breaks.length - 1], limit = start + PAGE_H
+      const f = forced.find(y => y > start + 4 && y <= limit)
+      if (f != null) { breaks.push(f); continue }
+      if (totalH - start <= PAGE_H) break
       let cut = null
       for (const y of cuts) { if (y > start + PAGE_H * 0.35 && y <= limit) cut = y }
       breaks.push(cut ?? limit)

@@ -37,7 +37,7 @@ export function cellText(m, v, isAr) {
 
 export default function SummaryPanel({
   data, isAr, allowed, metrics, setMetrics, pctStyle, setPctStyle, flags,
-  onPrintSummary, onPrintDetailed, onOpenFolder, onExport, folderCount, canPrint,
+  onPrintSummary, onPrintDetailed, onOpenFolder, onExport, canPrint,
 }) {
   const t = (a, e) => (isAr ? a : e)
   const [pick, setPick] = useState(false)
@@ -112,7 +112,7 @@ export default function SummaryPanel({
       {/* الإجراءات: طباعة وتصدير — بما فيها ملفات المحطات المتعددة */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {canPrint && <button type="button" onClick={() => onPrintSummary(model)} disabled={!ids.length} style={btn(true, !ids.length)}>{t('طباعة الملخص', 'Print summary')}</button>}
-        {canPrint && <button type="button" onClick={onOpenFolder} style={btn(false)}>{t('تقارير المحطات (أكثر من ملف)', 'Station reports (multiple files)')}{folderCount > 0 ? ` · ${folderCount}` : ''}</button>}
+        {canPrint && <button type="button" onClick={onOpenFolder} style={btn(false)}>{t('بوصلة الأداء — التقرير التنفيذي', 'Performance Compass — executive report')}</button>}
         {canPrint && <button type="button" onClick={onPrintDetailed} style={btn(false)}>{t('تقرير مفصّل', 'Detailed report')}</button>}
         <button type="button" onClick={() => onExport(model)} disabled={!ids.length} style={btn(false, !ids.length)}>{t('تصدير Excel', 'Export Excel')}</button>
         <span style={{ marginInlineStart: 'auto', fontSize: '0.72rem', color: 'var(--text-3)', fontWeight: 700 }}>

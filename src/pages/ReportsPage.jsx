@@ -19,8 +19,8 @@ import { shiftIdx } from '../utils/shifts'
 import { USER_ROLES, ADMIN_ROLE_VALUES, SALES_VIEW_CAPS } from '../utils/constants'
 import SelectField from '../components/shared/SelectField'
 import { brandHeader } from '../utils/printDoc'
-import StationFolderModal from '../components/reports/StationFolderModal'
-import { savePdfFolder } from '../utils/pdfFolder'
+import ExecReportModal from '../components/reports/ExecReportModal'
+import DateRangePicker, { rangePresets } from '../components/shared/DateRangePicker'
 
 const fmt  = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { minimumFractionDigits: 2 })
 const fmtN = n => Number(n ?? 0).toLocaleString('ar-SA-u-ca-gregory-nu-latn')
@@ -387,14 +387,7 @@ export default function ReportsPage() {
   const myStationIds = stations.map(s => s.id)   // محطاته المخصصة (لو غير أدمن) — منقولة هنا عشان fetchAudit يستخدمها
   const [station,  _setStation]      = useState(() => localStorage.getItem('rpt_station') || 'all')
   const setStation = v => { localStorage.setItem('rpt_station', v); _setStation(v) }
-  // مجلد طباعة المحطات: كل ملف = محطة + نوع المحتوى (detail: وصول ومغادرة بالجداول، summary: ملخص)
-  const [folder, _setFolder] = useState(() => {
-    try { const v = JSON.parse(localStorage.getItem('rpt_folder') ?? '[]'); return Array.isArray(v) ? v.filter(f => f && f.id && (f.mode === 'detail' || f.mode === 'summary')) : [] } catch { return [] }
-  })
-  const setFolder = v => { localStorage.setItem('rpt_folder', JSON.stringify(v)); _setFolder(v) }
-  const [folderOverview, _setFolderOverview] = useState(() => localStorage.getItem('rpt_folder_overview') !== '0')
-  const setFolderOverview = v => { localStorage.setItem('rpt_folder_overview', v ? '1' : '0'); _setFolderOverview(v) }
-  const [showFolder, setShowFolder] = useState(false)
+  const [showExec, setShowExec] = useState(false)
   // فلتر قائمة المحطات الرئيسية: فقط المحطات التي فيها يوزرات
   const [onlyStaffed, _setOnlyStaffed] = useState(() => localStorage.getItem('rpt_only_staffed') === '1')
   const setOnlyStaffed = v => { localStorage.setItem('rpt_only_staffed', v ? '1' : '0'); _setOnlyStaffed(v) }
@@ -1117,226 +1110,6 @@ export default function ReportsPage() {
     w.document.close()
   }
 
-  // plan: [{ id, mode: 'detail' | 'summary' }] بترتيب المجلد — detail = وصول ومغادرة بالجداول، summary = أرقام ونسب فقط
-  function printStationsReport(plan, withOverview = true, outMode = 'print') {
-    if (!data || !plan?.length) return
-    const modeById = Object.fromEntries(plan.map(f => [f.id, f.mode]))
-    const targetIds = plan.map(f => f.id)
-    const targetStations = plan.map(f => stations.find(s => s.id === f.id)).filter(Boolean)
-
-    const calcRate = (list) => {
-      const withSched = list.filter(m => m.sched && m.sched !== '—' && m.actual && m.actual !== '—' && !m.unentered)
-      if (!withSched.length) return null
-      const onTime = withSched.filter(m => m.acc?.key === 'ontime' || m.acc?.key === 'early').length
-      return Math.round(onTime / withSched.length * 100)
-    }
-    const rateColor = r => r >= 80 ? '#16a34a' : r >= 60 ? '#d97706' : '#dc2626'
-    const rateWord = r => r === null ? (isAr ? 'لا بيانات' : 'No data') : r >= 80 ? (isAr ? 'ممتاز' : 'Excellent') : r >= 60 ? (isAr ? 'مقبول' : 'Fair') : (isAr ? 'يحتاج تحسين' : 'Needs work')
-    const rateCard = (title, rate, sub) => `
-      <div style="flex:1;display:flex;align-items:center;gap:16px;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;background:#fff">
-        <div class="ring" style="flex:none;width:96px;height:96px;border-radius:50%;--p:${rate ?? 0}%;background:conic-gradient(${rate === null ? '#cbd5e1' : rateColor(rate)} var(--p),#e2e8f0 0);display:grid;place-items:center">
-          <div style="width:72px;height:72px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:22px;font-weight:900;color:#0f172a">${rate === null ? '—' : rate + '%'}</div>
-        </div>
-        <div style="min-width:0">
-          <div style="font-size:14px;font-weight:800;color:#334155">${title}</div>
-          <div style="display:inline-block;margin-top:6px;border:1.5px solid ${rate === null ? '#cbd5e1' : rateColor(rate)};color:${rate === null ? '#94a3b8' : rateColor(rate)};border-radius:999px;padding:2px 12px;font-size:12px;font-weight:800">${rateWord(rate)}</div>
-          <div style="font-size:11.5px;color:#64748b;margin-top:7px">${sub}</div>
-        </div>
-      </div>`
-
-    const pageList = targetStations.map((stn, idx) => {
-      const stMoves = data.movements.filter(m => m.station_id === stn.id)
-      const deps = stMoves.filter(m => m.type === 'departure')
-      const arrs = stMoves.filter(m => m.type === 'arrival')
-      const stnName = isAr ? stn.name_ar : stn.name_en
-      const depPax = deps.reduce((s, m) => s + (m.pax || 0), 0)
-      const arrPax = arrs.reduce((s, m) => s + (m.pax || 0), 0)
-      const missed = stMoves.reduce((s, m) => s + (m.missed || 0), 0)
-      const depRate = calcRate(deps)
-      const arrRate = calcRate(arrs)
-      const cnt = k => stMoves.filter(m => accKey(m) === k).length
-      const dist = [
-        { k: 'ontime', l: isAr ? 'في الوقت' : 'On time', c: '#16a34a' },
-        { k: 'early', l: isAr ? 'مبكر' : 'Early', c: '#2563eb' },
-        { k: 'noton', l: isAr ? 'غير منتظم' : 'Irregular', c: '#d97706' },
-        { k: 'delayed', l: isAr ? 'متأخر' : 'Delayed', c: '#dc2626' },
-        { k: 'unentered', l: isAr ? 'غير مدخلة' : 'Not entered', c: '#f59e0b' },
-        { k: 'none', l: isAr ? 'بلا جدول' : 'No schedule', c: '#94a3b8' },
-      ].map(d => ({ ...d, n: cnt(d.k) })).filter(d => d.n > 0)
-      const total = Math.max(1, stMoves.length)
-
-      const enteredN = stMoves.filter(m => !m.unentered).length
-      const followUp = cnt('delayed') + cnt('noton')
-      const completion = stMoves.length ? Math.round(enteredN / stMoves.length * 100) : null
-      const I = {
-        dep: '<path d="M7 17L17 7M8 7h9v9"/>',
-        arr: '<path d="M17 7L7 17M16 17H7V8"/>',
-        users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
-        userx: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M17 8l5 5M22 8l-5 5"/>',
-        warn: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
-        check: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 14l2 2 4-4"/>',
-      }
-      const kpis = [
-        { val: deps.length, lbl: isAr ? 'رحلات المغادرة' : 'Departures', sub: isAr ? 'رحلة' : 'trips', accent: '#0ea5e9', icon: I.dep },
-        { val: arrs.length, lbl: isAr ? 'رحلات الوصول' : 'Arrivals', sub: isAr ? 'رحلة' : 'trips', accent: '#10b981', icon: I.arr },
-        { val: depPax, lbl: isAr ? 'ركاب المغادرة' : 'Departing pax', sub: isAr ? 'راكب' : 'passengers', accent: '#6366f1', icon: I.users },
-        { val: arrPax, lbl: isAr ? 'ركاب الوصول' : 'Arriving pax', sub: isAr ? 'راكب' : 'passengers', accent: '#0891b2', icon: I.users },
-        { val: missed, lbl: isAr ? 'المتخلفون' : 'Missed', sub: isAr ? 'راكب' : 'passengers', accent: '#ef4444', icon: I.userx },
-        { val: followUp, lbl: isAr ? 'تحتاج متابعة' : 'Need follow-up', sub: isAr ? 'متأخرة أو غير منتظمة' : 'delayed / irregular', accent: '#f97316', icon: I.warn },
-        { val: completion === null ? '—' : completion + '%', lbl: isAr ? 'اكتمال الإدخال' : 'Data entered', sub: isAr ? `${enteredN} من ${stMoves.length} رحلة` : `${enteredN} of ${stMoves.length}`, accent: '#8b5cf6', icon: I.check },
-      ]
-      const kpiBar = `
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:9px;margin-top:4px">
-          ${kpis.map(k => `<div style="border:1px solid #e2e8f0;border-radius:12px;padding:11px 12px 10px;background:#fff;border-top:4px solid ${k.accent}">
-            <div style="display:flex;align-items:center;gap:7px">
-              <span class="kpi-chip" style="flex:none;width:28px;height:28px;border-radius:50%;background:${k.accent}22;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="${k.accent}" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">${k.icon}</svg></span>
-              <span style="font-size:11.5px;font-weight:800;color:#475569;line-height:1.25">${k.lbl}</span>
-            </div>
-            <div style="font-size:30px;font-weight:900;color:#0f172a;line-height:1;margin-top:9px">${k.val}</div>
-            <div style="font-size:10.5px;font-weight:600;color:#94a3b8;margin-top:4px">${k.sub}</div>
-          </div>`).join('')}
-        </div>`
-
-      const perf = `
-        <div style="display:flex;gap:10px;margin-top:10px;align-items:stretch">
-          ${rateCard(isAr ? 'الالتزام بالمغادرة' : 'Departure punctuality', depRate, isAr ? `${deps.length} رحلة مغادرة` : `${deps.length} departures`)}
-          ${rateCard(isAr ? 'الالتزام بالوصول' : 'Arrival punctuality', arrRate, isAr ? `${arrs.length} رحلة وصول` : `${arrs.length} arrivals`)}
-          <div style="flex:1.25;border:1px solid #e2e8f0;border-radius:12px;padding:12px 16px;background:#fff">
-            <div style="font-size:14px;font-weight:800;color:#334155;margin-bottom:8px">${isAr ? 'توزيع حالات الرحلات' : 'Trip status breakdown'}</div>
-            ${dist.map(d => {
-              const pct = Math.round((d.n / total) * 100)
-              return `<div style="display:flex;align-items:center;gap:8px;margin-top:5px">
-                <span class="seg-${d.k}" style="flex:none;width:11px;height:11px;border-radius:3px;background:${d.c};border:1px solid rgba(0,0,0,.25)"></span>
-                <span style="flex:none;width:78px;font-size:12px;font-weight:700;color:#334155">${d.l}</span>
-                <span class="track" style="flex:1;height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden"><span class="seg-${d.k}" style="display:block;height:100%;width:${Math.max(pct, 3)}%;background:${d.c};border-radius:999px"></span></span>
-                <span style="flex:none;width:22px;text-align:end;font-size:13px;font-weight:900;color:#0f172a">${d.n}</span>
-                <span style="flex:none;width:34px;text-align:end;font-size:10.5px;font-weight:700;color:#64748b">${pct}%</span>
-              </div>`
-            }).join('')}
-          </div>
-        </div>`
-
-      return `
-        <div style="page-break-after:${idx < targetStations.length - 1 ? 'always' : 'avoid'}">
-          ${brandHeader({ title: modeById[stn.id] === 'summary' ? (isAr ? 'ملخص الوصول والمغادرة' : 'Arrivals & Departures summary') : (isAr ? 'تقرير الوصول والمغادرة' : 'Arrivals & Departures'), subtitle: escapeHtml(stnName), lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
-          <div style="padding:0 4px">
-            ${kpiBar}
-            ${perf}
-            ${modeById[stn.id] === 'summary' ? '' : `${moveTable(deps, '#1C2B36', isAr ? 'رحلات المغادرة' : 'Departures', '↗')}
-            ${moveTable(arrs, '#23695A', isAr ? 'رحلات الوصول' : 'Arrivals', '↙')}`}
-          </div>
-          <div style="margin-top:12px;padding:8px 14px;border-top:2px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b">
-            <span>${escapeHtml(profile?.full_name_ar) ?? '—'} · ${new Date().toLocaleString('en-GB')}</span>
-            <span style="font-weight:700">${isAr ? 'التخلف' : 'Missed'}: <b style="color:#dc2626">${missed}</b> &nbsp;|&nbsp; ${isAr ? 'ركاب المغادرة' : 'Dep. pax'}: <b style="color:#0f172a">${depPax}</b> &nbsp;|&nbsp; ${isAr ? 'ركاب الوصول' : 'Arr. pax'}: <b style="color:#0f172a">${arrPax}</b></span>
-            <span class="pill-dark" style="background:#1C2B36;color:#fff;font-size:10px;font-weight:800;padding:3px 12px;border-radius:999px;letter-spacing:.6px">NORTH WEST BUS</span>
-          </div>
-        </div>`
-    })
-    const pages = pageList.join('')
-
-    // عند تحديد أكثر من محطة: صفحة ملخص أولاً ثم تفاصيل كل محطة. المغادرة والوصول منفصلان دائماً (لا يُجمعان أبداً)
-    let summaryPage = ''
-    if (targetStations.length > 1 && withOverview) {
-      const sum = (l, f) => l.reduce((x, m) => x + (m[f] || 0), 0)
-      const rowsS = targetStations.map(stn => {
-        const mv = data.movements.filter(m => m.station_id === stn.id)
-        const d = mv.filter(m => m.type === 'departure'), a = mv.filter(m => m.type === 'arrival')
-        return { name: isAr ? stn.name_ar : stn.name_en, dT: d.length, aT: a.length, dP: sum(d, 'pax'), aP: sum(a, 'pax'), miss: sum(mv, 'missed'), dRate: calcRate(d), aRate: calcRate(a), entered: mv.filter(m => !m.unentered).length, all: mv.length }
-      }).sort((x, y) => y.dP - x.dP || y.dT - x.dT)
-      const tot = rowsS.reduce((t, r) => ({ dT: t.dT + r.dT, aT: t.aT + r.aT, dP: t.dP + r.dP, aP: t.aP + r.aP, miss: t.miss + r.miss, entered: t.entered + r.entered, all: t.all + r.all }), { dT: 0, aT: 0, dP: 0, aP: 0, miss: 0, entered: 0, all: 0 })
-      const allMoves = data.movements.filter(m => targetIds.includes(m.station_id))
-      const depRateAll = calcRate(allMoves.filter(m => m.type === 'departure'))
-      const arrRateAll = calcRate(allMoves.filter(m => m.type === 'arrival'))
-      const maxD = Math.max(1, ...rowsS.map(r => r.dP)), maxA = Math.max(1, ...rowsS.map(r => r.aP))
-      const topDep = [...rowsS].sort((x, y) => y.dP - x.dP)[0]
-      const topArr = [...rowsS].sort((x, y) => y.aP - x.aP)[0]
-      const topMiss = [...rowsS].sort((x, y) => y.miss - x.miss)[0]
-      const bestRate = [...rowsS].filter(r => r.dRate !== null && r.dT >= 3).sort((x, y) => y.dRate - x.dRate)[0]
-      const th = (h, w) => `<th style="${w ? `width:${w}%;` : ''}padding:9px 8px;font-size:11.5px;font-weight:800;color:#475569;background:#eef2f6;border-bottom:2px solid #cbd5e1;text-align:center;white-space:nowrap">${h}</th>`
-      const num = v => `<td style="padding:8px;border-bottom:1px solid #eef2f6;text-align:center;font-size:14px;font-weight:700;color:#0f172a;font-family:'IBM Plex Mono',ui-monospace,monospace">${v}</td>`
-      const rateTd = r => `<td style="padding:8px;border-bottom:1px solid #eef2f6;text-align:center;font-size:13px;font-weight:900;color:${r === null ? '#cbd5e1' : rateColor(r)}">${r === null ? '—' : r + '%'}</td>`
-      const barTd = (v, max, cls, col) => `<td style="padding:7px 10px;border-bottom:1px solid #eef2f6"><div style="display:flex;align-items:center;gap:8px"><span style="flex:none;width:44px;text-align:end;font-size:14px;font-weight:900;color:#0f172a;font-family:'IBM Plex Mono',ui-monospace,monospace">${v.toLocaleString('en-US')}</span><span class="track" style="flex:1;height:11px;border-radius:999px;background:#e2e8f0;overflow:hidden"><span class="${cls}" style="display:block;height:100%;width:${Math.round(v / max * 100)}%;background:${col};border-radius:999px"></span></span></div></td>`
-      const hero = (label, pax, trips, rate, col, cls) => `<div class="hero-dark" style="flex:1.2;border-radius:14px;padding:16px 20px;background:#1C2B36;color:#fff;border-top:5px solid ${col}">
-          <div style="font-size:13px;font-weight:800;opacity:.85">${label}</div>
-          <div style="font-size:50px;font-weight:900;line-height:1.05;margin-top:4px">${pax.toLocaleString('en-US')}</div>
-          <div style="font-size:12px;font-weight:700;margin-top:8px;opacity:.9">${trips} ${isAr ? 'رحلة' : 'trips'} · ${isAr ? 'الالتزام' : 'punctuality'} <b style="font-size:14px">${rate === null ? '—' : rate + '%'}</b></div>
-        </div>`
-      const kpi = (l, v, sub, c) => `<div style="flex:.55;border:1px solid #e2e8f0;border-top:5px solid ${c};border-radius:14px;padding:12px 14px;background:#fff;display:flex;flex-direction:column;justify-content:center">
-          <div style="font-size:11.5px;font-weight:800;color:#475569">${l}</div>
-          <div style="font-size:30px;font-weight:900;color:#0f172a;line-height:1.1;margin-top:4px">${v}</div>
-          <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-top:2px">${sub}</div></div>`
-      const insight = (label, name, val, c) => `<div style="flex:1;border:1px solid #e2e8f0;border-inline-start:5px solid ${c};border-radius:10px;padding:10px 14px;background:#fff">
-        <div style="font-size:11px;font-weight:800;color:#64748b">${label}</div>
-        <div style="font-size:14.5px;font-weight:900;color:#0f172a;margin-top:3px">${escapeHtml(name)}</div>
-        <div style="font-size:12px;font-weight:700;color:${c};margin-top:2px">${val}</div></div>`
-      summaryPage = `
-        <div class="sum-compact" style="page-break-after:always">
-          <style>.sum-compact tbody td{padding-top:3px!important;padding-bottom:3px!important}</style>
-          ${brandHeader({ title: isAr ? 'ملخص المحطات المحددة' : 'Selected stations summary', subtitle: isAr ? `${targetStations.length} محطة` : `${targetStations.length} stations`, lines: [`${dateFrom} → ${dateTo}`], dir: isAr ? 'rtl' : 'ltr', logoW: 120, margin: '0 0 10px' })}
-          <div style="padding:0 4px">
-            <div style="display:flex;gap:10px;align-items:stretch;margin-top:4px">
-              ${hero(isAr ? 'ركاب المغادرة' : 'Departing passengers', tot.dP, tot.dT, depRateAll, '#38bdf8')}
-              ${hero(isAr ? 'ركاب الوصول' : 'Arriving passengers', tot.aP, tot.aT, arrRateAll, '#34d399')}
-              ${kpi(isAr ? 'المتخلفون' : 'Missed', tot.miss, isAr ? 'راكب' : 'passengers', '#ef4444')}
-              ${kpi(isAr ? 'اكتمال الإدخال' : 'Data entered', tot.all ? Math.round(tot.entered / tot.all * 100) + '%' : '—', isAr ? `${tot.entered} من ${tot.all}` : `${tot.entered} of ${tot.all}`, '#8b5cf6')}
-            </div>
-            <div style="display:flex;gap:10px;margin-top:10px">
-              ${insight(isAr ? 'الأعلى ركاب مغادرة' : 'Most departing', topDep.dP ? topDep.name : '—', topDep.dP ? `${topDep.dP.toLocaleString('en-US')} ${isAr ? 'راكب' : 'pax'}` : '—', '#0ea5e9')}
-              ${insight(isAr ? 'الأعلى ركاب وصول' : 'Most arriving', topArr.aP ? topArr.name : '—', topArr.aP ? `${topArr.aP.toLocaleString('en-US')} ${isAr ? 'راكب' : 'pax'}` : '—', '#10b981')}
-              ${insight(isAr ? 'الأكثر تخلفاً' : 'Most missed', topMiss.miss ? topMiss.name : '—', topMiss.miss ? `${topMiss.miss} ${isAr ? 'متخلف' : 'missed'}` : (isAr ? 'لا يوجد تخلف' : 'none'), '#ef4444')}
-              ${insight(isAr ? 'الأفضل التزاماً بالمغادرة' : 'Best departure punctuality', bestRate ? bestRate.name : '—', bestRate ? `${bestRate.dRate}%` : (isAr ? 'بيانات غير كافية' : 'not enough data'), '#16a34a')}
-            </div>
-            <div class="sec-head" style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding:9px 14px;background:#1C2B36;color:#fff;border-radius:8px 8px 0 0">
-              <span style="font-size:15px;font-weight:800">${isAr ? 'المحطات مرتبة حسب ركاب المغادرة' : 'Stations ranked by departing passengers'}</span>
-              <span style="font-size:12px;font-weight:800;background:rgba(255,255,255,.18);border-radius:999px;padding:3px 12px">${rowsS.length} ${isAr ? 'محطة' : 'stations'}</span>
-            </div>
-            <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none">
-              <thead style="display:table-header-group"><tr>${th('#', 3)}${th(isAr ? 'المحطة' : 'Station', 17)}${th(isAr ? 'رحلات المغادرة' : 'Dep. trips', 7)}${th(isAr ? 'رحلات الوصول' : 'Arr. trips', 7)}${th(isAr ? 'ركاب المغادرة' : 'Dep. pax', 19)}${th(isAr ? 'ركاب الوصول' : 'Arr. pax', 19)}${th(isAr ? 'التزام المغادرة' : 'Dep. punct.', 7)}${th(isAr ? 'التزام الوصول' : 'Arr. punct.', 7)}${th(isAr ? 'المتخلفون' : 'Missed', 7)}</tr></thead>
-              <tbody>${rowsS.map((r, i) => {
-                const idle = r.dT + r.aT === 0
-                return `<tr style="page-break-inside:avoid;background:${i % 2 ? '#f8fafc' : '#fff'};${idle ? 'opacity:.55' : ''}">
-                  <td style="padding:8px;border-bottom:1px solid #eef2f6;text-align:center;color:#94a3b8;font-size:11.5px;font-weight:800">${i + 1}</td>
-                  <td style="padding:8px 10px;border-bottom:1px solid #eef2f6;font-size:13.5px;font-weight:800;color:#1e293b">${escapeHtml(r.name)}</td>
-                  ${num(r.dT)}${num(r.aT)}
-                  ${barTd(r.dP, maxD, 'seg-ontime', '#38bdf8')}${barTd(r.aP, maxA, 'seg-early', '#34d399')}
-                  ${rateTd(r.dRate)}${rateTd(r.aRate)}
-                  <td style="padding:8px;border-bottom:1px solid #eef2f6;text-align:center;font-size:14px;font-weight:900;color:${r.miss ? '#dc2626' : '#cbd5e1'};font-family:'IBM Plex Mono',ui-monospace,monospace">${r.miss || '—'}</td>
-                </tr>`
-              }).join('')}
-                <tr class="tot-row" style="background:#1C2B36"><td></td><td style="padding:10px;font-size:14px;font-weight:900;color:#fff">${isAr ? 'الإجمالي' : 'Total'}</td>${[tot.dT, tot.aT, tot.dP.toLocaleString('en-US'), tot.aP.toLocaleString('en-US'), depRateAll === null ? '—' : depRateAll + '%', arrRateAll === null ? '—' : arrRateAll + '%', tot.miss].map(v => `<td style="padding:10px;text-align:center;font-size:15px;font-weight:900;color:#fff">${v}</td>`).join('')}</tr>
-              </tbody>
-            </table>
-            <div style="margin-top:10px;font-size:12.5px;color:#475569">${outMode === 'pdf'
-              ? (isAr ? 'ركاب المغادرة والوصول يُعرضان منفصلين دائماً — وتفاصيل كل محطة في ملفها المستقل' : 'Departing and arriving passengers are always shown separately — each station has its own file')
-              : (isAr ? 'ركاب المغادرة والوصول يُعرضان منفصلين دائماً — تفاصيل كل محطة في الصفحات التالية' : 'Departing and arriving passengers are always shown separately — station details on the following pages')}</div>
-          </div>
-        </div>`
-    }
-
-    const wrapSheet = h => `<div class="sheet" style="font-family:IBM Plex Sans Arabic,Arial,sans-serif;direction:${isAr ? 'rtl' : 'ltr'};color:#1a2233;font-size:12.5px">${h}</div>`
-    // حفظ PDF: ملف مستقل لكل محطة (+ ملف لصفحة الملخص إن وُجدت)
-    if (outMode === 'pdf') {
-      const modeWord = m => (m === 'summary' ? (isAr ? 'ملخص وصول ومغادرة' : 'Arr-Dep summary') : (isAr ? 'وصول ومغادرة' : 'Arrivals-Departures'))
-      const files = []
-      if (summaryPage) files.push({ name: `00 - ${isAr ? 'ملخص المحطات' : 'Stations summary'}`, html: wrapSheet(summaryPage), fit: true })   // الملخص يدخل صفحة واحدة بدل ما يتقطع
-      targetStations.forEach((stn, i) => files.push({ name: `${String(i + 1).padStart(2, '0')} - ${isAr ? (stn.name_ar || stn.name_en) : (stn.name_en || stn.name_ar)} - ${modeWord(modeById[stn.id])}`, html: wrapSheet(pageList[i]) }))
-      // ملف الملخص أكثر إحكاماً (صفوف أقل ارتفاعاً) ليدخل صفحة واحدة مقروءة
-      return { files, css: `${SHEET_CSS} .sum-compact tbody td{padding-top:3px!important;padding-bottom:3px!important}` }
-    }
-    const html = wrapSheet(`${summaryPage}${pages}`)
-    const kindS = reportKindName()
-    const docTitleS = targetStations.length > 1
-      ? `${kindS} — ${isAr ? 'ملخص المحطات' : 'Stations summary'} (${targetStations.length}) — ${periodForName()}`
-      : `${kindS} — ${isAr ? targetStations[0]?.name_ar || targetStations[0]?.name_en : targetStations[0]?.name_en || targetStations[0]?.name_ar} — ${periodForName()}`
-    openPrintPreview(html, SHEET_CSS, true, docTitleS)
-  }
-
-  // حفظ ملفات PDF (ملف لكل محطة) في مجلد على الجهاز أو ZIP
-  function savePdfFiles(plan, ov, opts) {
-    const built = printStationsReport(plan, ov, 'pdf')
-    return savePdfFolder(built.files, { ...opts, css: built.css, folderName: `${isAr ? 'تقارير المحطات' : 'Stations reports'} ${periodForName()}` })
-  }
-
   // طباعة ملخص المحطات بالأعمدة المختارة (model من buildSummary) — جدول واحد بسطر لكل محطة بلا تفاصيل الرحلات
   function printSummary(model) {
     const rc = rateTone
@@ -1491,9 +1264,9 @@ export default function ReportsPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto" dir={isAr ? 'rtl' : 'ltr'}>
-      {showFolder && <StationFolderModal isAr={isAr} stations={stations} staff={staffByStation} folder={folder} setFolder={setFolder}
-        overview={folderOverview} setOverview={setFolderOverview} onClose={() => setShowFolder(false)}
-        onPrint={(plan, ov) => { setShowFolder(false); printStationsReport(plan, ov) }} onSavePdf={savePdfFiles} />}
+      {showExec && <ExecReportModal isAr={isAr} supabase={supabase} stations={stations} staff={staffByStation} from={dateFrom} to={dateTo}
+        onDates={(a, b) => { setDateFrom(a); setDateTo(b) }} allowed={typeAllowed} canSales={canSales} activeOnly={activeOnly}
+        preparedBy={profile?.full_name_ar} onClose={() => setShowExec(false)} />}
       {/* ═ الرأس ═ */}
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
@@ -1557,7 +1330,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ═ المرشحات (على الجوال تُفتح بزر تصفية) ═ */}
-      <div className={`${filtersOpen ? 'grid' : 'hidden'} md:grid relative bg-white border border-gray-200 rounded-xl p-4 mb-4 gap-3 grid-cols-2 lg:grid-cols-[minmax(0,1.3fr)_1fr_1fr_auto] items-end`}>
+      <div className={`${filtersOpen ? 'grid' : 'hidden'} md:grid relative bg-white border border-gray-200 rounded-xl p-4 mb-4 gap-3 grid-cols-2 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_auto] items-end`}>
         {loading && <div className="absolute top-0 inset-x-0 h-0.5 bg-nwbus-primary animate-pulse rounded-t-xl" />}
         <div className="col-span-2 lg:col-span-1">
         {/* Station selector */}
@@ -1582,50 +1355,26 @@ export default function ReportsPage() {
         )}
         </div>
         <div>
-          <label className="rp-label mb-1.5">{isAr ? 'من' : 'From'}</label>
-          <DatePicker value={dateFrom} onChange={v => { setDateFrom(v); if (v) setDateTo(v) }} isAr={isAr}
-            className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
-        </div>
-        <div>
-          <label className="rp-label mb-1.5">{isAr ? 'إلى' : 'To'}</label>
-          <DatePicker value={dateTo} onChange={setDateTo} isAr={isAr}
-            className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-nwbus-primary focus:outline-none bg-white" />
+          <label className="rp-label mb-1.5">{isAr ? 'الفترة' : 'Period'}</label>
+          <DateRangePicker isAr={isAr} from={dateFrom} to={dateTo} onChange={(a, b) => { setDateFrom(a); setDateTo(b) }} className="w-full" />
         </div>
         <div className="col-span-2 lg:col-span-1">
           <p className="rp-label mb-1.5">{isAr ? 'اختصار' : 'Quick'}</p>
-            <div className="flex gap-1.5 overflow-x-auto rp-presets">
-              {(() => {
-                const now = new Date()
-                const ymd = d => toLocalDateStr(d)
-                const off = n => { const d = new Date(); d.setDate(d.getDate() + n); return ymd(d) }
-                return [
-                  [isAr ? 'اليوم' : 'Today', off(0), off(0)],
-                  [isAr ? 'أمس' : 'Yesterday', off(-1), off(-1)],
-                  [isAr ? '7 أيام' : '7 days', off(-6), off(0)],
-                  [isAr ? '30 يوماً' : '30 days', off(-29), off(0)],
-                  [isAr ? 'هذا الشهر' : 'This month', ymd(new Date(now.getFullYear(), now.getMonth(), 1)), off(0)],
-                  [isAr ? 'الشهر الماضي' : 'Last month', ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1)), ymd(new Date(now.getFullYear(), now.getMonth(), 0))],
-                ]
-              })().map(([label, fv, tv]) => {
-                const on = dateFrom === fv && dateTo === tv
-                return (
-                  <button key={label} type="button" onClick={() => { setDateFrom(fv); setDateTo(tv) }} aria-pressed={on}
-                    className={`rp-preset${on ? ' on' : ''}`}>
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
+          <div className="flex gap-1.5 overflow-x-auto rp-presets">
+            {rangePresets(isAr).filter(p => ['today', 'yday', 'd7', 'd30', 'month', 'lmonth'].includes(p.id)).map(p => {
+              const on = dateFrom === p.from && dateTo === p.to
+              return <button key={p.id} type="button" onClick={() => { setDateFrom(p.from); setDateTo(p.to) }} aria-pressed={on} className={`rp-preset${on ? ' on' : ''}`}>{p.label}</button>
+            })}
+          </div>
         </div>
-        {data && stations.length > 1 && (
-          <div className="rp-actions col-span-2 lg:col-span-4 flex flex-wrap items-center gap-3 pt-3 border-t border-gray-100">
-            <button type="button" onClick={() => setShowFolder(true)} className="rp-folder-btn">
-              <span className="rp-folder-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></span>
+        {stations.length > 0 && allowCap('reports_print') && (
+          <div className="rp-actions col-span-2 lg:col-span-3 flex flex-wrap items-center gap-3 pt-3 border-t border-gray-100">
+            <button type="button" onClick={() => setShowExec(true)} className="rp-folder-btn xr-launch">
+              <span className="rp-folder-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36z"/></svg></span>
               <span className="rp-folder-t">
-                <b>{isAr ? 'مجلد طباعة المحطات' : 'Station print folder'}</b>
-                <small>{folder.length ? (isAr ? `${folder.length} ملف جاهز — لكل محطة نوعها` : `${folder.length} files ready`) : (isAr ? 'اختر محطات وحدّد ما تريد من كل واحدة' : 'Pick stations and choose what you want from each')}</small>
+                <b>{isAr ? 'بوصلة الأداء — التقرير التنفيذي' : 'Performance Compass — executive report'}</b>
+                <small>{isAr ? 'للإدارة العليا: ملخص، أداء المحطات والوكلاء، المبيعات والنمو، المتخلفون، الحالة التشغيلية، الموجودات، وكشوف المحطات' : 'For leadership: summary, stations & agents, sales growth, missed, operations, lost & found, station sheets'}</small>
               </span>
-              {folder.length > 0 && <span className="rp-folder-n">{folder.length}</span>}
             </button>
           </div>
         )}
@@ -1648,7 +1397,7 @@ export default function ReportsPage() {
       ) : (
         <SummaryPanel data={data} isAr={isAr} allowed={typeAllowed} metrics={metrics} setMetrics={setMetrics} pctStyle={pctStyle} setPctStyle={setPctStyle}
           flags={{ onlyStaffed: onlyStaffed && station === 'all', activeOnly }}
-          canPrint={allowCap('reports_print')} folderCount={folder.length} onOpenFolder={() => setShowFolder(true)}
+          canPrint={allowCap('reports_print')} onOpenFolder={() => setShowExec(true)}
           onPrintSummary={printSummary} onPrintDetailed={() => setShowPrintPicker(true)} onExport={exportSummary} />
       ))}
 
