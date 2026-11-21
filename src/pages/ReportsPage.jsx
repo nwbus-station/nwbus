@@ -1372,8 +1372,8 @@ export default function ReportsPage() {
             <button type="button" onClick={() => setShowExec(true)} className="rp-folder-btn xr-launch">
               <span className="rp-folder-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36z"/></svg></span>
               <span className="rp-folder-t">
-                <b>{isAr ? 'بوصلة الأداء — التقرير التنفيذي' : 'Performance Compass — executive report'}</b>
-                <small>{isAr ? 'للإدارة العليا: ملخص، أداء المحطات والوكلاء، المبيعات والنمو، المتخلفون، الحالة التشغيلية، الموجودات، وكشوف المحطات' : 'For leadership: summary, stations & agents, sales growth, missed, operations, lost & found, station sheets'}</small>
+                <b>{isAr ? 'بوصلة الأداء — تقرير تنفيذي' : 'Performance Compass — executive report'}</b>
+                <small>{isAr ? 'للإدارة العليا: نظرة عامة، المحطات والوكلاء، المبيعات، المتخلفون، الحالة التشغيلية، الموجودات، وكشوف المحطات' : 'For leadership: overview, stations & agents, sales, missed, operations, lost & found, station sheets'}</small>
               </span>
             </button>
           </div>

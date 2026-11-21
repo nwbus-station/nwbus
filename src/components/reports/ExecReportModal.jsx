@@ -47,7 +47,7 @@ export default function ExecReportModal({ isAr, supabase, stations, staff, from:
   const [secs, _setSecs] = useState(() => { const v = load('xr_secs', null); return Array.isArray(v) ? v : EXEC_SECTIONS.map(s => s.id) })
   const setSecs = v => { _setSecs(v); save('xr_secs', v) }
   const chosen = avail.map(s => s.id).filter(id => secs.includes(id))
-  const [opt, _setOpt] = useState(() => ({ details: true, withUnentered: false, tickets: false, ...load('xr_opt', {}) }))
+  const [opt, _setOpt] = useState(() => ({ details: true, withUnentered: false, tickets: false, growth: false, ...load('xr_opt', {}) }))
   const setOpt = (k, v) => { const n = { ...opt, [k]: v }; _setOpt(n); save('xr_opt', n) }
 
   useEffect(() => {
@@ -65,6 +65,9 @@ export default function ExecReportModal({ isAr, supabase, stations, staff, from:
   const toggleGroup = g => { const n = new Set(sel); const on = groupOn(g); groups[g].forEach(s => (on ? n.delete(s.id) : n.add(s.id))); setSel(n) }
   const picked = stations.filter(s => sel.has(s.id))
   const nAgents = picked.filter(s => s.is_agent).length
+  // «بلا وكلاء»: يشيل كل الوكلاء من الاختيار بضغطة (وضغطة ثانية ترجعهم)
+  const noAgents = picked.length > 0 && nAgents === 0
+  const toggleNoAgents = () => { const n = new Set(sel); groups.agent.forEach(s => (noAgents ? n.add(s.id) : n.delete(s.id))); setSel(n) }
   const days = spanDays(from, to)
 
   const scopeLabel = picked.length === 1 ? nameOf(picked[0])
@@ -75,7 +78,7 @@ export default function ExecReportModal({ isAr, supabase, stations, staff, from:
 
   const ready = picked.length > 0 && chosen.length > 0 && from && to
   const build = async () => {
-    const model = await buildExecModel({ supabase, isAr, from, to, stations: picked, sections: new Set(chosen), activeOnly, onProgress: m => setBusy(b => ({ ...(b || {}), msg: m })) })
+    const model = await buildExecModel({ supabase, isAr, from, to, stations: picked, sections: new Set(chosen), activeOnly, growth: !!opt.growth, onProgress: m => setBusy(b => ({ ...(b || {}), msg: m })) })
     return { model, doc: buildExecDocument(model, { sections: chosen, opts: opt, preparedBy, scopeLabel }) }
   }
 
@@ -147,6 +150,11 @@ export default function ExecReportModal({ isAr, supabase, stations, staff, from:
                   <b>{groups[g.id].filter(s => sel.has(s.id)).length}<small>/{groups[g.id].length}</small></b><span>{g.label}</span>
                 </button>
               ))}
+              {groups.agent.length > 0 && (
+                <button type="button" aria-pressed={noAgents} className={`xr-group k-noagent${noAgents ? ' on' : ''}`} onClick={toggleNoAgents}>
+                  <b>{picked.length - nAgents}</b><span>{T('بلا وكلاء', 'No agents')}</span>
+                </button>
+              )}
             </div>
             <input value={q} onChange={e => setQ(e.target.value)} placeholder={T('ابحث عن محطة…', 'Search stations…')} className="fd-search" />
             <div className="fd-chips">
@@ -181,6 +189,10 @@ export default function ExecReportModal({ isAr, supabase, stations, staff, from:
               <button type="button" className="fd-link" onClick={() => setSecs(EXEC_SECTIONS.map(s => s.id))}>{T('الكل', 'All')}</button>
               <button type="button" className="fd-link fd-link-d" onClick={() => setSecs([])}>{T('لا شيء', 'None')}</button>
             </div>
+            <label className="xr-opt">
+              <input type="checkbox" checked={!!opt.growth} onChange={e => setOpt('growth', e.target.checked)} />
+              <span><b>{T('إظهار النمو والمقارنة', 'Show growth & comparison')}</b><small>{T('نسبة الارتفاع عن الفترة السابقة والعام الماضي (الركاب، المبيعات، المتخلفون)', 'Change vs previous period and last year (passengers, sales, missed)')}</small></span>
+            </label>
             <div className="xr-secs">
               {avail.map((s, i) => {
                 const on = secs.includes(s.id)
