@@ -4,6 +4,7 @@ import DatePicker from '../shared/DatePicker'
 import { SURVEY_EXEMPT_ROLES } from '../../utils/constants'
 import { riyadhDay } from '../../utils/dates'
 import { usePresence } from '../../lib/presence'
+import { fetchSurveyCities, detectSurveyCity } from '../../pages/SurveyPage'
 import { docShell, docHeader, openDocWindow, esc } from '../../utils/printDoc'
 
 const RATING_LABEL = { 1: 'سيئ جداً', 2: 'سيئ', 3: 'محايد', 4: 'جيد', 5: 'ممتاز' }
@@ -18,8 +19,9 @@ export const STATES = {
   noshow:   { t: 'دخل دون تقييم',            short: 'دخل دون تقييم', c: '#9333ea', bg: '#f3e8ff', order: 2 },
   progress: { t: 'يقيّم الآن',               short: 'جارٍ',         c: '#0284c7', bg: '#e0f2fe', order: 3 },
   done:     { t: 'أكمل التقييم',             short: 'أكمل',         c: '#059669', bg: '#d1fae5', order: 4 },
-  leave:    { t: 'في إجازة',                 short: 'إجازة',        c: '#64748b', bg: '#e2e8f0', order: 5 },
-  off:      { t: 'لم يسجّل دخول',            short: 'لم يسجّل دخول', c: '#9ca3af', bg: '#f3f4f6', order: 6 },
+  nocity:   { t: 'محطته بلا استبيان',        short: 'محطة بلا استبيان', c: '#0d9488', bg: '#ccfbf1', order: 5 },
+  leave:    { t: 'في إجازة',                 short: 'إجازة',        c: '#64748b', bg: '#e2e8f0', order: 6 },
+  off:      { t: 'لم يسجّل دخول',            short: 'لم يسجّل دخول', c: '#9ca3af', bg: '#f3f4f6', order: 7 },
 }
 const STATE_KEYS = Object.keys(STATES).sort((a, b) => STATES[a].order - STATES[b].order)
 const EVADE = new Set(['evaded', 'skipped'])
@@ -146,21 +148,24 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
     setErr('')
     ;(async () => {
       const fT = `${from}T00:00:00+03:00`, tT = `${last}T23:59:59.999+03:00`
-      const [u, p, e, tr, sl, lv, au] = await Promise.all([
-        fetchAll(() => supabase.from('users').select('id, full_name_ar, job_number, role, last_login, station:station_id(id, name_ar, name_en)').eq('is_active', true).not('role', 'in', `(${SURVEY_EXEMPT_ROLES.join(',')})`).order('id')),
+      const [u, p, e, tr, sl, lv, au, cities] = await Promise.all([
+        fetchAll(() => supabase.from('users').select('id, full_name_ar, job_number, role, last_login, station:station_id(id, name_ar, name_en, survey_city)').eq('is_active', true).not('role', 'in', `(${SURVEY_EXEMPT_ROLES.join(',')})`).order('id')),
         fetchAll(() => supabase.from('user_daily_survey').select('user_id, day, done, updated_at').gte('day', from).lte('day', last).order('user_id').order('day')),
         fetchAll(() => supabase.from('user_survey_events').select('id, user_id, day, rating, created_at').gte('day', from).lte('day', last).order('created_at').order('id')),
         fetchAll(() => supabase.from('trip_records').select('id, created_by, record_date, created_at').gte('record_date', from).lte('record_date', last).order('id')),
-        fetchAll(() => supabase.from('sales_records').select('id, created_by, sale_date, created_at').gte('sale_date', from).lte('sale_date', last).order('id')),
+        // إدخال الإيراد نيابةً عن موظف (entered_by) يُنسب لمن أدخله فعلاً لا للموظف الغائب
+        fetchAll(() => supabase.from('sales_records').select('id, created_by, entered_by, sale_date, created_at').gte('sale_date', from).lte('sale_date', last).order('id'))
+          .then(r => (r.error ? fetchAll(() => supabase.from('sales_records').select('id, created_by, sale_date, created_at').gte('sale_date', from).lte('sale_date', last).order('id')) : r)),
         fetchAll(() => supabase.from('leaves').select('id, employee_id, start_date, end_date').eq('status', 'approved').lte('start_date', last).gte('end_date', from).order('id')),
         // تسجيلات الدخول السابقة من سجل التدقيق (تغيّر last_login)
         fetchAll(() => supabase.from('audit_log').select('id, record_id, created_at, a:after_data->>last_login, b:before_data->>last_login').eq('table_name', 'users').gte('created_at', fT).lte('created_at', tT).order('id')),
+        fetchSurveyCities().catch(() => null),
       ])
       if (off) return
       if (p.error) { setErr('جدول المتابعة غير مُنشأ بعد. شغّل استعلام SQL الخاص بالتقييم اليومي.'); setData({ users: [] }); return }
       if (u.error) { setErr('تعذّر تحميل الحسابات: ' + u.error.message); return }
       const users = target === 'selected' ? u.data.filter(x => selectedIds.includes(x.id)) : u.data
-      setData({ users, progress: p.data, events: e.error ? [] : e.data, noEvents: !!e.error, trips: tr.data, sales: sl.data, leaves: lv.data, audit: au.error ? [] : au.data, auditOk: !au.error, at: Date.now() })
+      setData({ users, progress: p.data, events: e.error ? [] : e.data, noEvents: !!e.error, trips: tr.data, sales: sl.data, cities, leaves: lv.data, audit: au.error ? [] : au.data, auditOk: !au.error, at: Date.now() })
     })()
     return () => { off = true }
   }, [from, last, target, selectedIds.join(','), tick]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -176,12 +181,16 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
     for (const r of data.audit) if (r.a && r.a !== r.b) addLogin(String(r.record_id), r.a)
     for (const u of data.users) addLogin(u.id, u.last_login)
     for (const r of data.trips) { const a = (act[k(r.created_by, r.record_date)] ||= { trips: 0, sales: 0, first: r.created_at }); a.trips++; if (r.created_at < a.first) a.first = r.created_at }
-    for (const r of data.sales) { const a = (act[k(r.created_by, r.sale_date)] ||= { trips: 0, sales: 0, first: r.created_at }); a.sales++; if (r.created_at < a.first) a.first = r.created_at }
+    for (const r of data.sales) { const a = (act[k(r.entered_by || r.created_by, r.sale_date)] ||= { trips: 0, sales: 0, first: r.created_at }); a.sales++; if (r.created_at < a.first) a.first = r.created_at }
     const leaveOf = {}
     for (const l of data.leaves) (leaveOf[l.employee_id] ||= []).push(l)
     const nowMs = Date.now()
+    // المحطات غير المربوطة بمدينة استبيان نشطة: لا تظهر لموظفيها صفحة التقييم أصلاً (ليس تهرّباً منهم)
+    const activeCities = data.cities ? new Set(data.cities.filter(c => c.is_active !== false).map(c => c.city)) : null
+    const covered = u => !activeCities || (!!u.station && activeCities.has(detectSurveyCity(u.station)))
 
     return data.users.map(u => {
+      const hasCity = covered(u)
       const perDay = days.map(d => {
         const p = prog[k(u.id, d)], ev = evs[k(u.id, d)] ?? [], lg = login[k(u.id, d)], a = act[k(u.id, d)]
         const online = d === today && !!presence[u.id]
@@ -193,14 +202,15 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
           if (done >= need) st = 'done'
           else if (d === today && (online || recent)) st = 'progress'
           else st = done > 0 ? 'evaded' : 'skipped'
-        } else if (lg || a || online) st = 'noshow'
+        } else if (!hasCity && (lg || a || online)) st = 'nocity'
+        else if (lg || a || online) st = 'noshow'
         else if (onLeave) st = 'leave'
         else st = 'off'
         return { day: d, st, done, evs: ev, login: lg || null, act: a || null, online }
       })
       const counts = {}
       for (const x of perDay) counts[x.st] = (counts[x.st] || 0) + 1
-      const present = perDay.filter(x => PRESENT.has(x.st)).length
+      const present = perDay.filter(x => PRESENT.has(x.st)).length   // «محطته بلا استبيان» لا تدخل في الالتزام
       const doneDays = counts.done || 0
       const evaded = (counts.evaded || 0) + (counts.skipped || 0)
       const allEvs = perDay.flatMap(x => x.evs)
@@ -283,9 +293,9 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
           <td>${single ? chip(r.st, dayText(r.perDay[0], need)) : r.perDay.filter(x => EVADE.has(x.st)).map(x => `${x.day.slice(5)}: ${esc(dayText(x, need))}`).join('<br>')}</td>
           <td>${single ? actTxt(r.perDay[0]) : '—'}</td></tr>`).join('')}</tbody></table></div>` : ''}
       <div class="sec"><h3>ملخص المحطات</h3>
-        <table class="t"><thead><tr><th>المحطة</th><th>الحسابات</th><th>الحاضرون</th><th>أكمل</th><th>تهرّب</th><th>دخل دون تقييم</th><th>لم يسجّل دخول</th><th>الالتزام</th><th>الرضا</th></tr></thead><tbody>
-        ${groups.map(g => `<tr><td class="l"><b>${esc(g.name)}</b></td><td>${g.list.length}</td><td>${g.present}</td><td>${g.counts.done || 0}</td><td style="color:#b91c1c"><b>${g.evaded || ''}</b></td><td>${g.counts.noshow || ''}</td><td class="muted">${g.counts.off || ''}</td><td><b style="color:${toneOf(g.compliance ?? 0)}">${g.compliance == null ? '—' : g.compliance + '%'}</b></td><td>${fmtAvg(g.avg)}</td></tr>`).join('')}
-        <tr class="tot"><td class="l">الإجمالي</td><td>${rows.length}</td><td>${present}</td><td>${counts.done || 0}</td><td>${(counts.evaded || 0) + (counts.skipped || 0)}</td><td>${counts.noshow || 0}</td><td>${counts.off || 0}</td><td>${compliance}%</td><td>${fmtAvg(avgOf(allRatings))}</td></tr></tbody></table></div>
+        <table class="t"><thead><tr><th>المحطة</th><th>الحسابات</th><th>الحاضرون</th><th>أكمل</th><th>تهرّب</th><th>دخل دون تقييم</th><th>بلا استبيان</th><th>لم يسجّل دخول</th><th>الالتزام</th><th>الرضا</th></tr></thead><tbody>
+        ${groups.map(g => `<tr><td class="l"><b>${esc(g.name)}</b></td><td>${g.list.length}</td><td>${g.present}</td><td>${g.counts.done || 0}</td><td style="color:#b91c1c"><b>${g.evaded || ''}</b></td><td>${g.counts.noshow || ''}</td><td>${g.counts.nocity || ''}</td><td class="muted">${g.counts.off || ''}</td><td><b style="color:${toneOf(g.compliance ?? 0)}">${g.compliance == null ? '—' : g.compliance + '%'}</b></td><td>${fmtAvg(g.avg)}</td></tr>`).join('')}
+        <tr class="tot"><td class="l">الإجمالي</td><td>${rows.length}</td><td>${present}</td><td>${counts.done || 0}</td><td>${(counts.evaded || 0) + (counts.skipped || 0)}</td><td>${counts.noshow || 0}</td><td>${counts.nocity || 0}</td><td>${counts.off || 0}</td><td>${compliance}%</td><td>${fmtAvg(avgOf(allRatings))}</td></tr></tbody></table></div>
       ${groups.map(g => `<div class="sec"><h3>${esc(g.name)} <span class="muted">(${g.list.length} حساب · التزام ${g.compliance == null ? '—' : g.compliance + '%'} · رضا ${fmtAvg(g.avg)})</span></h3>
         <table class="t"><thead><tr><th>الموظف</th><th>الرقم</th><th>${single ? 'الحالة' : 'الأيام'}</th><th>${single ? 'الدخول والنشاط' : 'الملخص'}</th><th>نتائج الركاب</th></tr></thead><tbody>
         ${g.list.map(r => `<tr><td class="l"><b>${esc(r.u.full_name_ar ?? '—')}</b></td><td>${esc(r.u.job_number ?? '—')}</td>
@@ -507,7 +517,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
 
           <div style={{ marginTop: 10, fontSize: '.78rem', color: 'var(--text-3)', lineHeight: 1.9 }}>
             <b style={{ color: 'var(--text-2)' }}>كيف تُحسب الحالات:</b> «لم يسجّل دخول» تعني لا يوجد له في القاعدة دخول ولا ظهور لصفحة التقييم ولا أي إدخال في ذلك اليوم.
-            «فتح التقييم وأغلق» ظهرت له صفحة التقييم وخرج دون أي تقييم. «قيّم جزءاً وأغلق» بدأ وخرج قبل إكمال {need}. «دخل دون تقييم» دخل أو أدخل بيانات ولم تُسجَّل له صفحة تقييم (غالباً نسخة قديمة قبل التحديث).
+            «فتح التقييم وأغلق» ظهرت له صفحة التقييم وخرج دون أي تقييم. «قيّم جزءاً وأغلق» بدأ وخرج قبل إكمال {need}. «دخل دون تقييم» دخل أو أدخل بيانات ولم تُسجَّل له صفحة تقييم: جهازه على نسخة قديمة لم تتحدّث، أو دخل قبل إصلاح ظهور التقييم اليوم، أو أكمل قبل التصفير القديم. «محطته بلا استبيان» محطة غير مربوطة بمدينة استبيان، فلا تظهر لموظفيها صفحة التقييم — اربطها من «تعديل روابط المدن».
             الالتزام يُحسب من الحاضرين فقط.{data.auditOk ? '' : ' (سجل الدخول للأيام السابقة غير متاح لهذا الحساب، فيُعتمد على آخر دخول والإدخالات.)'}
           </div>
         </>

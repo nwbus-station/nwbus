@@ -13,7 +13,7 @@ const r2 = v => (v == null ? '' : Math.round(v * 100) / 100)
  */
 export async function exportSurveyExcel({ groups, ctx }) {
   const { from, to, N, single, need, total, compliance, allRatings, stationF, counts = {}, present = 0, dayText } = ctx
-  const ST = { done: 'أكمل التقييم', evaded: 'قيّم جزءاً وأغلق', skipped: 'فتح التقييم وأغلق', noshow: 'دخل دون تقييم', progress: 'يقيّم الآن', leave: 'في إجازة', off: 'لم يسجّل دخول' }
+  const ST = { done: 'أكمل التقييم', evaded: 'قيّم جزءاً وأغلق', skipped: 'فتح التقييم وأغلق', noshow: 'دخل دون تقييم', nocity: 'محطته بلا استبيان', progress: 'يقيّم الآن', leave: 'في إجازة', off: 'لم يسجّل دخول' }
   const evadeN = (counts.evaded || 0) + (counts.skipped || 0)
   const book = await createBook({ isAr: true })
   const stamp = new Date().toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' })
