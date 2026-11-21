@@ -135,12 +135,39 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
   const onFrom = v => { if (!v) return; setTick(0); setFrom(v); if (v > to) setTo(v) }
   const onTo = v => { if (!v) return; setTick(0); setTo(v); if (v < from) setFrom(v) }
 
-  // تحديث تلقائي كل دقيقة لليوم الحالي (حالة «يقيّم الآن» تتغير)
+  // تحديث كامل كل 5 دقائق لليوم الحالي (الدخول والإدخالات)
   useEffect(() => {
     if (last !== today) return
-    const id = setInterval(() => setTick(t => t + 1), 60000)
+    const id = setInterval(() => setTick(t => t + 1), 5 * 60000)
     return () => clearInterval(id)
   }, [last, today])
+
+  // مباشر: أي تقييم يُسجَّل أو تقدّم يتغيّر يظهر فوراً دون تحديث الصفحة (Realtime + فحص احتياطي كل 10 ثوانٍ لتقدّم التقييم فقط)
+  const loaded = !!data?.users?.length
+  useEffect(() => {
+    if (last !== today || !loaded) return
+    let off = false, timer = null, busy = false
+    const refreshLive = async () => {
+      if (busy || off) return
+      busy = true
+      try {
+        const [p, e] = await Promise.all([
+          fetchAll(() => supabase.from('user_daily_survey').select('user_id, day, done, updated_at').gte('day', from).lte('day', last).order('user_id').order('day')),
+          fetchAll(() => supabase.from('user_survey_events').select('id, user_id, day, rating, created_at').gte('day', from).lte('day', last).order('created_at').order('id')),
+        ])
+        if (!off && !p.error) setData(d => (d ? { ...d, progress: p.data, events: e.error ? d.events : e.data, at: Date.now() } : d))
+      } finally { busy = false }
+    }
+    const soon = () => { clearTimeout(timer); timer = setTimeout(refreshLive, 700) }
+    const ch = supabase.channel('survey-report-live-' + Date.now())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_daily_survey' }, soon)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_survey_events' }, soon)
+      .subscribe()
+    const id = setInterval(() => { if (document.visibilityState !== 'hidden') refreshLive() }, 10000)
+    const onVis = () => { if (document.visibilityState === 'visible') refreshLive() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { off = true; clearTimeout(timer); clearInterval(id); supabase.removeChannel(ch); document.removeEventListener('visibilitychange', onVis) }
+  }, [from, last, today, loaded])
 
   useEffect(() => {
     let off = false
@@ -196,7 +223,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
         const online = d === today && !!presence[u.id]
         const onLeave = (leaveOf[u.id] ?? []).some(l => l.start_date <= d && l.end_date >= d)
         const done = Math.max(p?.done ?? 0, ev.length)
-        const recent = p?.updated_at && nowMs - new Date(p.updated_at).getTime() < 10 * 60 * 1000
+        const recent = p?.updated_at && nowMs - new Date(p.updated_at).getTime() < 15 * 60 * 1000
         let st
         if (p || done > 0) {
           if (done >= need) st = 'done'
@@ -347,7 +374,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
       </div>
       <p style={{ margin: '10px 0 16px', fontSize: '.86rem', color: 'var(--text-2)', fontWeight: 700 }}>
         {rangeLabel}{!single ? ` · ${N} يوم` : ''}
-        {last === today && data?.at ? <span style={{ color: 'var(--text-3)', fontWeight: 500 }}> · يتحدّث تلقائياً كل دقيقة</span> : null}
+        {last === today && data?.at ? <span style={{ color: '#059669', fontWeight: 700 }}> · <i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 99, background: '#059669', marginInlineEnd: 4 }} />مباشر · آخر تحديث {timeOf(data.at)}</span> : null}
       </p>
 
       {err && <p style={{ margin: '0 0 10px', fontSize: '.84rem', color: '#b91c1c' }}>{err}</p>}
