@@ -218,7 +218,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
       const total = perDay.reduce((s, x) => s + x.done, 0)
       // الحالة الممثّلة: ليوم واحد = حالة اليوم، ولفترة = أسوأ حالة ظهرت (التهرّب أولاً)
       const st = single ? perDay[0].st : STATE_KEYS.find(s => counts[s]) || 'off'
-      return { u, perDay, counts, present, doneDays, evaded, ratings, avg: avgOf(ratings), total, st, compliance: present ? pct(doneDays, present) : null,
+      return { u, hasCity, perDay, counts, present, doneDays, evaded, ratings, avg: avgOf(ratings), total, st, compliance: present ? pct(doneDays, present) : null,
         station: u.station?.name_ar || u.station?.name_en || 'بدون محطة' }
     })
   }, [data, days, need, presence, single, today])
@@ -241,7 +241,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
       const ratings = list.flatMap(r => r.ratings)
       const evaded = list.reduce((a, r) => a + r.evaded, 0)
       const sorted = [...list].sort((a, b) => STATES[a.st].order - STATES[b.st].order || b.evaded - a.evaded || (a.u.full_name_ar ?? '').localeCompare(b.u.full_name_ar ?? '', 'ar'))
-      return { name, list: sorted, counts, present, evaded, total: list.reduce((a, r) => a + r.total, 0), ratings, avg: avgOf(ratings), compliance: present ? pct(doneDays, present) : null }
+      return { name, noCity: list.every(r => !r.hasCity), list: sorted, counts, present, evaded, total: list.reduce((a, r) => a + r.total, 0), ratings, avg: avgOf(ratings), compliance: present ? pct(doneDays, present) : null }
     })
     const cmp = {
       issues: (a, b) => b.evaded - a.evaded || (a.compliance ?? 101) - (b.compliance ?? 101),
@@ -294,7 +294,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
           <td>${single ? actTxt(r.perDay[0]) : '—'}</td></tr>`).join('')}</tbody></table></div>` : ''}
       <div class="sec"><h3>ملخص المحطات</h3>
         <table class="t"><thead><tr><th>المحطة</th><th>الحسابات</th><th>الحاضرون</th><th>أكمل</th><th>تهرّب</th><th>دخل دون تقييم</th><th>بلا استبيان</th><th>لم يسجّل دخول</th><th>الالتزام</th><th>الرضا</th></tr></thead><tbody>
-        ${groups.map(g => `<tr><td class="l"><b>${esc(g.name)}</b></td><td>${g.list.length}</td><td>${g.present}</td><td>${g.counts.done || 0}</td><td style="color:#b91c1c"><b>${g.evaded || ''}</b></td><td>${g.counts.noshow || ''}</td><td>${g.counts.nocity || ''}</td><td class="muted">${g.counts.off || ''}</td><td><b style="color:${toneOf(g.compliance ?? 0)}">${g.compliance == null ? '—' : g.compliance + '%'}</b></td><td>${fmtAvg(g.avg)}</td></tr>`).join('')}
+        ${groups.map(g => `<tr><td class="l"><b>${esc(g.name)}</b>${g.noCity ? ' <span class="chip" style="background:#ccfbf1;color:#0d9488">غير مربوطة بالاستبيان</span>' : ''}</td><td>${g.list.length}</td><td>${g.present}</td><td>${g.counts.done || 0}</td><td style="color:#b91c1c"><b>${g.evaded || ''}</b></td><td>${g.counts.noshow || ''}</td><td>${g.counts.nocity || ''}</td><td class="muted">${g.counts.off || ''}</td><td><b style="color:${toneOf(g.compliance ?? 0)}">${g.compliance == null ? '—' : g.compliance + '%'}</b></td><td>${fmtAvg(g.avg)}</td></tr>`).join('')}
         <tr class="tot"><td class="l">الإجمالي</td><td>${rows.length}</td><td>${present}</td><td>${counts.done || 0}</td><td>${(counts.evaded || 0) + (counts.skipped || 0)}</td><td>${counts.noshow || 0}</td><td>${counts.nocity || 0}</td><td>${counts.off || 0}</td><td>${compliance}%</td><td>${fmtAvg(avgOf(allRatings))}</td></tr></tbody></table></div>
       ${groups.map(g => `<div class="sec"><h3>${esc(g.name)} <span class="muted">(${g.list.length} حساب · التزام ${g.compliance == null ? '—' : g.compliance + '%'} · رضا ${fmtAvg(g.avg)})</span></h3>
         <table class="t"><thead><tr><th>الموظف</th><th>الرقم</th><th>${single ? 'الحالة' : 'الأيام'}</th><th>${single ? 'الدخول والنشاط' : 'الملخص'}</th><th>نتائج الركاب</th></tr></thead><tbody>
@@ -426,6 +426,16 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
             </div>
           )}
 
+          {groups.some(g => g.noCity) && (
+            <div style={{ ...card, marginTop: 12, padding: '12px 16px', borderColor: STATES.nocity.c + '55', background: STATES.nocity.bg }}>
+              <b style={{ color: STATES.nocity.c, fontSize: '.95rem' }}>محطات غير مربوطة بالاستبيان ({groups.filter(g => g.noCity).length})</b>
+              <p style={{ margin: '4px 0 8px', fontSize: '.8rem', color: '#115e59' }}>لا تظهر صفحة التقييم لموظفي هذه المحطات. اربطها من «تعديل روابط المدن» أعلى الصفحة.</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {groups.filter(g => g.noCity).map(g => <span key={g.name} dir="auto" style={{ padding: '3px 10px', borderRadius: 99, background: '#fff', color: STATES.nocity.c, border: `1px solid ${STATES.nocity.c}55`, fontSize: '.78rem', fontWeight: 700 }}>{g.name} · {g.list.length}</span>)}
+              </div>
+            </div>
+          )}
+
           {/* فلاتر */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '18px 0 10px' }}>
             <select value={stationF} onChange={e => setStationF(e.target.value)} style={ctl}>
@@ -452,6 +462,7 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
                     style={{ width: '100%', padding: '14px 16px', border: 'none', background: isOpen ? 'var(--surface)' : 'transparent', color: 'var(--text-1)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
                     <span>
                       <b style={{ fontSize: '1rem' }} dir="auto">{g.name}</b>
+                      {g.noCity && <span style={{ marginInlineStart: 8, padding: '2px 9px', borderRadius: 99, background: STATES.nocity.bg, color: STATES.nocity.c, fontSize: '.72rem', fontWeight: 800, whiteSpace: 'nowrap' }}>غير مربوطة بالاستبيان</span>}
                       <span style={{ display: 'block', fontSize: '.76rem', color: 'var(--text-3)', marginTop: 2 }}>{g.list.length} حساب · حضر {g.present} {unit}</span>
                     </span>
                     <span className="dsr-hide"><StateBar counts={g.counts} total={g.list.length * N} height={12} />
@@ -464,6 +475,11 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
                     <span className="dsr-hide" style={{ textAlign: 'center' }}><b style={{ fontSize: '1.25rem', fontFamily: 'monospace' }}>{fmtAvg(g.avg)}</b><span style={{ display: 'block', fontSize: '.68rem', color: 'var(--text-3)' }}>رضا / 5</span></span>
                     <span style={{ color: 'var(--text-3)', fontSize: '1.2rem', transform: isOpen ? 'rotate(90deg)' : 'rotate(180deg)', transition: 'transform .15s', display: 'inline-block' }}>&#8250;</span>
                   </button>
+                  {isOpen && g.noCity && (
+                    <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', background: STATES.nocity.bg, color: STATES.nocity.c, fontSize: '.84rem', fontWeight: 700 }}>
+                      هذه المحطة غير مربوطة بمدينة استبيان، لذلك لا تظهر صفحة التقييم لموظفيها. اربطها من «تعديل روابط المدن» أعلى الصفحة ليصبح التقييم إلزامياً عليهم.
+                    </div>
+                  )}
                   {isOpen && g.list.map(r => {
                     const d = r.perDay[0]
                     return (
