@@ -191,7 +191,7 @@ export default function ExecReportModal({ isAr, supabase, stations, staff, from:
             </div>
             <label className="xr-opt">
               <input type="checkbox" checked={!!opt.growth} onChange={e => setOpt('growth', e.target.checked)} />
-              <span><b>{T('إظهار النمو والمقارنة', 'Show growth & comparison')}</b><small>{T('نسبة الارتفاع عن الفترة السابقة والعام الماضي (الركاب، المبيعات، المتخلفون)', 'Change vs previous period and last year (passengers, sales, missed)')}</small></span>
+              <span><b>{T('إظهار النمو والمقارنة', 'Show growth & comparison')}</b><small>{T('نسبة الارتفاع عن الفترة السابقة والعام الماضي (الركاب، المبيعات، المتغيبون)', 'Change vs previous period and last year (passengers, sales, missed)')}</small></span>
             </label>
             <div className="xr-secs">
               {avail.map((s, i) => {

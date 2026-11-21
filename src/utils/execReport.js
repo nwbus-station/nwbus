@@ -1,6 +1,6 @@
 // «بوصلة الأداء» — التقرير التنفيذي للعمليات (للإدارة العليا)
 // يجلب بياناته بنفسه لفترة ومحطات يحددها المستخدم، ويبني مستند طباعة A4 أفقي بأقسام يختارها:
-// الملخص التنفيذي · أداء المحطات (المحطات والوكلاء منفصلين) · المبيعات ونسب النمو · المتخلفون · الحالة التشغيلية
+// الملخص التنفيذي · أداء المحطات (المحطات والوكلاء منفصلين) · المبيعات ونسب النمو · المتغيبون · الحالة التشغيلية
 // (مع علامة تكرار على رقم الحافلة) · الموجودات والمفقودات · كشوف المحطات (المغادرة والوصول متقابلين في نفس الصفحة).
 // القواعد نفسها المعتمدة في صفحة التقارير: الوصول والمغادرة منفصلان دائماً ولا يُجمعان، والانضباط = مبكر أو ≤5 دقائق.
 import { shiftsOfStation } from './stationShifts'
@@ -14,7 +14,7 @@ export const EXEC_SECTIONS = [
   { id: 'summary', ar: 'نظرة عامة', en: 'Overview', hint_ar: 'الأرقام الرئيسية، الركاب يومياً، وأبرز الملاحظات', hint_en: 'Headline figures, daily passengers and highlights' },
   { id: 'stations', ar: 'أداء المحطات', en: 'Station performance', hint_ar: 'المحطات والوكلاء: الرحلات والركاب والإدخال', hint_en: 'Stations & agents: trips, passengers, data entry', cap: 'movements' },
   { id: 'sales', ar: 'المبيعات', en: 'Sales', hint_ar: 'الإيرادات وحصة كل محطة، والنمو عند تفعيله', hint_en: 'Revenue and share per station, growth when enabled', cap: 'sales' },
-  { id: 'missed', ar: 'المتخلفون عن الرحلات', en: 'Missed passengers', hint_ar: 'نسبة التخلف، الساعات والرحلات والمحطات الأعلى', hint_en: 'Missed rate, peak hours, trips and stations', cap: 'missed' },
+  { id: 'missed', ar: 'المتغيبون عن الرحلات', en: 'Missed passengers', hint_ar: 'نسبة الغياب، الساعات والرحلات والمحطات الأعلى', hint_en: 'Missed rate, peak hours, trips and stations', cap: 'missed' },
   { id: 'ops', ar: 'الحالة التشغيلية', en: 'Operational status', hint_ar: 'أعطال الحافلات وحالات التشغيل مع علامة التكرار', hint_en: 'Bus faults & incidents with repeat marks', cap: 'facilities' },
   { id: 'lost', ar: 'الموجودات والمفقودات', en: 'Lost & found', hint_ar: 'نسبة التسليم والمتبقي والمحطات الأعلى', hint_en: 'Delivery rate, remaining, top stations', cap: 'lost' },
   { id: 'sheets', ar: 'كشوف المحطات', en: 'Station sheets', hint_ar: 'المغادرة والوصول متقابلين لكل محطة', hint_en: 'Departures & arrivals side by side per station', cap: 'movements' },
@@ -53,13 +53,18 @@ const OPS_AR = {
 }
 const FAC = [['screen_works', 'الشاشة', 'Screen'], ['wheelchair_works', 'كرسي ذوي الإعاقة', 'Wheelchair'], ['toilet_works', 'دورة المياه', 'Toilet']]
 
+// جلب كل الصفحات (حد PostgREST 1000 صف) — 4 صفحات بالتوازي في كل دفعة بدل صفحة صفحة
 async function pageAll(make) {
   const out = []
-  for (let f = 0; f < 200000; f += 1000) {
-    const { data, error } = await make().range(f, f + 999)
-    if (error) throw new Error(error.message)
-    out.push(...(data ?? []))
-    if ((data ?? []).length < 1000) break
+  for (let f = 0; f < 200000; f += 4000) {
+    const res = await Promise.all([0, 1, 2, 3].map(k => make().range(f + k * 1000, f + k * 1000 + 999)))
+    let short = false
+    for (const { data, error } of res) {
+      if (error) throw new Error(error.message)
+      out.push(...(data ?? []))
+      if ((data ?? []).length < 1000) { short = true; break }
+    }
+    if (short) break
   }
   return out
 }
@@ -69,7 +74,18 @@ const soft = async p => { try { return await p } catch { return null } }
 /**
  * opts: { supabase, isAr, from, to, stations: [{id,name_ar,name_en,is_agent}], sections: Set, activeOnly, onProgress }
  */
-export async function buildExecModel({ supabase, isAr, from, to, stations, sections, activeOnly = true, growth: withGrowth = false, onProgress }) {
+// ذاكرة مؤقتة 5 دقائق: المعاينة ثم حفظ PDF بنفس الاختيارات لا يعيد جلب البيانات
+const CACHE = new Map()
+export async function buildExecModel(opts) {
+  const key = JSON.stringify([opts.isAr, opts.from, opts.to, opts.stations.map(s => s.id).sort(), [...opts.sections].sort(), opts.activeOnly, !!opts.growth, new Date().toISOString().slice(0, 15)])
+  const hit = CACHE.get(key)
+  if (hit && Date.now() - hit.t < 5 * 60000) return hit.model
+  const model = await buildExecModelRaw(opts)
+  CACHE.clear(); CACHE.set(key, { t: Date.now(), model })
+  return model
+}
+
+async function buildExecModelRaw({ supabase, isAr, from, to, stations, sections, activeOnly = true, growth: withGrowth = false, onProgress }) {
   const T = (a, e) => (isAr ? a : e)
   const ids = stations.map(s => s.id)
   const NONE = ['00000000-0000-0000-0000-000000000000']
@@ -79,10 +95,38 @@ export async function buildExecModel({ supabase, isAr, from, to, stations, secti
   // نفس التواريخ من العام الماضي
   const ly = { from: `${Number(from.slice(0, 4)) - 1}${from.slice(4)}`, to: `${Number(to.slice(0, 4)) - 1}${to.slice(4)}` }
   const want = id => sections.has(id)
-  const needMoves = want('summary') || want('stations') || want('sheets') || want('missed')
+  const nowDay = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' })
+  const nowHM = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', hour12: false })
+  const wantSales = want('sales') || want('summary') || want('stations')
+  const wantOps = want('ops') || want('summary')
+  const wantLost = want('lost') || want('summary')
+  const FAULTS = 'screen_works.eq.false,wheelchair_works.eq.false,toilet_works.eq.false,operational_status.neq.Normal'
+  const OPS_COLS = 'id, record_date, station_id, bus_number, screen_works, wheelchair_works, toilet_works, operational_status, actual_departure, actual_arrival, trip:trip_schedule_id(trip_number)'
+  const qSales = (a, b) => soft(pageAll(() => inIds(supabase.from('sales_records').select('id, station_id, sale_date, shift, total_actual, total_expected, surplus_deficit, is_confirmed').gte('sale_date', a).lte('sale_date', b)).order('id')))
+  const none = Promise.resolve([])
 
-  onProgress?.(T('جلب بيانات المحطات…', 'Loading stations…'))
-  const stInfo = await supabase.from('stations').select('id, shift_ends, inactive_shifts').in('id', ids.length ? ids : NONE)
+  // كل الاستعلامات تنطلق معاً (بدل واحد بعد الثاني) — أكبر توفير في وقت المعاينة
+  onProgress?.(T('جلب البيانات…', 'Loading data…'))
+  const [stInfo, recs, prevRecs, stTrips, stops, curS, prevS, lastS, opsPeriod, lostItems, lostBacklog, lostReports] = await Promise.all([
+    supabase.from('stations').select('id, shift_ends, inactive_shifts').in('id', ids.length ? ids : NONE),
+    pageAll(() => inIds(supabase.from('trip_records').select(`id, trip_schedule_id, record_date, station_id, passenger_count, missed_count, missed_tickets,
+      bus_number, actual_departure, actual_arrival, is_arrival,
+      trip:trip_schedule_id(trip_number, from_station_id, to_station_id, scheduled_departure, scheduled_arrival, from_station:from_station_id(name_ar,name_en), to_station:to_station_id(name_ar,name_en))`)
+      .gte('record_date', from).lte('record_date', to)).order('id')),
+    withGrowth ? pageAll(() => inIds(supabase.from('trip_records').select('id, station_id, passenger_count, missed_count, is_arrival, actual_departure, actual_arrival, trip:trip_schedule_id(from_station_id, to_station_id)')
+      .gte('record_date', pFrom).lte('record_date', pTo)).order('id')) : none,
+    pageAll(() => inIds(supabase.from('station_trips').select(`trip_schedule_id, station_id, departure_time, arrival_time, dep_enabled, arr_enabled,
+      trip:trip_schedule_id(trip_number, from_station_id, to_station_id, scheduled_departure, scheduled_arrival, is_active, is_rf, rf_date, days_of_week, start_date, end_date,
+        from_station:from_station_id(id, name_ar, name_en, city_group), to_station:to_station_id(id, name_ar, name_en, city_group))`)).order('trip_schedule_id').order('station_id')),
+    pageAll(() => inIds(supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time')).order('trip_schedule_id').order('station_id')),
+    wantSales ? qSales(from, to) : null,
+    wantSales && withGrowth ? qSales(pFrom, pTo) : none,
+    wantSales && withGrowth ? qSales(ly.from, ly.to) : none,
+    wantOps ? soft(pageAll(() => inIds(supabase.from('trip_records').select(OPS_COLS)).gte('record_date', from).lte('record_date', to).or(FAULTS).order('id'))) : none,
+    wantLost ? soft(pageAll(() => inIds(supabase.from('lost_found_items').select('id, station_id, status, found_date')).gte('found_date', from).lte('found_date', to).order('id'))) : null,
+    wantLost ? soft(pageAll(() => inIds(supabase.from('lost_found_items').select('id, station_id, found_date')).eq('status', 'unclaimed').order('id'))) : none,
+    wantLost ? soft(pageAll(() => inIds(supabase.from('lost_reports').select('id, station_id, created_at')).gte('created_at', `${from}T00:00:00+03:00`).lte('created_at', `${to}T23:59:59.999+03:00`).order('id'))) : none,
+  ])
   const shiftSt = Object.fromEntries((stInfo.data ?? []).map(x => [x.id, x]))
   const offAt = (sid, hhmm) => {
     if (!activeOnly || !hhmm) return false
@@ -92,55 +136,23 @@ export async function buildExecModel({ supabase, isAr, from, to, stations, secti
     const [h, m] = String(hhmm).slice(0, 5).split(':').map(Number)
     return !!sh[shiftIdx((h || 0) * 60 + (m || 0), sh)]?.off
   }
-
-  // ── الترحيل ──
-  let recs = [], prevRecs = [], stTrips = [], stops = []
-  if (needMoves) {
-    onProgress?.(T('جلب سجلات الرحلات…', 'Loading trip records…'))
-    ;[recs, prevRecs, stTrips, stops] = await Promise.all([
-      pageAll(() => inIds(supabase.from('trip_records').select(`id, trip_schedule_id, record_date, station_id, passenger_count, missed_count, missed_tickets,
-        bus_number, actual_departure, actual_arrival, is_arrival,
-        trip:trip_schedule_id(trip_number, from_station_id, to_station_id, scheduled_departure, scheduled_arrival, from_station:from_station_id(name_ar,name_en), to_station:to_station_id(name_ar,name_en))`)
-        .gte('record_date', from).lte('record_date', to)).order('id')),
-      withGrowth ? pageAll(() => inIds(supabase.from('trip_records').select('id, station_id, record_date, passenger_count, missed_count, is_arrival, actual_departure, actual_arrival, trip:trip_schedule_id(from_station_id, to_station_id)')
-        .gte('record_date', pFrom).lte('record_date', pTo)).order('id')) : [],
-      pageAll(() => inIds(supabase.from('station_trips').select(`trip_schedule_id, station_id, departure_time, arrival_time, dep_enabled, arr_enabled,
-        trip:trip_schedule_id(trip_number, from_station_id, to_station_id, scheduled_departure, scheduled_arrival, is_active, is_rf, rf_date, days_of_week, start_date, end_date,
-          from_station:from_station_id(id, name_ar, name_en, city_group), to_station:to_station_id(id, name_ar, name_en, city_group))`)).order('trip_schedule_id').order('station_id')),
-      pageAll(() => supabase.from('trip_schedule_stops').select('trip_schedule_id, station_id, arrival_time, departure_time').order('trip_schedule_id').order('station_id')),
-    ])
-  }
-
-  // ── المبيعات (الفترة + السابقة + العام الماضي) ──
   let sales = null
-  if (want('sales') || want('summary') || want('stations')) {
-    onProgress?.(T('جلب المبيعات…', 'Loading sales…'))
-    const q = (a, b) => soft(pageAll(() => inIds(supabase.from('sales_records').select('id, station_id, sale_date, shift, total_actual, total_expected, surplus_deficit, is_confirmed').gte('sale_date', a).lte('sale_date', b)).order('id')))
-    const [cur, prev, last] = await Promise.all([q(from, to), withGrowth ? q(pFrom, pTo) : [], withGrowth ? q(ly.from, ly.to) : []])
-    if (cur) {
-      const keep = r => !(activeOnly && (shiftSt[r.station_id]?.inactive_shifts || []).includes(r.shift))
-      sales = { cur: cur.filter(keep), prev: (prev ?? []).filter(keep), last: (last ?? []).filter(keep) }
+  if (curS) {
+    const keep = r => !(activeOnly && (shiftSt[r.station_id]?.inactive_shifts || []).includes(r.shift))
+    sales = { cur: curS.filter(keep), prev: (prevS ?? []).filter(keep), last: (lastS ?? []).filter(keep) }
+  }
+  // التكرار: تاريخ نفس الحافلات فقط خلال 30 يوماً (على مستوى الشبكة) بدل جلب كل أعطال الشبكة
+  let opsRecs = opsPeriod ?? []
+  const buses = [...new Set(opsRecs.map(r => String(r.bus_number || '').trim()).filter(Boolean))]
+  if (buses.length) {
+    onProgress?.(T('فحص تكرار الحالات…', 'Checking repeats…'))
+    const hist = []
+    for (let i = 0; i < buses.length; i += 150) {
+      const part = await soft(pageAll(() => supabase.from('trip_records').select(OPS_COLS).in('bus_number', buses.slice(i, i + 150)).gte('record_date', addDays(from, -30)).lte('record_date', to).or(FAULTS).order('id')))
+      if (part) hist.push(...part)
     }
-  }
-
-  // ── الحالة التشغيلية: 30 يوماً قبل الفترة لاكتشاف التكرار، على مستوى الشبكة (الحافلة تتنقل بين المحطات) ──
-  let opsRecs = []
-  if (want('ops') || want('summary')) {
-    onProgress?.(T('جلب الحالة التشغيلية…', 'Loading operational status…'))
-    opsRecs = (await soft(pageAll(() => supabase.from('trip_records').select('id, record_date, station_id, bus_number, screen_works, wheelchair_works, toilet_works, operational_status, actual_departure, actual_arrival, trip:trip_schedule_id(trip_number)')
-      .gte('record_date', addDays(from, -30)).lte('record_date', to)
-      .or('screen_works.eq.false,wheelchair_works.eq.false,toilet_works.eq.false,operational_status.neq.Normal').order('id')))) ?? []
-  }
-
-  // ── الموجودات والمفقودات ──
-  let lostItems = null, lostBacklog = [], lostReports = []
-  if (want('lost') || want('summary')) {
-    onProgress?.(T('جلب الموجودات…', 'Loading lost & found…'))
-    ;[lostItems, lostBacklog, lostReports] = await Promise.all([
-      soft(pageAll(() => inIds(supabase.from('lost_found_items').select('id, station_id, status, found_date')).gte('found_date', from).lte('found_date', to).order('id'))),
-      soft(pageAll(() => inIds(supabase.from('lost_found_items').select('id, station_id, found_date')).eq('status', 'unclaimed').order('id'))),
-      soft(pageAll(() => inIds(supabase.from('lost_reports').select('id, station_id, created_at')).gte('created_at', `${from}T00:00:00+03:00`).lte('created_at', `${to}T23:59:59.999+03:00`).order('id'))),
-    ])
+    const seen = new Set(opsRecs.map(r => r.id))
+    opsRecs = [...opsRecs, ...hist.filter(r => !seen.has(r.id))]
   }
 
   onProgress?.(T('تحليل البيانات…', 'Analysing…'))
@@ -191,6 +203,8 @@ export async function buildExecModel({ supabase, isAr, from, to, stations, secti
       if (trip.days_of_week?.length && !trip.days_of_week.includes(dowOf(date))) return
       const add = (isArr, time) => {
         if (!time || entered.has(`${st.trip_schedule_id}|${date}|${st.station_id}|${isArr ? 'a' : 'd'}`) || offAt(st.station_id, hm(time))) return
+        // رحلة لم يحن موعدها بعد (اليوم لاحقاً أو يوم قادم) لا تُحسب «غير مدخلة»
+        if (date > nowDay || (date === nowDay && hm(time) > nowHM)) return
         moves.push({ date, sid: st.station_id, dir: isArr ? 'a' : 'd', trip: trip.trip_number || '—', bus: '', other: nameOf(isArr ? trip.from_station : trip.to_station), sched: hm(time), act: '', delay: null, cls: null, pax: 0, missed: 0, tickets: [], un: true })
       }
       if (isDest) { if (arrOn) add(true, st.arrival_time || trip.scheduled_arrival) }
@@ -259,6 +273,9 @@ export async function buildExecModel({ supabase, isAr, from, to, stations, secti
   tot.missRate = (tot.d.pax + tot.d.missed) > 0 ? Math.round(tot.d.missed / (tot.d.pax + tot.d.missed) * 1000) / 10 : 0
   tot.gD = growth(tot.d.pax, tot.prevD); tot.gA = growth(tot.a.pax, tot.prevA)
 
+  // ساعات الذروة: ركاب المغادرة والوصول لكل ساعة (منفصلين) حسب الوقت الفعلي، وإلا المجدول
+  const hours = { d: Array(24).fill(0), a: Array(24).fill(0), dT: Array(24).fill(0), aT: Array(24).fill(0) }
+  moves.forEach(m => { if (m.un) return; const h = Number((m.act || m.sched || '').slice(0, 2)); if (Number.isNaN(h) || h > 23) return; hours[m.dir][h] += m.pax; hours[m.dir + 'T'][h]++ })
   // يومي (الاتجاه)
   const daily = days.map(date => {
     const L = moves.filter(m => m.date === date && !m.un)
@@ -273,7 +290,7 @@ export async function buildExecModel({ supabase, isAr, from, to, stations, secti
     salesM = { ...c, prev: p.rev, last: l.rev, gPrev: growth(c.rev, p.rev), gLast: growth(c.rev, l.rev), pFrom, pTo, lyFrom: ly.from, lyTo: ly.to, hasLast: sales.last.length > 0 }
   }
 
-  // ── المتخلفون ──
+  // ── المتغيبون ──
   const depMoves = moves.filter(m => m.dir === 'd' && !m.un)
   const missedRows = depMoves.filter(m => m.missed > 0)
   const byHour = Array.from({ length: 24 }, () => 0)
@@ -337,7 +354,7 @@ export async function buildExecModel({ supabase, isAr, from, to, stations, secti
 
   return {
     isAr, from, to, days: n, pFrom, pTo, stations: all, nwb: all.filter(P => !P.agent), agents: all.filter(P => P.agent),
-    moves, tot, daily, sales: salesM, missed: missedM, ops: opsM, lost: lostM, activeOnly, growth: withGrowth,
+    moves, tot, daily, hours, sales: salesM, missed: missedM, ops: opsM, lost: lostM, activeOnly, growth: withGrowth,
   }
 }
 
@@ -413,6 +430,9 @@ table.t tr.idle td{color:#A0AABA}
 .tag.ag{background:#EEF0FF;color:#4338CA}
 .rep{display:inline-flex;align-items:center;gap:3px;font-size:8.5px;font-weight:700;border-radius:3px;padding:1px 5px;margin-inline-start:5px;background:#FDECEC;color:${C.bad};white-space:nowrap}
 .rep.day{background:#FFF4E5;color:${C.warn}}
+.vs{display:inline-block;min-width:38px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;border-radius:4px;padding:1px 6px;text-align:center}
+.vs.b{background:#FDECEC;color:${C.bad}}.vs.g{background:#E8F6EC;color:${C.good}}.vs.n{background:#F1F3F6;color:${C.mute}}
+.th2{display:block;font-size:8px;font-weight:600;color:${C.mute}}
 .bus{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:11px}
 .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:9.5px;color:${C.mute};margin-top:6px}
 .legend span{display:inline-flex;align-items:center;gap:5px}
@@ -480,9 +500,21 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
   const head = (title, sub) => { secNo++; return `<div class="sn"><i>${String(secNo).padStart(2, '0')}</i><h2>${esc(title)}</h2>${sub ? `<span>${sub}</span>` : ''}</div>` }
   const page = (title, body) => `<section class="pg">${top(title)}${body}${foot()}</section>`
   const gTxt = g => (g == null ? `<em class="flat">${T('لا مقارنة', 'no baseline')}</em>` : `<em class="${g > 0 ? 'up' : g < 0 ? 'down' : 'flat'}">${g > 0 ? '▲' : g < 0 ? '▼' : '■'} ${Math.abs(g)}%</em>`)
-  // للمتخلفين: الارتفاع سيئ (أحمر) والانخفاض جيد
+  // للمتغيبين: الارتفاع سيئ (أحمر) والانخفاض جيد
   const gTxtInv = g => (g == null ? '' : `<em class="${g > 0 ? 'down' : g < 0 ? 'up' : 'flat'}">${g > 0 ? '▲' : g < 0 ? '▼' : '■'} ${Math.abs(g)}% ${isAr ? 'عن الفترة السابقة' : 'vs previous'}</em>`)
   const gCell = g => (g == null ? '<span style="color:#A0AABA">—</span>' : `<b class="mono ${g > 0 ? 'up' : g < 0 ? 'down' : 'flat'}">${sgn(g, '%')}</b>`)
+  // مقارنة المحطة بمتوسط المحطات المختارة (×1 = مثل المتوسط). bad=true: الأعلى أسوأ
+  const NET = model.stations.reduce((t, P) => ({ dT: t.dT + P.d.trips, aT: t.aT + P.a.trips, dP: t.dP + P.d.pax, aP: t.aP + P.a.pax }), { dT: 0, aT: 0, dP: 0, aP: 0 })
+  const per = (v, base, k) => (base > 0 ? Math.round(v / base * k * 10) / 10 : null)
+  const vs = (v, avg, bad = true) => {
+    if (v == null || !(avg > 0)) return '<span class="vs n">—</span>'
+    const r = Math.round(v / avg * 10) / 10
+    const cls = r >= 1.25 ? (bad ? 'b' : 'g') : r <= 0.8 ? (bad ? 'g' : 'b') : 'n'
+    return `<span class="vs ${cls}"><bdi dir="ltr">×${r}</bdi></span>`
+  }
+  const small = P => P.d.trips + P.a.trips < 3   // عيّنة صغيرة: تُرتَّب آخراً
+  const byNorm = f => (a, b) => (small(a) - small(b)) || ((f(b) ?? -1) - (f(a) ?? -1))
+  const vsNote = T('«×» = المحطة مقارنةً بمتوسط المحطات المختارة نسبةً لعدد رحلاتها وركابها (×1 مثل المتوسط، ×2 ضعفه). <span class="vs b">أحمر</span> أسوأ من المتوسط بوضوح، <span class="vs g">أخضر</span> أفضل. المحطات بأقل من 3 رحلات تُرتَّب آخراً.', '“×” = station vs the average of selected stations, relative to its trips and passengers (×1 = average, ×2 = double). <span class="vs b">Red</span> clearly worse, <span class="vs g">green</span> better. Stations under 3 trips sort last.')
   const rateBar = r => (r == null ? '<span style="color:#A0AABA">—</span>' : `<div class="bar"><span><i style="width:${Math.min(100, r)}%;background:${tone(r)}"></i></span><b style="color:${tone(r)}" dir="ltr">${r}%</b></div>`)
   const kpis = items => `<div class="kpis" style="--n:${items.length}">${items.map(k => `<div class="kpi" style="--c:${k.c || C.ink}"><small>${k.l}</small><b${/[\u0600-\u06FFA-Za-z]{3}/.test(String(k.v).replace(/<[^>]+>/g, '')) ? ' style="font-family:inherit;font-size:14px;line-height:1.5"' : ''}>${k.v}</b>${k.s != null ? (String(k.s).startsWith('<') ? k.s : `<em>${k.s}</em>`) : ''}</div>`).join('')}</div>`
   const rp = r => (r == null ? '—' : `<bdi dir="ltr">${r}%</bdi>`)
@@ -509,13 +541,13 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
   if (want('summary')) {
     const busiest = [...model.stations].sort((a, b) => b.d.pax - a.d.pax)[0]
     const lowEntry = model.stations.filter(P => P.entry != null && P.entry < 80).sort((a, b) => a.entry - b.entry).slice(0, 3)
-    const topMiss = [...model.stations].sort((a, b) => b.d.missed - a.d.missed)[0]
+    const topMiss = [...model.stations].filter(P => P.d.missed > 0).sort(byNorm(P => P.missRate))[0]
     const ins = []
     ins.push({ c: C.dep, t: T(`ركاب المغادرة <b>${nf(T0.d.pax)}</b> على <b>${nf(T0.d.trips)}</b> رحلة${G && T0.gD != null ? ` — ${T0.gD >= 0 ? 'ارتفاع' : 'انخفاض'} <b>${Math.abs(T0.gD)}%</b> عن الفترة السابقة` : ''}.`, `Departing passengers <b>${nf(T0.d.pax)}</b> on <b>${nf(T0.d.trips)}</b> trips${G && T0.gD != null ? ` — ${T0.gD >= 0 ? 'up' : 'down'} <b>${Math.abs(T0.gD)}%</b> vs previous period` : ''}.`) })
     ins.push({ c: C.arr, t: T(`ركاب الوصول <b>${nf(T0.a.pax)}</b> على <b>${nf(T0.a.trips)}</b> رحلة${G && T0.gA != null ? ` — ${T0.gA >= 0 ? 'ارتفاع' : 'انخفاض'} <b>${Math.abs(T0.gA)}%</b>` : ''}.`, `Arriving passengers <b>${nf(T0.a.pax)}</b> on <b>${nf(T0.a.trips)}</b> trips${G && T0.gA != null ? ` — ${T0.gA >= 0 ? 'up' : 'down'} <b>${Math.abs(T0.gA)}%</b>` : ''}.`) })
     if (busiest?.d.pax && model.stations.length > 1) ins.push({ c: C.navy, t: T(`الأعلى ركاب مغادرة: <b>${esc(busiest.name)}</b> (${nf(busiest.d.pax)} راكب).`, `Most departing passengers: <b>${esc(busiest.name)}</b> (${nf(busiest.d.pax)}).`) })
-    if (lowEntry.length) ins.push({ c: C.warn, t: T(`اكتمال الإدخال أقل من 80% في: ${lowEntry.map(P => `<b>${esc(P.name)}</b> (${P.entry}%)`).join('، ')}.`, `Data entry below 80%: ${lowEntry.map(P => `<b>${esc(P.name)}</b> (${P.entry}%)`).join(', ')}.`) })
-    if (T0.d.missed > 0) ins.push({ c: C.bad, t: T(`المتخلفون <b>${nf(T0.d.missed)}</b> راكباً (${T0.missRate}% من ركاب المغادرة)${topMiss?.d.missed ? ` — الأعلى في <b>${esc(topMiss.name)}</b> (${nf(topMiss.d.missed)})` : ''}.`, `Missed <b>${nf(T0.d.missed)}</b> (${T0.missRate}% of departing)${topMiss?.d.missed ? ` — highest at <b>${esc(topMiss.name)}</b>` : ''}.`) })
+    if (lowEntry.length) ins.push({ c: C.warn, t: T(`اكتمال الإدخال أقل من 80% في: ${lowEntry.map(P => `<b>${esc(P.name)}</b> (<bdi dir="ltr">${P.entry}%</bdi>)`).join('، ')}.`, `Data entry below 80%: ${lowEntry.map(P => `<b>${esc(P.name)}</b> (${P.entry}%)`).join(', ')}.`) })
+    if (T0.d.missed > 0) ins.push({ c: C.bad, t: T(`المتغيبون <b>${nf(T0.d.missed)}</b> راكباً (<bdi dir="ltr">${T0.missRate}%</bdi> من ركاب المغادرة)${topMiss ? ` — أعلى نسبة غياب في <b>${esc(topMiss.name)}</b> (<bdi dir="ltr">${topMiss.missRate}%</bdi>، ${vs(topMiss.missRate, T0.missRate)} من المتوسط)` : ''}.`, `Absentees <b>${nf(T0.d.missed)}</b> (${T0.missRate}% of departing)${topMiss ? ` — highest rate at <b>${esc(topMiss.name)}</b> (${topMiss.missRate}%, ${vs(topMiss.missRate, T0.missRate)} the average)` : ''}.`) })
     if (model.sales) {
       const S = model.sales, sg = g => sgn(g, '%')
       const cmp = !G ? [] : [S.gPrev != null && T(`${sg(S.gPrev)} عن الفترة السابقة`, `${sg(S.gPrev)} vs previous`), S.gLast != null && T(`${sg(S.gLast)} عن العام الماضي`, `${sg(S.gLast)} vs last year`)].filter(Boolean)
@@ -535,20 +567,25 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
       </div></div>`
     const strip = kpis([
       { l: T('اكتمال الإدخال', 'Data entry'), v: rp(T0.entry), c: tone(T0.entry) },
-      { l: T('المتخلفون', 'Missed'), v: nf(T0.d.missed), c: C.bad, s: `${T0.missRate}% ${T('من ركاب المغادرة', 'of departing')}` },
+      { l: T('المتغيبون', 'Missed'), v: nf(T0.d.missed), c: C.bad, s: `${T0.missRate}% ${T('من ركاب المغادرة', 'of departing')}` },
       ...(model.sales ? [{ l: T('الإيرادات (ر.س)', 'Revenue (SAR)'), v: nf(model.sales.rev), c: C.navy, s: G ? gTxt(model.sales.gPrev) : T(`${model.sales.conf}/${model.sales.n} إقفال مؤكد`, `${model.sales.conf}/${model.sales.n} confirmed`) }] : []),
       ...(model.lost ? [{ l: T('نسبة تسليم الموجودات', 'Lost-item delivery'), v: rp(model.lost.rate), c: '#7C3AED', s: T(`${nf(model.lost.backlog)} متبقٍ`, `${nf(model.lost.backlog)} held`) }] : []),
       { l: T('حالات تشغيلية', 'Operational cases'), v: nf(model.ops.facN + model.ops.incN), c: C.warn, s: model.ops.busRepeat ? `<em class="down">${model.ops.busRepeat} ${T('حافلة متكررة', 'repeat buses')}</em>` : T('بلا تكرار', 'no repeats') },
     ])
     const trend = model.daily.length > 1 ? `<div class="box"><h3>${T('الاتجاه اليومي للركاب', 'Daily passengers')}<span>${T('المغادرة والوصول منفصلان', 'departures & arrivals separate')}</span></h3>${dualBars(model.daily, 'dPax', 'aPax', C.dep, C.arr, r => dm(r.date))}
       <div class="legend"><span><i style="background:${C.dep}"></i>${T('ركاب المغادرة', 'Departing')}</span><span><i style="background:${C.arr}"></i>${T('ركاب الوصول', 'Arriving')}</span></div></div>` : ''
-    // أعلى المحطات ركاباً
-    const top5 = [...model.stations].sort((a, b) => b.d.pax - a.d.pax).slice(0, 6)
-    const maxP = Math.max(1, ...top5.map(P => Math.max(P.d.pax, P.a.pax)))
-    const topBox = `<div class="box"><h3>${T('الأعلى ركاباً', 'Busiest stations')}<span>${T('مغادرة | وصول', 'dep | arr')}</span></h3>${top5.map(P => `<div style="display:grid;grid-template-columns:110px 1fr 1fr;gap:8px;align-items:center;margin:5px 0;font-size:10px">
-      <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(P.name)}${P.agent ? `<span class="tag ag">${T('وكيل', 'Agent')}</span>` : ''}</span>
-      <div class="bar"><span><i style="width:${P.d.pax / maxP * 100}%;background:${C.dep}"></i></span><b>${nf(P.d.pax)}</b></div>
-      <div class="bar"><span><i style="width:${P.a.pax / maxP * 100}%;background:${C.arr}"></i></span><b>${nf(P.a.pax)}</b></div></div>`).join('')}</div>`
+    // ساعات الذروة: ركاب المغادرة والوصول لكل ساعة (صفّان منفصلان)
+    const H = model.hours
+    const peakOf = arr => { const v = Math.max(...arr); return v > 0 ? arr.indexOf(v) : null }
+    const hh = h => `${String(h).padStart(2, '0')}:00`
+    const hStrip = (arr, rgb, label) => { const mx = Math.max(1, ...arr), pk = peakOf(arr); return `<div style="display:grid;grid-template-columns:78px 1fr;gap:8px;align-items:center;margin:5px 0"><span style="font-size:9.5px;font-weight:700">${label}</span>
+      <div style="display:grid;grid-template-columns:repeat(24,1fr);gap:2px;direction:ltr">${arr.map((v, h) => `<div style="height:22px;border-radius:3px;background:${v ? `rgba(${rgb},${0.1 + 0.9 * v / mx})` : '#F1F3F6'};${h === pk ? `outline:2px solid rgb(${rgb});outline-offset:1px;` : ''}"></div>`).join('')}</div></div>` }
+    const top3 = arr => arr.map((v, h) => [h, v]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([h, v]) => `<b class="mono">${hh(h)}</b> <span style="color:${C.mute}">(${nf(v)})</span>`).join(' · ')
+    const hrs = `<div style="display:grid;grid-template-columns:78px 1fr;gap:8px"><span></span><div style="display:grid;grid-template-columns:repeat(24,1fr);gap:2px;direction:ltr">${H.d.map((_, h) => `<span style="text-align:center;font-size:7.5px;color:${C.mute};font-family:'IBM Plex Mono'">${String(h).padStart(2, '0')}</span>`).join('')}</div></div>`
+    const pkD = peakOf(H.d), pkA = peakOf(H.a)
+    const topBox = `<div class="box"><h3>${T('ساعات الذروة', 'Peak hours')}<span>${pkD != null ? T(`ذروة المغادرة ${hh(pkD)}`, `dep peak ${hh(pkD)}`) : ''}${pkA != null ? T(` · ذروة الوصول ${hh(pkA)}`, ` · arr peak ${hh(pkA)}`) : ''}</span></h3>
+      ${hStrip(H.d, '31,78,140', T('ركاب المغادرة', 'Departing'))}${hStrip(H.a, '15,122,108', T('ركاب الوصول', 'Arriving'))}${hrs}
+      <div style="margin-top:8px;font-size:10px;line-height:1.9"><div><span style="color:${C.dep};font-weight:700">${T('أعلى ساعات المغادرة', 'Top departure hours')}:</span> ${top3(H.d) || '—'}</div><div><span style="color:${C.arr};font-weight:700">${T('أعلى ساعات الوصول', 'Top arrival hours')}:</span> ${top3(H.a) || '—'}</div></div></div>`
     out.push(page(T('نظرة عامة', 'Overview'), `${head(T('نظرة عامة', 'Overview'))}${cover}${strip}
       <div class="row" style="grid-template-columns:1.15fr 1fr"><div class="box"><h3>${T('أبرز الملاحظات', 'Key highlights')}</h3><ul class="ins">${ins.map(x => `<li style="--c:${x.c}"><i></i><span>${x.t}</span></li>`).join('')}</ul></div>
       <div style="display:grid;gap:12px">${trend}${topBox}</div></div>`))
@@ -558,29 +595,34 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
   if (want('stations')) {
     const tbl = (list, title) => {
       if (!list.length) return ''
-      const rows = [...list].sort((a, b) => b.d.pax - a.d.pax || b.a.pax - a.a.pax)
+      const load = (P, k) => per(P[k].pax, P[k].trips, 1)
+      const rows = [...list].sort(byNorm(P => load(P, 'd')))
+      const avgD = per(NET.dP, NET.dT, 1), avgA = per(NET.aP, NET.aT, 1)
       const sum = rows.reduce((t, P) => ({ dT: t.dT + P.d.trips, aT: t.aT + P.a.trips, dP: t.dP + P.d.pax, aP: t.aP + P.a.pax, m: t.m + P.d.missed, dg: t.dg + P.d.good, dr: t.dr + P.d.rated, ag: t.ag + P.a.good, ar: t.ar + P.a.rated, e: t.e + P.d.trips + P.a.trips, x: t.x + P.d.trips + P.d.un + P.a.trips + P.a.un, rev: t.rev + (P.sales?.rev || 0) }), { dT: 0, aT: 0, dP: 0, aP: 0, m: 0, dg: 0, dr: 0, ag: 0, ar: 0, e: 0, x: 0, rev: 0 })
       const hasSales = !!model.sales
       return `<div class="box" style="padding:0;overflow:hidden;margin-bottom:12px"><div style="padding:9px 12px;font-weight:700;font-size:12px;display:flex;justify-content:space-between"><span>${title}</span><span style="color:${C.mute};font-size:10px">${rows.length}</span></div>
-      <table class="t"><thead><tr><th>#</th><th class="s">${T('المحطة', 'Station')}</th><th>${T('رحلات المغادرة', 'Dep. trips')}</th><th>${T('رحلات الوصول', 'Arr. trips')}</th><th>${T('ركاب المغادرة', 'Dep. pax')}</th><th>${T('ركاب الوصول', 'Arr. pax')}</th><th>${T('اكتمال الإدخال', 'Data entry')}</th><th>${T('المتخلفون', 'Missed')}</th>${hasSales ? `<th>${T('الإيرادات', 'Revenue')}</th>${G ? `<th>${T('النمو', 'Growth')}</th>` : ''}` : ''}</tr></thead>
+      <table class="t"><thead><tr><th>#</th><th class="s">${T('المحطة', 'Station')}</th><th>${T('رحلات المغادرة', 'Dep. trips')}</th><th>${T('رحلات الوصول', 'Arr. trips')}</th><th>${T('ركاب المغادرة', 'Dep. pax')}</th><th>${T('ركاب الوصول', 'Arr. pax')}</th><th>${T('ركاب/رحلة مغادرة', 'Pax/dep. trip')}<span class="th2">${T('مقارنة بالمتوسط', 'vs average')}</span></th><th>${T('ركاب/رحلة وصول', 'Pax/arr. trip')}<span class="th2">${T('مقارنة بالمتوسط', 'vs average')}</span></th><th>${T('اكتمال الإدخال', 'Data entry')}</th><th>${T('المتغيبون', 'Missed')}<span class="th2">${T('% من ركاب المغادرة', '% of dep. pax')}</span></th>${hasSales ? `<th>${T('الإيرادات', 'Revenue')}</th>${G ? `<th>${T('النمو', 'Growth')}</th>` : ''}` : ''}</tr></thead>
       <tbody>${rows.map((P, i) => `<tr class="${P.idle ? 'idle' : ''}"><td class="mono" style="color:${C.mute}">${i + 1}</td><td class="s" style="font-weight:600">${esc(P.name)}</td>
         <td class="mono">${nf(P.d.trips)}${P.d.un ? `<small style="color:${C.warn}"> <bdi dir="ltr">+${P.d.un}</bdi></small>` : ''}</td><td class="mono">${nf(P.a.trips)}${P.a.un ? `<small style="color:${C.warn}"> <bdi dir="ltr">+${P.a.un}</bdi></small>` : ''}</td>
         <td class="mono" style="font-weight:700;color:${C.dep}">${nf(P.d.pax)}</td><td class="mono" style="font-weight:700;color:${C.arr}">${nf(P.a.pax)}</td>
+        <td class="mono">${load(P, 'd') ?? '—'} ${vs(load(P, 'd'), avgD, false)}</td><td class="mono">${load(P, 'a') ?? '—'} ${vs(load(P, 'a'), avgA, false)}</td>
         <td>${rateBar(P.entry)}</td>
-        <td class="mono" style="color:${P.d.missed ? C.bad : '#A0AABA'};font-weight:700">${P.d.missed || '—'}</td>
+        <td class="mono" style="color:${P.d.missed ? C.bad : '#A0AABA'};font-weight:700">${P.d.missed ? `${P.d.missed} <small style="color:${C.mute};font-weight:600">(${P.missRate}%)</small>` : '—'}</td>
         ${hasSales ? `<td class="mono">${P.sales?.n ? nf(P.sales.rev) : '—'}</td>${G ? `<td>${gCell(P.sales ? growth(P.sales.rev, P.sales.prev) : null)}</td>` : ''}` : ''}</tr>`).join('')}
-        <tr class="tot"><td></td><td class="s">${T('الإجمالي', 'Total')}</td><td class="mono">${nf(sum.dT)}</td><td class="mono">${nf(sum.aT)}</td><td class="mono">${nf(sum.dP)}</td><td class="mono">${nf(sum.aP)}</td><td class="mono">${rp(pct(sum.e, sum.x))}</td><td class="mono">${nf(sum.m)}</td>${hasSales ? `<td class="mono">${nf(sum.rev)}</td>${G ? '<td></td>' : ''}` : ''}</tr>
+        <tr class="tot"><td></td><td class="s">${T('الإجمالي', 'Total')}</td><td class="mono">${nf(sum.dT)}</td><td class="mono">${nf(sum.aT)}</td><td class="mono">${nf(sum.dP)}</td><td class="mono">${nf(sum.aP)}</td><td class="mono">${per(sum.dP, sum.dT, 1) ?? '—'}</td><td class="mono">${per(sum.aP, sum.aT, 1) ?? '—'}</td><td class="mono">${rp(pct(sum.e, sum.x))}</td><td class="mono">${nf(sum.m)}</td>${hasSales ? `<td class="mono">${nf(sum.rev)}</td>${G ? '<td></td>' : ''}` : ''}</tr>
       </tbody></table></div>`
     }
-    out.push(page(T('أداء المحطات', 'Station performance'), `${head(T('أداء المحطات', 'Station performance'), T('مرتبة حسب ركاب المغادرة', 'ranked by departing passengers'))}
+    out.push(page(T('أداء المحطات', 'Station performance'), `${head(T('أداء المحطات', 'Station performance'), T('مرتبة حسب متوسط ركاب رحلة المغادرة', 'ranked by passengers per departure'))}
       ${tbl(model.nwb, T('محطات نورث وست', 'North West stations'))}${tbl(model.agents, T('محطات الوكلاء', 'Agent stations'))}
-      <div class="note">${T(`الرقم الأصفر «+n» بجانب الرحلات = رحلات مجدولة لم تُدخل. اكتمال الإدخال = الرحلات المُدخلة من المجدولة.${G ? ' النمو = الإيرادات مقارنة بالفترة السابقة بنفس عدد الأيام.' : ''}`, `Amber “+n” = scheduled trips not entered. Data entry = entered out of scheduled.${G ? ' Growth = revenue vs the previous period of equal length.' : ''}`)}</div>`))
+      <div class="note">${vsNote}<br>${T(`الرقم الأصفر «+n» بجانب الرحلات = رحلات مجدولة لم تُدخل. اكتمال الإدخال = الرحلات المُدخلة من المجدولة.${G ? ' النمو = الإيرادات مقارنة بالفترة السابقة بنفس عدد الأيام.' : ''}`, `Amber “+n” = scheduled trips not entered. Data entry = entered out of scheduled.${G ? ' Growth = revenue vs the previous period of equal length.' : ''}`)}</div>`))
   }
 
   // ═══ 3. المبيعات ═══
   if (want('sales') && model.sales) {
     const S = model.sales
-    const rows = model.stations.filter(P => P.sales && (P.sales.n || (G && (P.sales.prev || P.sales.last)))).sort((a, b) => b.sales.rev - a.sales.rev)
+    const rpp = P => per(P.sales.rev, P.d.pax, 1)
+    const avgRpp = per(S.rev, NET.dP, 1)
+    const rows = model.stations.filter(P => P.sales && (P.sales.n || (G && (P.sales.prev || P.sales.last)))).sort(byNorm(rpp))
     const maxR = Math.max(1, ...rows.map(P => P.sales.rev))
     const rises = G ? rows.map(P => ({ P, g: growth(P.sales.rev, P.sales.prev) })).filter(x => x.g != null) : []
     const up = [...rises].sort((a, b) => b.g - a.g)[0], down = [...rises].sort((a, b) => a.g - b.g)[0]
@@ -596,23 +638,24 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
       <div class="row" style="grid-template-columns:1fr 1fr">
         ${model.daily.length > 1 ? `<div class="box"><h3>${T('الإيرادات اليومية', 'Daily revenue')}<span>${T('ر.س', 'SAR')}</span></h3>${dualBars(model.daily, 'rev', null, C.navy, null, r => dm(r.date))}</div>` : ''}
         <div class="box"><h3>${T('قراءة سريعة', 'Quick read')}</h3><ul class="ins">
-          ${rows[0] ? `<li style="--c:${C.navy}"><i></i><span>${T('الأعلى إيراداً', 'Top revenue')}: <b>${esc(rows[0].name)}</b> — ${nf(rows[0].sales.rev)} ${T('ر.س', 'SAR')} (${pct(rows[0].sales.rev, S.rev)}% ${T('من الإجمالي', 'of total')})</span></li>` : ''}
+          ${(() => { const t = [...rows].sort((a, b) => b.sales.rev - a.sales.rev)[0]; return t ? `<li style="--c:${C.navy}"><i></i><span>${T('الأعلى إيراداً', 'Top revenue')}: <b>${esc(t.name)}</b> — ${nf(t.sales.rev)} ${T('ر.س', 'SAR')} (${pct(t.sales.rev, S.rev)}% ${T('من الإجمالي', 'of total')})</span></li>` : '' })()}
+          ${rows[0] && rpp(rows[0]) != null ? `<li style="--c:${C.good}"><i></i><span>${T('الأعلى إيراداً لكل راكب', 'Highest revenue per passenger')}: <b>${esc(rows[0].name)}</b> — ${rpp(rows[0])} ${T('ر.س', 'SAR')} ${vs(rpp(rows[0]), avgRpp, false)}</span></li>` : ''}
           ${up && up.g > 0 ? `<li style="--c:${C.good}"><i></i><span>${T('أعلى ارتفاع', 'Biggest rise')}: <b>${esc(up.P.name)}</b> ${sgn(up.g, '%')}</span></li>` : ''}
           ${down && down.g < 0 ? `<li style="--c:${C.bad}"><i></i><span>${T('أكبر انخفاض', 'Biggest drop')}: <b>${esc(down.P.name)}</b> ${sgn(down.g, '%')}</span></li>` : ''}
           ${S.n - S.conf > 0 ? `<li style="--c:${C.warn}"><i></i><span>${T(`${S.n - S.conf} إقفال بانتظار التأكيد`, `${S.n - S.conf} closings awaiting confirmation`)}</span></li>` : ''}
         </ul></div></div>
-      ${rows.length ? `<table class="t"><thead><tr><th>#</th><th class="s">${T('المحطة', 'Station')}</th><th>${T('الإيرادات', 'Revenue')}</th><th>${T('الحصة', 'Share')}</th>${G ? `<th>${T('الفترة السابقة', 'Previous')}</th><th>${T('التغير', 'Change')}</th><th>${T('العام الماضي', 'Last year')}</th><th>${T('التغير', 'Change')}</th>` : ''}<th>${T('الفرق', 'Diff')}</th><th>${T('مؤكدة', 'Confirmed')}</th></tr></thead><tbody>
+      ${rows.length ? `<table class="t"><thead><tr><th>#</th><th class="s">${T('المحطة', 'Station')}</th><th>${T('الإيرادات', 'Revenue')}</th><th>${T('الحصة', 'Share')}</th><th>${T('الإيراد لكل راكب مغادر', 'Revenue / dep. pax')}<span class="th2">${T('ر.س · مقارنة بالمتوسط', 'SAR · vs average')}</span></th>${G ? `<th>${T('الفترة السابقة', 'Previous')}</th><th>${T('التغير', 'Change')}</th><th>${T('العام الماضي', 'Last year')}</th><th>${T('التغير', 'Change')}</th>` : ''}<th>${T('الفرق', 'Diff')}</th><th>${T('مؤكدة', 'Confirmed')}</th></tr></thead><tbody>
         ${rows.map((P, i) => `<tr><td class="mono" style="color:${C.mute}">${i + 1}</td><td class="s" style="font-weight:600">${esc(P.name)}${P.agent ? `<span class="tag ag">${T('وكيل', 'Agent')}</span>` : ''}</td>
-          <td><div class="bar"><span><i style="width:${P.sales.rev / maxR * 100}%;background:${C.navy}"></i></span><b>${nf(P.sales.rev)}</b></div></td><td class="mono">${pct(P.sales.rev, S.rev) ?? 0}%</td>
+          <td><div class="bar"><span><i style="width:${P.sales.rev / maxR * 100}%;background:${C.navy}"></i></span><b>${nf(P.sales.rev)}</b></div></td><td class="mono">${pct(P.sales.rev, S.rev) ?? 0}%</td><td class="mono">${rpp(P) ?? '—'} ${vs(rpp(P), avgRpp, false)}</td>
           ${G ? `<td class="mono" style="color:${C.mute}">${nf(P.sales.prev)}</td><td>${gCell(growth(P.sales.rev, P.sales.prev))}</td>
           <td class="mono" style="color:${C.mute}">${P.sales.last ? nf(P.sales.last) : '—'}</td><td>${gCell(growth(P.sales.rev, P.sales.last))}</td>` : ''}
           <td class="mono" style="color:${P.sales.diff >= 0 ? C.good : C.bad}"><bdi dir="ltr">${P.sales.diff >= 0 ? '+' : ''}${nf(P.sales.diff)}</bdi></td><td class="mono">${P.sales.conf}/${P.sales.n}</td></tr>`).join('')}
-        <tr class="tot"><td></td><td class="s">${T('الإجمالي', 'Total')}</td><td class="mono">${nf(S.rev)}</td><td>100%</td>${G ? `<td class="mono">${nf(S.prev)}</td><td class="mono">${S.gPrev == null ? '—' : sgn(S.gPrev, '%')}</td><td class="mono">${S.hasLast ? nf(S.last) : '—'}</td><td class="mono">${S.gLast == null ? '—' : sgn(S.gLast, '%')}</td>` : ''}<td class="mono"><bdi dir="ltr">${S.diff >= 0 ? '+' : ''}${nf(S.diff)}</bdi></td><td class="mono">${S.conf}/${S.n}</td></tr>
+        <tr class="tot"><td></td><td class="s">${T('الإجمالي', 'Total')}</td><td class="mono">${nf(S.rev)}</td><td>100%</td><td class="mono">${avgRpp ?? '—'}</td>${G ? `<td class="mono">${nf(S.prev)}</td><td class="mono">${S.gPrev == null ? '—' : sgn(S.gPrev, '%')}</td><td class="mono">${S.hasLast ? nf(S.last) : '—'}</td><td class="mono">${S.gLast == null ? '—' : sgn(S.gLast, '%')}</td>` : ''}<td class="mono"><bdi dir="ltr">${S.diff >= 0 ? '+' : ''}${nf(S.diff)}</bdi></td><td class="mono">${S.conf}/${S.n}</td></tr>
       </tbody></table>` : `<div class="empty">${T('لا توجد مبيعات مسجلة في هذه الفترة', 'No sales recorded in this period')}</div>`}
-      <div class="note">${G ? T('نسبة الارتفاع = (إيرادات الفترة − إيرادات المقارنة) ÷ إيرادات المقارنة. الفترة السابقة بنفس عدد الأيام مباشرة قبل الفترة المحددة.', 'Growth = (period − baseline) ÷ baseline. Previous period has the same number of days immediately before.') : T('الحصة = إيرادات المحطة ÷ إجمالي الإيرادات.', 'Share = station revenue ÷ total revenue.')}${model.activeOnly ? T(' إقفالات الورديات المتوقفة غير محسوبة.', ' Stopped-shift closings excluded.') : ''}</div>`))
+      <div class="note">${vsNote}<br>${G ? T('نسبة الارتفاع = (إيرادات الفترة − إيرادات المقارنة) ÷ إيرادات المقارنة. الفترة السابقة بنفس عدد الأيام مباشرة قبل الفترة المحددة.', 'Growth = (period − baseline) ÷ baseline. Previous period has the same number of days immediately before.') : T('الحصة = إيرادات المحطة ÷ إجمالي الإيرادات.', 'Share = station revenue ÷ total revenue.')}${model.activeOnly ? T(' إقفالات الورديات المتوقفة غير محسوبة.', ' Stopped-shift closings excluded.') : ''}</div>`))
   }
 
-  // ═══ 4. المتخلفون ═══
+  // ═══ 4. المتغيبون ═══
   if (want('missed')) {
     const M = model.missed
     const peakH = M.byHour.indexOf(Math.max(...M.byHour))
@@ -620,26 +663,30 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
     const heat = `<div style="display:grid;grid-template-columns:repeat(24,1fr);gap:2px;direction:ltr">${M.byHour.map((v, h) => `<div style="text-align:center"><div style="height:34px;border-radius:3px;background:${v ? `rgba(185,28,28,${0.12 + 0.88 * v / maxH})` : '#F1F3F6'};display:grid;place-items:center;color:${v / maxH > 0.5 ? '#fff' : C.ink};font-family:'IBM Plex Mono';font-size:9px;font-weight:700">${v || ''}</div><div style="font-size:8px;color:${C.mute};margin-top:2px;font-family:'IBM Plex Mono'">${String(h).padStart(2, '0')}</div></div>`).join('')}</div>`
     const WD = isAr ? WD_AR : WD_EN, maxW = Math.max(1, ...M.byWd)
     const wdBars = [6, 0, 1, 2, 3, 4, 5].map(i => `<div style="display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:center;margin:4px 0;font-size:10px"><span style="font-weight:600">${WD[i]}</span><div class="bar"><span><i style="width:${M.byWd[i] / maxW * 100}%;background:${C.bad}"></i></span><b>${M.byWd[i]}</b></div></div>`).join('')
-    const stRows = model.stations.filter(P => P.d.missed > 0).sort((a, b) => b.d.missed - a.d.missed)
-    const maxS = Math.max(1, ...stRows.map(P => P.d.missed))
-    const body = M.total === 0 ? `<div class="empty" style="padding:30px;border-color:#86EFAC;color:${C.good}">${T('لا يوجد متخلفون في هذه الفترة — التزام كامل بالرحلات', 'No missed passengers in this period')}</div>` : `
+    const stRows = model.stations.filter(P => P.d.missed > 0).sort(byNorm(P => P.missRate))
+    const per100 = P => per(P.d.missed, P.d.trips, 100)
+    const avg100 = per(M.total, NET.dT, 100)
+    const body = M.total === 0 ? `<div class="empty" style="padding:30px;border-color:#86EFAC;color:${C.good}">${T('لا يوجد متغيبون في هذه الفترة — التزام كامل بالرحلات', 'No missed passengers in this period')}</div>` : `
       ${kpis([
-        { l: T('إجمالي المتخلفين', 'Total missed'), v: nf(M.total), c: C.bad, s: G ? gTxtInv(M.g) : '' },
-        { l: T('نسبة التخلف', 'Missed rate'), v: `${M.rate}%`, c: M.rate > 3 ? C.bad : M.rate > 1 ? C.warn : C.good, s: T('من ركاب المغادرة', 'of departing pax') },
-        { l: T('رحلات فيها تخلف', 'Trips with missed'), v: nf(M.trips), c: C.warn, s: T(`من ${nf(M.depTrips)} رحلة مغادرة`, `of ${nf(M.depTrips)} departures`) },
+        { l: T('إجمالي المتغيبين', 'Total missed'), v: nf(M.total), c: C.bad, s: G ? gTxtInv(M.g) : '' },
+        { l: T('نسبة الغياب', 'Missed rate'), v: `${M.rate}%`, c: M.rate > 3 ? C.bad : M.rate > 1 ? C.warn : C.good, s: T('من ركاب المغادرة', 'of departing pax') },
+        { l: T('رحلات فيها غياب', 'Trips with missed'), v: nf(M.trips), c: C.warn, s: T(`من ${nf(M.depTrips)} رحلة مغادرة`, `of ${nf(M.depTrips)} departures`) },
         { l: T('متوسط لكل رحلة متأثرة', 'Avg per affected trip'), v: M.avg, c: C.ink2 },
-        { l: T('ساعة الذروة', 'Peak hour'), v: M.byHour[peakH] ? `${String(peakH).padStart(2, '0')}:00` : '—', c: C.bad, s: M.byHour[peakH] ? T(`${M.byHour[peakH]} متخلف`, `${M.byHour[peakH]} missed`) : '' },
+        { l: T('ساعة الذروة', 'Peak hour'), v: M.byHour[peakH] ? `${String(peakH).padStart(2, '0')}:00` : '—', c: C.bad, s: M.byHour[peakH] ? T(`${M.byHour[peakH]} متغيب`, `${M.byHour[peakH]} missed`) : '' },
         { l: T('التذاكر المسجلة', 'Tickets logged'), v: nf(M.tickets.length), c: C.navy, s: T('مرتبطة برقم الرحلة', 'linked to trip') },
       ])}
-      <div class="box" style="margin-bottom:12px"><h3>${T('خريطة التخلف على مدار اليوم', 'Missed passengers by hour')}<span>${T('حسب موعد المغادرة — كلما غمق اللون زاد العدد', 'by scheduled departure — darker = more')}</span></h3>${heat}</div>
-      <div class="row" style="grid-template-columns:1fr 1.1fr 1.2fr">
-        <div class="box"><h3>${T('حسب المحطة', 'By station')}<span>${T('العدد · النسبة', 'count · rate')}</span></h3>${stRows.slice(0, 8).map(P => `<div style="display:grid;grid-template-columns:100px 1fr 38px;gap:8px;align-items:center;margin:5px 0;font-size:10px"><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(P.name)}</span><div class="bar"><span><i style="width:${P.d.missed / maxS * 100}%;background:${C.bad}"></i></span><b>${P.d.missed}</b></div><span class="mono" style="color:${C.mute};font-size:9.5px">${P.missRate}%</span></div>`).join('')}</div>
+      <div class="box" style="margin-bottom:12px"><h3>${T('ساعات ذروة الغياب', 'Peak hours of missed passengers')}<span>${T('حسب موعد المغادرة — كلما غمق اللون زاد العدد', 'by scheduled departure — darker = more')}</span></h3>${heat}</div>
+      <div class="box" style="padding:0;overflow:hidden;margin-bottom:12px"><div style="padding:9px 12px;font-weight:700;font-size:12px">${T('حسب المحطة', 'By station')} <span style="color:${C.mute};font-weight:600;font-size:10px">${T('— مرتبة بنسبة الغياب لا بالعدد', '— ranked by rate, not count')}</span></div>
+        <table class="t"><thead><tr><th>#</th><th class="s">${T('المحطة', 'Station')}</th><th>${T('المتغيبون', 'Missed')}</th><th>${T('رحلات المغادرة', 'Dep. trips')}</th><th>${T('ركاب المغادرة', 'Dep. pax')}</th><th>${T('النسبة من الركاب', '% of pax')}<span class="th2">${T('مقارنة بالمتوسط', 'vs average')}</span></th><th>${T('لكل 100 رحلة', 'Per 100 trips')}<span class="th2">${T('مقارنة بالمتوسط', 'vs average')}</span></th></tr></thead><tbody>
+        ${stRows.map((P, i) => `<tr><td class="mono" style="color:${C.mute}">${i + 1}</td><td class="s" style="font-weight:600">${esc(P.name)}${P.agent ? `<span class="tag ag">${T('وكيل', 'Agent')}</span>` : ''}</td><td class="mono" style="color:${C.bad};font-weight:700">${P.d.missed}</td><td class="mono">${nf(P.d.trips)}</td><td class="mono">${nf(P.d.pax)}</td><td class="mono">${P.missRate}% ${vs(P.missRate, M.rate)}</td><td class="mono">${per100(P) ?? '—'} ${vs(per100(P), avg100)}</td></tr>`).join('')}
+        <tr class="tot"><td></td><td class="s">${T('الإجمالي', 'Total')}</td><td class="mono">${nf(M.total)}</td><td class="mono">${nf(NET.dT)}</td><td class="mono">${nf(NET.dP)}</td><td class="mono">${M.rate}%</td><td class="mono">${avg100 ?? '—'}</td></tr></tbody></table></div>
+      <div class="row" style="grid-template-columns:1fr 1.4fr">
         <div class="box"><h3>${T('حسب يوم الأسبوع', 'By weekday')}</h3>${wdBars}</div>
-        <div class="box"><h3>${T('الرحلات الأكثر تخلفاً', 'Trips with most missed')}</h3><table class="t"><thead><tr><th class="s">${T('الرحلة', 'Trip')}</th><th class="s">${T('المحطة → الوجهة', 'Station → to')}</th><th>${T('الموعد', 'Time')}</th><th>${T('مرات', 'Times')}</th><th>${T('متخلفون', 'Missed')}</th></tr></thead><tbody>
-          ${M.topTrips.slice(0, 8).map(r => `<tr><td class="s mono" style="font-weight:700">${esc(r.trip)}</td><td class="s" style="font-size:9.5px">${esc(r.station)} ← ${esc(r.to)}</td><td class="mono">${esc(r.sched || '—')}</td><td class="mono">${r.times}</td><td class="mono" style="color:${C.bad};font-weight:700">${r.missed}</td></tr>`).join('')}</tbody></table></div>
+        <div class="box"><h3>${T('الرحلات الأكثر غياباً', 'Trips with most missed')}</h3><table class="t"><thead><tr><th class="s">${T('الرحلة', 'Trip')}</th><th class="s">${T('المحطة → الوجهة', 'Station → to')}</th><th>${T('الموعد', 'Time')}</th><th>${T('مرات', 'Times')}</th><th>${T('النسبة', 'Rate')}</th><th>${T('متغيبون', 'Missed')}</th></tr></thead><tbody>
+          ${M.topTrips.slice(0, 8).map(r => `<tr><td class="s mono" style="font-weight:700">${esc(r.trip)}</td><td class="s" style="font-size:9.5px">${esc(r.station)} ← ${esc(r.to)}</td><td class="mono">${esc(r.sched || '—')}</td><td class="mono">${r.times}</td><td class=\"mono\" style=\"color:${C.mute}\">${(r.pax + r.missed) ? Math.round(r.missed / (r.pax + r.missed) * 1000) / 10 : 0}%</td><td class="mono" style="color:${C.bad};font-weight:700">${r.missed}</td></tr>`).join('')}</tbody></table></div>
       </div>
       ${opts.tickets && M.tickets.length ? `<div class="box"><h3>${T('سجل التذاكر', 'Ticket log')}<span>${M.tickets.length}</span></h3><div style="columns:4;column-gap:14px;font-size:9.5px">${M.tickets.map(t => `<div style="break-inside:avoid;padding:2px 0;border-bottom:1px dotted ${C.line}"><b class="mono">${esc(t.ticket)}</b> <span style="color:${C.mute}">· ${esc(t.trip)} · ${dm(t.date)} · ${esc(t.station)}</span></div>`).join('')}</div></div>` : ''}`
-    out.push(page(T('المتخلفون عن الرحلات', 'Missed passengers'), `${head(T('المتخلفون عن الرحلات', 'Missed passengers'), G && M.prev ? T(`الفترة السابقة: ${nf(M.prev)}`, `previous period: ${nf(M.prev)}`) : '')}${body}`))
+    out.push(page(T('المتغيبون عن الرحلات', 'Missed passengers'), `${head(T('المتغيبون عن الرحلات', 'Missed passengers'), G && M.prev ? T(`الفترة السابقة: ${nf(M.prev)}`, `previous period: ${nf(M.prev)}`) : '')}${body}${M.total ? `<div class="note">${vsNote}</div>` : ''}`))
   }
 
   // ═══ 5. الحالة التشغيلية ═══
@@ -659,6 +706,15 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
         { l: T('حافلات متكررة', 'Repeat buses'), v: nf(O.busRepeat), c: C.bad, s: T('نفس الحالة أكثر من مرة', 'same issue more than once') },
       ])}
       ${!O.fac.length && !O.inc.length ? `<div class="empty" style="padding:30px;border-color:#86EFAC;color:${C.good}">${T('لا توجد أعطال أو حالات تشغيلية مسجلة — جميع التجهيزات تعمل', 'No faults or incidents recorded')}</div>` : ''}
+      ${(() => {
+        const rows = model.stations.filter(P => P.faults > 0).sort(byNorm(P => per(P.faults, P.d.trips + P.a.trips, 100)))
+        if (!rows.length) return ''
+        const allF = rows.reduce((t, P) => t + P.faults, 0), avg = per(allF, NET.dT + NET.aT, 100)
+        return `<div class="box" style="padding:0;overflow:hidden;margin-bottom:12px"><div style="padding:9px 12px;font-weight:700;font-size:12px">${T('حسب المحطة', 'By station')} <span style="color:${C.mute};font-weight:600;font-size:10px">${T('— مرتبة بعدد الحالات لكل 100 رحلة', '— ranked by cases per 100 trips')}</span></div>
+        <table class="t"><thead><tr><th>#</th><th class="s">${T('المحطة', 'Station')}</th><th>${T('الحالات', 'Cases')}</th><th>${T('الرحلات', 'Trips')}</th><th>${T('لكل 100 رحلة', 'Per 100 trips')}<span class="th2">${T('مقارنة بالمتوسط', 'vs average')}</span></th></tr></thead><tbody>
+        ${rows.map((P, i) => { const v = per(P.faults, P.d.trips + P.a.trips, 100); return `<tr><td class="mono" style="color:${C.mute}">${i + 1}</td><td class="s" style="font-weight:600">${esc(P.name)}${P.agent ? `<span class="tag ag">${T('وكيل', 'Agent')}</span>` : ''}</td><td class="mono" style="font-weight:700">${P.faults}</td><td class="mono">${nf(P.d.trips + P.a.trips)}</td><td class="mono">${v ?? '—'} ${vs(v, avg)}</td></tr>` }).join('')}
+        <tr class="tot"><td></td><td class="s">${T('الإجمالي', 'Total')}</td><td class="mono">${nf(allF)}</td><td class="mono">${nf(NET.dT + NET.aT)}</td><td class="mono">${avg ?? '—'}</td></tr></tbody></table></div>`
+      })()}
       ${tbl(O.fac, T('أعطال تجهيزات الحافلات', 'Bus equipment faults'), C.warn)}${tbl(O.inc, T('حالات التشغيل غير الطبيعية', 'Non-normal operating status'), C.bad)}
       <div class="legend"><span><span class="rep day" style="margin:0">↻ ×2 ${T('بنفس اليوم', 'same day')}</span> ${T('تكررت على الحافلة أكثر من مرة في اليوم نفسه', 'repeated on the same day')}</span><span><span class="rep" style="margin:0">↻ ${T('متكرر منذ', 'since')}</span> ${T('ظهرت على الحافلة في أكثر من يوم خلال آخر 30 يوماً (على مستوى الشبكة)', 'seen on more than one day within the last 30 days (network-wide)')}</span></div>`))
   }
@@ -666,8 +722,10 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
   // ═══ 6. الموجودات ═══
   if (want('lost') && model.lost) {
     const L = model.lost
-    const rows = model.stations.filter(P => P.lost && (P.lost.found || P.lost.backlog || P.lost.reports)).sort((a, b) => b.lost.found - a.lost.found || b.lost.backlog - a.lost.backlog)
-    const topF = rows[0], topB = [...rows].sort((a, b) => b.lost.backlog - a.lost.backlog)[0]
+    const k1 = P => per(P.lost.found, P.d.pax + P.a.pax, 1000)
+    const avgK = per(L.found, NET.dP + NET.aP, 1000)
+    const rows = model.stations.filter(P => P.lost && (P.lost.found || P.lost.backlog || P.lost.reports)).sort(byNorm(k1))
+    const topF = rows.filter(P => P.lost.found)[0], topB = [...rows].sort((a, b) => b.lost.backlog - a.lost.backlog)[0]
     const ring = (v, c) => `<div style="width:92px;height:92px;border-radius:50%;background:conic-gradient(${c} ${v ?? 0}%,#E8ECF2 0);display:grid;place-items:center;margin:auto"><div style="width:70px;height:70px;border-radius:50%;background:#fff;display:grid;place-items:center;font-family:'IBM Plex Mono';font-weight:700;font-size:18px">${rp(v)}</div></div>`
     out.push(page(T('الموجودات والمفقودات', 'Lost & found'), `${head(T('الموجودات والمفقودات', 'Lost & found'))}
       <div class="row" style="grid-template-columns:200px 1fr">
@@ -680,14 +738,14 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
         ])}${kpis([
           { l: T('المتبقي لدى المحطات (كل الفترات)', 'Still held at stations (all time)'), v: nf(L.backlog), c: '#7C3AED', s: L.oldBacklog ? T(`${nf(L.oldBacklog)} منها أقدم من 30 يوماً`, `${nf(L.oldBacklog)} older than 30 days`) : '' },
           { l: T('بلاغات مفقودات من العملاء', 'Customer lost reports'), v: nf(L.reports), c: C.bad },
-          { l: T('الأعلى موجودات', 'Most items'), v: topF?.lost.found ? esc(topF.name) : '—', c: C.navy, s: topF?.lost.found ? T(`${topF.lost.found} غرض`, `${topF.lost.found} items`) : '' },
+          { l: T('الأعلى موجودات نسبةً للركاب', 'Most items per passenger'), v: topF?.lost.found ? esc(topF.name) : '—', c: C.navy, s: topF?.lost.found ? T(`${topF.lost.found} غرض · ${k1(topF)} لكل 1000 راكب`, `${topF.lost.found} items · ${k1(topF)} per 1,000 pax`) : '' },
           { l: T('الأعلى متبقياً', 'Most held'), v: topB?.lost.backlog ? esc(topB.name) : '—', c: '#7C3AED', s: topB?.lost.backlog ? T(`${topB.lost.backlog} غرض`, `${topB.lost.backlog} items`) : '' },
         ])}</div></div>
-      ${rows.length ? `<table class="t"><thead><tr><th>#</th><th class="s">${T('المحطة', 'Station')}</th><th>${T('موجودات', 'Found')}</th><th>${T('سُلّمت', 'Returned')}</th><th>${T('نسبة التسليم', 'Delivery rate')}</th><th>${T('لم تُستلم', 'Unclaimed')}</th><th>${T('تبرع/إتلاف', 'Donated')}</th><th>${T('المتبقي حالياً', 'Held now')}</th><th>${T('بلاغات المفقودات', 'Lost reports')}</th></tr></thead><tbody>
-        ${rows.map((P, i) => `<tr><td class="mono" style="color:${C.mute}">${i + 1}</td><td class="s" style="font-weight:600">${esc(P.name)}${P.agent ? `<span class="tag ag">${T('وكيل', 'Agent')}</span>` : ''}</td><td class="mono" style="font-weight:700">${P.lost.found}</td><td class="mono" style="color:${C.good}">${P.lost.claimed}</td><td>${rateBar(pct(P.lost.claimed, P.lost.found))}</td><td class="mono" style="color:${C.warn}">${P.lost.unclaimed}</td><td class="mono">${P.lost.donated}</td><td class="mono" style="font-weight:700;color:#7C3AED">${P.lost.backlog}</td><td class="mono">${P.lost.reports}</td></tr>`).join('')}
-        <tr class="tot"><td></td><td class="s">${T('الإجمالي', 'Total')}</td><td class="mono">${nf(L.found)}</td><td class="mono">${nf(L.claimed)}</td><td class="mono">${rp(L.rate)}</td><td class="mono">${nf(L.unclaimed)}</td><td class="mono">${nf(L.donated)}</td><td class="mono">${nf(L.backlog)}</td><td class="mono">${nf(L.reports)}</td></tr></tbody></table>`
+      ${rows.length ? `<table class="t"><thead><tr><th>#</th><th class="s">${T('المحطة', 'Station')}</th><th>${T('موجودات', 'Found')}</th><th>${T('لكل 1000 راكب', 'Per 1,000 pax')}<span class="th2">${T('مقارنة بالمتوسط', 'vs average')}</span></th><th>${T('سُلّمت', 'Returned')}</th><th>${T('نسبة التسليم', 'Delivery rate')}</th><th>${T('لم تُستلم', 'Unclaimed')}</th><th>${T('تبرع/إتلاف', 'Donated')}</th><th>${T('المتبقي حالياً', 'Held now')}</th><th>${T('بلاغات المفقودات', 'Lost reports')}</th></tr></thead><tbody>
+        ${rows.map((P, i) => `<tr><td class="mono" style="color:${C.mute}">${i + 1}</td><td class="s" style="font-weight:600">${esc(P.name)}${P.agent ? `<span class="tag ag">${T('وكيل', 'Agent')}</span>` : ''}</td><td class="mono" style="font-weight:700">${P.lost.found}</td><td class=\"mono\">${k1(P) ?? '—'} ${vs(k1(P), avgK)}</td><td class="mono" style="color:${C.good}">${P.lost.claimed}</td><td>${rateBar(pct(P.lost.claimed, P.lost.found))}</td><td class="mono" style="color:${C.warn}">${P.lost.unclaimed}</td><td class="mono">${P.lost.donated}</td><td class="mono" style="font-weight:700;color:#7C3AED">${P.lost.backlog}</td><td class="mono">${P.lost.reports}</td></tr>`).join('')}
+        <tr class="tot"><td></td><td class="s">${T('الإجمالي', 'Total')}</td><td class="mono">${nf(L.found)}</td><td class="mono">${avgK ?? '—'}</td><td class="mono">${nf(L.claimed)}</td><td class="mono">${rp(L.rate)}</td><td class="mono">${nf(L.unclaimed)}</td><td class="mono">${nf(L.donated)}</td><td class="mono">${nf(L.backlog)}</td><td class="mono">${nf(L.reports)}</td></tr></tbody></table>`
         : `<div class="empty">${T('لا توجد موجودات أو مفقودات في هذه الفترة', 'No lost & found activity in this period')}</div>`}
-      <div class="note">${T('نسبة التسليم = ما سُلّم لأصحابه ÷ ما سُجّل خلال الفترة. «المتبقي حالياً» = كل الأغراض غير المستلمة الموجودة في المحطة الآن بغض النظر عن تاريخها.', 'Delivery rate = returned ÷ found in the period. “Held now” = every unclaimed item currently at the station regardless of date.')}</div>`))
+      <div class="note">${vsNote}<br>${T('نسبة التسليم = ما سُلّم لأصحابه ÷ ما سُجّل خلال الفترة. «المتبقي حالياً» = كل الأغراض غير المستلمة الموجودة في المحطة الآن بغض النظر عن تاريخها.', 'Delivery rate = returned ÷ found in the period. “Held now” = every unclaimed item currently at the station regardless of date.')}</div>`))
   }
 
   // ═══ 7. كشوف المحطات ═══
@@ -713,7 +771,7 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
       const hdr = `<div class="sh"><b>${esc(P.name)}</b>${P.agent ? `<span class="tag ag">${T('وكيل', 'Agent')}</span>` : ''}<span class="sp"></span>
         <div class="m"><span>${T('مغادرة', 'Dep')}<b>${P.d.trips}</b></span><span>${T('ركاب', 'Pax')}<b>${nf(P.d.pax)}</b></span><span style="opacity:.35">|</span>
         <span>${T('وصول', 'Arr')}<b>${P.a.trips}</b></span><span>${T('ركاب', 'Pax')}<b>${nf(P.a.pax)}</b></span><span style="opacity:.35">|</span>
-        <span>${T('متخلفون', 'Missed')}<b>${P.d.missed}</b></span><span>${T('الإدخال', 'Entry')}<b>${rp(P.entry)}</b></span></div></div>`
+        <span>${T('متغيبون', 'Missed')}<b>${P.d.missed}</b></span><span>${T('الإدخال', 'Entry')}<b>${rp(P.entry)}</b></span></div></div>`
       let body
       if (!opts.details) {
         body = ''
@@ -723,7 +781,7 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
         const rows = Array.from({ length: n }, (_, i) => `<tr>${cell(deps[i], true)}<td class="gap"></td>${cell(arrs[i], false)}</tr>`).join('')
         body = `<table class="pair"><colgroup>${colsD}<col style="width:1.5%">${colsA}</colgroup><thead>
           <tr><th class="hd d" colspan="7">↗ ${T('المغادرة', 'Departures')} · ${deps.length}</th><th class="gap"></th><th class="hd a" colspan="6">↙ ${T('الوصول', 'Arrivals')} · ${arrs.length}</th></tr>
-          <tr><th>${T('الرحلة', 'Trip')}</th><th>${T('الحافلة', 'Bus')}</th><th>${T('إلى', 'To')}</th><th>${T('المجدول', 'Sched')}</th><th>${T('الفعلي', 'Actual')}</th><th>${T('ركاب', 'Pax')}</th><th>${T('متخلف', 'Miss')}</th><th class="gap"></th>
+          <tr><th>${T('الرحلة', 'Trip')}</th><th>${T('الحافلة', 'Bus')}</th><th>${T('إلى', 'To')}</th><th>${T('المجدول', 'Sched')}</th><th>${T('الفعلي', 'Actual')}</th><th>${T('ركاب', 'Pax')}</th><th>${T('متغيب', 'Miss')}</th><th class="gap"></th>
           <th>${T('الرحلة', 'Trip')}</th><th>${T('الحافلة', 'Bus')}</th><th>${T('من', 'From')}</th><th>${T('المجدول', 'Sched')}</th><th>${T('الفعلي', 'Actual')}</th><th>${T('ركاب', 'Pax')}</th></tr></thead><tbody>${rows}</tbody></table>`
       }
       const unList = !opts.withUnentered && opts.details && (unD.length || unA.length)
@@ -742,7 +800,7 @@ export function buildExecDocument(model, { sections, sheetIds, opts = {}, prepar
         const cards = sheetPages.map(({ P }) => `<div class="card"><div class="h"><b>${esc(P.name)}</b>${P.agent ? `<span class="tag ag">${T('وكيل', 'Agent')}</span>` : ''}</div>
           <div class="g"><div><small>${T('رحلات مغادرة', 'Dep trips')}</small><b style="color:${C.dep}">${P.d.trips}</b></div><div><small>${T('ركاب مغادرة', 'Dep pax')}</small><b style="color:${C.dep}">${nf(P.d.pax)}</b></div><div><small>${T('رحلات وصول', 'Arr trips')}</small><b style="color:${C.arr}">${P.a.trips}</b></div><div><small>${T('ركاب وصول', 'Arr pax')}</small><b style="color:${C.arr}">${nf(P.a.pax)}</b></div></div>
           <div style="margin-top:8px;font-size:9px;color:${C.mute}">${T('اكتمال الإدخال', 'Data entry')}${rateBar(P.entry)}</div>
-          ${P.d.missed ? `<div style="margin-top:6px;font-size:9.5px;color:${C.bad};font-weight:600">${T('المتخلفون', 'Missed')}: ${P.d.missed}</div>` : ''}</div>`)
+          ${P.d.missed ? `<div style="margin-top:6px;font-size:9.5px;color:${C.bad};font-weight:600">${T('المتغيبون', 'Missed')}: ${P.d.missed}</div>` : ''}</div>`)
         for (let i = 0; i < cards.length; i += 8) out.push(page(T('كشوف المحطات', 'Station sheets'), `${i === 0 ? head(T('كشوف المحطات', 'Station sheets'), T('ملخص لكل محطة بدون تفاصيل الرحلات', 'per-station summary without trip detail')) : ''}<div class="cards">${cards.slice(i, i + 8).join('')}</div>`))
       }
     }

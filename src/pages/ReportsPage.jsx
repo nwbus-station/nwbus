@@ -776,6 +776,9 @@ export default function ReportsPage() {
     while (cur <= endD) { dates.push(cur.toISOString().slice(0, 10)); cur = new Date(cur.getTime() + 86400000) }
 
     let unenteredCount = 0
+    // رحلة لم يحن موعدها بعد (اليوم لاحقاً أو يوم قادم) لا تُعدّ «غير مدخلة»
+    const nowDay = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' })
+    const nowHM = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', hour12: false })
     ;(stationTripsRes.data ?? []).forEach(st => {
       const trip = st.trip
       if (!trip?.is_active) return
@@ -816,7 +819,7 @@ export default function ReportsPage() {
         if (trip.end_date && date > trip.end_date) return
         if (trip.days_of_week?.length && !trip.days_of_week.includes(new Date(date + 'T00:00:00').getDay())) return
         const key = `${st.trip_schedule_id}|${date}|${st.station_id}`
-        const add = (isArr, time) => { if (!time || enteredKeys.has(`${key}|${isArr ? 'a' : 'd'}`) || offAt(st.station_id, String(time).slice(0, 5))) return; unenteredCount++; movements.push(makeUnentered(date, isArr, time)) }
+        const add = (isArr, time) => { if (!time || enteredKeys.has(`${key}|${isArr ? 'a' : 'd'}`) || offAt(st.station_id, String(time).slice(0, 5))) return; if (date > nowDay || (date === nowDay && String(time).slice(0, 5) > nowHM)) return; unenteredCount++; movements.push(makeUnentered(date, isArr, time)) }
         if (isDest) {
           if (arrOn) add(true, st.arrival_time || trip.scheduled_arrival)
         } else if (isOrigin) {
@@ -1373,7 +1376,7 @@ export default function ReportsPage() {
               <span className="rp-folder-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36z"/></svg></span>
               <span className="rp-folder-t">
                 <b>{isAr ? 'بوصلة الأداء — تقرير تنفيذي' : 'Performance Compass — executive report'}</b>
-                <small>{isAr ? 'للإدارة العليا: نظرة عامة، المحطات والوكلاء، المبيعات، المتخلفون، الحالة التشغيلية، الموجودات، وكشوف المحطات' : 'For leadership: overview, stations & agents, sales, missed, operations, lost & found, station sheets'}</small>
+                <small>{isAr ? 'للإدارة العليا: نظرة عامة، المحطات والوكلاء، المبيعات، المتغيبون، الحالة التشغيلية، الموجودات، وكشوف المحطات' : 'For leadership: overview, stations & agents, sales, missed, operations, lost & found, station sheets'}</small>
               </span>
             </button>
           </div>
