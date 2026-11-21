@@ -22,19 +22,6 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [confirmReset, setConfirmReset] = useState(false)
-  const [confirmExcuse, setConfirmExcuse] = useState(false)
-  // أيام معفاة (خلل تقني): من حضر ولم يُكمل يُعتبر مكتملاً لذلك اليوم، ولا تُطلب منه صفحة التقييم
-  let excusedDays = []
-  try { excusedDays = JSON.parse(settings?.daily_survey_excused || '[]') } catch { excusedDays = [] }
-  const todayExcused = excusedDays.includes(riyadhDay())
-  const toggleExcuse = () => {
-    setConfirmExcuse(false)
-    const d = riyadhDay()
-    const next = todayExcused ? excusedDays.filter(x => x !== d) : [...new Set([...excusedDays, d])].slice(-60)
-    saveSetting('daily_survey_excused', JSON.stringify(next))
-    setResetMsg(todayExcused ? 'أُلغي إعفاء اليوم: يعود التقييم مطلوباً وتظهر الحالات الفعلية.' : 'تم: كل من حضر اليوم ولم يُكمل يُعتبر مكتملاً لليوم فقط، ولن تظهر له صفحة التقييم حتى الغد.')
-    setReportKey(k => k + 1)
-  }
   const [resetMsg, setResetMsg] = useState('')
   const [confirmOff, setConfirmOff] = useState(false)
   // آخر تغيير على مفتاح التفعيل: من ومتى (من سجل الإعدادات، إن كان الجدول مُنشأً)
@@ -249,7 +236,6 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('daily-survey-preview'))} style={ghost}>معاينة كما يراه الموظف</button>
                 <button type="button" onClick={() => setConfirmReset(true)} style={{ ...ghost, borderColor: '#fecaca', color: '#dc2626' }}>إعادة طلب التقييم اليوم</button>
-                <button type="button" onClick={() => setConfirmExcuse(true)} style={{ ...ghost, borderColor: todayExcused ? '#fde68a' : '#99f6e4', color: todayExcused ? '#b45309' : '#0d9488' }}>{todayExcused ? 'إلغاء إعفاء اليوم' : 'اعتبار غير المقيّمين اليوم مكتملين'}</button>
               </div>
               {resetMsg && <p style={{ ...hint, color: '#059669' }}>{resetMsg}</p>}
               <p style={hint}>المعاينة لا تُحتسب ولا تُحفظ. إعادة الطلب تُظهر الاستبيان من جديد للحسابات الشاملة دون حذف أي تقييم سابق، فتبقى الإحصائيات ثابتة.</p>
@@ -259,7 +245,6 @@ export default function DailySurveySettings({ cities = [], detectCity = () => nu
       </div>
       {confirmOff && <ConfirmDialog danger message="إيقاف التقييم اليومي الإلزامي لكل الموظفين؟ سيتوقف ظهوره لهم حتى تفعّله مرة أخرى." confirmLabel="إيقاف" cancelLabel="إلغاء"
         onConfirm={() => { setConfirmOff(false); saveSetting('daily_survey_enabled', 'false'); setTimeout(loadLast, 1200) }} onCancel={() => setConfirmOff(false)} />}
-      {confirmExcuse && <ConfirmDialog message={todayExcused ? 'إلغاء إعفاء اليوم؟ يعود التقييم مطلوباً اليوم وتظهر الحالات الفعلية في التقرير.' : 'اعتبار كل من حضر اليوم ولم يُكمل التقييم مكتملاً؟ ينطبق على اليوم فقط، ويظهر في التقرير «مكتمل (إعفاء)»، ولن تظهر لهم صفحة التقييم حتى الغد. لا يُحذف ولا يُضاف أي تقييم.'} confirmLabel={todayExcused ? 'إلغاء الإعفاء' : 'اعتماد'} cancelLabel="إلغاء" onConfirm={toggleExcuse} onCancel={() => setConfirmExcuse(false)} />}
       {confirmReset && <ConfirmDialog danger message={target === 'selected' ? 'إعادة طلب التقييم اليوم للحسابات المحددة؟ سيظهر لهم الاستبيان من جديد، وتبقى تقييماتهم السابقة محفوظة.' : 'إعادة طلب التقييم اليوم لكل الحسابات؟ سيظهر الاستبيان لهم من جديد، وتبقى تقييمات اليوم السابقة محفوظة.'} confirmLabel="إعادة الطلب" cancelLabel="إلغاء" onConfirm={resetToday} onCancel={() => setConfirmReset(false)} />}
     </div>
   )

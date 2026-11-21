@@ -13,12 +13,12 @@ const r2 = v => (v == null ? '' : Math.round(v * 100) / 100)
  */
 export async function exportSurveyExcel({ groups, ctx }) {
   const { from, to, N, single, need, total, compliance, allRatings, stationF, counts = {}, present = 0, dayText } = ctx
-  const ST = { done: 'أكمل التقييم', evaded: 'قيّم جزءاً وأغلق', skipped: 'فتح التقييم وأغلق', noshow: 'دخل دون تقييم', nocity: 'محطته بلا استبيان', excused: 'مكتمل (إعفاء)', progress: 'يقيّم الآن', leave: 'في إجازة', off: 'لم يسجّل دخول' }
+  const ST = { done: 'أكمل التقييم', evaded: 'قيّم جزءاً وأغلق', skipped: 'فتح التقييم وأغلق', noshow: 'دخل دون تقييم', nocity: 'محطته بلا استبيان', progress: 'يقيّم الآن', leave: 'في إجازة', off: 'لم يسجّل دخول' }
   const evadeN = (counts.evaded || 0) + (counts.skipped || 0)
   const book = await createBook({ isAr: true })
   const stamp = new Date().toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short', hourCycle: 'h23', timeZone: 'Asia/Riyadh' })
   const subtitle = `${single ? 'اليوم' : 'الفترة'}: ${single ? from : `${from} → ${to} (${N} يوماً)`}   ·   ${stationF ? 'المحطة: ' + stationF : 'كل المحطات'}   ·   تاريخ الإصدار: ${stamp}`
-  const stColor = v => (/أكمل|مكتمل/.test(v) ? XL.green : /أغلق|تهرّب|دون تقييم/.test(v) ? XL.red : XL.amber)
+  const stColor = v => (/أكمل/.test(v) ? XL.green : /أغلق|تهرّب|دون تقييم/.test(v) ? XL.red : XL.amber)
   const stOf = r => (single ? (dayText ? dayText(r.perDay[0], need) : ST[r.st]) : `أكمل ${r.doneDays} · تهرّب ${r.evaded} · حضور ${r.present} من ${N}`)
 
   // ═════════ الملخص ═════════
