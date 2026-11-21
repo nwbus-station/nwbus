@@ -56,14 +56,19 @@ export default function DailySurveyGate() {
     let off = false
     // يوم جديد: نصفّر حالة اليوم السابق قبل التحميل
     setDone(null); setReady(false); setFinished(false); setFails(0); setMsg({ kind: '', text: '' }); autoRef.current = false
-    ;(async () => {
-      const [{ data: row, error: pe }, { data: st }, cities] = await Promise.all([
+    let timer = null
+    // لا نفتح النظام بدون تقييم عند خطأ عابر (شبكة الجهاز لم تتصل بعد عند الصحوة أو بداية اليوم): نعيد المحاولة حتى ينجح الجلب
+    const load = async () => {
+      const [{ data: row, error: pe }, stRes, cities] = await Promise.all([
         supabase.from('user_daily_survey').select('done').eq('user_id', profile.id).eq('day', day).maybeSingle(),
         profile.station_id ? supabase.from('stations').select('name_ar, name_en, survey_city').eq('id', profile.station_id).maybeSingle() : Promise.resolve({ data: null }),
         fetchSurveyCities(),
       ])
       if (off) return
-      if (pe) { setDone(need); return }   // الجدول غير مُنشأ بعد: لا نحجب أحداً
+      const missingTable = pe && (pe.code === '42P01' || pe.code === 'PGRST205')
+      if (missingTable) { setDone(need); return }   // الجدول غير مُنشأ بعد: لا نحجب أحداً
+      if (pe || stRes?.error) { timer = setTimeout(() => { if (!off) load() }, 10000); return }
+      const st = stRes?.data
       const key = detectSurveyCity(st || profile.station)
       const city = cities.find(c => c.city === key && c.is_active !== false)
       if (!city) { setDone(need); return }   // محطة بلا استبيان معرّف: غير مشمولة
@@ -71,8 +76,9 @@ export default function DailySurveyGate() {
       setReady(true)
       setDone(preview ? 0 : (row?.done ?? 0))
       sinceRef.current = new Date(Date.now() - 3000).toISOString()
-    })()
-    return () => { off = true }
+    }
+    load().catch(() => { if (!off) timer = setTimeout(() => { if (!off) load() }, 10000) })
+    return () => { off = true; clearTimeout(timer) }
   }, [active, profile?.id, day, preview]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const next = useCallback(async (manual = false) => {

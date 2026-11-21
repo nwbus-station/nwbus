@@ -23,28 +23,56 @@ export function AppSettingsProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('app_settings').select('key,value').then(({ data }) => {
-      if (data?.length) {
+    let off = false, channel = null, lastLoad = 0
+    // الإعدادات محمية بـ RLS ولا تُقرأ قبل تسجيل الدخول: نعيد التحميل عند الدخول وتجديد الجلسة والرجوع للتطبيق،
+    // وإلا من يسجّل دخوله (خصوصاً بداية يوم جديد) يبقى بإعدادات فاضية ولا تظهر له صفحة التقييم اليومي وغيرها
+    const load = async () => {
+      lastLoad = Date.now()
+      const { data, error } = await supabase.from('app_settings').select('key,value')
+      if (off) return
+      if (!error && data?.length) {
         const map = Object.fromEntries(data.map(r => [r.key, r.value]))
         setSettings(map)
         applyTheme(map.theme || 'bw')
       }
       setLoading(false)
+    }
+    const subscribe = () => {
+      if (channel) supabase.removeChannel(channel)
+      channel = supabase.channel('app_settings_changes_' + Date.now())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, payload => {
+          if (payload.new?.key) {
+            setSettings(prev => {
+              const updated = { ...prev, [payload.new.key]: payload.new.value }
+              if (payload.new.key === 'theme') applyTheme(payload.new.value)
+              return updated
+            })
+          }
+        })
+        .subscribe()
+    }
+    load(); subscribe()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
+        // نؤجل الطلب خارج معالج الحدث (توصية supabase-js لتجنب التعليق)
+        setTimeout(() => { if (!off) { load(); if (event === 'SIGNED_IN') subscribe() } }, 0)
+      }
     })
+    // التطبيق يبقى مفتوحاً على أجهزة المحطات أياماً: عند الرجوع له بعد غياب نحدّث الإعدادات
+    const onBack = () => { if (document.visibilityState !== 'hidden' && Date.now() - lastLoad > 5 * 60 * 1000) load() }
+    document.addEventListener('visibilitychange', onBack)
+    window.addEventListener('focus', onBack)
+    window.addEventListener('online', load)
 
-    const channel = supabase.channel('app_settings_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, payload => {
-        if (payload.new?.key) {
-          setSettings(prev => {
-            const updated = { ...prev, [payload.new.key]: payload.new.value }
-            if (payload.new.key === 'theme') applyTheme(payload.new.value)
-            return updated
-          })
-        }
-      })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      off = true
+      subscription?.unsubscribe()
+      if (channel) supabase.removeChannel(channel)
+      document.removeEventListener('visibilitychange', onBack)
+      window.removeEventListener('focus', onBack)
+      window.removeEventListener('online', load)
+    }
   }, [])
 
   async function saveSetting(key, value) {
