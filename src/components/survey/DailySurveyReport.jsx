@@ -346,10 +346,15 @@ export default function DailySurveyReport({ need, target, selectedIds }) {
           {/* البطاقة الرئيسية: الالتزام + توزيع الحالات */}
           <div style={{ ...card, padding: 18, display: 'grid', gridTemplateColumns: 'minmax(170px, 220px) 1fr', gap: 22, alignItems: 'center' }} className="dsr-hero">
             <div style={{ textAlign: 'center' }}>
-              <div style={{ position: 'relative', width: 150, height: 150, margin: '0 auto', borderRadius: '50%', background: `conic-gradient(${toneOf(compliance)} ${compliance * 3.6}deg, var(--surface-2, #ebebed) 0)` }}>
-                <div style={{ position: 'absolute', inset: 14, borderRadius: '50%', background: 'var(--card)', display: 'grid', placeItems: 'center', alignContent: 'center' }}>
-                  <b style={{ fontSize: '2.3rem', lineHeight: 1, color: toneOf(compliance), fontFamily: 'monospace' }}>{compliance}%</b>
-                  <span style={{ fontSize: '.74rem', color: 'var(--text-3)', marginTop: 4 }}>التزام الحاضرين</span>
+              <div style={{ position: 'relative', width: 170, height: 170, margin: '0 auto' }}>
+                <svg viewBox="0 0 120 120" width="170" height="170" style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
+                  <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(128,128,128,.22)" strokeWidth="12" />
+                  <circle cx="60" cy="60" r="52" fill="none" stroke={toneOf(compliance)} strokeWidth="12" strokeLinecap="round"
+                    strokeDasharray={`${(compliance / 100) * 326.7} 326.7`} />
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', alignContent: 'center' }}>
+                  <b style={{ fontSize: '2.5rem', lineHeight: 1, color: toneOf(compliance), fontFamily: 'monospace' }}>{compliance}%</b>
+                  <span style={{ fontSize: '.78rem', color: 'var(--text-3)', marginTop: 4 }}>التزام الحاضرين</span>
                 </div>
               </div>
               <div style={{ fontSize: '.8rem', color: 'var(--text-2)', marginTop: 8 }}>أكمل <b>{doneDays}</b> من <b>{present}</b> {unit} حاضر</div>

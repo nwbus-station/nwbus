@@ -5,5 +5,5 @@ export const toLocalDateStr = (d = new Date()) =>
 
 export const todayStr = () => toLocalDateStr()
 
-// تاريخ اليوم بتوقيت الرياض (YYYY-MM-DD)
-export const riyadhDay = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' })
+// تاريخ اليوم بتوقيت الرياض (YYYY-MM-DD) — أو تاريخ لحظة معيّنة إن مُرّرت (كانت الدالة تتجاهل المعامل فيرجع كل تاريخ «اليوم»)
+export const riyadhDay = (d) => (d ? new Date(d) : new Date()).toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' })

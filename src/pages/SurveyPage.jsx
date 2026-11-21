@@ -311,7 +311,7 @@ const SURVEY_MOBILE_CSS = `
 `
 
 // ── الصفحة الرئيسية ───────────────────────────────────────────
-export default function SurveyPage() {
+export default function SurveyPage({ embedded = false }) {
   const authCtx     = (() => { try { return useAuth() } catch { return {} } })()
   const profile     = authCtx?.profile
   // نستخدم isGeneralAdmin بدل isAdmin هنا خصوصاً — مشرف المنطقة (isAdmin=true بسبب
@@ -325,7 +325,7 @@ export default function SurveyPage() {
   // الصفحة مستقلة عن قالب التطبيق: نطبّق المظهر المحفوظ بأنفسنا، ونتيح للموظف التبديل (ليلي/نهاري) ويُحفظ اختياره
   const [themeMode, setThemeModeSt] = useState(() => getThemeMode())
   const isDarkNow = resolveDark(themeMode)
-  useEffect(() => { applyTheme(resolveDark(themeMode)); setThemeMode(themeMode) }, [themeMode])
+  useEffect(() => { if (embedded) return; applyTheme(resolveDark(themeMode)); setThemeMode(themeMode) }, [themeMode, embedded])
 
   // دعم /survey/:city مباشرة (رابط عام للراكب)
   const paramCity   = params?.city
@@ -411,7 +411,7 @@ export default function SurveyPage() {
           error={manageErr} />
       )}
 
-      <div style={{ minHeight: 'calc(100vh - 108px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
+      <div style={{ minHeight: embedded ? undefined : 'calc(100vh - 108px)', background: 'var(--surface)' }} dir={isAr ? 'rtl' : 'ltr'}>
 
         {/* ── Hero ── */}
         <div className="survey-hero" style={{
@@ -419,8 +419,8 @@ export default function SurveyPage() {
           borderBottom: '1px solid var(--border)',
           padding: '28px 28px 24px',
         }}>
-          <div style={{ maxWidth: 860, margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ maxWidth: embedded ? 1400 : 860, margin: '0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{
                 width: 42, height: 42, borderRadius: 11,
@@ -459,7 +459,7 @@ export default function SurveyPage() {
                   {manage ? (isAr ? 'إنهاء التعديل' : 'Done') : (isAr ? 'تعديل روابط المدن' : 'Manage city links')}
                 </button>
               )}
-              {profile && (
+              {profile && !embedded && (
                 <button
                   onClick={() => setThemeModeSt(isDarkNow ? 'light' : 'dark')}
                   title={isAr ? 'تبديل المظهر' : 'Toggle theme'} aria-label={isAr ? 'تبديل المظهر' : 'Toggle theme'}
@@ -477,7 +477,7 @@ export default function SurveyPage() {
                   {isDarkNow ? (isAr ? 'نهاري' : 'Light') : (isAr ? 'ليلي' : 'Dark')}
                 </button>
               )}
-              {profile && (
+              {profile && !embedded && (
                 <button
                   onClick={() => navigate('/')}
                   style={{
@@ -499,7 +499,7 @@ export default function SurveyPage() {
           </div>
         </div>
 
-        <div className="survey-main" style={{ maxWidth: 860, margin: '0 auto', padding: '28px 28px' }}>
+        <div className="survey-main" style={{ maxWidth: embedded ? 1400 : 860, margin: '0 auto', padding: '28px 28px' }}>
 
           {/* ── موظف المحطة: زر إطلاق مباشر ── */}
           {!isAdmin && detectedCity && (

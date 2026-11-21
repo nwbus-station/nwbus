@@ -123,7 +123,6 @@ export default function App() {
 
       {/* صفحة التقييم — عامة بدون تسجيل دخول */}
       <Route path="/survey/:city" element={<SurveyPage />} />
-      <Route path="/survey"       element={<SurveyPage />} />
 
       {/* استبيان العملاء (QR موحّد بالحافلات) — عام بدون تسجيل دخول */}
       <Route path="/feedback" element={<FeedbackPage />} />
@@ -171,6 +170,7 @@ export default function App() {
           </RequireAuth>
         } />
         <Route path="leaves"     element={<RequireAuth module="leaves"><LeavePage /></RequireAuth>} />
+        <Route path="survey"     element={<SurveyPage embedded />} />
         <Route path="evaluation" element={<EvaluationPage />} />
         <Route path="my-rating" element={<EmployeeRatingPage />} />
         <Route path="customer-ratings" element={
